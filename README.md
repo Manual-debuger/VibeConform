@@ -1,11 +1,12 @@
 # VibeConform
 
-> **Status: pre-alpha / bootstrap (M0).** The `vibe` CLI currently exposes
-> its command surface (`init`, `audit`, `diff`, `sync`, `check`, `doctor`)
-> but every command returns "not implemented yet." Nothing described below
-> as "eventually" or "will" exists yet. See
+> **Status: pre-alpha (M0 + `vibe init` v1).** `vibe init` writes a
+> `vibe.yaml` desired-state file (see
+> [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `audit`,
+> `diff`, `sync`, `check`, `doctor` still return "not implemented yet."
+> Nothing described below as "eventually" or "will" exists yet. See
 > [`docs/plans/0001-bootstrap.md`](docs/plans/0001-bootstrap.md) for what M0
-> actually delivers.
+> delivered.
 
 ## What VibeConform is
 
@@ -46,12 +47,12 @@ enforce on other repositories — see the bootstrap rationale in
 ## Intended CLI
 
 ```text
-vibe init      # initialize a new repository from the standard
-vibe audit     # read-only compliance/drift check (non-zero exit on failure)
-vibe diff      # human-readable reconciliation preview
-vibe sync      # perform reconciliation
-vibe check     # affected-component validation for the current change set
-vibe doctor    # diagnose local environment/tooling issues
+vibe init <standard> <version>  # write vibe.yaml declaring the desired standard
+vibe audit                      # read-only compliance/drift check (non-zero exit on failure)
+vibe diff                       # human-readable reconciliation preview
+vibe sync                       # perform reconciliation
+vibe check                      # affected-component validation for the current change set
+vibe doctor                     # diagnose local environment/tooling issues
 ```
 
 Later: `vibe new`, `vibe eject`.
