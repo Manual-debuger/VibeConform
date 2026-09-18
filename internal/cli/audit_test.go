@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestAuditCmdReportsZeroModules(t *testing.T) {
+func TestAuditCmdReportsModuleCount(t *testing.T) {
 	dir := t.TempDir()
 	manifestPath := filepath.Join(dir, "vibe.yaml")
 	if err := os.WriteFile(manifestPath, []byte("standard: production\nversion: v1\n"), 0o644); err != nil {
@@ -24,7 +24,7 @@ func TestAuditCmdReportsZeroModules(t *testing.T) {
 	}
 
 	got := out.String()
-	for _, want := range []string{"standard: production/v1", "0 modules configured"} {
+	for _, want := range []string{"standard: production/v1", "1 modules configured"} {
 		if !bytes.Contains([]byte(got), []byte(want)) {
 			t.Errorf("audit output missing %q\n%s", want, got)
 		}

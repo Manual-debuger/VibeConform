@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
 )
 
 // Standard is a named, versioned bundle of modules.
@@ -47,5 +48,9 @@ func Lookup(name, version string) (*Standard, error) {
 }
 
 func init() {
-	Register(Standard{Name: "production", Version: "v1"})
+	Register(Standard{
+		Name:    "production",
+		Version: "v1",
+		Modules: []module.Module{gotooling.New()},
+	})
 }
