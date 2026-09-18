@@ -13,16 +13,6 @@ func errNotImplemented(cmd string) error {
 	return fmt.Errorf("%s: not implemented yet (see docs/plans/0001-bootstrap.md)", cmd)
 }
 
-func newInitCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "init",
-		Short: "Initialize a new repository from the VibeConform standard",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return errNotImplemented("init")
-		},
-	}
-}
-
 func newAuditCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "audit",

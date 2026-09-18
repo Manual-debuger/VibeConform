@@ -15,18 +15,25 @@ instead of being silently forgotten.
       public repos, requires GitHub Secret Protection on private repos.
       Enable via repository Settings → Code security once public (it is
       often auto-enabled by default for new public repos).
-- [ ] **Repository rules / rulesets (branch protection)** — the Free plan's
-      rule enforcement applies to public repositories only; private repos
-      need at least the Team plan. Once public (or upgraded), configure a
-      ruleset on `main`:
-      - [ ] Require a pull request before merging
-      - [ ] Require the `CI / gate` status check to pass
-      - [ ] Require branches to be up to date before merging
-      - [ ] Block force pushes
-      - [ ] Block branch deletion
-      - [ ] Require linear history
-      - Do **not** require additional human approvals beyond 0 while this
-        remains a solo project (see `docs/plans/0001-bootstrap.md`).
+- [x] **Repository rules / rulesets (branch protection)** — **correction**:
+      this was verified live against the actual repository on 2026-09-18
+      and it is *not* Team-plan-gated as originally assumed. The classic
+      branch protection API
+      (`PUT /repos/{owner}/{repo}/branches/{branch}/protection`) works on
+      Free-plan private repositories and is now configured on `main`:
+      - [x] Require a pull request before merging (0 required approvals —
+        solo project, see `docs/plans/0001-bootstrap.md`)
+      - [x] Require the `CI / gate` status check to pass, branch must be
+        up to date
+      - [x] Block force pushes
+      - [x] Block branch deletion
+      - [x] Require linear history
+      - `enforce_admins` is left `false` so the solo maintainer isn't
+        locked out; revisit once there's more than one contributor.
+      - Not yet verified: the newer *Rulesets* UI/API
+        (`repos/{owner}/{repo}/rulesets`) may still be plan-gated for
+        private repos — classic protection above already satisfies the
+        requirements, so this hasn't been tested.
 - [ ] **Draft pull requests / code owners** — also gated to public
       repositories on the Free plan; revisit `CODEOWNERS` once public.
 

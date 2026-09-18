@@ -30,3 +30,20 @@ func Parse(data []byte) (*Manifest, error) {
 	}
 	return &m, nil
 }
+
+// New constructs a Manifest for the given standard and version.
+func New(standard, version string) (*Manifest, error) {
+	if standard == "" {
+		return nil, fmt.Errorf("new manifest: %q is required", "standard")
+	}
+	return &Manifest{Standard: standard, Version: version}, nil
+}
+
+// Marshal encodes the manifest back into vibe.yaml form.
+func (m *Manifest) Marshal() ([]byte, error) {
+	data, err := yaml.Marshal(m)
+	if err != nil {
+		return nil, fmt.Errorf("marshal manifest: %w", err)
+	}
+	return data, nil
+}
