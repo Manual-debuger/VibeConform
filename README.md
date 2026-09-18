@@ -57,6 +57,12 @@ vibe doctor                     # diagnose local environment/tooling issues
 
 Later: `vibe new`, `vibe eject`.
 
+## Using `vibe`
+
+See [`docs/usage.md`](docs/usage.md) for the user manual: install/build
+instructions, the `vibe init` command reference, and exact error text for
+each failure case.
+
 ## Build and test
 
 Requires a current stable Go toolchain (this repository was bootstrapped
@@ -81,6 +87,7 @@ task verify     # fmt check, build, lint, race tests, mod tidy, govulncheck, act
 cmd/vibe/          CLI entrypoint
 internal/cli/      Command tree (root + init/audit/diff/sync/check/doctor)
 internal/manifest/ vibe.yaml parsing
+internal/standard/ Named, versioned standard registry
 internal/module/   Module composition interface
 internal/resource/ Resource + ownership model
 docs/              Specs, plans, architecture, and decision records (source of truth)
