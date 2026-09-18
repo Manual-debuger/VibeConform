@@ -1,0 +1,24 @@
+# Build artifacts
+/dist/
+/bin/
+*.exe
+*.test
+
+# Go
+*.out
+coverage.txt
+
+# Tooling caches
+.task/
+.tokensave/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Claude Code local (never shared) config
+.claude/settings.local.json
