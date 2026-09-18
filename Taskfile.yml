@@ -1,0 +1,84 @@
+version: "3"
+
+# Task's built-in shell (mvdan.cc/sh) interprets POSIX-style syntax
+# identically on Windows/Linux/macOS, so these commands need no per-OS
+# branching.
+
+tasks:
+  fmt:
+    desc: Apply gofmt/goimports formatting.
+    cmds:
+      - gofmt -l -w .
+      - goimports -l -w .
+
+  fmt:check:
+    desc: Fail if any file is not gofmt/goimports formatted (CI-safe, no writes).
+    cmds:
+      - test -z "$(gofmt -l .)"
+      - test -z "$(goimports -l .)"
+
+  lint:
+    desc: Run go vet and golangci-lint.
+    cmds:
+      - go vet ./...
+      - golangci-lint run
+
+  typecheck:
+    desc: Type-check by building all packages (Go has no separate typechecker).
+    cmds:
+      - go build ./...
+
+  test:
+    desc: Run the test suite.
+    cmds:
+      - go test ./...
+
+  test:race:
+    desc: Run the test suite with the race detector.
+    cmds:
+      - go test -race ./...
+
+  mod:verify:
+    desc: Ensure go.mod/go.sum are tidy and modules are verified.
+    cmds:
+      - go mod tidy
+      - go mod verify
+      - git diff --exit-code -- go.mod go.sum
+
+  security:
+    desc: Run vulnerability scanning.
+    cmds:
+      - govulncheck ./...
+
+  workflows:lint:
+    desc: Validate GitHub Actions workflow files.
+    cmds:
+      - actionlint
+
+  verify:
+    desc: Full local verification gate (same checks CI runs). Race detection
+      needs a C compiler (CGO); run "task test:race" separately if you have
+      one — CI runs it independently in its own job.
+    cmds:
+      - task: fmt:check
+      - task: typecheck
+      - task: lint
+      - task: test
+      - task: mod:verify
+      - task: security
+      - task: workflows:lint
+
+  verify-ci:
+    desc: Alias used by CI so the workflow and local docs never drift.
+    cmds:
+      - task: verify
+
+  build:
+    desc: Build the vibe binary into ./bin.
+    cmds:
+      - go build -o bin/vibe ./cmd/vibe
+
+  run:
+    desc: 'Run the CLI, e.g. task run -- --help.'
+    cmds:
+      - go run ./cmd/vibe {{.CLI_ARGS}}
