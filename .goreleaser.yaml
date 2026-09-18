@@ -1,0 +1,49 @@
+version: 2
+
+project_name: vibeconform
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: vibe
+    main: ./cmd/vibe
+    binary: vibe
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: vibe
+    ids: [vibe]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  # Draft so a human confirms before publishing; matches "no real public
+  # release from bootstrap" guidance in docs/plans/0001-bootstrap.md.
+  draft: true

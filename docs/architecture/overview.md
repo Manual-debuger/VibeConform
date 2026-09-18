@@ -1,0 +1,174 @@
+# VibeConform Architecture Overview
+
+Status: living document. This is the authoritative technical description of
+VibeConform's design; Notion (or any other project tracker) holds roadmap
+and status, never competing architecture.
+
+## Conceptual model
+
+```text
+vibe.yaml
+    +
+versioned standard
+    ↓
+VibeConform resolver/reconciler
+    ↓
+repo integrations
+├── language tooling
+├── CI
+├── Git hooks
+├── Codex
+├── Claude
+├── Skills Manager
+└── repository intelligence
+```
+
+`vibe.yaml` is human-owned desired state: which standard and version a
+repository conforms to, plus repository-specific overrides. Machine-owned
+state (`.vibe/lock.yaml`, `.vibe/state.yaml`) records what was last resolved
+and applied, enabling three-way reconciliation. Neither file is required to
+exist yet; they are introduced once the resolver lands.
+
+## Module/component composition
+
+Adapted from [projen](https://github.com/projen/projen): a standard is a
+composition of modules, and each module resolves into concrete resources.
+
+```text
+standard
+    ↓
+modules/components
+    ↓
+resolved resources/tasks/adapters
+```
+
+```go
+type Module interface {
+    Name() string
+    Resolve(ctx context.Context, mctx *Context) ([]resource.Resource, error)
+}
+```
+
+See `internal/module` for the current (intentionally minimal) interface and
+`internal/resource` for the `Resource` type it produces. Do not treat this
+signature as frozen — it will grow as the resolver is implemented.
+
+## Resource ownership
+
+Adopted to avoid relying on fragile text markers as the primary ownership
+mechanism. See `docs/decisions/0003-resource-ownership.md` and
+`internal/resource` for the `Ownership` enum:
+
+- `generated` — VibeConform owns the whole file.
+- `structured-patch` — VibeConform owns specific structured fields.
+- `managed-section` — VibeConform owns a delimited section of a
+  project-owned file.
+- `project-owned` — read-only context; never written.
+
+## Three-way reconciliation
+
+Adopted from [Copier](https://github.com/copier-org/copier):
+
+```text
+previous resolved state
+        +
+current repository
+        +
+new desired state
+        ↓
+reconciliation
+```
+
+- `current == previous` → safe replacement.
+- `current == target` → no change.
+- `current != previous` and `target != previous` → conflict, surfaced to the
+  user rather than silently overwritten.
+- `project-owned` → never overwritten.
+
+## Audit / diff / sync UX
+
+Adopted from [Cruft](https://github.com/cruft/cruft):
+
+- `vibe audit` — read-only compliance/drift check; non-zero exit on strict
+  non-compliance. Safe to run in CI.
+- `vibe diff` — human-readable reconciliation preview.
+- `vibe sync` — performs the reconciliation.
+
+## Affected-component graph
+
+Adopted from [Nx](https://nx.dev/):
+
+```text
+changed files
+    ↓
+owning components
+    ↓
+reverse dependency closure
+    ↓
+affected components
+    ↓
+applicable validation tasks
+```
+
+Mixed-language repositories are represented as an explicit component graph,
+not a flat `languages: [...]` list:
+
+```yaml
+components:
+  - id: web
+    path: apps/web
+    profile: typescript
+    depends_on: [contracts]
+
+  - id: api
+    path: services/api
+    profile: go
+    depends_on: [contracts]
+```
+
+The graph engine is not built at bootstrap time (see
+`docs/plans/0001-bootstrap.md`).
+
+## Repository intelligence and Skills Manager boundaries
+
+VibeConform will eventually orchestrate, but not absorb, two adjacent
+systems through provider abstractions:
+
+- **GitNexus** (repository intelligence): index/search/dependency/
+  caller/impact/trace. It must never replace the compiler, LSP, linter,
+  tests, or CI — it augments them.
+- **Skills Manager**: canonical skill storage, deployment, and per-project
+  activation. It must never become a CI dependency.
+
+## Future internal package layout
+
+```text
+internal/
+  manifest/       # vibe.yaml parsing (present)
+  standard/       # versioned standard definitions
+  module/         # module composition interface (present)
+  resource/       # resource + ownership model (present)
+  state/          # .vibe/lock.yaml, .vibe/state.yaml
+  reconcile/      # three-way reconciliation engine
+  audit/          # audit/diff/sync orchestration
+  affected/       # changed-files -> affected-components graph
+  validation/     # task execution for affected components
+  agents/
+    codex/        # Codex config/hooks provider
+    claude/       # Claude Code config/hooks provider
+  ci/
+    github/       # GitHub Actions provider
+  skills/         # Skills Manager provider
+  intelligence/   # GitNexus provider
+```
+
+Packages are created when there is real code to put in them, not in
+advance. See `docs/plans/0001-bootstrap.md` for what M0 actually delivers.
+
+## Canonical verification interface
+
+Taskfile (`Taskfile.yml`) is the single cross-platform entry point for local
+and CI verification (`task fmt`, `task lint`, `task test`, `task security`,
+`task verify`). CI, Git hooks, and docs invoke these tasks rather than
+duplicating command lists. `vibe check` / `vibe audit` will eventually thin
+this down once the affected-graph and validation subsystems exist.
