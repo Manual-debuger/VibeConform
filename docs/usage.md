@@ -72,13 +72,50 @@ vibe init production v1 --repo-root ./some/other/repo
   Error: init: new manifest: "standard" is required
   ```
 
-### `vibe audit`, `vibe diff`, `vibe sync`, `vibe check`, `vibe doctor`
+### `vibe audit`
+
+Reads `vibe.yaml`, resolves the declared standard/version via
+`internal/standard.Lookup`, and reports the resolved standard's module
+count — see `docs/specs/0004-vibe-audit-v1.md`.
+
+```bash
+vibe audit
+```
+
+produces:
+
+```
+standard: production/v1
+0 modules configured, nothing to check
+```
+
+**Flags:**
+
+| Flag          | Default | Meaning                          |
+|---------------|---------|-----------------------------------|
+| `--repo-root` | `.`     | Directory to read `vibe.yaml` from |
+
+**Behavior to know:**
+
+- Read-only: never writes `vibe.yaml`, `.vibe/lock.yaml`, or
+  `.vibe/state.yaml` (none of the latter exist yet).
+- "0 modules configured" is **not** a failure — every registered standard
+  has zero modules today (see `docs/specs/0003-standard-registry.md`), so
+  exit code is 0 whenever the manifest and standard both resolve.
+- Fails (non-zero exit) only if `vibe.yaml` is missing/unreadable, or the
+  declared `(standard, version)` isn't registered:
+  ```
+  Error: audit: open vibe.yaml: no such file or directory
+  Error: audit: standard: no such standard production/v99
+  ```
+
+### `vibe diff`, `vibe sync`, `vibe check`, `vibe doctor`
 
 Not implemented. Each returns an explicit error rather than silently doing
 nothing or exiting 0:
 
 ```
-Error: audit: not implemented yet (see docs/plans/0001-bootstrap.md)
+Error: diff: not implemented yet (see docs/plans/0001-bootstrap.md)
 ```
 
 Don't script against these expecting real output — they exist as
