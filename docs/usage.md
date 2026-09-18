@@ -86,7 +86,7 @@ produces:
 
 ```
 standard: production/v1
-0 modules configured, nothing to check
+1 modules configured, nothing to check
 ```
 
 **Flags:**
@@ -99,9 +99,11 @@ standard: production/v1
 
 - Read-only: never writes `vibe.yaml`, `.vibe/lock.yaml`, or
   `.vibe/state.yaml` (none of the latter exist yet).
-- "0 modules configured" is **not** a failure — every registered standard
-  has zero modules today (see `docs/specs/0003-standard-registry.md`), so
-  exit code is 0 whenever the manifest and standard both resolve.
+- A module count of `0` (a standard with no registered modules) is
+  **not** a failure — exit code is 0 whenever the manifest and standard
+  both resolve, regardless of module count. `production`/`v1` currently
+  composes one module, `go-tooling` (see
+  `docs/specs/0005-gotooling-module.md`).
 - Fails (non-zero exit) only if `vibe.yaml` is missing/unreadable, or the
   declared `(standard, version)` isn't registered:
   ```
