@@ -13,16 +13,6 @@ func errNotImplemented(cmd string) error {
 	return fmt.Errorf("%s: not implemented yet (see docs/plans/0001-bootstrap.md)", cmd)
 }
 
-func newAuditCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "audit",
-		Short: "Read-only compliance and drift check against the desired standard",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return errNotImplemented("audit")
-		},
-	}
-}
-
 func newDiffCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "diff",

@@ -1,8 +1,10 @@
 # VibeConform
 
-> **Status: pre-alpha (M0 + `vibe init` v1).** `vibe init` writes a
-> `vibe.yaml` desired-state file (see
-> [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `audit`,
+> **Status: pre-alpha (M0 + `vibe init` v1 + `vibe audit` v1).** `vibe init`
+> writes a `vibe.yaml` desired-state file (see
+> [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `vibe
+> audit` reads it back and reports the resolved standard's module count
+> (see [`docs/specs/0004-vibe-audit-v1.md`](docs/specs/0004-vibe-audit-v1.md)).
 > `diff`, `sync`, `check`, `doctor` still return "not implemented yet."
 > Nothing described below as "eventually" or "will" exists yet. See
 > [`docs/plans/0001-bootstrap.md`](docs/plans/0001-bootstrap.md) for what M0
