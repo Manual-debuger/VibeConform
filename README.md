@@ -1,7 +1,7 @@
 # VibeConform
 
 > **Status: pre-alpha (M0 + `vibe init` v1 + `vibe audit` v1 + `vibe diff`
-> v1).** `vibe init` writes a `vibe.yaml` desired-state file (see
+> v1 + `vibe sync` v1).** `vibe init` writes a `vibe.yaml` desired-state file (see
 > [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `vibe
 > audit` reads it back and reports the resolved standard's module count
 > (see [`docs/specs/0004-vibe-audit-v1.md`](docs/specs/0004-vibe-audit-v1.md)).
@@ -9,10 +9,12 @@
 > resolving a fixed `.golangci.yml` (see
 > [`docs/specs/0005-gotooling-module.md`](docs/specs/0005-gotooling-module.md)).
 > `vibe diff` previews the reconciliation VibeConform would perform for that
-> resource against `.vibe/state.yaml` (read-only; nothing writes that file
-> yet) — see
+> resource against `.vibe/state.yaml` — see
 > [`docs/specs/0006-reconcile-diff-v1.md`](docs/specs/0006-reconcile-diff-v1.md).
-> `sync`, `check`, `doctor` still return "not implemented yet."
+> `vibe sync` applies it: it writes `Generated` resources, records their
+> hashes in `.vibe/state.yaml`, and refuses to overwrite a conflict (see
+> [`docs/specs/0008-vibe-sync-v1.md`](docs/specs/0008-vibe-sync-v1.md)).
+> `check` and `doctor` still return "not implemented yet."
 > Nothing described below as "eventually" or "will" exists yet. See
 > [`docs/plans/0001-bootstrap.md`](docs/plans/0001-bootstrap.md) for what M0
 > delivered.

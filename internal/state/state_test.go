@@ -59,3 +59,81 @@ func TestLoadValidFileParsesResources(t *testing.T) {
 		t.Errorf("Load: SHA256 = %q, want %q", got.SHA256, "deadbeef")
 	}
 }
+
+func TestSaveThenLoadRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	want := &State{Resources: map[string]ResourceState{
+		".golangci.yml":            {SHA256: "aaa"},
+		".github/workflows/ci.yml": {SHA256: "bbb"},
+	}}
+
+	if err := Save(dir, want); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got.Resources) != len(want.Resources) {
+		t.Fatalf("Load: got %v, want %v", got.Resources, want.Resources)
+	}
+	for path, rs := range want.Resources {
+		if got.Resources[path] != rs {
+			t.Errorf("Load: %s = %v, want %v", path, got.Resources[path], rs)
+		}
+	}
+}
+
+func TestSaveCreatesStateDirectory(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := Save(dir, &State{Resources: map[string]ResourceState{".golangci.yml": {SHA256: "abc"}}}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, ".vibe", "state.yaml")); err != nil {
+		t.Fatalf("expected .vibe/state.yaml to exist: %v", err)
+	}
+}
+
+func TestSaveReplacesExistingState(t *testing.T) {
+	dir := t.TempDir()
+	if err := Save(dir, &State{Resources: map[string]ResourceState{"old.yml": {SHA256: "old"}}}); err != nil {
+		t.Fatalf("seeding Save: %v", err)
+	}
+
+	if err := Save(dir, &State{Resources: map[string]ResourceState{"new.yml": {SHA256: "new"}}}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, stale := got.Resources["old.yml"]; stale {
+		t.Errorf("Save: stale entry survived a rewrite: %v", got.Resources)
+	}
+	if got.Resources["new.yml"].SHA256 != "new" {
+		t.Errorf("Save: new.yml = %v, want sha256 %q", got.Resources["new.yml"], "new")
+	}
+}
+
+func TestSaveEmptyStateLoadsAsEmptyMap(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := Save(dir, &State{Resources: map[string]ResourceState{}}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Resources == nil {
+		t.Fatal("Load: Resources map should be non-nil after saving an empty state")
+	}
+	if len(got.Resources) != 0 {
+		t.Errorf("Load: got %v, want empty", got.Resources)
+	}
+}
