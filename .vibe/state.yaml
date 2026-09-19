@@ -1,0 +1,23 @@
+resources:
+    .claude/hooks/block-dangerous.sh:
+        sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
+    .claude/hooks/block-secret-files.sh:
+        sha256: a12815be5dd837f16ef67099a647ec207d494f5066329ddcf4a0a495ca52fedb
+    .claude/settings.json:
+        sha256: e2e0c9f3fd612ac657dc0123ac306460446ff7ebd6bc07a665a4bf7163bbab21
+    .codex/config.toml:
+        sha256: 0e2463f33a69a35951284567fba5559d3543d47e6ec381433235671d2dd5ac74
+    .codex/hooks.json:
+        sha256: ff684bcd9091bcce40fc029d245e717d9f44c959068b4860715e4f9dd99f87bd
+    .github/dependabot.yml:
+        sha256: 0242fad9502470453e9ca496b51957cd1a44ce748b62271870131d036e5db75b
+    .github/pull_request_template.md:
+        sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
+    .github/workflows/ci.yml:
+        sha256: 3319f9f3d03e920235a3c42f22e8aa4f31bf2ae77720e2acb79380010c58e843
+    .golangci.yml:
+        sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
+    Taskfile.yml:
+        sha256: 96652347f1475492f3b3fa57ccc15b50fe68d53edaf9ee6c17efba5e21204190
+    lefthook.yml:
+        sha256: 39b86742ce5cf94c5451adbc236b5be86c8cfd2acc717160424c363e6511fcdc

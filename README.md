@@ -1,23 +1,37 @@
 # VibeConform
 
-> **Status: pre-alpha (M0 + `vibe init` v1 + `vibe audit` v1 + `vibe diff`
-> v1 + `vibe sync` v1).** `vibe init` writes a `vibe.yaml` desired-state file (see
+> **Status: pre-alpha, M1 complete — VibeConform manages its own guardrails
+> and audits itself in CI.** `vibe init` writes a `vibe.yaml` desired-state file (see
 > [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `vibe
-> audit` reads it back and reports the resolved standard's module count
-> (see [`docs/specs/0004-vibe-audit-v1.md`](docs/specs/0004-vibe-audit-v1.md)).
-> The `production`/`v1` standard composes one real module, `go-tooling`,
-> resolving a fixed `.golangci.yml` (see
-> [`docs/specs/0005-gotooling-module.md`](docs/specs/0005-gotooling-module.md)).
+> audit` is the conformance gate: it checks every resolved resource against
+> the repository and exits `2` when the repository is not conformant, `1`
+> when it cannot answer at all
+> (see [`docs/specs/0009-vibe-audit-v2.md`](docs/specs/0009-vibe-audit-v2.md)).
+> The `production`/`v1` standard composes four modules: `go-tooling`
+> (a fixed `.golangci.yml`, see
+> [`docs/specs/0005-gotooling-module.md`](docs/specs/0005-gotooling-module.md))
+> `github-ci` (CI workflow, Dependabot config, PR template, see
+> [`docs/specs/0010-github-ci-module.md`](docs/specs/0010-github-ci-module.md)),
+> `repo-tooling` (`Taskfile.yml`, `lefthook.yml`, see
+> [`docs/specs/0011-repo-tooling-module.md`](docs/specs/0011-repo-tooling-module.md)),
+> and `agent-config` (Claude/Codex settings and the hook scripts that block
+> destructive commands, see
+> [`docs/specs/0012-agent-config-module.md`](docs/specs/0012-agent-config-module.md)).
 > `vibe diff` previews the reconciliation VibeConform would perform for that
 > resource against `.vibe/state.yaml` — see
 > [`docs/specs/0006-reconcile-diff-v1.md`](docs/specs/0006-reconcile-diff-v1.md).
 > `vibe sync` applies it: it writes `Generated` resources, records their
 > hashes in `.vibe/state.yaml`, and refuses to overwrite a conflict (see
 > [`docs/specs/0008-vibe-sync-v1.md`](docs/specs/0008-vibe-sync-v1.md)).
+> This repository declares `production`/`v1` in its own `vibe.yaml`, commits
+> `.vibe/state.yaml`, and runs `vibe audit` against itself in CI — every file
+> those four modules manage is generated from a module template rather than
+> hand-maintained (see
+> [`docs/specs/0013-dogfood-self-management.md`](docs/specs/0013-dogfood-self-management.md)).
 > `check` and `doctor` still return "not implemented yet."
 > Nothing described below as "eventually" or "will" exists yet. See
-> [`docs/plans/0001-bootstrap.md`](docs/plans/0001-bootstrap.md) for what M0
-> delivered.
+> [`docs/plans/0007-m1-milestone.md`](docs/plans/0007-m1-milestone.md) for
+> what M1 delivered and what moved to M2.
 
 ## What VibeConform is
 
@@ -99,8 +113,11 @@ cmd/vibe/          CLI entrypoint
 internal/cli/      Command tree (root + init/audit/diff/sync/check/doctor)
 internal/manifest/ vibe.yaml parsing
 internal/standard/ Named, versioned standard registry
-internal/module/   Module composition interface
-internal/resource/ Resource + ownership model
+internal/module/   Module composition interface + the four modules
+internal/resource/ Resource + ownership + file mode model
+internal/reconcile/ Three-way decision engine
+internal/state/    .vibe/state.yaml read/write
+internal/atomicfile/ Temp-file + rename writes
 docs/              Specs, plans, architecture, and decision records (source of truth)
 ```
 

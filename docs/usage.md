@@ -74,42 +74,74 @@ vibe init production v1 --repo-root ./some/other/repo
 
 ### `vibe audit`
 
-Reads `vibe.yaml`, resolves the declared standard/version via
-`internal/standard.Lookup`, and reports the resolved standard's module
-count — see `docs/specs/0004-vibe-audit-v1.md`.
+The conformance gate: checks every resource the declared standard resolves
+against the repository's actual files and exits non-zero if any of them is
+not what the standard says it should be. Safe to run in CI — see
+`docs/specs/0009-vibe-audit-v2.md`.
 
 ```bash
 vibe audit
 ```
 
-produces:
+on a conformant repository:
 
 ```
 standard: production/v1
-1 modules configured, nothing to check
+.golangci.yml: ok
+1 resource checked, 0 drifted, 0 conflicts
+conformant
+```
+
+and on one that has drifted:
+
+```
+standard: production/v1
+.golangci.yml: drifted (run vibe sync)
+1 resource checked, 1 drifted, 0 conflicts
+not conformant
 ```
 
 **Flags:**
 
 | Flag          | Default | Meaning                          |
 |---------------|---------|-----------------------------------|
-| `--repo-root` | `.`     | Directory to read `vibe.yaml` from |
+| `--repo-root` | `.`     | Directory to read `vibe.yaml` and check files under |
+
+**What each line means:**
+
+| Line | Meaning | Conformant? |
+|---|---|---|
+| `ok` | file matches the standard | yes |
+| `missing (run vibe sync)` | the standard resolves it, the file isn't there | no |
+| `drifted (run vibe sync)` | file differs from the standard, and `sync` can fix it | no |
+| `conflict: manual changes detected` | file and standard both moved; `sync` won't touch it | no |
+| `not yet checked (unsupported ownership)` | no command handles this ownership mode yet | not counted |
+
+**Exit codes:**
+
+| Code | Meaning |
+|---|---|
+| `0` | conformant |
+| `2` | audited successfully, repository is **not** conformant |
+| `1` | could not answer: `vibe.yaml` missing/unreadable, unregistered `(standard, version)`, malformed `.vibe/state.yaml`, or an I/O failure |
+
+The `1` / `2` split is the point of the command in CI: only a `2` is fixed by
+running `vibe sync`. A `1` means the check itself is broken.
+
+```
+Error: audit: open vibe.yaml: no such file or directory
+Error: audit: standard: no such standard production/v99
+```
 
 **Behavior to know:**
 
-- Read-only: never writes `vibe.yaml`, `.vibe/lock.yaml`, or
-  `.vibe/state.yaml` (none of the latter exist yet).
-- A module count of `0` (a standard with no registered modules) is
-  **not** a failure — exit code is 0 whenever the manifest and standard
-  both resolve, regardless of module count. `production`/`v1` currently
-  composes one module, `go-tooling` (see
-  `docs/specs/0005-gotooling-module.md`).
-- Fails (non-zero exit) only if `vibe.yaml` is missing/unreadable, or the
-  declared `(standard, version)` isn't registered:
-  ```
-  Error: audit: open vibe.yaml: no such file or directory
-  Error: audit: standard: no such standard production/v99
-  ```
+- Read-only: never writes `vibe.yaml`, `.vibe/state.yaml`, or any managed
+  file. `vibe sync` is the only writer.
+- There is no `--fix` and no `--strict`. Strict *is* the behavior; fixing is
+  a different command on purpose.
+- `audit`, `diff`, and `sync` share one decision engine, so they never
+  disagree about a resource — they only differ in whether they judge,
+  describe, or apply.
 
 ### `vibe diff`
 
@@ -245,6 +277,71 @@ Don't script against these expecting real output — they exist as
 scaffolding for commands that will eventually read/reconcile against
 `vibe.yaml` (see `docs/architecture/overview.md`).
 
+## What `production/v1` manages
+
+The command examples above are abbreviated — they show one resource so the
+output format is readable. `production/v1` actually resolves every resource
+its modules compose:
+
+| Module | Resources |
+|---|---|
+| `go-tooling` | `.golangci.yml` |
+| `github-ci` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
+| `repo-tooling` | `Taskfile.yml`, `lefthook.yml` |
+| `agent-config` | `.claude/settings.json`, `.claude/hooks/block-dangerous.sh`, `.claude/hooks/block-secret-files.sh`, `.codex/config.toml`, `.codex/hooks.json` |
+
+Deliberately **not** managed, and left for you to maintain by hand:
+
+- `.github/workflows/release.yml` and `.goreleaser.yaml` — releasing
+  binaries is a repository policy choice, not a baseline guardrail, and a
+  `v1` standard is all-or-nothing (no optional resources yet).
+- `AGENTS.md` and `CLAUDE.md` — prose written by a human for a specific
+  repository. Generating them would produce exactly the fabricated,
+  ignored-by-everyone instruction file this project argues against.
+- `.claude/settings.local.json` — gitignored, user-local, possibly
+  machine-specific. Never written.
+- `.gitignore` — genuinely project-specific.
+- `.gitattributes` — it governs how git materializes every file, including
+  the ones VibeConform writes and hashes. Managing the file that determines
+  how your own outputs are compared is a loop worth entering deliberately,
+  with its own spec.
+
+**File modes.** Resources are written `0644`, except the agent hook scripts,
+which are written `0755` — a hook script that is not executable does not run,
+and it fails open. Mode is applied on write but is **not** audited: a
+`chmod -x` on a hook script disables a guardrail and `vibe audit` will still
+report the repository conformant. See
+`docs/decisions/0006-resource-file-mode.md`. On Windows, Unix permission bits
+are not modeled at all, so the executable bit comes from your git checkout
+rather than from `sync`.
+
+Syncing `lefthook.yml` writes the configuration; it does **not** register git
+hooks. Run `lefthook install` yourself. More generally, VibeConform writes
+configuration and never provisions toolchains: a repository that syncs
+`Taskfile.yml` without `task` installed gets a file it cannot run, which is
+the correct division of responsibility.
+
+Content is fixed in `v1`: Go version, action pins, and job names come from
+the standard, not from your repository. A repository that needs different
+values cannot conform to `production/v1` yet.
+
+## VibeConform manages itself
+
+This repository is the worked example: it has a `vibe.yaml` declaring
+`production/v1`, a committed `.vibe/state.yaml`, and a CI job that runs
+`vibe audit` against itself. Every file in the table above is generated from
+a module template rather than hand-maintained.
+
+The practical consequence, and the main cost of the arrangement: changing a
+managed file means changing its template under `internal/module/`, rebuilding
+(`go:embed` resolves at build time), running `vibe sync`, and committing both
+the file and the updated state. Editing the file directly makes the
+repository non-conformant, and `task audit` fails.
+
+Still hand-maintained here, by the non-goals above:
+`.github/workflows/release.yml`, `.goreleaser.yaml`, `.gitignore`,
+`.gitattributes`, `AGENTS.md`, `CLAUDE.md`.
+
 ## What `vibe.yaml` means today
 
 Right now it's exactly two fields, nothing more:
@@ -254,9 +351,10 @@ standard: production
 version: v1
 ```
 
-There is no `.vibe/lock.yaml` and no component graph yet. `.vibe/state.yaml`
-exists once you run `vibe sync`; it is machine-owned bookkeeping — commit it,
-but don't hand-edit it. Editing `vibe.yaml` by hand is safe and expected —
+There is no `.vibe/lock.yaml` and no component graph yet — and no overrides:
+a repository either conforms to `production/v1` as written or it does not.
+`.vibe/state.yaml` exists once you run `vibe sync`; it is machine-owned
+bookkeeping — commit it, but don't hand-edit it. Editing `vibe.yaml` by hand is safe and expected —
 `init` only exists to create the first one.
 
 ## Getting help

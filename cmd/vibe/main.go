@@ -12,7 +12,7 @@ var version = "dev"
 
 func main() {
 	root := cli.NewRootCmd(version)
-	if err := root.Execute(); err != nil {
-		os.Exit(1)
-	}
+	// Exit code carries meaning: 2 means "audited, not conformant", which CI
+	// needs to tell apart from 1, "the tool could not answer".
+	os.Exit(cli.ExitCode(root.Execute()))
 }

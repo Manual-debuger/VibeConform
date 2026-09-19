@@ -1,0 +1,26 @@
+# Lefthook: fast checks at commit time, stronger checks at push time.
+# CI (.github/workflows/ci.yml) is the authoritative full verification gate;
+# these hooks are a fast local first line of defense, not a substitute.
+
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      glob: "*.go"
+      run: gofmt -l {staged_files}
+      fail_text: "Run 'task fmt' to format staged Go files."
+    goimports:
+      glob: "*.go"
+      run: goimports -l {staged_files}
+      fail_text: "Run 'task fmt' to fix staged Go imports."
+    go-vet:
+      glob: "*.go"
+      run: go vet ./...
+
+pre-push:
+  parallel: false
+  commands:
+    lint:
+      run: golangci-lint run
+    test:
+      run: go test ./...

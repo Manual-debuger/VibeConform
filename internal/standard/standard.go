@@ -7,7 +7,10 @@ import (
 	"fmt"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/agents"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/github"
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/repotooling"
 )
 
 // Standard is a named, versioned bundle of modules.
@@ -51,6 +54,7 @@ func init() {
 	Register(Standard{
 		Name:    "production",
 		Version: "v1",
-		Modules: []module.Module{gotooling.New()},
+		// Order matters: audit, diff, and sync report in module order.
+		Modules: []module.Module{gotooling.New(), github.New(), repotooling.New(), agents.New()},
 	})
 }

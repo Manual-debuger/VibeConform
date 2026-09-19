@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/state"
@@ -23,11 +24,16 @@ func runSyncIn(t *testing.T, dir string) (string, error) {
 	return out.String(), err
 }
 
-func seedState(t *testing.T, dir, path, sha string) {
+// recordState updates one entry in an existing state file, leaving the rest
+// alone, so a test can drift a single resource without disturbing the others.
+func recordState(t *testing.T, dir, path, sha string) {
 	t.Helper()
-	if err := state.Save(dir, &state.State{Resources: map[string]state.ResourceState{
-		path: {SHA256: sha},
-	}}); err != nil {
+	s, err := state.Load(dir)
+	if err != nil {
+		t.Fatalf("loading state: %v", err)
+	}
+	s.Resources[path] = state.ResourceState{SHA256: sha}
+	if err := state.Save(dir, s); err != nil {
 		t.Fatalf("seeding state: %v", err)
 	}
 }
@@ -63,13 +69,70 @@ func TestSyncCmdCreatesResourceAndRecordsState(t *testing.T) {
 		t.Errorf("recorded hash = %q, want %q", recorded, sha256Hex(want))
 	}
 
+	// The created count grows as modules are added; what this test pins is
+	// that this resource was created and nothing was updated or conflicted.
 	for _, wantLine := range []string{
 		"standard: production/v1",
 		".golangci.yml: created",
-		"1 created, 0 updated, 0 unchanged, 0 conflicts",
+		"0 updated, 0 unchanged, 0 conflicts",
 	} {
 		if !bytes.Contains([]byte(out), []byte(wantLine)) {
 			t.Errorf("sync output missing %q\n%s", wantLine, out)
+		}
+	}
+}
+
+// TestSyncCmdCreatesNestedPaths is the test spec 0008 deferred until a module
+// produced a resource in a subdirectory.
+func TestSyncCmdCreatesNestedPaths(t *testing.T) {
+	dir := t.TempDir()
+	writeManifest(t, dir)
+
+	if _, err := runSyncIn(t, dir); err != nil {
+		t.Fatalf("sync returned error: %v", err)
+	}
+
+	nested := filepath.Join(dir, ".github", "workflows", "ci.yml")
+	if _, err := os.Stat(nested); err != nil {
+		t.Fatalf("sync did not create the resource or its parent directories: %v", err)
+	}
+
+	s, err := state.Load(dir)
+	if err != nil {
+		t.Fatalf("loading state: %v", err)
+	}
+	// The key must be slash-separated regardless of host platform, or a
+	// Windows run and a Unix run record different state for the same repo.
+	if _, ok := s.Resources[".github/workflows/ci.yml"]; !ok {
+		t.Errorf("state is missing the slash-separated key for the nested resource: %v", s.Resources)
+	}
+}
+
+// TestSyncCmdAppliesResourceModes checks the reason ADR 0006 exists: hook
+// scripts must land executable, or the guardrail they implement silently
+// does not run. Ordinary config lands 0644, not the owner-only 0600 spec
+// 0008 originally hardcoded.
+func TestSyncCmdAppliesResourceModes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not model Unix permission bits; this would test the platform, not sync")
+	}
+
+	dir := t.TempDir()
+	writeManifest(t, dir)
+	if _, err := runSyncIn(t, dir); err != nil {
+		t.Fatalf("sync returned error: %v", err)
+	}
+
+	for path, want := range map[string]os.FileMode{
+		".claude/hooks/block-dangerous.sh": 0o755,
+		".golangci.yml":                    0o644,
+	} {
+		info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Errorf("%s mode = %v, want %v", path, got, want)
 		}
 	}
 }
@@ -94,7 +157,10 @@ func TestSyncCmdIsIdempotent(t *testing.T) {
 	if want := ".golangci.yml: unchanged"; !bytes.Contains([]byte(out), []byte(want)) {
 		t.Errorf("sync output missing %q\n%s", want, out)
 	}
-	if want := "0 created, 0 updated, 1 unchanged, 0 conflicts"; !bytes.Contains([]byte(out), []byte(want)) {
+	if want := "0 created, 0 updated,"; !bytes.Contains([]byte(out), []byte(want)) {
+		t.Errorf("sync output missing %q — a second run must write nothing\n%s", want, out)
+	}
+	if want := "0 conflicts"; !bytes.Contains([]byte(out), []byte(want)) {
 		t.Errorf("sync output missing %q\n%s", want, out)
 	}
 
@@ -139,13 +205,18 @@ func TestSyncCmdOverwritesDriftFromRecordedState(t *testing.T) {
 	writeManifest(t, dir)
 	target := goToolingContent(t)
 
+	// Sync everything first, so only the one resource under test drifts.
+	if _, err := runSyncIn(t, dir); err != nil {
+		t.Fatalf("seeding sync: %v", err)
+	}
+
 	// The file on disk still matches what was last applied, while the
 	// module's target has moved on: reconcile's safe-replacement row.
 	stale := []byte("previously-applied: true\n")
 	if err := os.WriteFile(filepath.Join(dir, ".golangci.yml"), stale, 0o600); err != nil {
 		t.Fatalf("seeding .golangci.yml: %v", err)
 	}
-	seedState(t, dir, ".golangci.yml", sha256Hex(stale))
+	recordState(t, dir, ".golangci.yml", sha256Hex(stale))
 
 	out, err := runSyncIn(t, dir)
 	if err != nil {
@@ -171,7 +242,10 @@ func TestSyncCmdOverwritesDriftFromRecordedState(t *testing.T) {
 	if want := ".golangci.yml: updated"; !bytes.Contains([]byte(out), []byte(want)) {
 		t.Errorf("sync output missing %q\n%s", want, out)
 	}
-	if want := "0 created, 1 updated, 0 unchanged, 0 conflicts"; !bytes.Contains([]byte(out), []byte(want)) {
+	if want := "0 created, 1 updated,"; !bytes.Contains([]byte(out), []byte(want)) {
+		t.Errorf("sync output missing %q — exactly one resource should have been rewritten\n%s", want, out)
+	}
+	if want := "0 conflicts"; !bytes.Contains([]byte(out), []byte(want)) {
 		t.Errorf("sync output missing %q\n%s", want, out)
 	}
 }
