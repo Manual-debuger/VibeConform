@@ -5,24 +5,24 @@ See `docs/specs/0009-vibe-audit-v2.md` for the accepted scope, and
 
 ## Checklist
 
-- [ ] `internal/cli/exit.go` (new): unexported `nonConformantError{drifted,
+- [x] `internal/cli/exit.go` (new): unexported `nonConformantError{drifted,
       conflicts int}` implementing `error`, plus
       `ExitCode(err error) int` — `0` for nil, `2` when `errors.As` matches
       the non-conformance type, `1` otherwise. Exported doc comment
       explains the contract for `main`.
-- [ ] `internal/cli/exit_test.go`: nil → 0; non-conformance error → 2;
+- [x] `internal/cli/exit_test.go`: nil → 0; non-conformance error → 2;
       wrapped non-conformance error (`fmt.Errorf("audit: %w", …)`) → 2;
       any other error → 1.
-- [ ] `cmd/vibe/main.go`: `os.Exit(cli.ExitCode(err))` in place of the
+- [x] `cmd/vibe/main.go`: `os.Exit(cli.ExitCode(err))` in place of the
       unconditional `os.Exit(1)`.
-- [ ] `internal/cli/audit.go`: `runAudit` rewritten over `buildPlan` —
+- [x] `internal/cli/audit.go`: `runAudit` rewritten over `buildPlan` —
       header, one line per resource per the spec's table, summary
       `<N> resource(s) checked, <N> drifted, <N> conflicts`, then
       `conformant` / `not conformant`. Returns the non-conformance error
       when anything drifted or conflicted; returns a plain wrapped error for
       manifest/standard/state/I-O failures. Drops the manifest and
       `standard.Lookup` calls it duplicated from `diff`.
-- [ ] `internal/cli/audit_test.go`: rewrite the module-count case (that
+- [x] `internal/cli/audit_test.go`: rewrite the module-count case (that
       output no longer exists) into:
       - conformant repo (file matches target) → exit 0, `ok`, `conformant`;
       - missing file → `missing`, `ExitCode` 2;
@@ -32,12 +32,12 @@ See `docs/specs/0009-vibe-audit-v2.md` for the accepted scope, and
       - unknown standard → `ExitCode` 1.
       Assert through `ExitCode(err)`, not just `err != nil`, or the 1-vs-2
       distinction is untested.
-- [ ] `docs/usage.md`: rewrite the `vibe audit` section — new output, the
+- [x] `docs/usage.md`: rewrite the `vibe audit` section — new output, the
       decision→line table, the three exit codes and what each means, and
       the "use `audit` in CI, `diff` for a preview" split.
-- [ ] `README.md`: status banner — `audit` is a strict conformance gate,
+- [x] `README.md`: status banner — `audit` is a strict conformance gate,
       not a module-count report.
-- [ ] `task verify` clean.
+- [x] `task verify` clean.
 
 ## Notes
 

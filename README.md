@@ -3,8 +3,10 @@
 > **Status: pre-alpha (M0 + `vibe init` v1 + `vibe audit` v1 + `vibe diff`
 > v1 + `vibe sync` v1).** `vibe init` writes a `vibe.yaml` desired-state file (see
 > [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `vibe
-> audit` reads it back and reports the resolved standard's module count
-> (see [`docs/specs/0004-vibe-audit-v1.md`](docs/specs/0004-vibe-audit-v1.md)).
+> audit` is the conformance gate: it checks every resolved resource against
+> the repository and exits `2` when the repository is not conformant, `1`
+> when it cannot answer at all
+> (see [`docs/specs/0009-vibe-audit-v2.md`](docs/specs/0009-vibe-audit-v2.md)).
 > The `production`/`v1` standard composes one real module, `go-tooling`,
 > resolving a fixed `.golangci.yml` (see
 > [`docs/specs/0005-gotooling-module.md`](docs/specs/0005-gotooling-module.md)).

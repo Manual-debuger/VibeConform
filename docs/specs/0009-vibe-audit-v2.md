@@ -1,6 +1,6 @@
 # Spec 0009: `vibe audit` (v2 — strict conformance gate)
 
-Status: proposed.
+Status: accepted and implemented.
 
 ## Problem
 

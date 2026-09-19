@@ -74,42 +74,74 @@ vibe init production v1 --repo-root ./some/other/repo
 
 ### `vibe audit`
 
-Reads `vibe.yaml`, resolves the declared standard/version via
-`internal/standard.Lookup`, and reports the resolved standard's module
-count — see `docs/specs/0004-vibe-audit-v1.md`.
+The conformance gate: checks every resource the declared standard resolves
+against the repository's actual files and exits non-zero if any of them is
+not what the standard says it should be. Safe to run in CI — see
+`docs/specs/0009-vibe-audit-v2.md`.
 
 ```bash
 vibe audit
 ```
 
-produces:
+on a conformant repository:
 
 ```
 standard: production/v1
-1 modules configured, nothing to check
+.golangci.yml: ok
+1 resource checked, 0 drifted, 0 conflicts
+conformant
+```
+
+and on one that has drifted:
+
+```
+standard: production/v1
+.golangci.yml: drifted (run vibe sync)
+1 resource checked, 1 drifted, 0 conflicts
+not conformant
 ```
 
 **Flags:**
 
 | Flag          | Default | Meaning                          |
 |---------------|---------|-----------------------------------|
-| `--repo-root` | `.`     | Directory to read `vibe.yaml` from |
+| `--repo-root` | `.`     | Directory to read `vibe.yaml` and check files under |
+
+**What each line means:**
+
+| Line | Meaning | Conformant? |
+|---|---|---|
+| `ok` | file matches the standard | yes |
+| `missing (run vibe sync)` | the standard resolves it, the file isn't there | no |
+| `drifted (run vibe sync)` | file differs from the standard, and `sync` can fix it | no |
+| `conflict: manual changes detected` | file and standard both moved; `sync` won't touch it | no |
+| `not yet checked (unsupported ownership)` | no command handles this ownership mode yet | not counted |
+
+**Exit codes:**
+
+| Code | Meaning |
+|---|---|
+| `0` | conformant |
+| `2` | audited successfully, repository is **not** conformant |
+| `1` | could not answer: `vibe.yaml` missing/unreadable, unregistered `(standard, version)`, malformed `.vibe/state.yaml`, or an I/O failure |
+
+The `1` / `2` split is the point of the command in CI: only a `2` is fixed by
+running `vibe sync`. A `1` means the check itself is broken.
+
+```
+Error: audit: open vibe.yaml: no such file or directory
+Error: audit: standard: no such standard production/v99
+```
 
 **Behavior to know:**
 
-- Read-only: never writes `vibe.yaml`, `.vibe/lock.yaml`, or
-  `.vibe/state.yaml` (none of the latter exist yet).
-- A module count of `0` (a standard with no registered modules) is
-  **not** a failure — exit code is 0 whenever the manifest and standard
-  both resolve, regardless of module count. `production`/`v1` currently
-  composes one module, `go-tooling` (see
-  `docs/specs/0005-gotooling-module.md`).
-- Fails (non-zero exit) only if `vibe.yaml` is missing/unreadable, or the
-  declared `(standard, version)` isn't registered:
-  ```
-  Error: audit: open vibe.yaml: no such file or directory
-  Error: audit: standard: no such standard production/v99
-  ```
+- Read-only: never writes `vibe.yaml`, `.vibe/state.yaml`, or any managed
+  file. `vibe sync` is the only writer.
+- There is no `--fix` and no `--strict`. Strict *is* the behavior; fixing is
+  a different command on purpose.
+- `audit`, `diff`, and `sync` share one decision engine, so they never
+  disagree about a resource — they only differ in whether they judge,
+  describe, or apply.
 
 ### `vibe diff`
 
