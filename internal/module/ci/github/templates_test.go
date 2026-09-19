@@ -7,6 +7,31 @@ import (
 	"testing"
 )
 
+// embeddedTemplates is every template this module compiles into the binary.
+var embeddedTemplates = map[string][]byte{
+	".github/workflows/ci.yml":         ciWorkflow,
+	".github/dependabot.yml":           dependabotConfig,
+	".github/pull_request_template.md": pullRequestTemplate,
+}
+
+// TestTemplatesAreLF guards a defect that is invisible without it: go:embed
+// reads the working copy at build time, so a CRLF checkout on Windows
+// produces a different binary than an LF checkout on Linux — different
+// embedded bytes, different content hashes, and a repository that reports
+// drift depending on which machine built the tool that syncs it.
+//
+// This repository pins "* text=auto eol=lf" in .gitattributes, so a correct
+// checkout never contains CR. Asserting it here turns a silent, per-machine
+// divergence into a failing test.
+func TestTemplatesAreLF(t *testing.T) {
+	for path, content := range embeddedTemplates {
+		if bytes.Contains(content, []byte("\r")) {
+			t.Errorf("%s contains CR bytes; the working copy it was embedded from is CRLF, "+
+				"which makes this binary's output platform-dependent", path)
+		}
+	}
+}
+
 // TestTemplatesMatchLiveFiles is the drift alarm for the window between this
 // module landing and docs/specs/0013-dogfood-self-management.md, during which
 // every managed file exists twice: live in this repository, and embedded
