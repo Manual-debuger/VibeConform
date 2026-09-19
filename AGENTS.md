@@ -19,6 +19,14 @@ system.
 
 ## Rules
 
+- **This repository is managed by VibeConform.** Files that `vibe audit`
+  lists are generated from module templates under `internal/module/`. Do not
+  edit them directly: change the template, rebuild, run `vibe sync`, and
+  commit both the file and the updated `.vibe/state.yaml`. A direct edit is
+  non-conformant the moment it lands, and CI will say so. Run `vibe audit`
+  (or `task audit`) to see the current list. `go:embed` resolves at build
+  time, so a stale binary syncs stale templates — rebuild after every
+  template change.
 - Bug fixes require a regression test. Do not weaken or delete a test to
   make an implementation pass.
 - Do not introduce a production dependency without recording why (an ADR

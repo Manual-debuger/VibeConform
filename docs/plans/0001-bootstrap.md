@@ -9,6 +9,9 @@
 4. VibeConform becomes its own first dogfood repository.
 ```
 
+Steps 2-4 completed in M1; see `docs/plans/0007-m1-milestone.md` and
+`docs/specs/0013-dogfood-self-management.md`.
+
 ## M0 checklist
 
 - [x] Go module (`github.com/Manual-debuger/VibeConform`) and CLI skeleton

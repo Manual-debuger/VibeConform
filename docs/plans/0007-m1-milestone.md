@@ -32,6 +32,28 @@ this repo onto it, become the first dogfood repository.
 The decision engine is done; the loop is open at both ends — nothing writes,
 and nothing gates.
 
+## Status: complete
+
+All four exit criteria below are met. Delivered as 0008 (`sync`), 0009
+(strict `audit`), 0010–0012 (the `github-ci`, `repo-tooling`, and
+`agent-config` modules), and 0013 (dogfood). The acceptance test held: with
+templates seeded from files hand-written months earlier, the first `vibe
+sync` on this repository reported `0 created, 0 updated, 11 unchanged, 0
+conflicts`.
+
+Two things were found during implementation that the plan below did not
+anticipate:
+
+- **A CRLF/`go:embed` defect.** `go:embed` reads the working copy at build
+  time, and 27 tracked files had gone stale as CRLF while their blobs stayed
+  LF — `core.autocrlf=true` hid it from `git status`. Binaries built on
+  Windows embedded different bytes than binaries built in CI, which for a
+  content-hashing tool is a correctness bug. Fixed, and each module now
+  asserts its templates contain no CR.
+- **Adoption order is the reverse of what plan 0013 specified.** See that
+  plan's correction note: with no prior state, editing templates before the
+  first sync produces conflicts the tool refuses to resolve.
+
 ## Exit criteria
 
 M1 is done when all four hold:

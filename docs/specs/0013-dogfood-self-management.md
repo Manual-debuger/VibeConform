@@ -1,6 +1,6 @@
 # Spec 0013: Dogfood — VibeConform manages VibeConform
 
-Status: proposed.
+Status: accepted and implemented.
 
 ## Problem
 

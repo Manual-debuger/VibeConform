@@ -4,72 +4,105 @@ See `docs/specs/0013-dogfood-self-management.md` for the accepted scope, and
 `docs/plans/0007-m1-milestone.md` for where this sits in M1. This is the
 closing increment: when it merges, M1's four exit criteria are met.
 
+## Correction: adopt before changing templates
+
+This plan originally said "templates, then sync, then docs", reasoning that
+syncing before the template edits would produce a no-op and hide whether the
+templates were right. Implementation showed that order does not work, for a
+reason worth recording:
+
+on first adoption there is no `.vibe/state.yaml`, so `previous` is absent for
+every resource. Any resource whose live file differs from its template then
+decides `Conflict` (truth-table row 3), not `Overwrite` — and `sync` refuses
+to write it. Editing the templates first therefore produces two conflicts the
+tool will not resolve, and the only honest fixes are deleting the live files
+or hand-editing them, both of which destroy the evidence that the templates
+reproduce the repository.
+
+The working order is the reverse:
+
+1. `vibe init`, then `vibe sync` with templates exactly as seeded. Every
+   resource reports `unchanged`, state is recorded, and *that* is the
+   acceptance test for 0010–0012.
+2. Then edit the templates and `vibe sync` again. With state on record the
+   same edits decide `Overwrite`, and sync applies them cleanly.
+
+Observed on the real repository: step 1 gave `0 created, 0 updated, 11
+unchanged, 0 conflicts`; step 2 gave `0 created, 2 updated, 9 unchanged, 0
+conflicts`.
+
+Also worth knowing: `go:embed` resolves at build time, so the binary must be
+rebuilt after every template change. A stale binary silently reconciles
+against the templates it was compiled with.
+
 ## Checklist
 
-### Template changes first
+### Adopt first
 
-- [ ] `internal/module/repotooling/templates/Taskfile.yml`: add the `audit`
+- [x] `vibe.yaml` at the repository root: `standard: production`,
+      `version: v1`. Write it with `vibe init production v1`, not by hand.
+- [x] Run `vibe sync` with templates exactly as seeded. Every resource must
+      report `unchanged`. **This is the acceptance test for increments
+      0010–0012** — templates written from hand-maintained files reproducing
+      those files exactly. Observed: `0 created, 0 updated, 11 unchanged, 0
+      conflicts`.
+- [x] Confirm `.vibe/state.yaml` is actually tracked (`git check-ignore`
+      must not match) — reconciliation silently degrades to two-way if it is
+      not committed.
+
+### Then change templates
+
+- [x] `internal/module/repotooling/templates/Taskfile.yml`: add the `audit`
       target and add `task: audit` to `verify`'s step list, after `test` and
       before `mod:verify`.
-- [ ] `internal/module/ci/github/templates/ci.yml`: add a `conformance` job
+- [x] `internal/module/ci/github/templates/ci.yml`: add a `conformance` job
       (checkout, setup-go, install task, `task audit`) with
       `continue-on-error: true`, **not** added to `gate`'s `needs`.
-- [ ] Both `templates_test.go` drift alarms will now fail — they compare
-      templates against live files that have not been synced yet. That
-      failure is expected and is resolved by the sync step below, not by
-      weakening the tests.
-
-### Adopt
-
-- [ ] `vibe.yaml` at the repository root: `standard: production`,
-      `version: v1`. Write it with `vibe init production v1`, not by hand.
-- [ ] Run `vibe sync` and commit both the changed managed files and the
-      generated `.vibe/state.yaml`.
-- [ ] Confirm `.vibe/state.yaml` is actually tracked (`git status` must not
-      show it as ignored) — reconciliation silently degrades to two-way if
-      it is not committed.
-- [ ] Run `vibe audit`: every resource `ok`, exit 0. **This is the
-      acceptance test for increments 0010–0012.** Any `drifted` or
-      `conflict` result is a finding to resolve explicitly in this PR, not
-      to paper over by re-seeding the template from the live file.
-- [ ] `task verify` clean — now including `task audit`.
+- [x] Rebuild the binary, then `vibe sync` again: the two edited resources
+      decide `Overwrite` and are applied. Observed: `0 created, 2 updated, 9
+      unchanged, 0 conflicts`.
+- [x] Run `vibe audit`: every resource `ok`, exit 0.
+- [x] `task verify` clean — now including `task audit`.
 
 ### Documentation
 
-- [ ] `AGENTS.md`: a rule under "Rules" — files managed by VibeConform
+- [x] `AGENTS.md`: a rule under "Rules" — files managed by VibeConform
       (listed, or pointed at `vibe audit`'s output) must be changed via
       their module template followed by `vibe sync`, never edited directly.
       Include the reason: a direct edit is non-conformant the moment it
       lands, and CI will say so.
-- [ ] `README.md`: status banner — VibeConform manages its own guardrails
+- [x] `README.md`: status banner — VibeConform manages its own guardrails
       and audits itself in CI; M1 complete.
-- [ ] `docs/usage.md`: a short "VibeConform manages itself" section pointing
+- [x] `docs/usage.md`: a short "VibeConform manages itself" section pointing
       at `vibe.yaml` and `.vibe/state.yaml` as the worked example, and
       naming `release.yml` / `.goreleaser.yaml` as the remaining
       hand-maintained files under `.github/`.
-- [ ] `docs/architecture/overview.md`: the "Future internal package layout"
+- [x] `docs/architecture/overview.md`: the "Future internal package layout"
       section is now partly present tense — mark which packages exist.
-- [ ] `docs/plans/0001-bootstrap.md`: sequencing steps 3 and 4 are done; say
+- [x] `docs/plans/0001-bootstrap.md`: sequencing steps 3 and 4 are done; say
       so.
-- [ ] `docs/plans/0007-m1-milestone.md`: record M1's exit criteria as met.
-- [ ] Specs 0008–0013 and plans 0008–0013: `Status: accepted and
+- [x] `docs/plans/0007-m1-milestone.md`: record M1's exit criteria as met.
+- [x] Specs 0008–0013 and plans 0008–0013: `Status: accepted and
       implemented`, checklists ticked.
 
-### Step B — make the gate binding (separate PR)
+### Step B — make the gate binding (NOT DONE: separate PR, after Step A merges)
 
 - [ ] `internal/module/ci/github/templates/ci.yml`: remove
       `continue-on-error` from `conformance`; add `conformance` to `gate`'s
       `needs`.
-- [ ] `vibe sync`; commit the workflow and the state change.
+- [ ] Rebuild, `vibe sync`, commit the workflow and the state change.
 - [ ] Confirm on a real PR that `CI / gate` fails when a managed file is
       edited directly — deliberately drift one file, watch it fail, revert.
       An untested gate is an assumed gate.
 
+Step B is deliberately not in this branch. Its whole purpose is to observe
+one merged PR's worth of real `conformance` output on real runners before
+anything depends on it; doing both at once discards that evidence.
+
 ## Notes
 
-- Order matters: templates, then sync, then docs. Syncing before the
-  template edits produces a no-op and hides whether the templates were
-  right.
+- Order matters, in the direction the correction note above establishes:
+  adopt first, then change templates.
 - The branch-protection required check stays `CI / gate` throughout; only
   what `gate` waits for changes. No repository settings need touching.
 - Expect this PR's diff to be large and mostly mechanical: the managed files

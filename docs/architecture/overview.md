@@ -140,35 +140,51 @@ systems through provider abstractions:
 - **Skills Manager**: canonical skill storage, deployment, and per-project
   activation. It must never become a CI dependency.
 
-## Future internal package layout
+## Internal package layout
+
+Present after M1:
 
 ```text
 internal/
-  manifest/       # vibe.yaml parsing (present)
-  standard/       # versioned standard definitions
-  module/         # module composition interface (present)
-  resource/       # resource + ownership model (present)
-  state/          # .vibe/lock.yaml, .vibe/state.yaml
-  reconcile/      # three-way reconciliation engine
-  audit/          # audit/diff/sync orchestration
+  manifest/                 # vibe.yaml parsing
+  standard/                 # versioned standard definitions
+  module/                   # module composition interface
+    gotooling/              # .golangci.yml
+    ci/github/              # GitHub Actions workflow, dependabot, PR template
+    repotooling/            # Taskfile.yml, lefthook.yml
+    agents/                 # Claude/Codex config + hook scripts
+  resource/                 # resource + ownership + file mode model
+  state/                    # .vibe/state.yaml read/write
+  reconcile/                # three-way decision engine
+  atomicfile/               # temp-file + rename writes
+  cli/                      # command tree; audit/diff/sync share one plan walk
+```
+
+Not built yet:
+
+```text
+internal/
   affected/       # changed-files -> affected-components graph
   validation/     # task execution for affected components
-  agents/
-    codex/        # Codex config/hooks provider
-    claude/       # Claude Code config/hooks provider
-  ci/
-    github/       # GitHub Actions provider
   skills/         # Skills Manager provider
   intelligence/   # GitNexus provider
 ```
 
+`.vibe/lock.yaml` does not exist either: state alone closes the
+reconciliation loop, and the lock file earns its place when standards
+resolve dynamically rather than being registered in Go.
+
 Packages are created when there is real code to put in them, not in
-advance. See `docs/plans/0001-bootstrap.md` for what M0 actually delivers.
+advance. Audit/diff/sync orchestration lives in `internal/cli` rather than a
+separate `audit/` package, because all three are thin reporters over one
+shared plan walk — a package boundary there would separate nothing.
 
 ## Canonical verification interface
 
 Taskfile (`Taskfile.yml`) is the single cross-platform entry point for local
 and CI verification (`task fmt`, `task lint`, `task test`, `task security`,
-`task verify`). CI, Git hooks, and docs invoke these tasks rather than
-duplicating command lists. `vibe check` / `vibe audit` will eventually thin
-this down once the affected-graph and validation subsystems exist.
+`task audit`, `task verify`). CI, Git hooks, and docs invoke these tasks
+rather than duplicating command lists. Since M1, `Taskfile.yml` is itself a
+managed resource, and `task audit` checks this repository against the
+standard it declares. `vibe check` will eventually thin this down further
+once the affected-graph and validation subsystems exist.

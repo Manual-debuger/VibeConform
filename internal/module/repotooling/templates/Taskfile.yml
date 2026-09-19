@@ -55,6 +55,11 @@ tasks:
     cmds:
       - actionlint
 
+  audit:
+    desc: Check this repository against the standard its vibe.yaml declares.
+    cmds:
+      - go run ./cmd/vibe audit --repo-root .
+
   verify:
     desc: Full local verification gate (same checks CI runs). Race detection
       needs a C compiler (CGO); run "task test:race" separately if you have
@@ -64,6 +69,7 @@ tasks:
       - task: typecheck
       - task: lint
       - task: test
+      - task: audit
       - task: mod:verify
       - task: security
       - task: workflows:lint
