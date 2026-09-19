@@ -277,6 +277,28 @@ Don't script against these expecting real output — they exist as
 scaffolding for commands that will eventually read/reconcile against
 `vibe.yaml` (see `docs/architecture/overview.md`).
 
+## What `production/v1` manages
+
+The command examples above are abbreviated — they show one resource so the
+output format is readable. `production/v1` actually resolves every resource
+its modules compose:
+
+| Module | Resources |
+|---|---|
+| `go-tooling` | `.golangci.yml` |
+| `github-ci` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
+
+Deliberately **not** managed, and left for you to maintain by hand:
+
+- `.github/workflows/release.yml` and `.goreleaser.yaml` — releasing
+  binaries is a repository policy choice, not a baseline guardrail, and a
+  `v1` standard is all-or-nothing (no optional resources yet).
+- `.gitignore` — genuinely project-specific.
+
+Content is fixed in `v1`: Go version, action pins, and job names come from
+the standard, not from your repository. A repository that needs different
+values cannot conform to `production/v1` yet.
+
 ## What `vibe.yaml` means today
 
 Right now it's exactly two fields, nothing more:

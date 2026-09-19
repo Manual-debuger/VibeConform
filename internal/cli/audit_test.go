@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/Manual-debuger/VibeConform/internal/state"
 )
 
 func runAuditIn(t *testing.T, dir string) (string, error) {
@@ -33,8 +31,10 @@ func assertAuditOutput(t *testing.T, out string, want ...string) {
 func TestAuditCmdConformantRepo(t *testing.T) {
 	dir := t.TempDir()
 	writeManifest(t, dir)
-	if err := os.WriteFile(filepath.Join(dir, ".golangci.yml"), goToolingContent(t), 0o600); err != nil {
-		t.Fatalf("seeding .golangci.yml: %v", err)
+	// A synced repository is the definition of a conformant one; seeding via
+	// sync keeps this test correct as modules are added to the standard.
+	if _, err := runSyncIn(t, dir); err != nil {
+		t.Fatalf("seeding sync: %v", err)
 	}
 
 	out, err := runAuditIn(t, dir)
@@ -65,15 +65,17 @@ func TestAuditCmdReportsMissingResource(t *testing.T) {
 func TestAuditCmdReportsDriftAgainstRecordedState(t *testing.T) {
 	dir := t.TempDir()
 	writeManifest(t, dir)
+	if _, err := runSyncIn(t, dir); err != nil {
+		t.Fatalf("seeding sync: %v", err)
+	}
+
+	// Drift exactly one resource: file and recorded state agree with each
+	// other but no longer with the module's target.
 	stale := []byte("previously-applied: true\n")
 	if err := os.WriteFile(filepath.Join(dir, ".golangci.yml"), stale, 0o600); err != nil {
-		t.Fatalf("seeding .golangci.yml: %v", err)
+		t.Fatalf("drifting .golangci.yml: %v", err)
 	}
-	if err := state.Save(dir, &state.State{Resources: map[string]state.ResourceState{
-		".golangci.yml": {SHA256: sha256Hex(stale)},
-	}}); err != nil {
-		t.Fatalf("seeding state: %v", err)
-	}
+	recordState(t, dir, ".golangci.yml", sha256Hex(stale))
 
 	out, err := runAuditIn(t, dir)
 	if code := ExitCode(err); code != 2 {

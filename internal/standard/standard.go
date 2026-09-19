@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/github"
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
 )
 
@@ -51,6 +52,7 @@ func init() {
 	Register(Standard{
 		Name:    "production",
 		Version: "v1",
-		Modules: []module.Module{gotooling.New()},
+		// Order matters: audit, diff, and sync report in module order.
+		Modules: []module.Module{gotooling.New(), github.New()},
 	})
 }

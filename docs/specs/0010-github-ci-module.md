@@ -1,6 +1,6 @@
 # Spec 0010: GitHub CI module (`internal/module/ci/github`)
 
-Status: proposed.
+Status: accepted and implemented.
 
 ## Problem
 
