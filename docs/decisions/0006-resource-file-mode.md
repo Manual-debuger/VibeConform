@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (required by `docs/specs/0012-agent-config-module.md`).
+Accepted (implemented by `docs/specs/0012-agent-config-module.md`).
 
 ## Context
 

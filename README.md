@@ -7,13 +7,16 @@
 > the repository and exits `2` when the repository is not conformant, `1`
 > when it cannot answer at all
 > (see [`docs/specs/0009-vibe-audit-v2.md`](docs/specs/0009-vibe-audit-v2.md)).
-> The `production`/`v1` standard composes three modules: `go-tooling`
+> The `production`/`v1` standard composes four modules: `go-tooling`
 > (a fixed `.golangci.yml`, see
 > [`docs/specs/0005-gotooling-module.md`](docs/specs/0005-gotooling-module.md))
 > `github-ci` (CI workflow, Dependabot config, PR template, see
 > [`docs/specs/0010-github-ci-module.md`](docs/specs/0010-github-ci-module.md)),
-> and `repo-tooling` (`Taskfile.yml`, `lefthook.yml`, see
-> [`docs/specs/0011-repo-tooling-module.md`](docs/specs/0011-repo-tooling-module.md)).
+> `repo-tooling` (`Taskfile.yml`, `lefthook.yml`, see
+> [`docs/specs/0011-repo-tooling-module.md`](docs/specs/0011-repo-tooling-module.md)),
+> and `agent-config` (Claude/Codex settings and the hook scripts that block
+> destructive commands, see
+> [`docs/specs/0012-agent-config-module.md`](docs/specs/0012-agent-config-module.md)).
 > `vibe diff` previews the reconciliation VibeConform would perform for that
 > resource against `.vibe/state.yaml` — see
 > [`docs/specs/0006-reconcile-diff-v1.md`](docs/specs/0006-reconcile-diff-v1.md).

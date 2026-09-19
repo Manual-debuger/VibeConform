@@ -144,5 +144,5 @@ func writeResource(repoRoot string, r resource.Resource) error {
 	// line-ending translation: this repository pins eol=lf in
 	// .gitattributes, and translating on write would hash differently on
 	// Windows and report drift forever.
-	return atomicfile.Write(path, r.Content, 0o600)
+	return atomicfile.Write(path, r.Content, r.ModeOrDefault())
 }

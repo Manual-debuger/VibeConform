@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "command": "bash .claude/hooks/block-dangerous.sh",
+        "commandWindows": "bash .claude/hooks/block-dangerous.sh"
+      }
+    ]
+  }
+}

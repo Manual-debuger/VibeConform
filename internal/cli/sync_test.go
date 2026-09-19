@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/state"
@@ -104,6 +105,35 @@ func TestSyncCmdCreatesNestedPaths(t *testing.T) {
 	// Windows run and a Unix run record different state for the same repo.
 	if _, ok := s.Resources[".github/workflows/ci.yml"]; !ok {
 		t.Errorf("state is missing the slash-separated key for the nested resource: %v", s.Resources)
+	}
+}
+
+// TestSyncCmdAppliesResourceModes checks the reason ADR 0006 exists: hook
+// scripts must land executable, or the guardrail they implement silently
+// does not run. Ordinary config lands 0644, not the owner-only 0600 spec
+// 0008 originally hardcoded.
+func TestSyncCmdAppliesResourceModes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not model Unix permission bits; this would test the platform, not sync")
+	}
+
+	dir := t.TempDir()
+	writeManifest(t, dir)
+	if _, err := runSyncIn(t, dir); err != nil {
+		t.Fatalf("sync returned error: %v", err)
+	}
+
+	for path, want := range map[string]os.FileMode{
+		".claude/hooks/block-dangerous.sh": 0o755,
+		".golangci.yml":                    0o644,
+	} {
+		info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Errorf("%s mode = %v, want %v", path, got, want)
+		}
 	}
 }
 

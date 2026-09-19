@@ -1,6 +1,6 @@
 # Spec 0012: Agent-config module (`internal/module/agents`)
 
-Status: proposed.
+Status: accepted and implemented.
 
 ## Problem
 

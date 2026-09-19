@@ -288,17 +288,32 @@ its modules compose:
 | `go-tooling` | `.golangci.yml` |
 | `github-ci` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
 | `repo-tooling` | `Taskfile.yml`, `lefthook.yml` |
+| `agent-config` | `.claude/settings.json`, `.claude/hooks/block-dangerous.sh`, `.claude/hooks/block-secret-files.sh`, `.codex/config.toml`, `.codex/hooks.json` |
 
 Deliberately **not** managed, and left for you to maintain by hand:
 
 - `.github/workflows/release.yml` and `.goreleaser.yaml` — releasing
   binaries is a repository policy choice, not a baseline guardrail, and a
   `v1` standard is all-or-nothing (no optional resources yet).
+- `AGENTS.md` and `CLAUDE.md` — prose written by a human for a specific
+  repository. Generating them would produce exactly the fabricated,
+  ignored-by-everyone instruction file this project argues against.
+- `.claude/settings.local.json` — gitignored, user-local, possibly
+  machine-specific. Never written.
 - `.gitignore` — genuinely project-specific.
 - `.gitattributes` — it governs how git materializes every file, including
   the ones VibeConform writes and hashes. Managing the file that determines
   how your own outputs are compared is a loop worth entering deliberately,
   with its own spec.
+
+**File modes.** Resources are written `0644`, except the agent hook scripts,
+which are written `0755` — a hook script that is not executable does not run,
+and it fails open. Mode is applied on write but is **not** audited: a
+`chmod -x` on a hook script disables a guardrail and `vibe audit` will still
+report the repository conformant. See
+`docs/decisions/0006-resource-file-mode.md`. On Windows, Unix permission bits
+are not modeled at all, so the executable bit comes from your git checkout
+rather than from `sync`.
 
 Syncing `lefthook.yml` writes the configuration; it does **not** register git
 hooks. Run `lefthook install` yourself. More generally, VibeConform writes
