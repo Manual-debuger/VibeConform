@@ -13,16 +13,6 @@ func errNotImplemented(cmd string) error {
 	return fmt.Errorf("%s: not implemented yet (see docs/plans/0001-bootstrap.md)", cmd)
 }
 
-func newDiffCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "diff",
-		Short: "Preview the reconciliation VibeConform would perform",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return errNotImplemented("diff")
-		},
-	}
-}
-
 func newSyncCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync",

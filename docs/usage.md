@@ -111,13 +111,69 @@ standard: production/v1
   Error: audit: standard: no such standard production/v99
   ```
 
-### `vibe diff`, `vibe sync`, `vibe check`, `vibe doctor`
+### `vibe diff`
+
+Reads `vibe.yaml`, resolves the declared standard/version, and previews the
+reconciliation decision for each `Generated`-ownership resource against
+`.vibe/state.yaml` and the repository's actual files — see
+`docs/specs/0006-reconcile-diff-v1.md`.
+
+```bash
+vibe diff
+```
+
+produces one of, depending on repository state:
+
+```
+standard: production/v1
+.golangci.yml: create (no file on disk)
+```
+
+```
+standard: production/v1
+.golangci.yml: no change
+```
+
+```
+standard: production/v1
+.golangci.yml: would update (drift from last applied state)
+```
+
+```
+standard: production/v1
+.golangci.yml: conflict: manual changes detected, review before sync
+```
+
+**Flags:**
+
+| Flag          | Default | Meaning                          |
+|---------------|---------|-----------------------------------|
+| `--repo-root` | `.`     | Directory to read `vibe.yaml` and target files from |
+
+**Behavior to know:**
+
+- Read-only: never writes `vibe.yaml`, files on disk, or `.vibe/state.yaml`.
+  `.vibe/state.yaml` doesn't exist on any repository yet — nothing writes it
+  until `vibe sync` lands — so `diff`'s decision is effectively two-way in
+  practice today (`create`/`no change`/`conflict`; `would update` only
+  triggers once a prior applied state is on record).
+- Always exits 0 on a successful run, regardless of the decisions found —
+  `diff` is a preview, not a compliance gate (that's `audit`'s and, later,
+  a strict `audit`'s job).
+- Fails (non-zero exit) only if `vibe.yaml` is missing/unreadable, the
+  declared `(standard, version)` isn't registered, or `.vibe/state.yaml`
+  exists but is malformed.
+- Only `Generated`-ownership resources are diffed; any other ownership
+  mode prints `<path>: not yet supported by diff` (none exist in the
+  registry today).
+
+### `vibe sync`, `vibe check`, `vibe doctor`
 
 Not implemented. Each returns an explicit error rather than silently doing
 nothing or exiting 0:
 
 ```
-Error: diff: not implemented yet (see docs/plans/0001-bootstrap.md)
+Error: sync: not implemented yet (see docs/plans/0001-bootstrap.md)
 ```
 
 Don't script against these expecting real output — they exist as
