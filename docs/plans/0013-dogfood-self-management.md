@@ -85,19 +85,21 @@ against the templates it was compiled with.
 - [x] Specs 0008–0013 and plans 0008–0013: `Status: accepted and
       implemented`, checklists ticked.
 
-### Step B — make the gate binding (NOT DONE: separate PR, after Step A merges)
+### Step B — make the gate binding
 
-- [ ] `internal/module/ci/github/templates/ci.yml`: remove
+- [x] `internal/module/ci/github/templates/ci.yml`: remove
       `continue-on-error` from `conformance`; add `conformance` to `gate`'s
-      `needs`.
-- [ ] Rebuild, `vibe sync`, commit the workflow and the state change.
-- [ ] Confirm on a real PR that `CI / gate` fails when a managed file is
-      edited directly — deliberately drift one file, watch it fail, revert.
+      `needs` **and to the result loop inside `gate`'s step**. Adding it to
+      `needs` alone makes `gate` wait for the job without ever checking its
+      outcome — a gate that looks wired up and enforces nothing.
+- [x] Rebuild, `vibe sync`, commit the workflow and the state change.
+      Observed: `0 created, 1 updated, 10 unchanged, 0 conflicts`.
+- [ ] **Open:** confirm on a real PR that `CI / gate` fails when a managed
+      file is edited directly — drift one file, watch it fail, revert. This
+      cannot be verified locally; it needs a run on real runners. Locally,
+      `vibe audit` exits 2 on a hand-edited managed file, so the input to
+      the gate is proven; what remains unproven is the workflow wiring.
       An untested gate is an assumed gate.
-
-Step B is deliberately not in this branch. Its whole purpose is to observe
-one merged PR's worth of real `conformance` output on real runners before
-anything depends on it; doing both at once discards that evidence.
 
 ## Notes
 
