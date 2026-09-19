@@ -14,7 +14,7 @@ resources:
     .github/pull_request_template.md:
         sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
     .github/workflows/ci.yml:
-        sha256: 3319f9f3d03e920235a3c42f22e8aa4f31bf2ae77720e2acb79380010c58e843
+        sha256: 68cda26ad46094a79b11327a556d4927fca87a1bdfc02dda0c1cc2bdab1e1c54
     .golangci.yml:
         sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
     Taskfile.yml:

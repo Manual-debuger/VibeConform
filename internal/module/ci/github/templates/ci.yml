@@ -129,12 +129,9 @@ jobs:
   conformance:
     name: conformance
     runs-on: ubuntu-latest
-    # Deliberately not gating yet. docs/specs/0013-dogfood-self-management.md
-    # adopts this in two steps: one merged PR observing real output, then a
-    # follow-up that removes continue-on-error and adds this job to gate's
-    # needs. A gating self-audit introduced alongside the modules it validates
-    # can lock the repository out of its own CI with no green path back.
-    continue-on-error: true
+    # Gating since docs/specs/0013-dogfood-self-management.md's step B. A
+    # managed file edited directly instead of through its module template
+    # fails here: vibe audit exits 2 for drift, 1 if it could not answer.
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -150,7 +147,7 @@ jobs:
   gate:
     name: CI / gate
     if: always()
-    needs: [lint, actionlint, mod-tidy, test, race, security]
+    needs: [lint, actionlint, mod-tidy, test, race, security, conformance]
     runs-on: ubuntu-latest
     steps:
       - name: Require all upstream jobs to have succeeded
@@ -161,7 +158,8 @@ jobs:
             "${{ needs.mod-tidy.result }}" \
             "${{ needs.test.result }}" \
             "${{ needs.race.result }}" \
-            "${{ needs.security.result }}"; do
+            "${{ needs.security.result }}" \
+            "${{ needs.conformance.result }}"; do
             if [ "$result" != "success" ]; then
               echo "A required job did not succeed: $result"
               exit 1
