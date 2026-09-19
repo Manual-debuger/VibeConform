@@ -153,10 +153,10 @@ standard: production/v1
 **Behavior to know:**
 
 - Read-only: never writes `vibe.yaml`, files on disk, or `.vibe/state.yaml`.
-  `.vibe/state.yaml` doesn't exist on any repository yet — nothing writes it
-  until `vibe sync` lands — so `diff`'s decision is effectively two-way in
-  practice today (`create`/`no change`/`conflict`; `would update` only
-  triggers once a prior applied state is on record).
+  `would update` appears only on a repository `vibe sync` has already
+  applied to, since it needs a recorded prior state to compare against.
+- `diff` and `sync` share one decision walk (`buildPlan`), so `diff` is
+  exactly the preview of what `sync` would do.
 - Always exits 0 on a successful run, regardless of the decisions found —
   `diff` is a preview, not a compliance gate (that's `audit`'s and, later,
   a strict `audit`'s job).
@@ -167,13 +167,78 @@ standard: production/v1
   mode prints `<path>: not yet supported by diff` (none exist in the
   registry today).
 
-### `vibe sync`, `vibe check`, `vibe doctor`
+### `vibe sync`
+
+Applies what `vibe diff` previews: writes each `Generated`-ownership
+resource the declared standard resolves, and records what it wrote in
+`.vibe/state.yaml` — see `docs/specs/0008-vibe-sync-v1.md`.
+
+```bash
+vibe sync
+```
+
+On a repository that has never been synced:
+
+```
+standard: production/v1
+.golangci.yml: created
+1 created, 0 updated, 0 unchanged, 0 conflicts
+```
+
+Running it again changes nothing:
+
+```
+standard: production/v1
+.golangci.yml: unchanged
+0 created, 0 updated, 1 unchanged, 0 conflicts
+```
+
+**Flags:**
+
+| Flag          | Default | Meaning                          |
+|---------------|---------|-----------------------------------|
+| `--repo-root` | `.`     | Directory to read `vibe.yaml` and write resources under |
+
+**What each decision does:**
+
+| Decision | File on disk | `.vibe/state.yaml` | Exit |
+|---|---|---|---|
+| `created` | written | hash recorded | 0 |
+| `updated` | replaced | hash recorded | 0 |
+| `unchanged` | untouched | hash recorded | 0 |
+| `conflict` | **untouched** | prior entry kept | non-zero |
+
+**Behavior to know:**
+
+- A conflict is a hard stop. `sync` never overwrites a file that has been
+  changed by hand in a way it can't account for; there is no `--force` yet.
+  Resolve it by reconciling the file yourself, or delete it and re-run.
+  Other resources in the same run are still applied — the non-zero exit
+  comes at the end.
+- `unchanged` still records a hash. That is what makes a repository tracked:
+  until a resource is in `.vibe/state.yaml`, reconciliation can only compare
+  two ways, and genuine drift is indistinguishable from a conflict.
+- Writes are atomic (temp file + rename), so an interrupted run leaves
+  either the old file or the new one, never a half-written one.
+- Content is written exactly as the module resolved it, with no line-ending
+  translation. Pin `* text=auto eol=lf` in `.gitattributes` if you work
+  across Windows and Unix, or checkouts will re-hash differently and report
+  drift forever.
+- There is no `--dry-run`: `vibe diff` is the dry run.
+- Resources dropped from a standard are not deleted. `sync` only writes what
+  the standard currently resolves; it never removes files.
+- Fails (non-zero exit) if `vibe.yaml` is missing/unreadable, the declared
+  `(standard, version)` isn't registered, `.vibe/state.yaml` is malformed, a
+  write fails, or any resource conflicts. A write failure stops the run but
+  still records the resources that already landed, so re-running is safe.
+
+### `vibe check`, `vibe doctor`
 
 Not implemented. Each returns an explicit error rather than silently doing
 nothing or exiting 0:
 
 ```
-Error: sync: not implemented yet (see docs/plans/0001-bootstrap.md)
+Error: check: not implemented yet (see docs/plans/0001-bootstrap.md)
 ```
 
 Don't script against these expecting real output — they exist as
@@ -189,8 +254,9 @@ standard: production
 version: v1
 ```
 
-There is no resolver, no `.vibe/lock.yaml` / `.vibe/state.yaml`, and no
-component graph yet. Editing `vibe.yaml` by hand is safe and expected —
+There is no `.vibe/lock.yaml` and no component graph yet. `.vibe/state.yaml`
+exists once you run `vibe sync`; it is machine-owned bookkeeping — commit it,
+but don't hand-edit it. Editing `vibe.yaml` by hand is safe and expected —
 `init` only exists to create the first one.
 
 ## Getting help

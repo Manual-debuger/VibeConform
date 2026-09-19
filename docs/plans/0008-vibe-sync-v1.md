@@ -5,7 +5,7 @@ See `docs/specs/0008-vibe-sync-v1.md` for the accepted scope, and
 
 ## Checklist
 
-- [ ] `internal/atomicfile/atomicfile.go` (new leaf package):
+- [x] `internal/atomicfile/atomicfile.go` (new leaf package):
       `Write(path string, data []byte, perm os.FileMode) error` — temp file
       in the destination's directory, `Sync()`, `Close()`, `os.Rename` over
       the destination, removing the temp file on any failure path. Depends
@@ -15,33 +15,38 @@ See `docs/specs/0008-vibe-sync-v1.md` for the accepted scope, and
       be exported from somewhere. A leaf package beats duplicating the
       temp+rename dance in two places or exporting a file utility from
       `internal/state`.*
-- [ ] `internal/atomicfile/atomicfile_test.go`: writes new file with the
+- [x] `internal/atomicfile/atomicfile_test.go`: writes new file with the
       requested mode; replaces existing file's content; leaves no temp file
       behind on success; leaves the original intact when the destination
       directory doesn't exist (error path).
-- [ ] `internal/state/state.go`: `Save(repoRoot string, s *State) error` —
+- [x] `internal/state/state.go`: `Save(repoRoot string, s *State) error` —
       `os.MkdirAll(filepath.Join(repoRoot, ".vibe"), 0o750)`, `yaml.Marshal`,
       `atomicfile.Write(..., 0o600)`. Package doc updated: the "only a
       reader exists so far" sentence is now false.
-- [ ] `internal/state/state_test.go`: `Save` → `Load` round-trip preserves
+- [x] `internal/state/state_test.go`: `Save` → `Load` round-trip preserves
       the path→hash map; `Save` creates `.vibe/` when absent; `Save` over an
       existing state file replaces it; saving an empty `State` then loading
       yields an empty non-nil map.
-- [ ] `internal/cli/plan.go` (new): `resourcePlan{Resource, Decision,
+- [x] `internal/cli/plan.go` (new): `resourcePlan{Resource, Decision,
       TargetHash, Supported}` and `buildPlan(repoRoot string)
-      (*standard.Standard, []resourcePlan, error)`, holding the manifest
+      (*repoPlan, error)`, holding the manifest
       read/parse, `standard.Lookup`, `state.Load`, per-module `Resolve`,
       hashing, and `reconcile.Decide` currently inline in `diff.go`.
       `hashHex` moves here. Error strings stay unprefixed; each command
       wraps with its own `"<cmd>: %w"`.
-- [ ] `internal/cli/diff.go`: `runDiff` becomes a reporter over
+      *Second refinement: `buildPlan` returns a `repoPlan{Standard,
+      Previous, Resources}` rather than three values. `sync` needs the
+      previously recorded state to carry conflicted entries through
+      untouched, and a fourth return value reads worse than a named
+      struct.*
+- [x] `internal/cli/diff.go`: `runDiff` becomes a reporter over
       `buildPlan` — resolve, then one `diffLine` per plan entry, plus the
       `"not yet supported by diff"` line where `Supported` is false.
       `diffLine`'s text is unchanged.
-- [ ] `internal/cli/diff_test.go`: **unmodified**. The existing five cases
+- [x] `internal/cli/diff_test.go`: **unmodified**. The existing five cases
       passing untouched is the evidence that the extraction changed no
       behavior; if a test needs editing, the refactor was not a refactor.
-- [ ] `internal/cli/sync.go` (new): `newSyncCmd` + `runSync(cmd
+- [x] `internal/cli/sync.go` (new): `newSyncCmd` + `runSync(cmd
       *cobra.Command, repoRoot string) error`, mirroring `diff.go`'s shape
       and `--repo-root` flag:
       1. `buildPlan(repoRoot)`; print `standard: <name>/<version>`.
@@ -59,11 +64,11 @@ See `docs/specs/0008-vibe-sync-v1.md` for the accepted scope, and
          `N created, N updated, N unchanged, N conflicts`.
       6. Return a non-nil error when any entry decided `Conflict`, after
          all entries are processed and state is saved.
-- [ ] `internal/cli/commands.go`: remove `newSyncCmd` stub (moves to
+- [x] `internal/cli/commands.go`: remove `newSyncCmd` stub (moves to
       `sync.go`); `check`/`doctor` stubs unchanged.
-- [ ] `internal/cli/root_test.go`: drop `"sync"` from
+- [x] `internal/cli/root_test.go`: drop `"sync"` from
       `TestSubcommandsNotYetImplemented`'s list, leaving `check`/`doctor`.
-- [ ] `internal/cli/sync_test.go`, following `diff_test.go`'s `t.TempDir()`
+- [x] `internal/cli/sync_test.go`, following `diff_test.go`'s `t.TempDir()`
       + `root.Execute()` pattern:
       - fresh repo → `.golangci.yml` written with the module's exact bytes,
         `.vibe/state.yaml` records its hash, exit 0;
@@ -75,14 +80,14 @@ See `docs/specs/0008-vibe-sync-v1.md` for the accepted scope, and
         → `Overwrite` → file replaced with target, state updated, exit 0.
         This is the first test anywhere to reach an `Overwrite` row;
       - missing `vibe.yaml` → error; unknown standard → error.
-- [ ] `docs/usage.md`: `vibe sync` moves out of the "not implemented"
+- [x] `docs/usage.md`: `vibe sync` moves out of the "not implemented"
       section into its own section (flags, example output for first and
       second run, decision table, exit codes, `Conflict` guidance). The
       remaining "not implemented" section covers `check`/`doctor` only.
-- [ ] `README.md`: factual status update — `sync` applies `Generated`
+- [x] `README.md`: factual status update — `sync` applies `Generated`
       resources and writes `.vibe/state.yaml`; the "nothing writes that
       file yet" claim in the `vibe diff` sentence is now false.
-- [ ] `task verify` clean.
+- [x] `task verify` clean.
 
 ## Notes
 
