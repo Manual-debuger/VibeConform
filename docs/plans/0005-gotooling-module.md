@@ -4,35 +4,35 @@ See `docs/specs/0005-gotooling-module.md` for the accepted scope.
 
 ## Checklist
 
-- [ ] `internal/module/gotooling/gotooling.go`: unexported struct
+- [x] `internal/module/gotooling/gotooling.go`: unexported struct
       satisfying `module.Module`, `New() module.Module` constructor,
       `Name()` returns `"go-tooling"`.
-- [ ] `internal/module/gotooling/golangci.yml` (embedded template, seeded
+- [x] `internal/module/gotooling/golangci.yml` (embedded template, seeded
       as a copy of this repo's own `.golangci.yml`) + `//go:embed`
       directive wiring it into `Resolve`.
-- [ ] `Resolve(ctx, mctx)` returns `[]resource.Resource{{Path:
+- [x] `Resolve(ctx, mctx)` returns `[]resource.Resource{{Path:
       ".golangci.yml", Ownership: resource.Generated, Content: <embedded
       bytes>}}, nil`, ignoring `mctx`.
-- [ ] `internal/module/gotooling/gotooling_test.go`: `Name()` value,
+- [x] `internal/module/gotooling/gotooling_test.go`: `Name()` value,
       `Resolve` returns exactly one resource with the expected path/
       ownership/content, two calls produce byte-identical output
       (determinism).
-- [ ] `internal/standard/standard.go`: register `gotooling.New()` into
+- [x] `internal/standard/standard.go`: register `gotooling.New()` into
       `production`/`v1`'s `Modules`, replacing the empty slice.
-- [ ] `internal/standard/standard_test.go`: update/extend to assert
+- [x] `internal/standard/standard_test.go`: update/extend to assert
       `production`/`v1` now has exactly one module named `"go-tooling"`.
-- [ ] `internal/cli/audit_test.go`: rename
+- [x] `internal/cli/audit_test.go`: rename
       `TestAuditCmdReportsZeroModules` to reflect the new count and update
       its assertion from `"0 modules configured"` to
       `"1 modules configured"`.
-- [ ] `docs/usage.md`: update the `vibe audit` example output to
+- [x] `docs/usage.md`: update the `vibe audit` example output to
       `1 modules configured, nothing to check`, and correct the "every
       registered standard has zero modules today" claim now that
       `production`/`v1` has one.
-- [ ] `README.md`: status banner note that `production`/`v1` now composes
+- [x] `README.md`: status banner note that `production`/`v1` now composes
       one module (`go-tooling`, a `.golangci.yml` resource) — factual
       update only, no scope claims beyond what's implemented.
-- [ ] `task verify` clean.
+- [x] `task verify` clean.
 
 ## Explicitly still deferred
 

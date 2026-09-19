@@ -1,6 +1,6 @@
 # Spec 0004: `vibe audit` (v1)
 
-Status: proposed.
+Status: accepted and implemented.
 
 ## Problem
 

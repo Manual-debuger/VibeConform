@@ -1,6 +1,6 @@
 # Spec 0006: Reconciliation decision engine + `vibe diff` (v1)
 
-Status: proposed.
+Status: accepted and implemented.
 
 ## Problem
 

@@ -34,6 +34,9 @@
 
 ## Explicitly deferred to M1+
 
+`docs/plans/0007-m1-milestone.md` records which of these M1 absorbs and
+which move past it.
+
 - Manifest resolver beyond field parsing.
 - Reconciliation engine and `.vibe/lock.yaml` / `.vibe/state.yaml`.
 - Affected-component graph and `vibe check` real implementation.

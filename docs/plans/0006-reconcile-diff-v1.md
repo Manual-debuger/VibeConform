@@ -4,23 +4,23 @@ See `docs/specs/0006-reconcile-diff-v1.md` for the accepted scope.
 
 ## Checklist
 
-- [ ] `internal/state/state.go`: `State{Resources map[string]ResourceState}`,
+- [x] `internal/state/state.go`: `State{Resources map[string]ResourceState}`,
       `ResourceState{SHA256 string}`, `Load(repoRoot string) (*State, error)`
       reading `.vibe/state.yaml`; returns `&State{}` (empty map, nil error)
       when the file doesn't exist, an error only on malformed YAML.
-- [ ] `internal/state/state_test.go`: missing file → empty non-nil `State`,
+- [x] `internal/state/state_test.go`: missing file → empty non-nil `State`,
       no error; malformed YAML → error; valid file → parsed
       path→hash map matches.
-- [ ] `internal/reconcile/reconcile.go`: `Decision` enum
+- [x] `internal/reconcile/reconcile.go`: `Decision` enum
       (`Create`/`NoChange`/`Overwrite`/`Conflict`) with a `String()` method
       for CLI output, and `Decide(previous, current *string, target string)
       Decision`. Package doc comment reproduces spec 0006's truth table and
       the row-6/row-7 rationale verbatim (single source of truth, cited by
       `vibe sync` later rather than re-derived).
-- [ ] `internal/reconcile/reconcile_test.go`: table-driven test with one
+- [x] `internal/reconcile/reconcile_test.go`: table-driven test with one
       case per row of the spec's truth table (8 rows), asserting the exact
       `Decision` returned.
-- [ ] `internal/cli/diff.go` (new file): `newDiffCmd` + `runDiff(cmd
+- [x] `internal/cli/diff.go` (new file): `newDiffCmd` + `runDiff(cmd
       *cobra.Command, repoRoot string) error`, mirroring `audit.go`'s
       shape:
       1. Parse `vibe.yaml`, look up standard (same two calls as
@@ -38,26 +38,26 @@ See `docs/specs/0006-reconcile-diff-v1.md` for the accepted scope.
          detected, review before sync`.
       5. Always returns `nil` on a successful run regardless of decisions
          found (no exit-code gating, per spec's non-goals).
-- [ ] `internal/cli/commands.go`: remove `newDiffCmd` (moves to `diff.go`);
+- [x] `internal/cli/commands.go`: remove `newDiffCmd` (moves to `diff.go`);
       `sync`/`check`/`doctor` stubs unchanged.
-- [ ] `internal/cli/diff_test.go`: cases for a fresh repo (`Create`), an
+- [x] `internal/cli/diff_test.go`: cases for a fresh repo (`Create`), an
       up-to-date repo (`NoChange`), a repo with an untracked pre-existing
       `.golangci.yml` differing from target (`Conflict`), manifest missing
       (error), unknown standard (error). Mirrors `audit_test.go`'s
       `t.TempDir()` + `root.Execute()` pattern.
-- [ ] `internal/cli/root_test.go`: drop `"diff"` from
+- [x] `internal/cli/root_test.go`: drop `"diff"` from
       `TestSubcommandsNotYetImplemented`'s stub list (mirrors spec 0004's
       plan removing `"audit"`); `TestRootCmdHelp`'s command-name assertions
       are unaffected (already lists `diff`).
-- [ ] `docs/usage.md`: split `vibe diff` out of the "not implemented" bullet
+- [x] `docs/usage.md`: split `vibe diff` out of the "not implemented" bullet
       into its own documented section (flags, example output, behavior —
       matching the `vibe audit` section's structure); the remaining
       "not implemented" section covers only `sync`/`check`/`doctor`.
-- [ ] `README.md`: factual status update — `vibe diff` now previews
+- [x] `README.md`: factual status update — `vibe diff` now previews
       reconciliation for the one `Generated` resource that exists
       (`.golangci.yml`); `.vibe/state.yaml` is read but nothing writes it
       yet.
-- [ ] `task verify` clean.
+- [x] `task verify` clean.
 
 ## Explicitly still deferred
 

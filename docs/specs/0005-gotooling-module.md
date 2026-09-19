@@ -1,6 +1,6 @@
 # Spec 0005: Go-tooling module (`internal/module/gotooling`)
 
-Status: proposed.
+Status: accepted and implemented.
 
 ## Problem
 
