@@ -287,6 +287,7 @@ its modules compose:
 |---|---|
 | `go-tooling` | `.golangci.yml` |
 | `github-ci` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
+| `repo-tooling` | `Taskfile.yml`, `lefthook.yml` |
 
 Deliberately **not** managed, and left for you to maintain by hand:
 
@@ -294,6 +295,16 @@ Deliberately **not** managed, and left for you to maintain by hand:
   binaries is a repository policy choice, not a baseline guardrail, and a
   `v1` standard is all-or-nothing (no optional resources yet).
 - `.gitignore` — genuinely project-specific.
+- `.gitattributes` — it governs how git materializes every file, including
+  the ones VibeConform writes and hashes. Managing the file that determines
+  how your own outputs are compared is a loop worth entering deliberately,
+  with its own spec.
+
+Syncing `lefthook.yml` writes the configuration; it does **not** register git
+hooks. Run `lefthook install` yourself. More generally, VibeConform writes
+configuration and never provisions toolchains: a repository that syncs
+`Taskfile.yml` without `task` installed gets a file it cannot run, which is
+the correct division of responsibility.
 
 Content is fixed in `v1`: Go version, action pins, and job names come from
 the standard, not from your repository. A repository that needs different

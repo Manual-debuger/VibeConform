@@ -9,6 +9,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/github"
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/repotooling"
 )
 
 // Standard is a named, versioned bundle of modules.
@@ -53,6 +54,6 @@ func init() {
 		Name:    "production",
 		Version: "v1",
 		// Order matters: audit, diff, and sync report in module order.
-		Modules: []module.Module{gotooling.New(), github.New()},
+		Modules: []module.Module{gotooling.New(), github.New(), repotooling.New()},
 	})
 }

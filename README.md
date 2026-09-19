@@ -1,17 +1,19 @@
 # VibeConform
 
-> **Status: pre-alpha (M0 + `vibe init` v1 + `vibe audit` v1 + `vibe diff`
+> **Status: pre-alpha (M0 + `vibe init` v1 + `vibe audit` v2 + `vibe diff`
 > v1 + `vibe sync` v1).** `vibe init` writes a `vibe.yaml` desired-state file (see
 > [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `vibe
 > audit` is the conformance gate: it checks every resolved resource against
 > the repository and exits `2` when the repository is not conformant, `1`
 > when it cannot answer at all
 > (see [`docs/specs/0009-vibe-audit-v2.md`](docs/specs/0009-vibe-audit-v2.md)).
-> The `production`/`v1` standard composes two modules: `go-tooling`
+> The `production`/`v1` standard composes three modules: `go-tooling`
 > (a fixed `.golangci.yml`, see
 > [`docs/specs/0005-gotooling-module.md`](docs/specs/0005-gotooling-module.md))
-> and `github-ci` (CI workflow, Dependabot config, PR template, see
-> [`docs/specs/0010-github-ci-module.md`](docs/specs/0010-github-ci-module.md)).
+> `github-ci` (CI workflow, Dependabot config, PR template, see
+> [`docs/specs/0010-github-ci-module.md`](docs/specs/0010-github-ci-module.md)),
+> and `repo-tooling` (`Taskfile.yml`, `lefthook.yml`, see
+> [`docs/specs/0011-repo-tooling-module.md`](docs/specs/0011-repo-tooling-module.md)).
 > `vibe diff` previews the reconciliation VibeConform would perform for that
 > resource against `.vibe/state.yaml` — see
 > [`docs/specs/0006-reconcile-diff-v1.md`](docs/specs/0006-reconcile-diff-v1.md).

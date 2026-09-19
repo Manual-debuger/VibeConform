@@ -1,6 +1,6 @@
 # Spec 0011: Repo-tooling module (`internal/module/repotooling`)
 
-Status: proposed.
+Status: accepted and implemented.
 
 ## Problem
 

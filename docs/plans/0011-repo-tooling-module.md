@@ -5,32 +5,32 @@ See `docs/specs/0011-repo-tooling-module.md` for the accepted scope, and
 
 ## Checklist
 
-- [ ] `internal/module/repotooling/templates/Taskfile.yml` and
+- [x] `internal/module/repotooling/templates/Taskfile.yml` and
       `templates/lefthook.yml` — byte-for-byte copies of this repository's
       current files, copied with a command rather than transcribed.
-- [ ] `internal/module/repotooling/repotooling.go`: unexported struct
+- [x] `internal/module/repotooling/repotooling.go`: unexported struct
       satisfying `module.Module`, `New() module.Module`, `Name()` →
       `"repo-tooling"`, `//go:embed templates/*`, `Resolve` returning the
       two `resource.Generated` resources in documented order.
-- [ ] `internal/module/repotooling/repotooling_test.go`: `Name()`; `Resolve`
+- [x] `internal/module/repotooling/repotooling_test.go`: `Name()`; `Resolve`
       returns exactly two resources with expected paths/ownership/non-empty
       content in the documented order; determinism across two calls.
-- [ ] `internal/module/repotooling/templates_test.go`: each embedded
+- [x] `internal/module/repotooling/templates_test.go`: each embedded
       template equals the live file it was seeded from — the same drift
       alarm as spec 0010's, and more load-bearing here, since a broken
       `Taskfile.yml` breaks every CI job and every local `task verify`.
-- [ ] `internal/standard/standard.go`: register `repotooling.New()` after
+- [x] `internal/standard/standard.go`: register `repotooling.New()` after
       `github.New()`.
-- [ ] `internal/standard/standard_test.go`: extend the ordered module-name
+- [x] `internal/standard/standard_test.go`: extend the ordered module-name
       assertion to `go-tooling`, `github-ci`, `repo-tooling`.
-- [ ] `internal/cli/*_test.go`: update any assertion that depends on the
+- [x] `internal/cli/*_test.go`: update any assertion that depends on the
       full report or the resource count (now six resources).
-- [ ] `docs/usage.md`: `production/v1` now manages `Taskfile.yml` and
+- [x] `docs/usage.md`: `production/v1` now manages `Taskfile.yml` and
       `lefthook.yml`; document that syncing `lefthook.yml` does **not**
       install git hooks — `lefthook install` stays a manual step — and that
       VibeConform writes configuration but never provisions toolchains.
-- [ ] `README.md`: status banner — three modules.
-- [ ] `task verify` clean.
+- [x] `README.md`: status banner — three modules.
+- [x] `task verify` clean.
 
 ## Notes
 
