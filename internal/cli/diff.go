@@ -1,23 +1,11 @@
 package cli
 
 import (
-	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
-	"github.com/Manual-debuger/VibeConform/internal/manifest"
-	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/reconcile"
-	"github.com/Manual-debuger/VibeConform/internal/resource"
-	"github.com/Manual-debuger/VibeConform/internal/standard"
-	"github.com/Manual-debuger/VibeConform/internal/state"
 )
 
 func newDiffCmd() *cobra.Command {
@@ -37,76 +25,27 @@ func newDiffCmd() *cobra.Command {
 }
 
 func runDiff(cmd *cobra.Command, repoRoot string) error {
-	path := filepath.Join(repoRoot, manifestFileName)
-	data, err := os.ReadFile(path) // #nosec G304 -- repoRoot is an operator-supplied CLI flag, same trust boundary as init.go's WriteFile target
-	if err != nil {
-		return fmt.Errorf("diff: %w", err)
-	}
-
-	m, err := manifest.Parse(data)
-	if err != nil {
-		return fmt.Errorf("diff: %w", err)
-	}
-
-	s, err := standard.Lookup(m.Standard, m.Version)
-	if err != nil {
-		return fmt.Errorf("diff: %w", err)
-	}
-
-	st, err := state.Load(repoRoot)
+	p, err := buildPlan(repoRoot)
 	if err != nil {
 		return fmt.Errorf("diff: %w", err)
 	}
 
 	out := cmd.OutOrStdout()
-	if _, err := fmt.Fprintf(out, "standard: %s/%s\n", s.Name, s.Version); err != nil {
+	if _, err := fmt.Fprintf(out, "standard: %s/%s\n", p.Standard.Name, p.Standard.Version); err != nil {
 		return fmt.Errorf("diff: %w", err)
 	}
 
-	mctx := &module.Context{RepoRoot: repoRoot}
-	for _, mod := range s.Modules {
-		resources, err := mod.Resolve(context.Background(), mctx)
-		if err != nil {
-			return fmt.Errorf("diff: resolve %s: %w", mod.Name(), err)
+	for _, rp := range p.Resources {
+		line := "not yet supported by diff"
+		if rp.Supported {
+			line = diffLine(rp.Decision)
 		}
-		for _, r := range resources {
-			if err := reportResource(out, repoRoot, st, r); err != nil {
-				return fmt.Errorf("diff: %w", err)
-			}
+		if _, err := fmt.Fprintf(out, "%s: %s\n", rp.Resource.Path, line); err != nil {
+			return fmt.Errorf("diff: %w", err)
 		}
 	}
 
 	return nil
-}
-
-func reportResource(out io.Writer, repoRoot string, st *state.State, r resource.Resource) error {
-	if r.Ownership != resource.Generated {
-		_, err := fmt.Fprintf(out, "%s: not yet supported by diff\n", r.Path)
-		return err
-	}
-
-	target := hashHex(r.Content)
-
-	var current *string
-	currentData, err := os.ReadFile(filepath.Join(repoRoot, r.Path)) // #nosec G304 -- repoRoot/r.Path come from an operator-supplied CLI flag and a registered module's fixed resource path
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		current = nil
-	case err != nil:
-		return err
-	default:
-		h := hashHex(currentData)
-		current = &h
-	}
-
-	var previous *string
-	if rs, ok := st.Resources[r.Path]; ok {
-		previous = &rs.SHA256
-	}
-
-	decision := reconcile.Decide(previous, current, target)
-	_, err = fmt.Fprintf(out, "%s: %s\n", r.Path, diffLine(decision))
-	return err
 }
 
 func diffLine(d reconcile.Decision) string {
@@ -122,9 +61,4 @@ func diffLine(d reconcile.Decision) string {
 	default:
 		return d.String()
 	}
-}
-
-func hashHex(data []byte) string {
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
 }
