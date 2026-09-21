@@ -10,7 +10,7 @@ import (
 // yet implemented, so agents and users get a clear signal instead of a silent
 // no-op.
 func errNotImplemented(cmd string) error {
-	return fmt.Errorf("%s: not implemented yet (see docs/plans/0001-bootstrap.md)", cmd)
+	return fmt.Errorf("%s: not implemented yet (see docs/plans/0014-m2-milestone.md)", cmd)
 }
 
 func newCheckCmd() *cobra.Command {

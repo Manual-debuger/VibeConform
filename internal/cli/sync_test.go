@@ -314,6 +314,28 @@ func TestSyncCmdRegistersGitHooks(t *testing.T) {
 	}
 }
 
+// TestSyncCmdSkipsHookRegistrationForStandardsWithoutLefthook is the
+// integration counterpart to TestPlanManagesLefthook's negative case:
+// production-typescript/v1 manages no lefthook.yml, so a repository
+// declaring it must not have its git hooks touched.
+func TestSyncCmdSkipsHookRegistrationForStandardsWithoutLefthook(t *testing.T) {
+	dir := t.TempDir()
+	writeManifestFor(t, dir, "production-typescript", "v1")
+	rec := stubHookInstall(t)
+
+	out, _, err := runSyncCapturing(t, dir)
+	if err != nil {
+		t.Fatalf("sync returned error: %v\n%s", err, out)
+	}
+
+	if len(rec.roots) != 0 {
+		t.Errorf("registered git hooks for a standard that manages no lefthook.yml: %v", rec.roots)
+	}
+	if strings.Contains(out, "lefthook") {
+		t.Errorf("sync output mentions lefthook for a standard that does not manage it\n%s", out)
+	}
+}
+
 // TestSyncCmdSkipsHookRegistrationOnConflict pins the conservative half of
 // the rule: a run that refused to write part of the standard has not
 // finished configuring the repository.

@@ -174,7 +174,12 @@ The closing move: steps 3–4 of plan 0001's sequencing.
 ## Explicitly deferred past M1
 
 Carried from `docs/plans/0001-bootstrap.md`'s "deferred to M1+" list — these
-are M2 or later, not part of this milestone:
+are M2 or later, not part of this milestone.
+
+M2 (`docs/plans/0014-m2-milestone.md`) absorbed none of the items below. It
+took hook registration, tool-availability warnings, and TypeScript/Python
+support instead, and explicitly deferred `vibe check`, `vibe doctor`, the
+affected-component graph, and multi-component repositories again.
 
 - Affected-component graph and `vibe check`.
 - `vibe doctor`.

@@ -10,7 +10,9 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/agents"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/github"
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/pythontooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/repotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/tstooling"
 )
 
 // Standard is a named, versioned bundle of modules.
@@ -51,10 +53,30 @@ func Lookup(name, version string) (*Standard, error) {
 }
 
 func init() {
+	// "production" is the Go standard and is not named production-go for one
+	// reason: renaming it would break the vibe.yaml and .vibe/state.yaml this
+	// repository has committed, for cosmetic gain. See
+	// docs/specs/0014-m2-milestone.md.
 	Register(Standard{
 		Name:    "production",
 		Version: "v1",
 		// Order matters: audit, diff, and sync report in module order.
 		Modules: []module.Module{gotooling.New(), github.New(), repotooling.New(), agents.New()},
+	})
+
+	// The language standards compose agent-config, which is language-neutral,
+	// but neither repo-tooling nor github-ci: a Taskfile of go commands and a
+	// workflow on setup-go are Go by content, not just by name. Their
+	// per-language variants are M3.
+	Register(Standard{
+		Name:    "production-typescript",
+		Version: "v1",
+		Modules: []module.Module{tstooling.New(), agents.New()},
+	})
+
+	Register(Standard{
+		Name:    "production-python",
+		Version: "v1",
+		Modules: []module.Module{pythontooling.New(), agents.New()},
 	})
 }

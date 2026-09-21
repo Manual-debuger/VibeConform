@@ -323,7 +323,7 @@ Not implemented. Each returns an explicit error rather than silently doing
 nothing or exiting 0:
 
 ```
-Error: check: not implemented yet (see docs/plans/0001-bootstrap.md)
+Error: check: not implemented yet (see docs/plans/0014-m2-milestone.md)
 ```
 
 Don't script against these expecting real output — they exist as
@@ -384,6 +384,63 @@ is missing, `sync` warns and moves on — see `vibe sync` above.
 Content is fixed in `v1`: Go version, action pins, and job names come from
 the standard, not from your repository. A repository that needs different
 values cannot conform to `production/v1` yet.
+
+## What `production-typescript/v1` and `production-python/v1` manage
+
+Two language standards, added in M2. Declare one the same way:
+
+```bash
+vibe init production-typescript v1
+vibe sync
+```
+
+| Standard | Module | Resources |
+|---|---|---|
+| `production-typescript/v1` | `ts-tooling` | `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json` |
+| `production-python/v1` | `python-tooling` | `ruff.toml`, `pyrightconfig.json` |
+
+Both also compose `agent-config`, which is language-neutral, so a TypeScript
+or Python repository gets the same `.claude/` and `.codex/` guardrails a Go
+one does.
+
+**They are lint/format/typecheck only.** Read that as a limitation, because
+it is one:
+
+- **No Taskfile, no CI workflow, no dependabot config.** `repo-tooling` and
+  `github-ci` are Go by content — a Taskfile of `go` commands, a workflow on
+  `actions/setup-go`, a `gomod` dependabot config — so neither is composed
+  here. Per-language variants are the next milestone. Until then these
+  standards say how your code is linted and nothing about how it is verified
+  or built.
+- **No `package.json` or `pyproject.toml`.** VibeConform owns whole files,
+  and both of those also hold project-owned metadata. So nothing here pins
+  eslint, prettier, typescript, ruff, or pyright to a version — you install
+  and pin them yourself. That is also why `ruff.toml` and `pyrightconfig.json`
+  are standalone files rather than `[tool.*]` sections.
+- **`tsconfig.base.json`, not `tsconfig.json`.** The standard owns the
+  compiler options; your repository owns a `tsconfig.json` that extends them:
+
+  ```json
+  { "extends": "./tsconfig.base.json", "include": ["src"] }
+  ```
+
+Content is fixed in `v1` exactly as it is for `production/v1`: ES2023,
+Python 3.12, and the rule sets as written.
+
+### Worked examples
+
+`examples/typescript/` and `examples/python/` in this repository are real
+repositories declaring these standards, holding the exact output of syncing
+them. They are the same worked example that VibeConform itself is for
+`production/v1` — and, since this is a Go repository that never resolves
+either language module, they are also what keeps those templates honest: a
+test fails if a template changes and the examples are not re-synced.
+
+What that test checks is that the generated files are byte-for-byte what the
+module resolved. It does **not** run eslint, ruff, or pyright against them,
+so it cannot tell you the configuration is *valid* — only that it is what
+the standard says. Closing that gap needs those toolchains in CI, and is
+deferred to the next milestone.
 
 ## VibeConform manages itself
 

@@ -1,0 +1,17 @@
+resources:
+    .claude/hooks/block-dangerous.sh:
+        sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
+    .claude/hooks/block-secret-files.sh:
+        sha256: a12815be5dd837f16ef67099a647ec207d494f5066329ddcf4a0a495ca52fedb
+    .claude/settings.json:
+        sha256: e2e0c9f3fd612ac657dc0123ac306460446ff7ebd6bc07a665a4bf7163bbab21
+    .codex/config.toml:
+        sha256: 0e2463f33a69a35951284567fba5559d3543d47e6ec381433235671d2dd5ac74
+    .codex/hooks.json:
+        sha256: ff684bcd9091bcce40fc029d245e717d9f44c959068b4860715e4f9dd99f87bd
+    .prettierrc.json:
+        sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
+    eslint.config.js:
+        sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
+    tsconfig.base.json:
+        sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217

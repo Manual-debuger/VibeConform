@@ -1,6 +1,6 @@
 # Spec 0014: M2 — hook registration, tool warnings, TypeScript/Python
 
-Status: proposed.
+Status: accepted and implemented.
 
 One spec for the whole milestone rather than a spec/plan pair per
 increment, as M1 used. The three increments below are small and share one
@@ -218,6 +218,21 @@ repository's layout rather than a standard's opinion:
   `packages/db/migrations/**`, keeping `**/dist/**` and `**/coverage/**`.
   Those two entries name directories that exist in exactly one repository;
   shipping them in a standard would be shipping someone else's file tree.
+- A trailing block applies `tseslint.configs.disableTypeChecked` to
+  `**/*.config.ts`. This was **not** anticipated when the spec was written;
+  it was found by the smoke check against the seed repository, where the
+  generalized glob produced seven fatal parse errors — every
+  `vitest.config.ts`. Tool configs normally sit outside any tsconfig's
+  `include`, and under `projectService` a file the project service cannot
+  find is a parse failure rather than a lint finding. Excluding them from
+  `typedFiles` instead would have restored the silent-non-linting the
+  generalization existed to fix, so they get the untyped rules: still
+  linted, just not type-aware.
+
+  This is the increment's worked example of why the smoke check is worth
+  running. No test in the milestone would have caught it: the templates were
+  byte-for-byte what the module resolved, `examples/` was conformant, and
+  the defect only existed relative to a real repository's file tree.
 
 **`ruff.toml`** — the content of `pyproject.toml`'s `[tool.ruff]`,
 `[tool.ruff.lint]`, and `[tool.ruff.lint.per-file-ignores]` sections,

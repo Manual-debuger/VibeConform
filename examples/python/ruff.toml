@@ -1,0 +1,18 @@
+# Ruff configuration for production-python/v1.
+#
+# Standalone rather than a [tool.ruff] section in pyproject.toml:
+# VibeConform owns whole files, and pyproject.toml also holds [project]
+# metadata that belongs to the repository. Ruff reads this file in
+# preference to pyproject.toml when both are present.
+
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "RUF100", "DTZ", "S", "BLE"]
+# StrEnum changes user-visible str(enum) behavior; migrating API enums needs a product-level review.
+ignore = ["UP042"]
+
+[lint.per-file-ignores]
+# Assertions are the test contract, not runtime input validation.
+"tests/**/*.py" = ["S101"]
