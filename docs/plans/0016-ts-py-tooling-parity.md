@@ -88,31 +88,65 @@ Sequenced after plan 0015 (uses `prod-ts`/`prod-py` names).
 
 ### Increment 3 — real example fixtures + CI verification
 
-- [ ] `examples/typescript`: add minimal real source + `package.json`
-      with pinned eslint/prettier/typescript dev dependencies + one
-      deliberate lint violation.
-- [ ] `examples/python`: add minimal real source + `pyproject.toml` with
-      pinned ruff/pyright dev dependencies + one deliberate lint
-      violation.
-- [ ] Re-sync both examples (`vibe sync --repo-root examples/typescript`,
-      `--repo-root examples/python`) so `.vibe/state.yaml` and the
-      generated files reflect increments 1–2's new module output.
-- [ ] Add a hand-authored, unmanaged CI job (not part of any module's
-      resolved resources — see spec 0016's design notes on why) running
-      `setup-node`/`setup-python` and executing eslint/ruff/pyright
-      against the two example fixtures. Confirm it fails on the
-      deliberate violations before they're fixed, then fix them and
-      confirm it passes (proves the job actually checks something).
-- [ ] `internal/cli/examples_test.go`: confirm `TestExamplesAreConformant`
-      and `TestExamplesCoverEveryLanguageStandard` still pass against the
-      new module set.
+- [x] `examples/typescript`: `package.json` (pinned eslint/prettier/
+      typescript/typescript-eslint/@types/node dev deps — `typescript`
+      pinned to `5.9.3`, not the newly-released `7.0.2`, since
+      `typescript-eslint@8.70.0`'s peer range is `<6.1.0`, discovered by
+      actually running `npm install`) + `package-lock.json`, `tsconfig.json`
+      extending `tsconfig.base.json`, `src/index.ts`.
+- [x] `examples/python`: `pyproject.toml` (`[dependency-groups] dev`, added
+      via `uv add --dev ruff pyright pytest` rather than hand-pinned, so
+      `uv.lock` carries the exact resolution) + `uv.lock`,
+      `src/example/greet.py`, `tests/test_greet.py`. `[tool.uv] package =
+      false` (no build backend needed for a fixture) plus `[tool.pytest.
+      ini_options] pythonpath = ["src"]` (discovered by running `pytest`
+      and hitting `ModuleNotFoundError` — package=false means nothing
+      installs the src layout onto the path automatically).
+- [x] Deliberate violation introduced and confirmed to fail in both
+      (`eslint`: unused var → `@typescript-eslint/no-unused-vars`; `ruff`:
+      unused import → `F401`), then fixed; confirmed clean afterward. The
+      committed fixtures are clean, not permanently broken — the violation
+      was a one-time proof the checks have teeth, per this checklist's own
+      original wording.
+- [x] Re-synced both examples after the increment-1/2 template fixes below.
+- [x] Hand-authored, unmanaged `.github/workflows/examples.yml` (this
+      repo's own CI, not a module resource) builds `vibe` from source,
+      installs `task`, and runs `task verify` inside each example
+      directory — reuses each fixture's own Taskfile rather than
+      duplicating eslint/ruff/pyright commands, and checks against the
+      templates actually in this change rather than the last release.
+      `actionlint` clean.
+- [x] Found and fixed a real bug: `ts-repo-tooling`'s `fmt`/`fmt:check` ran
+      unscoped `prettier --write/--check .`, which also tried to reformat
+      this standard's own generated YAML (`Taskfile.yml`, `lefthook.yml`,
+      `.github/*`, `.vibe/*.yaml`) — caught by actually running it against
+      `examples/typescript`, not just reading the template. Scoped to
+      `**/*.{js,jsx,ts,tsx,json,css,md}`, matching what `lefthook.yml`'s
+      pre-commit hook already correctly did. Template fixed, both examples
+      re-synced.
+- [x] `internal/cli/examples_test.go`: `TestExamplesAreConformant` and
+      `TestExamplesCoverEveryLanguageStandard` pass against the new module
+      set (source files aren't vibe resources, so they don't affect these
+      tests either way).
+- [x] Verified `task verify` end-to-end in both example directories
+      locally, with a from-source `vibe` on `PATH` — matching exactly what
+      `examples.yml` runs in CI — before committing.
 
 ### Cross-cutting
 
-- [ ] `docs/usage.md` / `README.md`: document the per-language Taskfile/CI
-      differences if the current docs describe `Taskfile.yml`/`ci.yml` as
-      uniform across standards.
-- [ ] `task verify` clean.
+- [x] `docs/usage.md`: rewrote "What `prod-ts/v1` and `prod-py/v1` manage"
+      — the old text described them as lint/format/typecheck-only with "no
+      Taskfile, no CI workflow" as a documented limitation; replaced with
+      the full per-language module table and what `ts-repo-tooling`/
+      `py-repo-tooling`/`github-ci-ts`/`github-ci-py` add. Also updated the
+      worked-examples section to mention real fixture source and
+      `examples.yml`.
+- [x] `README.md`: status banner updated from "M2 complete" to "M3 in
+      progress," linking specs 0015/0016 alongside 0014.
+- [x] `task verify` clean (repo root, with `examples/typescript/
+      node_modules` present locally — harmless: `go test ./...` picks up
+      a stray vendored `.go` file inside one npm dependency as a no-op `?`
+      package; `node_modules/` is gitignored so this never reaches CI).
 
 ## Explicitly still deferred
 

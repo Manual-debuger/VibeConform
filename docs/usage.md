@@ -429,26 +429,46 @@ vibe sync
 | Standard | Module | Resources |
 |---|---|---|
 | `prod-ts/v1` | `ts-tooling` | `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json` |
+| `prod-ts/v1` | `github-ci-ts` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
+| `prod-ts/v1` | `ts-repo-tooling` | `Taskfile.yml`, `lefthook.yml` |
 | `prod-py/v1` | `python-tooling` | `ruff.toml`, `pyrightconfig.json` |
+| `prod-py/v1` | `github-ci-py` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
+| `prod-py/v1` | `py-repo-tooling` | `Taskfile.yml`, `lefthook.yml` |
 
 Both also compose `agent-config`, which is language-neutral, so a TypeScript
 or Python repository gets the same `.claude/` and `.codex/` guardrails a Go
 one does.
 
-**They are lint/format/typecheck only.** Read that as a limitation, because
-it is one:
+**As of M3 these are complete standards, not lint/format/typecheck only.**
+Through M2 they composed neither `repo-tooling` nor `github-ci` — a
+repository declaring `prod-ts` got correct eslint/prettier/tsc configuration
+but no `Taskfile.yml`, no `lefthook.yml`, and no CI workflow to run any of it
+through. `ts-repo-tooling`/`py-repo-tooling` and `github-ci-ts`/`github-ci-py`
+close that gap:
 
-- **No Taskfile, no CI workflow, no dependabot config.** `repo-tooling` and
-  `github-ci` are Go by content — a Taskfile of `go` commands, a workflow on
-  `actions/setup-go`, a `gomod` dependabot config — so neither is composed
-  here. Per-language variants are the next milestone. Until then these
-  standards say how your code is linted and nothing about how it is verified
-  or built.
-- **No `package.json` or `pyproject.toml`.** VibeConform owns whole files,
-  and both of those also hold project-owned metadata. So nothing here pins
-  eslint, prettier, typescript, ruff, or pyright to a version — you install
-  and pin them yourself. That is also why `ruff.toml` and `pyrightconfig.json`
-  are standalone files rather than `[tool.*]` sections.
+- `ts-repo-tooling`'s `Taskfile.yml` shells out to `eslint`/`prettier`/`tsc`
+  via `npx` (project-local, not assumed on `PATH`); `py-repo-tooling`'s shells
+  out to `ruff`/`pyright`/`pytest` via `uv run`. Both expose the same target
+  names `prod-go/v1`'s Taskfile does (`fmt`, `fmt:check`, `lint`, `typecheck`,
+  `test`, `audit`, `verify`, `verify-ci`), minus `build`/`run` — those build
+  the `vibe` binary this repository ships, which doesn't generalize to an
+  adopting repository.
+- `github-ci-ts`/`github-ci-py` run on `actions/setup-node` /
+  `astral-sh/setup-uv` instead of `actions/setup-go` (Go is still installed
+  in-workflow to install `task` and `vibe` themselves), calling those
+  Taskfile targets. Each also gets its own `dependabot.yml`: the Go one
+  hardcodes `package-ecosystem: gomod`, so it isn't reusable as-is —
+  `github-ci-ts` declares `npm`, `github-ci-py` declares `pip`.
+
+What's still true from M2:
+
+- **No `package.json` or `pyproject.toml` content beyond dev tooling.**
+  VibeConform owns whole files, and both of those also hold project-owned
+  metadata (dependencies, project name, build config). Nothing pins eslint,
+  prettier, typescript, ruff, or pyright to a version on your behalf — you
+  install and pin them yourself, the way `examples/typescript/package.json`
+  and `examples/python/pyproject.toml` do. That is also why `ruff.toml` and
+  `pyrightconfig.json` are standalone files rather than `[tool.*]` sections.
 - **`tsconfig.base.json`, not `tsconfig.json`.** The standard owns the
   compiler options; your repository owns a `tsconfig.json` that extends them:
 
@@ -463,16 +483,23 @@ Python 3.12, and the rule sets as written.
 
 `examples/typescript/` and `examples/python/` in this repository are real
 repositories declaring these standards, holding the exact output of syncing
-them. They are the same worked example that VibeConform itself is for
-`prod-go/v1` — and, since this is a Go repository that never resolves
-either language module, they are also what keeps those templates honest: a
-test fails if a template changes and the examples are not re-synced.
+them, plus real source (`src/`, `tests/`) and pinned dev dependencies
+(`package.json`/`package-lock.json`, `pyproject.toml`/`uv.lock`) that
+VibeConform itself does not manage. They are the same worked example that
+VibeConform itself is for `prod-go/v1` — and, since this is a Go repository
+that never resolves either language module, they are also what keeps those
+templates honest: a test fails if a template changes and the examples are
+not re-synced.
 
-What that test checks is that the generated files are byte-for-byte what the
-module resolved. It does **not** run eslint, ruff, or pyright against them,
-so it cannot tell you the configuration is *valid* — only that it is what
-the standard says. Closing that gap needs those toolchains in CI, and is
-deferred to the next milestone.
+`TestExamplesAreConformant` (`internal/cli/examples_test.go`) only checks
+that the generated files are byte-for-byte what the module resolved — it
+does not run eslint, ruff, or pyright. That gap is closed by
+`.github/workflows/examples.yml`, a hand-authored workflow (not a module
+resource, since encoding an `examples/`-specific job into `github-ci-ts`/
+`github-ci-py`'s template would leak this repository's layout into every
+adopting repository): it builds `vibe` from source and runs `task verify`
+inside each example, so a template change that breaks linting fails CI, not
+just a byte-comparison test.
 
 ## VibeConform manages itself
 

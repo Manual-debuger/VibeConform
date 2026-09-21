@@ -1,6 +1,6 @@
 # Spec 0016: TS/PY Tooling Parity
 
-Status: accepted; implementation pending.
+Status: accepted and implemented.
 
 ## Problem
 

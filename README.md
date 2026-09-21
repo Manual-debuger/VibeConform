@@ -1,6 +1,6 @@
 # VibeConform
 
-> **Status: pre-alpha, M2 complete — VibeConform manages its own guardrails
+> **Status: pre-alpha, M3 in progress — VibeConform manages its own guardrails
 > and audits itself in CI.** `vibe init` writes a `vibe.yaml` desired-state file (see
 > [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `vibe
 > audit` is the conformance gate: it checks every resolved resource against
@@ -31,14 +31,20 @@
 > those four modules manage is generated from a module template rather than
 > hand-maintained (see
 > [`docs/specs/0013-dogfood-self-management.md`](docs/specs/0013-dogfood-self-management.md)).
-> M2 also added `prod-ts`/`v1` and `prod-py`/`v1`
-> standards (fixed ESLint/Prettier and Ruff configuration respectively) —
-> see [`docs/specs/0014-m2-milestone.md`](docs/specs/0014-m2-milestone.md).
+> M2 added `prod-ts`/`v1` and `prod-py`/`v1` as lint/format/typecheck-only
+> standards — see
+> [`docs/specs/0014-m2-milestone.md`](docs/specs/0014-m2-milestone.md). M3
+> renamed all three standards (`production` → `prod-go`, etc., see
+> [`docs/specs/0015-standard-naming.md`](docs/specs/0015-standard-naming.md))
+> and gave `prod-ts`/`prod-py` their own `repo-tooling`/`github-ci` variants,
+> so they are now complete standards rather than lint configuration — see
+> [`docs/specs/0016-ts-py-tooling-parity.md`](docs/specs/0016-ts-py-tooling-parity.md).
 > `check` and `doctor` still return "not implemented yet."
 > Nothing described below as "eventually" or "will" exists yet. See
-> [`docs/plans/0007-m1-milestone.md`](docs/plans/0007-m1-milestone.md) and
-> [`docs/plans/0014-m2-milestone.md`](docs/plans/0014-m2-milestone.md) for
-> what M1 and M2 delivered and what moved to M3.
+> [`docs/plans/0007-m1-milestone.md`](docs/plans/0007-m1-milestone.md),
+> [`docs/plans/0014-m2-milestone.md`](docs/plans/0014-m2-milestone.md), and
+> [`docs/plans/0016-ts-py-tooling-parity.md`](docs/plans/0016-ts-py-tooling-parity.md)
+> for what M1, M2, and M3 (so far) delivered.
 
 ## What VibeConform is
 
