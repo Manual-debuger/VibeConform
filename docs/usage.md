@@ -6,7 +6,45 @@ something below and the CLI's own `--help` output disagree, trust
 
 ## Installing
 
-No releases exist yet. Build from source:
+### `go install` or `go run`, by module path (no clone needed)
+
+The repository is public, so Go can fetch it unauthenticated. `go install`
+puts a `vibe` binary on `$GOPATH/bin` (usually `~/go/bin`):
+
+```bash
+go install github.com/Manual-debuger/VibeConform/cmd/vibe@latest
+```
+
+`go run` does the same fetch without leaving a binary behind:
+
+```bash
+go run github.com/Manual-debuger/VibeConform/cmd/vibe@latest --help
+```
+
+Pin an exact tag instead of tracking `@latest` — see
+`docs/decisions/0007-release-tag-naming.md` for what a tag looks like and
+why:
+
+```bash
+go run github.com/Manual-debuger/VibeConform/cmd/vibe@v0.1.0-alpha.1 --help
+```
+
+This previously required git credentials even with a version suffix,
+because the repository was private; it works unauthenticated now.
+
+### Prebuilt binaries
+
+`.github/workflows/release.yml` runs GoReleaser on every `v*` tag push and
+attaches per-OS/arch archives (`.tar.gz` for Linux/macOS, `.zip` for
+Windows) plus a `checksums.txt` to a GitHub Release. `.goreleaser.yaml` sets
+`release.draft: true`, so each run creates that release as a **draft**
+first — nothing is downloadable from it until a maintainer opens it on the
+Releases page and publishes it by hand.
+
+### From source
+
+Still works, and is the only path if you want to build from a commit that
+hasn't been tagged:
 
 ```bash
 git clone <this repo>
@@ -14,17 +52,11 @@ cd VibeConform
 go build -o vibe ./cmd/vibe
 ```
 
-Or run it without building, from inside the repo:
+Or without building:
 
 ```bash
 go run ./cmd/vibe --help
 ```
-
-`go run github.com/Manual-debuger/VibeConform/cmd/vibe ...` (by module
-path, from *outside* the repo) only works with a versioned `@vX.Y.Z`
-suffix, since it requires Go to fetch the module — and this is currently a
-private repo, so that fetch will fail without git credentials configured
-for it. Building or running from a local clone is the supported path today.
 
 ## Commands
 
