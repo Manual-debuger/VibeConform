@@ -1,13 +1,13 @@
 # VibeConform
 
-> **Status: pre-alpha, M2 complete — VibeConform manages its own guardrails
+> **Status: pre-alpha, M3 in progress — VibeConform manages its own guardrails
 > and audits itself in CI.** `vibe init` writes a `vibe.yaml` desired-state file (see
 > [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `vibe
 > audit` is the conformance gate: it checks every resolved resource against
 > the repository and exits `2` when the repository is not conformant, `1`
 > when it cannot answer at all
 > (see [`docs/specs/0009-vibe-audit-v2.md`](docs/specs/0009-vibe-audit-v2.md)).
-> The `production`/`v1` standard composes four modules: `go-tooling`
+> The `prod-go`/`v1` standard composes four modules: `go-tooling`
 > (a fixed `.golangci.yml`, see
 > [`docs/specs/0005-gotooling-module.md`](docs/specs/0005-gotooling-module.md))
 > `github-ci` (CI workflow, Dependabot config, PR template, see
@@ -26,19 +26,25 @@
 > `lefthook install` when the standard manages `lefthook.yml`, and warns
 > (without failing) about any external binary a module requires that is
 > missing from `PATH`.
-> This repository declares `production`/`v1` in its own `vibe.yaml`, commits
+> This repository declares `prod-go`/`v1` in its own `vibe.yaml`, commits
 > `.vibe/state.yaml`, and runs `vibe audit` against itself in CI — every file
 > those four modules manage is generated from a module template rather than
 > hand-maintained (see
 > [`docs/specs/0013-dogfood-self-management.md`](docs/specs/0013-dogfood-self-management.md)).
-> M2 also added `production-typescript`/`v1` and `production-python`/`v1`
-> standards (fixed ESLint/Prettier and Ruff configuration respectively) —
-> see [`docs/specs/0014-m2-milestone.md`](docs/specs/0014-m2-milestone.md).
+> M2 added `prod-ts`/`v1` and `prod-py`/`v1` as lint/format/typecheck-only
+> standards — see
+> [`docs/specs/0014-m2-milestone.md`](docs/specs/0014-m2-milestone.md). M3
+> renamed all three standards (`production` → `prod-go`, etc., see
+> [`docs/specs/0015-standard-naming.md`](docs/specs/0015-standard-naming.md))
+> and gave `prod-ts`/`prod-py` their own `repo-tooling`/`github-ci` variants,
+> so they are now complete standards rather than lint configuration — see
+> [`docs/specs/0016-ts-py-tooling-parity.md`](docs/specs/0016-ts-py-tooling-parity.md).
 > `check` and `doctor` still return "not implemented yet."
 > Nothing described below as "eventually" or "will" exists yet. See
-> [`docs/plans/0007-m1-milestone.md`](docs/plans/0007-m1-milestone.md) and
-> [`docs/plans/0014-m2-milestone.md`](docs/plans/0014-m2-milestone.md) for
-> what M1 and M2 delivered and what moved to M3.
+> [`docs/plans/0007-m1-milestone.md`](docs/plans/0007-m1-milestone.md),
+> [`docs/plans/0014-m2-milestone.md`](docs/plans/0014-m2-milestone.md), and
+> [`docs/plans/0016-ts-py-tooling-parity.md`](docs/plans/0016-ts-py-tooling-parity.md)
+> for what M1, M2, and M3 (so far) delivered.
 
 ## What VibeConform is
 

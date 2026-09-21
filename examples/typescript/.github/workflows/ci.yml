@@ -1,0 +1,106 @@
+name: CI
+
+# Every job below runs a Taskfile target so CI, local dev, and docs never
+# duplicate independent command lists. See Taskfile.yml.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  GO_VERSION: "1.27.0"
+  TASK_VERSION: "v3.53.1"
+
+jobs:
+  lint:
+    name: format / lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      - name: Install dependencies
+        run: npm ci
+      - name: task fmt:check
+        run: task fmt:check
+      - name: task lint
+        run: task lint
+
+  typecheck_test:
+    name: typecheck / test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      - name: Install dependencies
+        run: npm ci
+      - name: task typecheck
+        run: task typecheck
+      - name: task test
+        run: task test
+
+  conformance:
+    name: conformance
+    runs-on: ubuntu-latest
+    # Gating since docs/specs/0013-dogfood-self-management.md's step B. A
+    # managed file edited directly instead of through its module template
+    # fails here: vibe audit exits 2 for drift, 1 if it could not answer.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      - name: Install vibe
+        run: go install github.com/Manual-debuger/VibeConform/cmd/vibe@latest
+      - name: task audit
+        run: task audit
+
+  gate:
+    name: CI / gate
+    if: always()
+    needs: [lint, typecheck_test, conformance]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all upstream jobs to have succeeded
+        run: |
+          for result in \
+            "${{ needs.lint.result }}" \
+            "${{ needs.typecheck_test.result }}" \
+            "${{ needs.conformance.result }}"; do
+            if [ "$result" != "success" ]; then
+              echo "A required job did not succeed: $result"
+              exit 1
+            fi
+          done

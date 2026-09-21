@@ -8,6 +8,15 @@
 *.out
 coverage.txt
 
+# Node (examples/typescript)
+node_modules/
+examples/typescript/dist/
+
+# Python (examples/python)
+.venv/
+__pycache__/
+*.pyc
+
 # Tooling caches
 .task/
 .tokensave/

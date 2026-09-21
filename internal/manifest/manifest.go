@@ -13,7 +13,7 @@ import (
 // Manifest is the parsed form of vibe.yaml.
 type Manifest struct {
 	// Standard is the name of the versioned production standard this
-	// repository conforms to, e.g. "production".
+	// repository conforms to, e.g. "prod-go".
 	Standard string `yaml:"standard"`
 	// Version pins the standard revision, e.g. "v1".
 	Version string `yaml:"version"`

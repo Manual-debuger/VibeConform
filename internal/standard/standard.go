@@ -9,9 +9,13 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/module/agents"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/github"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubpy"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubts"
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/pyrepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/pythontooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/repotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/tsrepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/tstooling"
 )
 
@@ -53,30 +57,33 @@ func Lookup(name, version string) (*Standard, error) {
 }
 
 func init() {
-	// "production" is the Go standard and is not named production-go for one
-	// reason: renaming it would break the vibe.yaml and .vibe/state.yaml this
-	// repository has committed, for cosmetic gain. See
-	// docs/specs/0014-m2-milestone.md.
+	// "prod-go" was "production" through M2, kept unnamespaced because
+	// renaming it then would have broken the vibe.yaml and .vibe/state.yaml
+	// this repository had already committed, for cosmetic gain. M3 settled
+	// the naming across all three standards. See
+	// docs/specs/0015-standard-naming.md.
 	Register(Standard{
-		Name:    "production",
+		Name:    "prod-go",
 		Version: "v1",
 		// Order matters: audit, diff, and sync report in module order.
 		Modules: []module.Module{gotooling.New(), github.New(), repotooling.New(), agents.New()},
 	})
 
-	// The language standards compose agent-config, which is language-neutral,
-	// but neither repo-tooling nor github-ci: a Taskfile of go commands and a
-	// workflow on setup-go are Go by content, not just by name. Their
-	// per-language variants are M3.
+	// Through M2 these composed only their language-tooling module plus
+	// agent-config: no repo-tooling, no CI, so a repository declaring
+	// prod-ts/prod-py got lint config but no verification entry point at
+	// all. Spec 0016 closes that gap with each language's own repo-tooling
+	// and github-ci variant, in the same module order prod-go uses
+	// (language tooling, CI, repo-tooling, agent-config).
 	Register(Standard{
-		Name:    "production-typescript",
+		Name:    "prod-ts",
 		Version: "v1",
-		Modules: []module.Module{tstooling.New(), agents.New()},
+		Modules: []module.Module{tstooling.New(), githubts.New(), tsrepotooling.New(), agents.New()},
 	})
 
 	Register(Standard{
-		Name:    "production-python",
+		Name:    "prod-py",
 		Version: "v1",
-		Modules: []module.Module{pythontooling.New(), agents.New()},
+		Modules: []module.Module{pythontooling.New(), githubpy.New(), pyrepotooling.New(), agents.New()},
 	})
 }

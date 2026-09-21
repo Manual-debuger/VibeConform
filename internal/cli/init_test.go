@@ -15,7 +15,7 @@ func TestInitCmdWritesManifest(t *testing.T) {
 	root := NewRootCmd("test")
 	var out bytes.Buffer
 	root.SetOut(&out)
-	root.SetArgs([]string{"init", "production", "v1", "--repo-root", dir})
+	root.SetArgs([]string{"init", "prod-go", "v1", "--repo-root", dir})
 
 	if err := root.Execute(); err != nil {
 		t.Fatalf("init returned error: %v", err)
@@ -30,7 +30,7 @@ func TestInitCmdWritesManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parsing written vibe.yaml: %v", err)
 	}
-	if m.Standard != "production" || m.Version != "v1" {
+	if m.Standard != "prod-go" || m.Version != "v1" {
 		t.Fatalf("unexpected manifest: %+v", m)
 	}
 }
@@ -38,14 +38,14 @@ func TestInitCmdWritesManifest(t *testing.T) {
 func TestInitCmdFailsIfManifestExists(t *testing.T) {
 	dir := t.TempDir()
 	existing := filepath.Join(dir, "vibe.yaml")
-	if err := os.WriteFile(existing, []byte("standard: production\nversion: v1\n"), 0o644); err != nil {
+	if err := os.WriteFile(existing, []byte("standard: prod-go\nversion: v1\n"), 0o644); err != nil {
 		t.Fatalf("seeding existing vibe.yaml: %v", err)
 	}
 
 	root := NewRootCmd("test")
 	root.SetOut(&bytes.Buffer{})
 	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"init", "production", "v2", "--repo-root", dir})
+	root.SetArgs([]string{"init", "prod-go", "v2", "--repo-root", dir})
 
 	if err := root.Execute(); err == nil {
 		t.Fatal("expected error when vibe.yaml already exists, got nil")
@@ -55,7 +55,7 @@ func TestInitCmdFailsIfManifestExists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading vibe.yaml: %v", err)
 	}
-	if string(data) != "standard: production\nversion: v1\n" {
+	if string(data) != "standard: prod-go\nversion: v1\n" {
 		t.Fatalf("existing vibe.yaml was modified: %s", data)
 	}
 }
@@ -64,7 +64,7 @@ func TestInitCmdRequiresTwoArgs(t *testing.T) {
 	root := NewRootCmd("test")
 	root.SetOut(&bytes.Buffer{})
 	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"init", "production"})
+	root.SetArgs([]string{"init", "prod-go"})
 
 	if err := root.Execute(); err == nil {
 		t.Fatal("expected error for missing version argument, got nil")

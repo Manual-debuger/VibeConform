@@ -19,7 +19,7 @@ import (
 // examples/ being re-synced.
 //
 // It deliberately lives here rather than in Taskfile.yml or CI: both are
-// resources of production/v1 and ship to every adopting repository, and an
+// resources of prod-go/v1 and ship to every adopting repository, and an
 // --repo-root examples/typescript line in either would leak this
 // repository's layout into the standard. See
 // docs/specs/0014-m2-milestone.md.
@@ -54,13 +54,14 @@ func TestExamplesAreConformant(t *testing.T) {
 // forgotten when a standard is added: a standard nothing syncs is a standard
 // nothing checks.
 func TestExamplesCoverEveryLanguageStandard(t *testing.T) {
+	wantByExample := map[string]string{"typescript": "prod-ts", "python": "prod-py"}
 	for _, example := range []string{"typescript", "python"} {
 		root := filepath.Join("..", "..", "examples", example)
 		p, err := buildPlan(root)
 		if err != nil {
 			t.Fatalf("planning %s: %v", root, err)
 		}
-		if want := "production-" + example; p.Standard.Name != want {
+		if want := wantByExample[example]; p.Standard.Name != want {
 			t.Errorf("examples/%s declares %s, want %s", example, p.Standard.Name, want)
 		}
 	}

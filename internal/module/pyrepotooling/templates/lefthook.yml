@@ -1,0 +1,22 @@
+# Lefthook: fast checks at commit time, stronger checks at push time.
+# CI (.github/workflows/ci.yml) is the authoritative full verification gate;
+# these hooks are a fast local first line of defense, not a substitute.
+
+pre-commit:
+  parallel: true
+  commands:
+    ruff-format:
+      glob: "*.py"
+      run: uv run ruff format --check {staged_files}
+      fail_text: "Run 'task fmt' to format staged Python files."
+    ruff-lint:
+      glob: "*.py"
+      run: uv run ruff check {staged_files}
+
+pre-push:
+  parallel: false
+  commands:
+    typecheck:
+      run: uv run pyright
+    test:
+      run: uv run pytest

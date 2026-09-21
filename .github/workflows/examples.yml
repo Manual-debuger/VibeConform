@@ -1,0 +1,108 @@
+name: Examples
+
+# Runs eslint/prettier/tsc and ruff/pyright/pytest against real fixture
+# source in examples/typescript and examples/python, closing the blind
+# spot TestExamplesAreConformant (internal/cli/examples_test.go) leaves:
+# that test proves generated config round-trips through vibe sync, not
+# that it catches anything.
+#
+# Hand-authored rather than a job in ci.yml: ci.yml is itself a resource
+# github-ci resolves, shipped to every adopting Go repository, and an
+# examples/-specific job in it would leak this repository's own layout
+# into that standard. See docs/specs/0016-ts-py-tooling-parity.md.
+#
+# Builds vibe from source rather than installing a published release, so
+# "task audit" (part of "task verify") checks fixtures against the
+# templates this change under review actually contains, not the last tag.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: examples-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.0"
+  TASK_VERSION: "v3.53.1"
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  typescript:
+    name: examples/typescript
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      - name: Build vibe from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install dependencies
+        working-directory: examples/typescript
+        run: npm ci
+      - name: task verify
+        working-directory: examples/typescript
+        run: task verify
+
+  python:
+    name: examples/python
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      - name: Build vibe from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install dependencies
+        working-directory: examples/python
+        run: uv sync
+      - name: task verify
+        working-directory: examples/python
+        run: task verify
+
+  gate:
+    name: Examples / gate
+    if: always()
+    needs: [typescript, python]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all upstream jobs to have succeeded
+        run: |
+          for result in \
+            "${{ needs.typescript.result }}" \
+            "${{ needs.python.result }}"; do
+            if [ "$result" != "success" ]; then
+              echo "A required job did not succeed: $result"
+              exit 1
+            fi
+          done
