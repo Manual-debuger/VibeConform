@@ -1,0 +1,41 @@
+name: CodeQL
+
+# Free on public repositories (see PUBLIC_REPO_CHECKLIST.md); scans the Go
+# source on every push/PR to main plus a weekly sweep for newly disclosed
+# query coverage against unchanged code.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.0"
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@c23de5a82f64bb08c6d9f28844551440ca298e76 # v4.38.1
+        with:
+          languages: go
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@c23de5a82f64bb08c6d9f28844551440ca298e76 # v4.38.1
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@c23de5a82f64bb08c6d9f28844551440ca298e76 # v4.38.1

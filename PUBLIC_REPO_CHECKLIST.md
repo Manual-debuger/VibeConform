@@ -8,9 +8,12 @@ instead of being silently forgotten.
 
 ## Blocked today by GitHub Free + private visibility
 
-- [ ] **Code scanning / CodeQL** — free on public repositories; on private
-      repositories it requires purchasing GitHub Code Security (Team/
-      Enterprise). Enable a `codeql-analysis` workflow once public.
+- [x] **Code scanning / CodeQL** — `.github/workflows/codeql.yml` is now in
+      the repository (push/PR to `main` + weekly schedule, Go analysis).
+      Still won't run successfully until the repository is public: on
+      private repos without GitHub Code Security, the `analyze` step fails
+      to upload results. No action needed after visibility flips other than
+      watching the first run go green.
 - [ ] **Secret scanning + push protection** — same constraint: free on
       public repos, requires GitHub Secret Protection on private repos.
       Enable via repository Settings → Code security once public (it is
@@ -34,8 +37,12 @@ instead of being silently forgotten.
         (`repos/{owner}/{repo}/rulesets`) may still be plan-gated for
         private repos — classic protection above already satisfies the
         requirements, so this hasn't been tested.
-- [ ] **Draft pull requests / code owners** — also gated to public
-      repositories on the Free plan; revisit `CODEOWNERS` once public.
+- [x] **Code owners** — `.github/CODEOWNERS` now exists (`@Manual-debuger`
+      as sole owner; no required-review enforcement is configured, so this
+      only records ownership).
+- [ ] **Draft pull requests** — still gated to public repositories on the
+      Free plan; no action needed, it becomes available automatically once
+      public.
 
 ## Already available today (no action needed later)
 

@@ -1,6 +1,6 @@
 # VibeConform
 
-> **Status: pre-alpha, M1 complete — VibeConform manages its own guardrails
+> **Status: pre-alpha, M2 complete — VibeConform manages its own guardrails
 > and audits itself in CI.** `vibe init` writes a `vibe.yaml` desired-state file (see
 > [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `vibe
 > audit` is the conformance gate: it checks every resolved resource against
@@ -21,17 +21,24 @@
 > resource against `.vibe/state.yaml` — see
 > [`docs/specs/0006-reconcile-diff-v1.md`](docs/specs/0006-reconcile-diff-v1.md).
 > `vibe sync` applies it: it writes `Generated` resources, records their
-> hashes in `.vibe/state.yaml`, and refuses to overwrite a conflict (see
-> [`docs/specs/0008-vibe-sync-v1.md`](docs/specs/0008-vibe-sync-v1.md)).
+> hashes in `.vibe/state.yaml`, refuses to overwrite a conflict (see
+> [`docs/specs/0008-vibe-sync-v1.md`](docs/specs/0008-vibe-sync-v1.md)), runs
+> `lefthook install` when the standard manages `lefthook.yml`, and warns
+> (without failing) about any external binary a module requires that is
+> missing from `PATH`.
 > This repository declares `production`/`v1` in its own `vibe.yaml`, commits
 > `.vibe/state.yaml`, and runs `vibe audit` against itself in CI — every file
 > those four modules manage is generated from a module template rather than
 > hand-maintained (see
 > [`docs/specs/0013-dogfood-self-management.md`](docs/specs/0013-dogfood-self-management.md)).
+> M2 also added `production-typescript`/`v1` and `production-python`/`v1`
+> standards (fixed ESLint/Prettier and Ruff configuration respectively) —
+> see [`docs/specs/0014-m2-milestone.md`](docs/specs/0014-m2-milestone.md).
 > `check` and `doctor` still return "not implemented yet."
 > Nothing described below as "eventually" or "will" exists yet. See
-> [`docs/plans/0007-m1-milestone.md`](docs/plans/0007-m1-milestone.md) for
-> what M1 delivered and what moved to M2.
+> [`docs/plans/0007-m1-milestone.md`](docs/plans/0007-m1-milestone.md) and
+> [`docs/plans/0014-m2-milestone.md`](docs/plans/0014-m2-milestone.md) for
+> what M1 and M2 delivered and what moved to M3.
 
 ## What VibeConform is
 
