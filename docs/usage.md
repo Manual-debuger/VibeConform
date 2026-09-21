@@ -215,6 +215,7 @@ On a repository that has never been synced:
 standard: production/v1
 .golangci.yml: created
 1 created, 0 updated, 0 unchanged, 0 conflicts
+lefthook: git hooks registered
 ```
 
 Running it again changes nothing:
@@ -223,7 +224,12 @@ Running it again changes nothing:
 standard: production/v1
 .golangci.yml: unchanged
 0 created, 0 updated, 1 unchanged, 0 conflicts
+lefthook: git hooks registered
 ```
+
+The last line appears for any standard that manages `lefthook.yml`, and
+`lefthook install` is idempotent — re-registering the same hooks on every
+sync is the intended behavior, not a sign the previous run failed.
 
 **Flags:**
 
@@ -256,7 +262,29 @@ standard: production/v1
   translation. Pin `* text=auto eol=lf` in `.gitattributes` if you work
   across Windows and Unix, or checkouts will re-hash differently and report
   drift forever.
-- There is no `--dry-run`: `vibe diff` is the dry run.
+- There is no `--dry-run`: `vibe diff` is the dry run. Note that `diff`
+  previews file changes only — it does not register git hooks, because it
+  writes nothing.
+- If the standard manages `lefthook.yml`, a clean sync ends by running
+  `lefthook install` in `--repo-root`, so the hooks the config describes are
+  actually registered. It runs **only** after a run with no conflicts and no
+  failures, and it can never cause one: a missing `lefthook` binary, or a
+  directory that is not a git work tree, prints a warning to stderr and
+  leaves the exit code at 0.
+
+  ```
+  warning: lefthook not found on PATH; git hooks were not registered
+  ```
+
+  ```
+  warning: git hooks were not registered: exit status 128
+  │  > git rev-parse --show-toplevel
+  │    fatal: not a git repository (or any of the parent directories): .git
+  ```
+
+  When `lefthook` runs and fails, its own output is repeated under the
+  warning (up to 10 lines) rather than reduced to an exit status, since the
+  exit status alone never says what went wrong.
 - Resources dropped from a standard are not deleted. `sync` only writes what
   the standard currently resolves; it never removes files.
 - Fails (non-zero exit) if `vibe.yaml` is missing/unreadable, the declared
@@ -315,11 +343,18 @@ report the repository conformant. See
 are not modeled at all, so the executable bit comes from your git checkout
 rather than from `sync`.
 
-Syncing `lefthook.yml` writes the configuration; it does **not** register git
-hooks. Run `lefthook install` yourself. More generally, VibeConform writes
-configuration and never provisions toolchains: a repository that syncs
-`Taskfile.yml` without `task` installed gets a file it cannot run, which is
-the correct division of responsibility.
+Syncing `lefthook.yml` writes the configuration **and** registers the hooks,
+by running `lefthook install` at the end of a clean sync. Writing the config
+without registering it would leave a pre-commit gate that is configured and
+off — a guardrail that fails silently and fails open.
+
+That is the only command `vibe` runs on your behalf, and the boundary it
+sits on is narrower than it looks: VibeConform writes configuration and does
+not provision toolchains. A repository that syncs `Taskfile.yml` without
+`task` installed gets a file it cannot run, and that is the correct division
+of responsibility. `lefthook install` activates a file VibeConform just
+wrote; it does not install a tool VibeConform did not. If `lefthook` itself
+is missing, `sync` warns and moves on — see `vibe sync` above.
 
 Content is fixed in `v1`: Go version, action pins, and job names come from
 the standard, not from your repository. A repository that needs different

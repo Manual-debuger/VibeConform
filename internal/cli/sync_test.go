@@ -2,26 +2,65 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/reconcile"
+	"github.com/Manual-debuger/VibeConform/internal/resource"
 	"github.com/Manual-debuger/VibeConform/internal/state"
 )
 
-func runSyncIn(t *testing.T, dir string) (string, error) {
+// hookRecorder captures the repo roots hook registration was asked to
+// install into, so tests can assert on registration without a real lefthook
+// binary or a real git work tree.
+type hookRecorder struct {
+	roots []string
+	err   error
+}
+
+// stubHookInstall replaces the lefthook seam for the duration of one test.
+// Every sync test needs it, not just the ones about hooks: the suite syncs
+// into t.TempDir(), which is not a git work tree, so an unstubbed run would
+// shell out to a lefthook install that cannot succeed.
+func stubHookInstall(t *testing.T) *hookRecorder {
+	t.Helper()
+	rec := &hookRecorder{}
+	previous := installGitHooks
+	installGitHooks = func(_ context.Context, repoRoot string) error {
+		rec.roots = append(rec.roots, repoRoot)
+		return rec.err
+	}
+	t.Cleanup(func() { installGitHooks = previous })
+	return rec
+}
+
+// runSyncCapturing runs sync and returns stdout and stderr separately. It
+// does not stub the hook seam; callers that care do it themselves.
+func runSyncCapturing(t *testing.T, dir string) (stdout, stderr string, err error) {
 	t.Helper()
 	root := NewRootCmd("test")
-	var out bytes.Buffer
+	var out, errOut bytes.Buffer
 	root.SetOut(&out)
-	root.SetErr(&bytes.Buffer{})
+	root.SetErr(&errOut)
 	root.SetArgs([]string{"sync", "--repo-root", dir})
 
-	err := root.Execute()
-	return out.String(), err
+	err = root.Execute()
+	return out.String(), errOut.String(), err
+}
+
+func runSyncIn(t *testing.T, dir string) (string, error) {
+	t.Helper()
+	stubHookInstall(t)
+	out, _, err := runSyncCapturing(t, dir)
+	return out, err
 }
 
 // recordState updates one entry in an existing state file, leaving the rest
@@ -247,6 +286,159 @@ func TestSyncCmdOverwritesDriftFromRecordedState(t *testing.T) {
 	}
 	if want := "0 conflicts"; !bytes.Contains([]byte(out), []byte(want)) {
 		t.Errorf("sync output missing %q\n%s", want, out)
+	}
+}
+
+// TestSyncCmdRegistersGitHooks covers the reason spec 0014's first
+// increment exists: production/v1 manages lefthook.yml, and a repository
+// that has the config without the hooks has a pre-commit gate that is
+// configured and off.
+func TestSyncCmdRegistersGitHooks(t *testing.T) {
+	dir := t.TempDir()
+	writeManifest(t, dir)
+	rec := stubHookInstall(t)
+
+	out, _, err := runSyncCapturing(t, dir)
+	if err != nil {
+		t.Fatalf("sync returned error: %v\n%s", err, out)
+	}
+
+	if len(rec.roots) != 1 {
+		t.Fatalf("hook registration ran %d time(s), want exactly 1", len(rec.roots))
+	}
+	if rec.roots[0] != dir {
+		t.Errorf("registered hooks in %q, want the synced repo root %q", rec.roots[0], dir)
+	}
+	if want := "lefthook: git hooks registered"; !strings.Contains(out, want) {
+		t.Errorf("sync output missing %q\n%s", want, out)
+	}
+}
+
+// TestSyncCmdSkipsHookRegistrationOnConflict pins the conservative half of
+// the rule: a run that refused to write part of the standard has not
+// finished configuring the repository.
+func TestSyncCmdSkipsHookRegistrationOnConflict(t *testing.T) {
+	dir := t.TempDir()
+	writeManifest(t, dir)
+	if err := os.WriteFile(filepath.Join(dir, ".golangci.yml"), []byte("hand-authored: true\n"), 0o600); err != nil {
+		t.Fatalf("seeding .golangci.yml: %v", err)
+	}
+	rec := stubHookInstall(t)
+
+	if _, _, err := runSyncCapturing(t, dir); err == nil {
+		t.Fatal("expected a non-zero exit for a conflict, got nil")
+	}
+
+	if len(rec.roots) != 0 {
+		t.Errorf("hook registration ran on a conflicted sync: %v", rec.roots)
+	}
+}
+
+// TestSyncCmdSurvivesHookRegistrationFailure is the invariant the whole
+// increment rests on: registering hooks is a convenience on top of a sync
+// that already succeeded, so no failure of it may change the exit code.
+func TestSyncCmdSurvivesHookRegistrationFailure(t *testing.T) {
+	dir := t.TempDir()
+	writeManifest(t, dir)
+	rec := stubHookInstall(t)
+	rec.err = errors.New("not a git repository")
+
+	out, errOut, err := runSyncCapturing(t, dir)
+	if err != nil {
+		t.Fatalf("a failed hook registration must not fail the sync: %v\n%s", err, out)
+	}
+
+	if want := "warning: git hooks were not registered"; !strings.Contains(errOut, want) {
+		t.Errorf("stderr missing %q\n%s", want, errOut)
+	}
+	if !strings.Contains(errOut, "not a git repository") {
+		t.Errorf("stderr should carry lefthook's own reason\n%s", errOut)
+	}
+	if strings.Contains(out, "warning") {
+		t.Errorf("warnings belong on stderr, not in sync's report of what it did\n%s", out)
+	}
+}
+
+func TestPlanManagesLefthook(t *testing.T) {
+	lefthook := resourcePlan{
+		Resource:  resource.Resource{Path: lefthookResourcePath, Ownership: resource.Generated},
+		Decision:  reconcile.NoChange,
+		Supported: true,
+	}
+	other := resourcePlan{
+		Resource:  resource.Resource{Path: ".golangci.yml", Ownership: resource.Generated},
+		Decision:  reconcile.NoChange,
+		Supported: true,
+	}
+	// An ownership mode no command handles yet is not a managed lefthook.yml:
+	// sync would not have written it, so there is nothing to register.
+	unsupported := resourcePlan{
+		Resource: resource.Resource{Path: lefthookResourcePath, Ownership: resource.ProjectOwned},
+	}
+
+	for name, tc := range map[string]struct {
+		resources []resourcePlan
+		want      bool
+	}{
+		"manages lefthook":      {[]resourcePlan{other, lefthook}, true},
+		"does not":              {[]resourcePlan{other}, false},
+		"no resources at all":   {nil, false},
+		"unsupported ownership": {[]resourcePlan{unsupported}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := planManagesLefthook(&repoPlan{Resources: tc.resources}); got != tc.want {
+				t.Errorf("planManagesLefthook() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTrimOutput uses lefthook's actual failure output: it boxes a command
+// echo above the line that says what went wrong, and pads every line out to
+// a fixed width, so neither the first line nor the last is the useful one.
+func TestTrimOutput(t *testing.T) {
+	lefthookFailure := "│  > git rev-parse --show-toplevel                                  \n" +
+		"│    fatal: not a git repository (or any of the parent directories): .git   \n" +
+		"│                                                                          \n" +
+		"exit status 128\n"
+
+	got := trimOutput([]byte(lefthookFailure), "exit status 128")
+	if strings.Contains(got, "  \n") || strings.HasSuffix(got, " ") {
+		t.Errorf("trailing padding survived:\n%q", got)
+	}
+	if !strings.Contains(got, "fatal: not a git repository") {
+		t.Errorf("dropped the line that says what went wrong:\n%s", got)
+	}
+	// The box-drawing line and the repeated exit status both cost a line and
+	// say nothing; the warning already leads with the exit status.
+	for _, unwanted := range []string{"│\n", "exit status 128"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("kept %q, which carries no information:\n%s", unwanted, got)
+		}
+	}
+
+	var long strings.Builder
+	for i := range maxOutputLines + 5 {
+		fmt.Fprintf(&long, "line %d\n", i)
+	}
+	capped := strings.Split(trimOutput([]byte(long.String()), ""), "\n")
+	if len(capped) != maxOutputLines+1 {
+		t.Errorf("kept %d lines, want %d plus an ellipsis", len(capped), maxOutputLines)
+	}
+	if last := capped[len(capped)-1]; last != "..." {
+		t.Errorf("truncated output should end in an ellipsis, got %q", last)
+	}
+}
+
+// TestRunLefthookInstallReportsMissingBinary exercises the real
+// implementation rather than the seam, since the seam is what every other
+// test replaces.
+func TestRunLefthookInstallReportsMissingBinary(t *testing.T) {
+	t.Setenv("PATH", "")
+
+	err := runLefthookInstall(context.Background(), t.TempDir())
+	if !errors.Is(err, errLefthookNotFound) {
+		t.Errorf("err = %v, want errLefthookNotFound", err)
 	}
 }
 
