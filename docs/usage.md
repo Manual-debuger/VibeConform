@@ -137,6 +137,9 @@ Error: audit: standard: no such standard production/v99
 
 - Read-only: never writes `vibe.yaml`, `.vibe/state.yaml`, or any managed
   file. `vibe sync` is the only writer.
+- Checks files, not machines. `audit` does not look at `PATH`, so tool
+  availability never affects its verdict or its exit code — that is `sync`'s
+  warning and, eventually, `doctor`'s job.
 - There is no `--fix` and no `--strict`. Strict *is* the behavior; fixing is
   a different command on purpose.
 - `audit`, `diff`, and `sync` share one decision engine, so they never
@@ -230,6 +233,28 @@ lefthook: git hooks registered
 The last line appears for any standard that manages `lefthook.yml`, and
 `lefthook install` is idempotent — re-registering the same hooks on every
 sync is the intended behavior, not a sign the previous run failed.
+
+Before writing anything, `sync` checks that the external tools the
+standard's modules need are on `PATH`, and warns on **stderr** about the
+ones that are not:
+
+```
+warning: golangci-lint not found on PATH (required by go-tooling: task lint, and CI's lint job)
+warning: task not found on PATH (required by repo-tooling: every verification entry point Taskfile.yml defines)
+```
+
+These never change the exit code, and they are not a conformance finding: a
+repository whose files match the standard is conformant on a machine with
+nothing installed, and `vibe audit` will agree. What the warnings buy is
+that the next command you run fails with a shell error you can already
+explain.
+
+Only binaries a correctly configured repository would genuinely have on
+`PATH` are checked. Project-local tools — anything run through
+`node_modules`, a virtualenv, or `uv run` — are deliberately not, because a
+warning that fires on a healthy repository teaches you to ignore the ones
+that matter. Environment-aware checking is what `vibe doctor` is for, and it
+does not exist yet.
 
 **Flags:**
 

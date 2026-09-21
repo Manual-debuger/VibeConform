@@ -69,6 +69,10 @@ func runSync(cmd *cobra.Command, repoRoot string) error {
 		return fmt.Errorf("sync: %w", err)
 	}
 
+	// Before anything is written: if this machine cannot run what the
+	// standard configures, say so above the report rather than below it.
+	warnMissingTools(cmd.ErrOrStderr(), p.Standard)
+
 	// Start from what was recorded before, so resources this run refuses to
 	// touch — conflicts — keep the entry they already had.
 	next := &state.State{Resources: make(map[string]state.ResourceState, len(p.Previous.Resources))}
@@ -124,8 +128,9 @@ func registerGitHooks(cmd *cobra.Command, repoRoot string, p *repoPlan) {
 	case err == nil:
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "lefthook: git hooks registered")
 	case errors.Is(err, errLefthookNotFound):
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
-			"warning: lefthook not found on PATH; git hooks were not registered")
+		// Deliberately silent. repo-tooling declares lefthook, so
+		// warnMissingTools already named it at the top of the run, and one
+		// missing binary should produce one line of output.
 	default:
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
 			"warning: git hooks were not registered: %v\n", err)
