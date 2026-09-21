@@ -5,15 +5,20 @@ version: "3"
 # branching.
 
 tasks:
+  # Scoped to source extensions, not ".": Prettier auto-detects a parser for
+  # any file type it recognizes, including the YAML this standard's other
+  # modules generate (Taskfile.yml, lefthook.yml, .github/*, .vibe/*.yaml).
+  # Reformatting those is not this repository's job — they are owned by
+  # their module template, not by the adopting repository's style.
   fmt:
     desc: Apply Prettier formatting.
     cmds:
-      - npx prettier --write .
+      - npx prettier --write "**/*.{js,jsx,ts,tsx,json,css,md}"
 
   fmt:check:
     desc: Fail if any file is not Prettier-formatted (CI-safe, no writes).
     cmds:
-      - npx prettier --check .
+      - npx prettier --check "**/*.{js,jsx,ts,tsx,json,css,md}"
 
   lint:
     desc: Run eslint.
