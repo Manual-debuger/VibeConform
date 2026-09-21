@@ -1,0 +1,15 @@
+resources:
+    .claude/hooks/block-dangerous.sh:
+        sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
+    .claude/hooks/block-secret-files.sh:
+        sha256: a12815be5dd837f16ef67099a647ec207d494f5066329ddcf4a0a495ca52fedb
+    .claude/settings.json:
+        sha256: e2e0c9f3fd612ac657dc0123ac306460446ff7ebd6bc07a665a4bf7163bbab21
+    .codex/config.toml:
+        sha256: 0e2463f33a69a35951284567fba5559d3543d47e6ec381433235671d2dd5ac74
+    .codex/hooks.json:
+        sha256: ff684bcd9091bcce40fc029d245e717d9f44c959068b4860715e4f9dd99f87bd
+    pyrightconfig.json:
+        sha256: ca1316bdda3ba3c86490ff023de71f39a48fa04105fd03fd888924c36ce0bb43
+    ruff.toml:
+        sha256: f28bd29e77c8494b80b2195135814d47b0ab0ffb28d3170d8bc77c473212aa01

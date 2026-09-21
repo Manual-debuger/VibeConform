@@ -148,17 +148,28 @@ Present after M1:
 internal/
   manifest/                 # vibe.yaml parsing
   standard/                 # versioned standard definitions
-  module/                   # module composition interface
+  module/                   # module composition interface + optional ToolRequirer
     gotooling/              # .golangci.yml
     ci/github/              # GitHub Actions workflow, dependabot, PR template
     repotooling/            # Taskfile.yml, lefthook.yml
     agents/                 # Claude/Codex config + hook scripts
+    tstooling/              # eslint, prettier, tsconfig base
+    pythontooling/          # ruff, pyright
   resource/                 # resource + ownership + file mode model
   state/                    # .vibe/state.yaml read/write
   reconcile/                # three-way decision engine
   atomicfile/               # temp-file + rename writes
   cli/                      # command tree; audit/diff/sync share one plan walk
 ```
+
+Since M2, `examples/typescript` and `examples/python` hold real repositories
+declaring the language standards, synced and committed. They are the drift
+alarm for modules this repository cannot dogfood: a Go repository never
+resolves `tstooling` or `pythontooling`, so without them those templates
+would have no live counterpart, which is the role `.golangci.yml` plays for
+`gotooling`. `internal/cli` enforces it — deliberately not `Taskfile.yml` or
+the CI workflow, since both are resources shipped to every adopting
+repository and must not name paths that exist only here.
 
 Not built yet:
 

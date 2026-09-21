@@ -26,6 +26,14 @@ func (gotoolingModule) Name() string {
 	return "go-tooling"
 }
 
+// RequiredTools reports the linter this module configures. A .golangci.yml
+// on a machine without golangci-lint is a file nothing reads.
+func (gotoolingModule) RequiredTools() []module.Tool {
+	return []module.Tool{
+		{Name: "golangci-lint", Why: "task lint, and CI's lint job"},
+	}
+}
+
 func (gotoolingModule) Resolve(_ context.Context, _ *module.Context) ([]resource.Resource, error) {
 	return []resource.Resource{
 		{

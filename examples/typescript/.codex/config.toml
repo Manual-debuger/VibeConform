@@ -1,0 +1,10 @@
+# Project-level Codex CLI configuration.
+# Verified against current OpenAI Codex documentation at bootstrap time
+# (learn.chatgpt.com/docs/config-file, .../docs/hooks). Only loaded when
+# this project directory is trusted.
+
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[features]
+hooks = true

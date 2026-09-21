@@ -20,10 +20,19 @@ func goToolingContent(t *testing.T) []byte {
 	return resources[0].Content
 }
 
+// writeManifest seeds a vibe.yaml declaring production/v1, the standard
+// almost every test wants. Use writeManifestFor when the standard itself is
+// what the test is about.
 func writeManifest(t *testing.T, dir string) {
 	t.Helper()
+	writeManifestFor(t, dir, "production", "v1")
+}
+
+func writeManifestFor(t *testing.T, dir, standard, version string) {
+	t.Helper()
 	manifestPath := filepath.Join(dir, "vibe.yaml")
-	if err := os.WriteFile(manifestPath, []byte("standard: production\nversion: v1\n"), 0o644); err != nil {
+	body := "standard: " + standard + "\nversion: " + version + "\n"
+	if err := os.WriteFile(manifestPath, []byte(body), 0o644); err != nil {
 		t.Fatalf("seeding vibe.yaml: %v", err)
 	}
 }

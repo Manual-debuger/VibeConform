@@ -137,6 +137,9 @@ Error: audit: standard: no such standard production/v99
 
 - Read-only: never writes `vibe.yaml`, `.vibe/state.yaml`, or any managed
   file. `vibe sync` is the only writer.
+- Checks files, not machines. `audit` does not look at `PATH`, so tool
+  availability never affects its verdict or its exit code — that is `sync`'s
+  warning and, eventually, `doctor`'s job.
 - There is no `--fix` and no `--strict`. Strict *is* the behavior; fixing is
   a different command on purpose.
 - `audit`, `diff`, and `sync` share one decision engine, so they never
@@ -215,6 +218,7 @@ On a repository that has never been synced:
 standard: production/v1
 .golangci.yml: created
 1 created, 0 updated, 0 unchanged, 0 conflicts
+lefthook: git hooks registered
 ```
 
 Running it again changes nothing:
@@ -223,7 +227,34 @@ Running it again changes nothing:
 standard: production/v1
 .golangci.yml: unchanged
 0 created, 0 updated, 1 unchanged, 0 conflicts
+lefthook: git hooks registered
 ```
+
+The last line appears for any standard that manages `lefthook.yml`, and
+`lefthook install` is idempotent — re-registering the same hooks on every
+sync is the intended behavior, not a sign the previous run failed.
+
+Before writing anything, `sync` checks that the external tools the
+standard's modules need are on `PATH`, and warns on **stderr** about the
+ones that are not:
+
+```
+warning: golangci-lint not found on PATH (required by go-tooling: task lint, and CI's lint job)
+warning: task not found on PATH (required by repo-tooling: every verification entry point Taskfile.yml defines)
+```
+
+These never change the exit code, and they are not a conformance finding: a
+repository whose files match the standard is conformant on a machine with
+nothing installed, and `vibe audit` will agree. What the warnings buy is
+that the next command you run fails with a shell error you can already
+explain.
+
+Only binaries a correctly configured repository would genuinely have on
+`PATH` are checked. Project-local tools — anything run through
+`node_modules`, a virtualenv, or `uv run` — are deliberately not, because a
+warning that fires on a healthy repository teaches you to ignore the ones
+that matter. Environment-aware checking is what `vibe doctor` is for, and it
+does not exist yet.
 
 **Flags:**
 
@@ -256,7 +287,29 @@ standard: production/v1
   translation. Pin `* text=auto eol=lf` in `.gitattributes` if you work
   across Windows and Unix, or checkouts will re-hash differently and report
   drift forever.
-- There is no `--dry-run`: `vibe diff` is the dry run.
+- There is no `--dry-run`: `vibe diff` is the dry run. Note that `diff`
+  previews file changes only — it does not register git hooks, because it
+  writes nothing.
+- If the standard manages `lefthook.yml`, a clean sync ends by running
+  `lefthook install` in `--repo-root`, so the hooks the config describes are
+  actually registered. It runs **only** after a run with no conflicts and no
+  failures, and it can never cause one: a missing `lefthook` binary, or a
+  directory that is not a git work tree, prints a warning to stderr and
+  leaves the exit code at 0.
+
+  ```
+  warning: lefthook not found on PATH; git hooks were not registered
+  ```
+
+  ```
+  warning: git hooks were not registered: exit status 128
+  │  > git rev-parse --show-toplevel
+  │    fatal: not a git repository (or any of the parent directories): .git
+  ```
+
+  When `lefthook` runs and fails, its own output is repeated under the
+  warning (up to 10 lines) rather than reduced to an exit status, since the
+  exit status alone never says what went wrong.
 - Resources dropped from a standard are not deleted. `sync` only writes what
   the standard currently resolves; it never removes files.
 - Fails (non-zero exit) if `vibe.yaml` is missing/unreadable, the declared
@@ -270,7 +323,7 @@ Not implemented. Each returns an explicit error rather than silently doing
 nothing or exiting 0:
 
 ```
-Error: check: not implemented yet (see docs/plans/0001-bootstrap.md)
+Error: check: not implemented yet (see docs/plans/0014-m2-milestone.md)
 ```
 
 Don't script against these expecting real output — they exist as
@@ -315,15 +368,79 @@ report the repository conformant. See
 are not modeled at all, so the executable bit comes from your git checkout
 rather than from `sync`.
 
-Syncing `lefthook.yml` writes the configuration; it does **not** register git
-hooks. Run `lefthook install` yourself. More generally, VibeConform writes
-configuration and never provisions toolchains: a repository that syncs
-`Taskfile.yml` without `task` installed gets a file it cannot run, which is
-the correct division of responsibility.
+Syncing `lefthook.yml` writes the configuration **and** registers the hooks,
+by running `lefthook install` at the end of a clean sync. Writing the config
+without registering it would leave a pre-commit gate that is configured and
+off — a guardrail that fails silently and fails open.
+
+That is the only command `vibe` runs on your behalf, and the boundary it
+sits on is narrower than it looks: VibeConform writes configuration and does
+not provision toolchains. A repository that syncs `Taskfile.yml` without
+`task` installed gets a file it cannot run, and that is the correct division
+of responsibility. `lefthook install` activates a file VibeConform just
+wrote; it does not install a tool VibeConform did not. If `lefthook` itself
+is missing, `sync` warns and moves on — see `vibe sync` above.
 
 Content is fixed in `v1`: Go version, action pins, and job names come from
 the standard, not from your repository. A repository that needs different
 values cannot conform to `production/v1` yet.
+
+## What `production-typescript/v1` and `production-python/v1` manage
+
+Two language standards, added in M2. Declare one the same way:
+
+```bash
+vibe init production-typescript v1
+vibe sync
+```
+
+| Standard | Module | Resources |
+|---|---|---|
+| `production-typescript/v1` | `ts-tooling` | `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json` |
+| `production-python/v1` | `python-tooling` | `ruff.toml`, `pyrightconfig.json` |
+
+Both also compose `agent-config`, which is language-neutral, so a TypeScript
+or Python repository gets the same `.claude/` and `.codex/` guardrails a Go
+one does.
+
+**They are lint/format/typecheck only.** Read that as a limitation, because
+it is one:
+
+- **No Taskfile, no CI workflow, no dependabot config.** `repo-tooling` and
+  `github-ci` are Go by content — a Taskfile of `go` commands, a workflow on
+  `actions/setup-go`, a `gomod` dependabot config — so neither is composed
+  here. Per-language variants are the next milestone. Until then these
+  standards say how your code is linted and nothing about how it is verified
+  or built.
+- **No `package.json` or `pyproject.toml`.** VibeConform owns whole files,
+  and both of those also hold project-owned metadata. So nothing here pins
+  eslint, prettier, typescript, ruff, or pyright to a version — you install
+  and pin them yourself. That is also why `ruff.toml` and `pyrightconfig.json`
+  are standalone files rather than `[tool.*]` sections.
+- **`tsconfig.base.json`, not `tsconfig.json`.** The standard owns the
+  compiler options; your repository owns a `tsconfig.json` that extends them:
+
+  ```json
+  { "extends": "./tsconfig.base.json", "include": ["src"] }
+  ```
+
+Content is fixed in `v1` exactly as it is for `production/v1`: ES2023,
+Python 3.12, and the rule sets as written.
+
+### Worked examples
+
+`examples/typescript/` and `examples/python/` in this repository are real
+repositories declaring these standards, holding the exact output of syncing
+them. They are the same worked example that VibeConform itself is for
+`production/v1` — and, since this is a Go repository that never resolves
+either language module, they are also what keeps those templates honest: a
+test fails if a template changes and the examples are not re-synced.
+
+What that test checks is that the generated files are byte-for-byte what the
+module resolved. It does **not** run eslint, ruff, or pyright against them,
+so it cannot tell you the configuration is *valid* — only that it is what
+the standard says. Closing that gap needs those toolchains in CI, and is
+deferred to the next milestone.
 
 ## VibeConform manages itself
 
