@@ -13,8 +13,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/reconcile"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
+	"github.com/Manual-debuger/VibeConform/internal/standard"
 	"github.com/Manual-debuger/VibeConform/internal/state"
 )
 
@@ -314,13 +316,40 @@ func TestSyncCmdRegistersGitHooks(t *testing.T) {
 	}
 }
 
+// noLefthookModule is a fixture module for
+// TestSyncCmdSkipsHookRegistrationForStandardsWithoutLefthook: as of spec
+// 0016, every real registered standard manages lefthook.yml, so the
+// negative case needs a standard of its own to exercise the sync command's
+// wiring end to end (the unit-level case already lives in
+// TestPlanManagesLefthook).
+type noLefthookModule struct{}
+
+func (noLefthookModule) Name() string { return "no-lefthook-fixture" }
+
+func (noLefthookModule) Resolve(_ context.Context, _ *module.Context) ([]resource.Resource, error) {
+	return []resource.Resource{
+		{Path: "NOTES.md", Ownership: resource.Generated, Content: []byte("fixture\n")},
+	}, nil
+}
+
+func init() {
+	// Named without the substring "lefthook": this test asserts sync output
+	// never mentions that word, and the standard name is itself part of
+	// that output ("standard: <name>/v1").
+	standard.Register(standard.Standard{
+		Name:    "test-fixture-no-hooks",
+		Version: "v1",
+		Modules: []module.Module{noLefthookModule{}},
+	})
+}
+
 // TestSyncCmdSkipsHookRegistrationForStandardsWithoutLefthook is the
-// integration counterpart to TestPlanManagesLefthook's negative case:
-// prod-ts/v1 manages no lefthook.yml, so a repository
-// declaring it must not have its git hooks touched.
+// integration counterpart to TestPlanManagesLefthook's negative case: a
+// standard that manages no lefthook.yml must not have its git hooks
+// touched.
 func TestSyncCmdSkipsHookRegistrationForStandardsWithoutLefthook(t *testing.T) {
 	dir := t.TempDir()
-	writeManifestFor(t, dir, "prod-ts", "v1")
+	writeManifestFor(t, dir, "test-fixture-no-hooks", "v1")
 	rec := stubHookInstall(t)
 
 	out, _, err := runSyncCapturing(t, dir)

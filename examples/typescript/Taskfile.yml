@@ -1,0 +1,50 @@
+version: "3"
+
+# Task's built-in shell (mvdan.cc/sh) interprets POSIX-style syntax
+# identically on Windows/Linux/macOS, so these commands need no per-OS
+# branching.
+
+tasks:
+  fmt:
+    desc: Apply Prettier formatting.
+    cmds:
+      - npx prettier --write .
+
+  fmt:check:
+    desc: Fail if any file is not Prettier-formatted (CI-safe, no writes).
+    cmds:
+      - npx prettier --check .
+
+  lint:
+    desc: Run eslint.
+    cmds:
+      - npx eslint .
+
+  typecheck:
+    desc: Type-check with tsc, emitting nothing.
+    cmds:
+      - npx tsc --noEmit
+
+  test:
+    desc: Run the test suite.
+    cmds:
+      - npm test
+
+  audit:
+    desc: Check this repository against the standard its vibe.yaml declares.
+    cmds:
+      - vibe audit --repo-root .
+
+  verify:
+    desc: Full local verification gate (same checks CI runs).
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: typecheck
+      - task: test
+      - task: audit
+
+  verify-ci:
+    desc: Alias used by CI so the workflow and local docs never drift.
+    cmds:
+      - task: verify

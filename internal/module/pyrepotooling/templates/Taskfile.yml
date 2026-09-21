@@ -1,0 +1,50 @@
+version: "3"
+
+# Task's built-in shell (mvdan.cc/sh) interprets POSIX-style syntax
+# identically on Windows/Linux/macOS, so these commands need no per-OS
+# branching.
+
+tasks:
+  fmt:
+    desc: Apply Ruff formatting.
+    cmds:
+      - uv run ruff format .
+
+  fmt:check:
+    desc: Fail if any file is not Ruff-formatted (CI-safe, no writes).
+    cmds:
+      - uv run ruff format --check .
+
+  lint:
+    desc: Run Ruff lint checks.
+    cmds:
+      - uv run ruff check .
+
+  typecheck:
+    desc: Type-check with pyright.
+    cmds:
+      - uv run pyright
+
+  test:
+    desc: Run the test suite.
+    cmds:
+      - uv run pytest
+
+  audit:
+    desc: Check this repository against the standard its vibe.yaml declares.
+    cmds:
+      - vibe audit --repo-root .
+
+  verify:
+    desc: Full local verification gate (same checks CI runs).
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: typecheck
+      - task: test
+      - task: audit
+
+  verify-ci:
+    desc: Alias used by CI so the workflow and local docs never drift.
+    cmds:
+      - task: verify

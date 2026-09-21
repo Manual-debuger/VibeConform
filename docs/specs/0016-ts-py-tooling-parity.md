@@ -5,14 +5,13 @@ Status: accepted; implementation pending.
 ## Problem
 
 `prod-ts` and `prod-py` (spec 0015 names; `production-typescript` and
-`production-python` before it) currently compose the *same* `repo-tooling`
-and `github-ci` modules as `prod-go`: a Go Taskfile (`go vet`,
-`golangci-lint run`, `go test ./...`) and a CI workflow on `actions/setup-
-go`. A repository declaring `prod-ts` gets correct eslint/prettier/tsc
-configuration from `ts-tooling`, but its verification entry point
-(`Taskfile.yml`) and CI pipeline still run Go commands against a
-TypeScript repository. `docs/specs/0014-m2-milestone.md`'s follow-on work
-names this directly:
+`production-python` before it) compose only their language-tooling module
+(`ts-tooling`/`python-tooling`) plus `agent-config` — neither `repo-
+tooling` nor `github-ci`, unlike `prod-go`. A repository declaring
+`prod-ts` gets correct eslint/prettier/tsc configuration, but no
+`Taskfile.yml`, no `lefthook.yml`, and no CI workflow at all: nothing to
+actually run those linters through. `docs/specs/0014-m2-milestone.md`'s
+follow-on work names this directly:
 
 > Per-language `repo-tooling` and `github-ci` variants (M3), which is what
 > makes `production-typescript/v1` a complete standard rather than a lint
@@ -44,7 +43,7 @@ content, `go:embed`, `resource.Generated`, no parameterization):
   equivalent — not assumed to be on PATH, consistent with `python-
   tooling`'s existing no-`RequiredTools` reasoning).
 
-Registered into `prod-ts`/`prod-py` in place of the generic `repotooling`.
+Added to `prod-ts`/`prod-py`, which compose no repo-tooling module today.
 
 ### 2. `github-ci-ts` / `github-ci-py` modules
 
@@ -58,8 +57,7 @@ githubpy`, mirroring `internal/module/ci/github`'s shape:
   content today (they don't mention Go by name) — reused as-is rather than
   duplicated per language; only `ci.yml` needs a per-language variant.
 
-Registered into `prod-ts`/`prod-py` in place of the generic `github`
-module.
+Added to `prod-ts`/`prod-py`, which compose no CI module today.
 
 ### 3. Example fixtures become real, and CI proves it
 

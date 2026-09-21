@@ -1,0 +1,22 @@
+# Lefthook: fast checks at commit time, stronger checks at push time.
+# CI (.github/workflows/ci.yml) is the authoritative full verification gate;
+# these hooks are a fast local first line of defense, not a substitute.
+
+pre-commit:
+  parallel: true
+  commands:
+    prettier:
+      glob: "*.{js,jsx,ts,tsx,json,css,md}"
+      run: npx prettier --check {staged_files}
+      fail_text: "Run 'task fmt' to format staged files."
+    eslint:
+      glob: "*.{js,jsx,ts,tsx}"
+      run: npx eslint {staged_files}
+
+pre-push:
+  parallel: false
+  commands:
+    typecheck:
+      run: npx tsc --noEmit
+    test:
+      run: npm test

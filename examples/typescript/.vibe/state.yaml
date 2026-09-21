@@ -11,7 +11,11 @@ resources:
         sha256: ff684bcd9091bcce40fc029d245e717d9f44c959068b4860715e4f9dd99f87bd
     .prettierrc.json:
         sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
+    Taskfile.yml:
+        sha256: fabf393c04fb35edd160748840aea365940ebbe524af8977f7562de6ce74809f
     eslint.config.js:
         sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
+    lefthook.yml:
+        sha256: 27e505c630f347f743745a74046b63a93332ddbb39c2964e3a61d9de3b264b0c
     tsconfig.base.json:
         sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217

@@ -10,8 +10,10 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/agents"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/github"
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/pyrepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/pythontooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/repotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/tsrepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/tstooling"
 )
 
@@ -65,19 +67,20 @@ func init() {
 		Modules: []module.Module{gotooling.New(), github.New(), repotooling.New(), agents.New()},
 	})
 
-	// The language standards compose agent-config, which is language-neutral,
-	// but neither repo-tooling nor github-ci: a Taskfile of go commands and a
-	// workflow on setup-go are Go by content, not just by name. Their
-	// per-language variants are M3.
+	// Through M2 these composed only their language-tooling module plus
+	// agent-config: no repo-tooling, no CI, so a repository declaring
+	// prod-ts/prod-py got lint config but no verification entry point at
+	// all. Spec 0016 increment 1 adds each language's own repo-tooling
+	// variant here; increment 2 adds a github-ci variant the same way.
 	Register(Standard{
 		Name:    "prod-ts",
 		Version: "v1",
-		Modules: []module.Module{tstooling.New(), agents.New()},
+		Modules: []module.Module{tstooling.New(), tsrepotooling.New(), agents.New()},
 	})
 
 	Register(Standard{
 		Name:    "prod-py",
 		Version: "v1",
-		Modules: []module.Module{pythontooling.New(), agents.New()},
+		Modules: []module.Module{pythontooling.New(), pyrepotooling.New(), agents.New()},
 	})
 }

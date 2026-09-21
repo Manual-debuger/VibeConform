@@ -7,24 +7,44 @@ Sequenced after plan 0015 (uses `prod-ts`/`prod-py` names).
 
 ### Increment 1 — `ts-repo-tooling` / `py-repo-tooling`
 
-- [ ] `internal/module/tsrepotooling/tsrepotooling.go` + `templates/
+- [x] `internal/module/tsrepotooling/tsrepotooling.go` + `templates/
       Taskfile.yml` + `templates/lefthook.yml`, mirroring `internal/module/
       repotooling`'s structure. `Name()` returns `"ts-repo-tooling"`.
       Targets: `fmt`, `fmt:check`, `lint`, `typecheck`, `test`, `audit`,
-      `verify` (mirroring `repotooling`'s target names so the interface
-      stays uniform across standards), shelling out to eslint/prettier/tsc
-      via local-binary invocation (not assumed on PATH).
-- [ ] `internal/module/tsrepotooling/tsrepotooling_test.go` (template ==
-      live-file equality test, mirroring `repotooling_test.go`).
-- [ ] `internal/module/pyrepotooling/pyrepotooling.go` + `templates/
+      `verify`, `verify-ci` (mirroring `repotooling`'s target names so the
+      interface stays uniform across standards; `build`/`run` are dropped —
+      those are specific to building the `vibe` binary this repository
+      ships, not generalizable to an adopting repository), shelling out to
+      eslint/prettier/tsc via `npx` (not assumed on PATH). `audit` runs
+      plain `vibe audit --repo-root .`, matching the documented external
+      install path (`go install .../cmd/vibe@latest`), not the self-hosted
+      `go run ./cmd/vibe` form `repotooling`'s own template uses.
+- [x] `internal/module/tsrepotooling/tsrepotooling_test.go`: no live-file
+      equality test (there is no live TS counterpart in this Go
+      repository) — mirrors `tstooling_test.go`'s pattern instead
+      (Name/Resolve/Deterministic/RequiredTools/LF-only).
+- [x] `internal/module/pyrepotooling/pyrepotooling.go` + `templates/
       Taskfile.yml` + `templates/lefthook.yml`. `Name()` returns
       `"py-repo-tooling"`. Same target set, shelling out to ruff/pyright/
-      pytest via `uv run` or equivalent.
-- [ ] `internal/module/pyrepotooling/pyrepotooling_test.go`.
-- [ ] `internal/standard/standard.go`: `prod-ts` composes `ts-tooling`,
-      `ts-repo-tooling`, `agents` (drop generic `repotooling`). `prod-py`
-      composes `python-tooling`, `py-repo-tooling`, `agents` (drop generic
-      `repotooling`).
+      pytest via `uv run`.
+- [x] `internal/module/pyrepotooling/pyrepotooling_test.go`: same pattern
+      as `tsrepotooling_test.go`.
+- [x] `internal/standard/standard.go`: `prod-ts` now composes `ts-tooling`,
+      `ts-repo-tooling`, `agent-config` (previously composed no repo-tooling
+      module at all). `prod-py` now composes `python-tooling`,
+      `py-repo-tooling`, `agent-config` (same gap, now closed).
+- [x] Re-synced both examples (`Taskfile.yml`/`lefthook.yml` created);
+      `vibe audit` clean on both afterward.
+- [x] Fixed `TestSyncCmdSkipsHookRegistrationForStandardsWithoutLefthook`
+      (`internal/cli/sync_test.go`): it asserted on `prod-ts` as "a standard
+      with no lefthook.yml," which is no longer true once increment 1
+      lands. Replaced with a package-local fixture standard
+      (`test-fixture-no-hooks/v1`, registered via `init()` in
+      `sync_test.go`) so the negative-case integration coverage survives.
+      `TestPlanManagesLefthook`'s unit-level negative case was already
+      standard-agnostic and needed no change.
+- [x] `go build ./...`, `go test ./...` (141 passed), `task verify` all
+      clean.
 
 ### Increment 2 — `github-ci-ts` / `github-ci-py`
 
