@@ -9,6 +9,12 @@ resources:
         sha256: 0e2463f33a69a35951284567fba5559d3543d47e6ec381433235671d2dd5ac74
     .codex/hooks.json:
         sha256: ff684bcd9091bcce40fc029d245e717d9f44c959068b4860715e4f9dd99f87bd
+    .github/dependabot.yml:
+        sha256: f8535549e33ea260cf307d5d96e74a0af625211e90b524a56856bd00a516a6dc
+    .github/pull_request_template.md:
+        sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
+    .github/workflows/ci.yml:
+        sha256: 687542ee9f599a9890f598eb34346e8cea5e949655c6c213d82197da2a1be333
     .prettierrc.json:
         sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
     Taskfile.yml:

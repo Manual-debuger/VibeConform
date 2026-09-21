@@ -9,6 +9,12 @@ resources:
         sha256: 0e2463f33a69a35951284567fba5559d3543d47e6ec381433235671d2dd5ac74
     .codex/hooks.json:
         sha256: ff684bcd9091bcce40fc029d245e717d9f44c959068b4860715e4f9dd99f87bd
+    .github/dependabot.yml:
+        sha256: 2c657f7e54cbf32e694120a8474356a225b6b7ad215b72cba0424b0e757bd50c
+    .github/pull_request_template.md:
+        sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
+    .github/workflows/ci.yml:
+        sha256: 89ccb4f1dd6a9e3666216c4aebbdcb9062aa8aa0ab71ead8fd3f6e71c0556243
     Taskfile.yml:
         sha256: d66d2017fbf335aad0df1a7ee1345dc273bf63993340efd792ea736e07b79db4
     lefthook.yml:

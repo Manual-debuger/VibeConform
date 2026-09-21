@@ -48,22 +48,43 @@ Sequenced after plan 0015 (uses `prod-ts`/`prod-py` names).
 
 ### Increment 2 — `github-ci-ts` / `github-ci-py`
 
-- [ ] `internal/module/ci/githubts/githubts.go` + `templates/ci.yml`,
-      mirroring `internal/module/ci/github`'s structure. `Name()` returns
-      `"github-ci-ts"`. Uses `actions/setup-node`, calls increment 1's
-      Taskfile targets. Reuses `github` package's `dependabot.yml` /
-      `pull_request_template.md` content (embed directly, or factor into a
-      shared template if duplication becomes a maintenance problem —
-      decide at implementation time).
-- [ ] `internal/module/ci/githubts/githubts_test.go`.
-- [ ] `internal/module/ci/githubpy/githubpy.go` + `templates/ci.yml`.
-      `Name()` returns `"github-ci-py"`. Uses `actions/setup-python`.
-- [ ] `internal/module/ci/githubpy/githubpy_test.go`.
-- [ ] `internal/standard/standard.go`: `prod-ts` and `prod-py` compose
-      `github-ci-ts`/`github-ci-py` in place of generic `github`.
-- [ ] Confirm module resolution order is documented and stable per
-      standard (audit/diff/sync report in module order — existing
-      contract from `docs/specs/0010-github-ci-module.md`).
+- [x] **Correction to the spec during implementation:** `dependabot.yml` is
+      *not* language-neutral — it hardcodes `package-ecosystem: gomod`.
+      Only `pull_request_template.md` is genuinely shared content. Spec
+      0016 updated accordingly before implementing.
+- [x] `internal/module/ci/githubts/githubts.go` + `templates/ci.yml` +
+      `templates/dependabot.yml` (npm ecosystem) + `templates/
+      pull_request_template.md` (duplicated verbatim from `github`'s —
+      three copies of a 16-line file is cheaper than a shared-template
+      abstraction). `Name()` returns `"github-ci-ts"`. Workflow: `lint`,
+      `typecheck_test`, `conformance`, `gate` jobs on `actions/setup-node`
+      + `actions/setup-go` (Go is still needed to install `task` and
+      `vibe` itself), calling increment 1's Taskfile targets. Action pins
+      (`actions/setup-node@820762786026740c76f36085b0efc47a31fe5020` #
+      v7.0.0) looked up live from GitHub's API rather than guessed, to
+      match this repo's SHA-pinning convention honestly.
+- [x] `internal/module/ci/githubts/githubts_test.go`: same no-live-file
+      pattern as `tsrepotooling_test.go`, plus a
+      `TestDependabotIsNPMNotGoMod` regression guard.
+- [x] `internal/module/ci/githubpy/githubpy.go` + `templates/ci.yml` +
+      `templates/dependabot.yml` (pip ecosystem — a dedicated `uv`
+      ecosystem is a future refinement) + `templates/
+      pull_request_template.md`. `Name()` returns `"github-ci-py"`. Uses
+      `astral-sh/setup-uv` (`bec219d24cd3e171d82865faccec33120bb574f4` #
+      v10.1.0) instead of `actions/setup-python` directly, since the
+      Taskfile shells out via `uv run`.
+- [x] `internal/module/ci/githubpy/githubpy_test.go`: same pattern, plus
+      `TestDependabotIsPipNotGoMod`.
+- [x] `internal/standard/standard.go`: `prod-ts` now composes `ts-tooling`,
+      `github-ci-ts`, `ts-repo-tooling`, `agent-config` (previously
+      composed no CI module at all). `prod-py` composes `python-tooling`,
+      `github-ci-py`, `py-repo-tooling`, `agent-config` — same order
+      `prod-go` uses (language tooling, CI, repo-tooling, agent-config).
+- [x] Re-synced both examples; `vibe audit` clean on both (13 and 12
+      resources respectively). `actionlint` run directly against both new
+      `ci.yml` files (outside `task workflows:lint`'s repo-root-only
+      scope) — clean.
+- [x] `go test ./...` (151 passed), `task verify` clean.
 
 ### Increment 3 — real example fixtures + CI verification
 

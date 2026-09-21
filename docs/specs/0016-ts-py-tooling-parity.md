@@ -53,9 +53,14 @@ githubpy`, mirroring `internal/module/ci/github`'s shape:
 - Each emits its own `.github/workflows/ci.yml` on `actions/setup-node` /
   `actions/setup-python` instead of `actions/setup-go`, calling the
   Taskfile targets from increment 1.
-- `dependabot.yml` and `pull_request_template.md` are language-neutral in
-  content today (they don't mention Go by name) — reused as-is rather than
-  duplicated per language; only `ci.yml` needs a per-language variant.
+- Each also emits its own `dependabot.yml`: the shared one hardcodes
+  `package-ecosystem: gomod`, so it is Go-specific despite its name — `npm`
+  for TS, `pip` for Python (the well-established ecosystem that also reads
+  `pyproject.toml`; a dedicated `uv` ecosystem is left as a future
+  refinement, not a blocker here).
+- `pull_request_template.md` is genuinely language-neutral (it only
+  mentions `task verify`, uniform across all three standards) — reused as
+  a shared embed rather than duplicated per language.
 
 Added to `prod-ts`/`prod-py`, which compose no CI module today.
 
