@@ -1,4 +1,4 @@
-// Package pythontooling provides the Python half of production-python/v1:
+// Package pythontooling provides the Python half of prod-py/v1:
 // ruff for lint and format, pyright for typecheck, mirroring gotooling's
 // shape.
 //

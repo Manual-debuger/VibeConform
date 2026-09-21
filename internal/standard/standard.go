@@ -53,12 +53,13 @@ func Lookup(name, version string) (*Standard, error) {
 }
 
 func init() {
-	// "production" is the Go standard and is not named production-go for one
-	// reason: renaming it would break the vibe.yaml and .vibe/state.yaml this
-	// repository has committed, for cosmetic gain. See
-	// docs/specs/0014-m2-milestone.md.
+	// "prod-go" was "production" through M2, kept unnamespaced because
+	// renaming it then would have broken the vibe.yaml and .vibe/state.yaml
+	// this repository had already committed, for cosmetic gain. M3 settled
+	// the naming across all three standards. See
+	// docs/specs/0015-standard-naming.md.
 	Register(Standard{
-		Name:    "production",
+		Name:    "prod-go",
 		Version: "v1",
 		// Order matters: audit, diff, and sync report in module order.
 		Modules: []module.Module{gotooling.New(), github.New(), repotooling.New(), agents.New()},
@@ -69,13 +70,13 @@ func init() {
 	// workflow on setup-go are Go by content, not just by name. Their
 	// per-language variants are M3.
 	Register(Standard{
-		Name:    "production-typescript",
+		Name:    "prod-ts",
 		Version: "v1",
 		Modules: []module.Module{tstooling.New(), agents.New()},
 	})
 
 	Register(Standard{
-		Name:    "production-python",
+		Name:    "prod-py",
 		Version: "v1",
 		Modules: []module.Module{pythontooling.New(), agents.New()},
 	})

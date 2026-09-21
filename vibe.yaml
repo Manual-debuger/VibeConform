@@ -1,2 +1,2 @@
-standard: production
+standard: prod-go
 version: v1

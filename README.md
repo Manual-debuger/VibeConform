@@ -7,7 +7,7 @@
 > the repository and exits `2` when the repository is not conformant, `1`
 > when it cannot answer at all
 > (see [`docs/specs/0009-vibe-audit-v2.md`](docs/specs/0009-vibe-audit-v2.md)).
-> The `production`/`v1` standard composes four modules: `go-tooling`
+> The `prod-go`/`v1` standard composes four modules: `go-tooling`
 > (a fixed `.golangci.yml`, see
 > [`docs/specs/0005-gotooling-module.md`](docs/specs/0005-gotooling-module.md))
 > `github-ci` (CI workflow, Dependabot config, PR template, see
@@ -26,12 +26,12 @@
 > `lefthook install` when the standard manages `lefthook.yml`, and warns
 > (without failing) about any external binary a module requires that is
 > missing from `PATH`.
-> This repository declares `production`/`v1` in its own `vibe.yaml`, commits
+> This repository declares `prod-go`/`v1` in its own `vibe.yaml`, commits
 > `.vibe/state.yaml`, and runs `vibe audit` against itself in CI — every file
 > those four modules manage is generated from a module template rather than
 > hand-maintained (see
 > [`docs/specs/0013-dogfood-self-management.md`](docs/specs/0013-dogfood-self-management.md)).
-> M2 also added `production-typescript`/`v1` and `production-python`/`v1`
+> M2 also added `prod-ts`/`v1` and `prod-py`/`v1`
 > standards (fixed ESLint/Prettier and Ruff configuration respectively) —
 > see [`docs/specs/0014-m2-milestone.md`](docs/specs/0014-m2-milestone.md).
 > `check` and `doctor` still return "not implemented yet."

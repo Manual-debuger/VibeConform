@@ -43,7 +43,7 @@ func TestAuditCmdConformantRepo(t *testing.T) {
 	}
 
 	assertAuditOutput(t, out,
-		"standard: production/v1",
+		"standard: prod-go/v1",
 		".golangci.yml: ok",
 		"drifted, 0 conflicts",
 		"conformant",
@@ -111,7 +111,7 @@ func TestAuditCmdFailsIfManifestMissing(t *testing.T) {
 
 func TestAuditCmdFailsIfStandardUnknown(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte("standard: production\nversion: v99\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte("standard: prod-go\nversion: v99\n"), 0o600); err != nil {
 		t.Fatalf("seeding vibe.yaml: %v", err)
 	}
 

@@ -20,12 +20,12 @@ func goToolingContent(t *testing.T) []byte {
 	return resources[0].Content
 }
 
-// writeManifest seeds a vibe.yaml declaring production/v1, the standard
+// writeManifest seeds a vibe.yaml declaring prod-go/v1, the standard
 // almost every test wants. Use writeManifestFor when the standard itself is
 // what the test is about.
 func writeManifest(t *testing.T, dir string) {
 	t.Helper()
-	writeManifestFor(t, dir, "production", "v1")
+	writeManifestFor(t, dir, "prod-go", "v1")
 }
 
 func writeManifestFor(t *testing.T, dir, standard, version string) {
@@ -51,7 +51,7 @@ func TestDiffCmdReportsCreateWhenFileMissing(t *testing.T) {
 	}
 
 	got := out.String()
-	for _, want := range []string{"standard: production/v1", ".golangci.yml: create (no file on disk)"} {
+	for _, want := range []string{"standard: prod-go/v1", ".golangci.yml: create (no file on disk)"} {
 		if !bytes.Contains([]byte(got), []byte(want)) {
 			t.Errorf("diff output missing %q\n%s", want, got)
 		}
@@ -115,7 +115,7 @@ func TestDiffCmdFailsIfManifestMissing(t *testing.T) {
 
 func TestDiffCmdFailsIfStandardUnknown(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte("standard: production\nversion: v99\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte("standard: prod-go\nversion: v99\n"), 0o644); err != nil {
 		t.Fatalf("seeding vibe.yaml: %v", err)
 	}
 

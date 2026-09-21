@@ -67,13 +67,13 @@ intends to conform to. This is the only command with a real
 implementation right now — see `docs/specs/0002-vibe-init.md`.
 
 ```bash
-vibe init production v1
+vibe init prod-go v1
 ```
 
 produces:
 
 ```yaml
-standard: production
+standard: prod-go
 version: v1
 ```
 
@@ -84,7 +84,7 @@ version: v1
 | `--repo-root` | `.`     | Directory to write `vibe.yaml` into        |
 
 ```bash
-vibe init production v1 --repo-root ./some/other/repo
+vibe init prod-go v1 --repo-root ./some/other/repo
 ```
 
 **Behavior to know:**
@@ -118,7 +118,7 @@ vibe audit
 on a conformant repository:
 
 ```
-standard: production/v1
+standard: prod-go/v1
 .golangci.yml: ok
 1 resource checked, 0 drifted, 0 conflicts
 conformant
@@ -127,7 +127,7 @@ conformant
 and on one that has drifted:
 
 ```
-standard: production/v1
+standard: prod-go/v1
 .golangci.yml: drifted (run vibe sync)
 1 resource checked, 1 drifted, 0 conflicts
 not conformant
@@ -162,7 +162,7 @@ running `vibe sync`. A `1` means the check itself is broken.
 
 ```
 Error: audit: open vibe.yaml: no such file or directory
-Error: audit: standard: no such standard production/v99
+Error: audit: standard: no such standard prod-go/v99
 ```
 
 **Behavior to know:**
@@ -192,22 +192,22 @@ vibe diff
 produces one of, depending on repository state:
 
 ```
-standard: production/v1
+standard: prod-go/v1
 .golangci.yml: create (no file on disk)
 ```
 
 ```
-standard: production/v1
+standard: prod-go/v1
 .golangci.yml: no change
 ```
 
 ```
-standard: production/v1
+standard: prod-go/v1
 .golangci.yml: would update (drift from last applied state)
 ```
 
 ```
-standard: production/v1
+standard: prod-go/v1
 .golangci.yml: conflict: manual changes detected, review before sync
 ```
 
@@ -247,7 +247,7 @@ vibe sync
 On a repository that has never been synced:
 
 ```
-standard: production/v1
+standard: prod-go/v1
 .golangci.yml: created
 1 created, 0 updated, 0 unchanged, 0 conflicts
 lefthook: git hooks registered
@@ -256,7 +256,7 @@ lefthook: git hooks registered
 Running it again changes nothing:
 
 ```
-standard: production/v1
+standard: prod-go/v1
 .golangci.yml: unchanged
 0 created, 0 updated, 1 unchanged, 0 conflicts
 lefthook: git hooks registered
@@ -362,10 +362,10 @@ Don't script against these expecting real output — they exist as
 scaffolding for commands that will eventually read/reconcile against
 `vibe.yaml` (see `docs/architecture/overview.md`).
 
-## What `production/v1` manages
+## What `prod-go/v1` manages
 
 The command examples above are abbreviated — they show one resource so the
-output format is readable. `production/v1` actually resolves every resource
+output format is readable. `prod-go/v1` actually resolves every resource
 its modules compose:
 
 | Module | Resources |
@@ -415,21 +415,21 @@ is missing, `sync` warns and moves on — see `vibe sync` above.
 
 Content is fixed in `v1`: Go version, action pins, and job names come from
 the standard, not from your repository. A repository that needs different
-values cannot conform to `production/v1` yet.
+values cannot conform to `prod-go/v1` yet.
 
-## What `production-typescript/v1` and `production-python/v1` manage
+## What `prod-ts/v1` and `prod-py/v1` manage
 
 Two language standards, added in M2. Declare one the same way:
 
 ```bash
-vibe init production-typescript v1
+vibe init prod-ts v1
 vibe sync
 ```
 
 | Standard | Module | Resources |
 |---|---|---|
-| `production-typescript/v1` | `ts-tooling` | `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json` |
-| `production-python/v1` | `python-tooling` | `ruff.toml`, `pyrightconfig.json` |
+| `prod-ts/v1` | `ts-tooling` | `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json` |
+| `prod-py/v1` | `python-tooling` | `ruff.toml`, `pyrightconfig.json` |
 
 Both also compose `agent-config`, which is language-neutral, so a TypeScript
 or Python repository gets the same `.claude/` and `.codex/` guardrails a Go
@@ -456,7 +456,7 @@ it is one:
   { "extends": "./tsconfig.base.json", "include": ["src"] }
   ```
 
-Content is fixed in `v1` exactly as it is for `production/v1`: ES2023,
+Content is fixed in `v1` exactly as it is for `prod-go/v1`: ES2023,
 Python 3.12, and the rule sets as written.
 
 ### Worked examples
@@ -464,7 +464,7 @@ Python 3.12, and the rule sets as written.
 `examples/typescript/` and `examples/python/` in this repository are real
 repositories declaring these standards, holding the exact output of syncing
 them. They are the same worked example that VibeConform itself is for
-`production/v1` — and, since this is a Go repository that never resolves
+`prod-go/v1` — and, since this is a Go repository that never resolves
 either language module, they are also what keeps those templates honest: a
 test fails if a template changes and the examples are not re-synced.
 
@@ -477,7 +477,7 @@ deferred to the next milestone.
 ## VibeConform manages itself
 
 This repository is the worked example: it has a `vibe.yaml` declaring
-`production/v1`, a committed `.vibe/state.yaml`, and a CI job that runs
+`prod-go/v1`, a committed `.vibe/state.yaml`, and a CI job that runs
 `vibe audit` against itself. Every file in the table above is generated from
 a module template rather than hand-maintained.
 
@@ -496,12 +496,12 @@ Still hand-maintained here, by the non-goals above:
 Right now it's exactly two fields, nothing more:
 
 ```yaml
-standard: production
+standard: prod-go
 version: v1
 ```
 
 There is no `.vibe/lock.yaml` and no component graph yet — and no overrides:
-a repository either conforms to `production/v1` as written or it does not.
+a repository either conforms to `prod-go/v1` as written or it does not.
 `.vibe/state.yaml` exists once you run `vibe sync`; it is machine-owned
 bookkeeping — commit it, but don't hand-edit it. Editing `vibe.yaml` by hand is safe and expected —
 `init` only exists to create the first one.

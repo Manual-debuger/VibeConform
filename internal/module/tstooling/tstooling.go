@@ -1,4 +1,4 @@
-// Package tstooling provides the TypeScript half of production-typescript/v1:
+// Package tstooling provides the TypeScript half of prod-ts/v1:
 // lint, format, and typecheck configuration, mirroring gotooling's shape.
 //
 // Configuration only. It does not manage package.json, so it pins no tool

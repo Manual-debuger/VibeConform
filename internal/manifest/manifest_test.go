@@ -3,11 +3,11 @@ package manifest
 import "testing"
 
 func TestParse(t *testing.T) {
-	m, err := Parse([]byte("standard: production\nversion: v1\n"))
+	m, err := Parse([]byte("standard: prod-go\nversion: v1\n"))
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}
-	if m.Standard != "production" || m.Version != "v1" {
+	if m.Standard != "prod-go" || m.Version != "v1" {
 		t.Fatalf("unexpected manifest: %+v", m)
 	}
 }
@@ -31,7 +31,7 @@ func TestNewMissingStandard(t *testing.T) {
 }
 
 func TestNewMarshalParseRoundTrip(t *testing.T) {
-	m, err := New("production", "v1")
+	m, err := New("prod-go", "v1")
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}

@@ -111,7 +111,7 @@ func TestSyncCmdCreatesResourceAndRecordsState(t *testing.T) {
 	// The created count grows as modules are added; what this test pins is
 	// that this resource was created and nothing was updated or conflicted.
 	for _, wantLine := range []string{
-		"standard: production/v1",
+		"standard: prod-go/v1",
 		".golangci.yml: created",
 		"0 updated, 0 unchanged, 0 conflicts",
 	} {
@@ -290,7 +290,7 @@ func TestSyncCmdOverwritesDriftFromRecordedState(t *testing.T) {
 }
 
 // TestSyncCmdRegistersGitHooks covers the reason spec 0014's first
-// increment exists: production/v1 manages lefthook.yml, and a repository
+// increment exists: prod-go/v1 manages lefthook.yml, and a repository
 // that has the config without the hooks has a pre-commit gate that is
 // configured and off.
 func TestSyncCmdRegistersGitHooks(t *testing.T) {
@@ -316,11 +316,11 @@ func TestSyncCmdRegistersGitHooks(t *testing.T) {
 
 // TestSyncCmdSkipsHookRegistrationForStandardsWithoutLefthook is the
 // integration counterpart to TestPlanManagesLefthook's negative case:
-// production-typescript/v1 manages no lefthook.yml, so a repository
+// prod-ts/v1 manages no lefthook.yml, so a repository
 // declaring it must not have its git hooks touched.
 func TestSyncCmdSkipsHookRegistrationForStandardsWithoutLefthook(t *testing.T) {
 	dir := t.TempDir()
-	writeManifestFor(t, dir, "production-typescript", "v1")
+	writeManifestFor(t, dir, "prod-ts", "v1")
 	rec := stubHookInstall(t)
 
 	out, _, err := runSyncCapturing(t, dir)
@@ -478,7 +478,7 @@ func TestSyncCmdFailsIfManifestMissing(t *testing.T) {
 
 func TestSyncCmdFailsIfStandardUnknown(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte("standard: production\nversion: v99\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte("standard: prod-go\nversion: v99\n"), 0o600); err != nil {
 		t.Fatalf("seeding vibe.yaml: %v", err)
 	}
 
