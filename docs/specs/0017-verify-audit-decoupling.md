@@ -1,6 +1,6 @@
 # Spec 0017: Decouple `task verify` from `vibe audit`
 
-Status: proposed.
+Status: accepted and implemented.
 
 ## Problem
 
