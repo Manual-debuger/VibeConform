@@ -43,8 +43,12 @@ system.
 
 ## Guardrails
 
-`.codex/config.toml` and `.codex/hooks.json` block destructive shell
-patterns (`git reset --hard`, `git push --force`, `rm -rf`, etc.) at the
-tool-call level where the current Codex hooks mechanism supports it. This
-is a guardrail, not a complete enforcement boundary — apply the same
-judgment CLAUDE.md describes for Claude Code.
+- `.codex/config.toml` and `.codex/hooks.json` block destructive shell
+  patterns (`git reset --hard`, `git push --force`, `rm -rf`, etc.) at the
+  tool-call level where the current Codex hooks mechanism supports it.
+- `.claude/settings.json` and `.claude/hooks/block-dangerous.sh` block the
+  same class of destructive Bash patterns for Claude Code, but do not cover
+  PowerShell equivalents unless a pattern is added there too.
+
+These are guardrails, not a complete enforcement boundary — apply the same
+judgment regardless of which agent runtime is in use.
