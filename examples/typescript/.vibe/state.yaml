@@ -14,11 +14,11 @@ resources:
     .github/pull_request_template.md:
         sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
     .github/workflows/ci.yml:
-        sha256: 687542ee9f599a9890f598eb34346e8cea5e949655c6c213d82197da2a1be333
+        sha256: e2cbc699d9bce3dac385b3d663ef32e81ef160bcab5185009e9617b2449af056
     .prettierrc.json:
         sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
     Taskfile.yml:
-        sha256: ead7860629128c9de33e0444c6a59fbf1c0d856f4d591f18484205b14fc72879
+        sha256: d42d047c0d6f23bb0bcc3907f64693a7f32ae3d9f67aaf0f98491d0580dbc946
     eslint.config.js:
         sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
     lefthook.yml:

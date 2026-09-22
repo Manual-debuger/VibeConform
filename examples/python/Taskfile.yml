@@ -42,7 +42,6 @@ tasks:
       - task: lint
       - task: typecheck
       - task: test
-      - task: audit
 
   verify-ci:
     desc: Alias used by CI so the workflow and local docs never drift.

@@ -70,6 +70,12 @@ jobs:
   conformance:
     name: conformance
     runs-on: ubuntu-latest
+    # VibeConform's own check, independent of the language jobs above —
+    # task verify/verify-ci never depend on it (spec 0017). Safe to delete
+    # this job, along with its entry in gate's `needs` below, if this
+    # repository stops using VibeConform; see docs/usage.md's "Removing
+    # VibeConform" section.
+    #
     # Gating since docs/specs/0013-dogfood-self-management.md's step B. A
     # managed file edited directly instead of through its module template
     # fails here: vibe audit exits 2 for drift, 1 if it could not answer.

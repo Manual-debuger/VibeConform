@@ -69,7 +69,6 @@ tasks:
       - task: typecheck
       - task: lint
       - task: test
-      - task: audit
       - task: mod:verify
       - task: security
       - task: workflows:lint
