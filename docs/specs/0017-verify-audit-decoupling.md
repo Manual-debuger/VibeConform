@@ -171,7 +171,7 @@ that has deferred them.
   pre-existing bug (adopters of `prod-go/v1` outside this repository have
   no local `cmd/vibe`, so their `task audit` already fails today,
   independent of this spec) — orthogonal to decoupling `verify` from
-  `audit`, and tracked as its own GitHub issue rather than folded in here.
+  `audit`, and tracked separately as issue #20 rather than folded in here.
 - No change to spec 0013's "`vibe sync` never runs in CI" rule —
   conformance stays audit-only and read-only in CI.
 - No new standards, and no renaming of existing modules or packages.
