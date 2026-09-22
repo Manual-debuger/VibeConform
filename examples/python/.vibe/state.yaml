@@ -14,9 +14,9 @@ resources:
     .github/pull_request_template.md:
         sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
     .github/workflows/ci.yml:
-        sha256: c10ea40ac7ce5dcebcd6efe04da50e57fc7d884640301ed54f436f916312e819
+        sha256: d4e4ab4b6879d0661bdfe6141b0f345e3d924dde616a3cdfca75074704592d11
     Taskfile.yml:
-        sha256: b7788907309e432fb752bb6b8168910b0373ac9e23a9cff1910e4e5018490a53
+        sha256: b50005223c330de17a2aa869f42afbff9101c690e4048d44e961269a16aafc15
     lefthook.yml:
         sha256: 9cbde339d40f685b9770ab9eab4c61a871b402649bfae53253ec6a387af796d1
     pyrightconfig.json:

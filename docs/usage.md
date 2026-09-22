@@ -497,9 +497,10 @@ does not run eslint, ruff, or pyright. That gap is closed by
 `.github/workflows/examples.yml`, a hand-authored workflow (not a module
 resource, since encoding an `examples/`-specific job into `github-ci-ts`/
 `github-ci-py`'s template would leak this repository's layout into every
-adopting repository): it builds `vibe` from source and runs `task verify`
-inside each example, so a template change that breaks linting fails CI, not
-just a byte-comparison test.
+adopting repository): it runs `task verify` inside each example with no
+`vibe` on `PATH`, then builds `vibe` from source and runs `task audit` as a
+separate step, so a template change that breaks linting fails CI, not just
+a byte-comparison test.
 
 ## VibeConform manages itself
 
@@ -541,11 +542,19 @@ tooling (spec 0017), never on a `vibe` binary. The VibeConform-specific
 pieces are concentrated and removable on their own:
 
 - Delete `.vibe/` and `vibe.yaml`.
-- Remove the `conformance` job from `.github/workflows/ci.yml`, and drop
-  `conformance` from `gate`'s `needs` list.
-- `task audit` in `Taskfile.yml` becomes inert once `vibe.yaml` is gone —
-  it has nothing left to check against. Delete it, or leave it as dead
-  code; either is safe, since nothing else in `Taskfile.yml` depends on it.
+- Remove the `conformance` job from `.github/workflows/ci.yml` — in three
+  places, not two: the job itself, its entry in `gate`'s `needs` list, and
+  its `"${{ needs.conformance.result }}"` line in `gate`'s `for result in`
+  loop. Miss the third and the expression evaluates to the empty string,
+  which is not `success`, so `gate` fails on every run afterward. (The Go
+  standard's `actionlint` job catches the dangling reference;
+  `prod-ts`/`prod-py` CI has no equivalent job, so there it surfaces only
+  as a permanently red `gate`.)
+- Delete the `audit` task from `Taskfile.yml`. Once `vibe.yaml` is gone it
+  has nothing to check against and exits 1 with
+  `Error: audit: open vibe.yaml: no such file or directory` — leaving it
+  in place breaks nothing else, since nothing in `Taskfile.yml` depends on
+  it, but it is a task that can now only fail.
 
 Everything else `vibe sync` wrote — `.golangci.yml`, `eslint`/`prettier`/
 `tsconfig`, `ruff`/`pyright` config, the rest of `Taskfile.yml`, the

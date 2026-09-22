@@ -41,7 +41,9 @@ tasks:
       - vibe audit --repo-root .
 
   verify:
-    desc: Full local verification gate (same checks CI runs).
+    desc: Local verification gate — native language tooling only, never
+      VibeConform itself; CI runs these checks plus "task audit" in its own
+      conformance job.
     cmds:
       - task: fmt:check
       - task: lint

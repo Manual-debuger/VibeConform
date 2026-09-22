@@ -209,7 +209,8 @@ correct."
 
 ### `vibe check`'s safe-fallback contract
 
-`vibe check` (not yet implemented; see "Not built yet" below) will
+`vibe check` (not yet implemented; see "Not built yet" under "Internal
+package layout" above) will
 eventually let validation skip components unaffected by a change set, once
 the affected-graph and validation subsystems exist. Whenever it can't
 establish that narrower scope safely, it must run the full equivalent of

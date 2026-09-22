@@ -56,6 +56,21 @@ standards, so no renumbering assumptions beyond spec 0016's.
 
 ### Cross-cutting
 
+- [x] Regression test (`internal/module/verify_independence_test.go`):
+      `TestVerifyNeverInvokesVibe` parses all three repo-tooling Taskfile
+      templates, walks `verify`/`verify-ci`'s transitive `task:` closure,
+      and fails if any reachable shell command invokes `vibe`;
+      `TestAuditStillInvokesVibe` is its counterweight, so deleting the
+      `audit` task cannot make the first test pass. Both were confirmed to
+      fail against a deliberately reintroduced `- task: audit` and a
+      neutered `audit` task respectively. The per-module byte-equality
+      drift tests cannot catch this class of regression — template and
+      live file move together under `vibe sync`.
+- [x] Teardown procedure validated end to end: the three-step `conformance`
+      removal documented in `docs/usage.md` was applied to a scratch copy of
+      `examples/typescript/.github/workflows/ci.yml` and passes `actionlint`
+      cleanly. The two-step reading (job + `needs` entry only) leaves a
+      dangling `needs.conformance.result` that fails `gate` on every run.
 - [x] `vibe audit --repo-root .` on this repository: conformant, 0 drifted,
       0 conflicts, after the increment-1 sync.
 - [x] `task verify` in `examples/typescript`, with `vibe` removed from
