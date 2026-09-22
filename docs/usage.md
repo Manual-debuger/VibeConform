@@ -533,6 +533,28 @@ a repository either conforms to `prod-go/v1` as written or it does not.
 bookkeeping — commit it, but don't hand-edit it. Editing `vibe.yaml` by hand is safe and expected —
 `init` only exists to create the first one.
 
+## Removing VibeConform
+
+Nothing generated depends on VibeConform staying installed to keep
+working: `task verify`/`task verify-ci` depend only on native language
+tooling (spec 0017), never on a `vibe` binary. The VibeConform-specific
+pieces are concentrated and removable on their own:
+
+- Delete `.vibe/` and `vibe.yaml`.
+- Remove the `conformance` job from `.github/workflows/ci.yml`, and drop
+  `conformance` from `gate`'s `needs` list.
+- `task audit` in `Taskfile.yml` becomes inert once `vibe.yaml` is gone —
+  it has nothing left to check against. Delete it, or leave it as dead
+  code; either is safe, since nothing else in `Taskfile.yml` depends on it.
+
+Everything else `vibe sync` wrote — `.golangci.yml`, `eslint`/`prettier`/
+`tsconfig`, `ruff`/`pyright` config, the rest of `Taskfile.yml`, the
+language CI jobs — is ordinary project configuration at that point, no
+different from having written it by hand.
+`.github/workflows/examples.yml` in this repository demonstrates the split
+for its own TS/PY fixtures: `task verify` runs first, with no `vibe` on
+`PATH`; building `vibe` and running `task audit` is a separate, later step.
+
 ## Getting help
 
 ```bash
