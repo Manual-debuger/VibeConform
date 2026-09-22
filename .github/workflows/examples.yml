@@ -11,9 +11,12 @@ name: Examples
 # examples/-specific job in it would leak this repository's own layout
 # into that standard. See docs/specs/0016-ts-py-tooling-parity.md.
 #
-# Builds vibe from source rather than installing a published release, so
-# "task audit" (part of "task verify") checks fixtures against the
-# templates this change under review actually contains, not the last tag.
+# "task verify" runs first, with no vibe on PATH — proving spec 0017's
+# decoupling holds: generated verify depends only on native language
+# tooling. "task audit" then runs as its own separate step, against a vibe
+# built from source rather than a published release, so it checks fixtures
+# against the templates this change under review actually contains, not
+# the last tag.
 
 on:
   pull_request:
@@ -50,17 +53,20 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Install task
         run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
-      - name: Build vibe from source
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Install dependencies
         working-directory: examples/typescript
         run: npm ci
       - name: task verify
         working-directory: examples/typescript
         run: task verify
+      - name: Build vibe from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: task audit
+        working-directory: examples/typescript
+        run: task audit
 
   python:
     name: examples/python
@@ -78,17 +84,20 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Install task
         run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
-      - name: Build vibe from source
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Install dependencies
         working-directory: examples/python
         run: uv sync
       - name: task verify
         working-directory: examples/python
         run: task verify
+      - name: Build vibe from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: task audit
+        working-directory: examples/python
+        run: task audit
 
   gate:
     name: Examples / gate

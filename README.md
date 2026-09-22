@@ -98,8 +98,9 @@ Later: `vibe new`, `vibe eject`.
 ## Using `vibe`
 
 See [`docs/usage.md`](docs/usage.md) for the user manual: install/build
-instructions, the `vibe init` command reference, and exact error text for
-each failure case.
+instructions, the `vibe init` command reference, exact error text for
+each failure case, and how to remove VibeConform from a repository that
+adopted it.
 
 ## Build and test
 

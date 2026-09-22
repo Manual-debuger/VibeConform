@@ -197,5 +197,34 @@ and CI verification (`task fmt`, `task lint`, `task test`, `task security`,
 `task audit`, `task verify`). CI, Git hooks, and docs invoke these tasks
 rather than duplicating command lists. Since M1, `Taskfile.yml` is itself a
 managed resource, and `task audit` checks this repository against the
-standard it declares. `vibe check` will eventually thin this down further
-once the affected-graph and validation subsystems exist.
+standard it declares.
+
+Since spec 0017, `task verify`/`task verify-ci` depend only on native
+language tooling — `task audit` is deliberately not one of `verify`'s
+steps. A generated repository's language verification must not require a
+`vibe` binary (or, for Go, a local `cmd/vibe`) to succeed; `task audit` and
+its CI `conformance` job stay independently invocable, VibeConform-specific
+checks layered on top, not folded into what `verify` means by "the code is
+correct."
+
+### `vibe check`'s safe-fallback contract
+
+`vibe check` (not yet implemented; see "Not built yet" under "Internal
+package layout" above) will
+eventually let validation skip components unaffected by a change set, once
+the affected-graph and validation subsystems exist. Whenever it can't
+establish that narrower scope safely, it must run the full equivalent of
+`task verify` instead of skipping anything — it may never report success
+having silently skipped checks. A full run is required whenever: `vibe`
+itself can't be resolved from the calling context; the affected-component
+scope can't be determined with confidence (no prior state to diff against,
+or a graph-resolution error); or a change touches something with unbounded
+blast radius that isn't representable as a single component (`Taskfile.yml`
+itself, lint/tooling configuration, dependency manifests, or the
+`vibe.yaml` standard declaration). This extends two precedents already in
+the codebase: `vibe check`/`vibe doctor`'s existing "not implemented yet"
+placeholder already fails loudly rather than no-oping (`docs/usage.md`),
+and `vibe sync`'s `ToolRequirer` warning already surfaces a missing tool
+rather than hiding it (spec 0014) — `vibe check`'s fallback is stricter
+than that warning-only pattern, since it must still run full verification,
+not just warn.

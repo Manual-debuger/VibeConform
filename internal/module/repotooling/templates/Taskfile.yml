@@ -61,15 +61,16 @@ tasks:
       - go run ./cmd/vibe audit --repo-root .
 
   verify:
-    desc: Full local verification gate (same checks CI runs). Race detection
-      needs a C compiler (CGO); run "task test:race" separately if you have
-      one — CI runs it independently in its own job.
+    desc: Local verification gate — native language tooling only, never
+      VibeConform itself; CI runs these checks plus "task audit" in its own
+      conformance job. Race detection needs a C compiler (CGO); run
+      "task test:race" separately if you have one — CI runs it
+      independently in its own job.
     cmds:
       - task: fmt:check
       - task: typecheck
       - task: lint
       - task: test
-      - task: audit
       - task: mod:verify
       - task: security
       - task: workflows:lint
