@@ -1,8 +1,21 @@
 # Spec 0019: Tell local drift apart from a moved standard
 
-Status: draft, awaiting approval.
+Status: accepted. Implementation plan:
+`docs/plans/0019-drift-classification.md`.
 
 Closes issue #22.
+
+Decisions taken at approval:
+
+- **Exit codes as recommended below**: `3` for out-of-date-only, `1` when
+  the running binary is older than the one that wrote the state.
+- **Option (c) for ordering**: stamp local builds *and* never claim a
+  direction that cannot be established. See "The ordering problem", which
+  has been revised since approval — the stamp format the recommendation
+  assumed does not order correctly, and the corrected design is recorded
+  there.
+- **One spec, not two**: increments 1–4 land together rather than splitting
+  the decision-engine fix from the provenance work.
 
 ## Problem
 
@@ -217,23 +230,78 @@ contributor here whose `~/go/bin/vibe` is a stale `go install` of a
 release, if their working binary reports `dev` — the exact case that
 prompted this spec.
 
-Options, for decision at approval:
+Option (c) is approved: stamp local builds, and never claim a direction
+that cannot be established. The *format* of the stamp, however, is not what
+the recommendation assumed. Measured against `golang.org/x/mod/semver`:
 
-- **(a) Stamp local builds.** Have `task build` pass
-  `-ldflags "-X main.version=$(git describe --tags --always --dirty)"`, so
-  a dev build reports something like `v0.2.0-alpha.1-42-g1c7666b`. This
-  lives in this repository's own `Taskfile.local.yml` — no standard
-  change. It makes the common local case orderable, though the
-  `-N-gSHA` suffix needs a defined comparison rule.
-- **(b) Treat unorderable as unknown, and rely on visibility.** When either
-  side is `dev` or unparseable, make no direction claim; print both
-  versions on every `OutOfDate` resource and let the human see the
-  mismatch. Simpler, weaker, never wrong.
-- **(c) Both.** (b) as the behaviour, (a) so the local case usually lands
-  in the orderable branch.
+```text
+v0.2.0-alpha.1-42-gAAAAAAA  vs  v0.2.0-alpha.1-9-gBBBBBBB   -> -1
+v0.2.1-0.20260923031702-1c7666bdead1  vs  v0.2.0-alpha.1    -> +1
+v0.2.1-0.20260923031702-1c7666bdead1
+                    vs  v0.2.1-0.20260101000000-aaaaaaaaaa  -> +1
+"dev"  ->  IsValid == false;  Compare("dev", anything) == -1
+```
 
-Recommendation: **(c)**, with (b) as the invariant — the tool never claims
-a direction it cannot establish, and (a) merely widens how often it can.
+Two corrections follow, and both are load-bearing:
+
+**`git describe` output does not order correctly.** Semver compares
+prerelease identifiers lexically, so `-42-g…` sorts *below* `-9-g…`: a
+build 42 commits past the tag is reported as older than one 9 commits past
+it. Stamping raw `git describe` would not merely fail to help — it would
+produce confidently wrong direction claims, which is worse than none.
+
+**The stamp is a Go-style pseudo-version instead**:
+`vX.Y.(Z+1)-0.<commit-time-UTC>-<12-char-sha>`. It is a defined, orderable
+format, it sorts above the release it descends from, and two of them sort
+by commit time. That gives exactly the protection the motivating case
+needs: a contributor's locally built binary outranks a stale
+`~/go/bin` release, so running the stale one against state written by the
+local build is detected as a downgrade.
+
+**Validity must be checked before comparing, not inferred from the
+result.** `semver.Compare` returns `-1` for invalid input, so comparing a
+`dev` version against a release yields "older" — silently branding every
+unstamped local binary stale. Every comparison site must gate on
+`semver.IsValid` for *both* operands first, and treat "not both valid" as
+unorderable. A regression test must pin this specific trap.
+
+The resulting rule:
+
+| recorded | running | outcome |
+|---|---|---|
+| absent (schema 1) | any | unorderable — no direction claim |
+| either invalid (`dev`) | — | unorderable — no direction claim |
+| both valid, running > recorded | | repository out of date; `sync` proceeds |
+| both valid, equal | | templates differ within one version — unorderable in the direction sense; report both, no claim |
+| both valid, running < recorded | | **stale binary**; `audit` exits 1, `sync` refuses without `--allow-downgrade` |
+
+"Unorderable" is never an error and never blocks: it reports both versions
+and falls through to increment 1's classification, which needs no
+provenance at all.
+
+## A new production dependency: `golang.org/x/mod/semver`
+
+Ordering versions correctly requires a semver comparator, and this
+repository has none — `go.mod` requires only `cobra` and `yaml.v3`.
+
+Hand-rolling one is the obvious alternative and is rejected. The evidence
+above is precisely that semver precedence is subtle enough to surprise:
+prerelease identifiers compare lexically, numeric and alphanumeric
+identifiers rank differently, and an invalid input returns a valid-looking
+answer. A hand-rolled comparator would be ~60 lines implementing exactly
+the rules that just produced a backwards result in testing, guarding a
+feature whose entire job is to prevent a destructive revert.
+
+`golang.org/x/mod/semver` is maintained by the Go team and its build
+footprint is stdlib only — `go list -deps golang.org/x/mod/semver` resolves
+to `slices`, `io`, and `strings`. (`go list -m all` also shows
+`golang.org/x/tools` in the module graph; it is a graph entry of `x/mod`,
+not a build dependency of the `semver` package.)
+
+Per `AGENTS.md`, a production dependency needs its rationale recorded:
+**`docs/decisions/0010-semver-comparison-dependency.md`**, short, covering
+the footprint, the rejected alternative, and the fact that `x/mod` is the
+only new module in `go.mod`.
 
 ## Acceptance criteria
 
@@ -252,9 +320,20 @@ a direction it cannot establish, and (a) merely widens how often it can.
   observation, not assumed.
 - `vibe sync` refuses to revert when the running binary is orderably older,
   and `--allow-downgrade` overrides it.
+- Version comparison gates on `semver.IsValid` for both operands. A `dev`
+  binary against a released recorded version is reported as
+  **unorderable**, never as stale — pinned by a regression test written
+  specifically against `Compare`'s `-1`-for-invalid behaviour, since that
+  is the failure this design would otherwise walk into.
+- `task build` stamps a Go-style pseudo-version, and a binary so built
+  compares **greater** than the release it descends from. Verified by
+  building and comparing, not by reading the format.
+- `golang.org/x/mod` is the only module added to `go.mod`, recorded in
+  ADR 0010.
 - Regression tests, each watched failing first: one pinning that row 6 and
   row 7 classify differently; one pinning that a schema-1 state file still
-  classifies correctly; one pinning that sync refuses a backwards write.
+  classifies correctly; one pinning that sync refuses a backwards write;
+  one pinning the `IsValid` trap above.
 - `task verify` and `vibe audit` on all three roots against a freshly
   rebuilt binary.
 
