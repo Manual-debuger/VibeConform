@@ -18,7 +18,7 @@ resources:
     .prettierrc.json:
         sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
     Taskfile.yml:
-        sha256: 9c8847cd4dec2d1df19630719c1ba0445e466e090b74083e5c10418ccd319672
+        sha256: 5ddf59196a1cb6f809fa487ae9a96903349a9a18a2d3a5191efa6dfb792c00a2
     eslint.config.js:
         sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
     lefthook.yml:
