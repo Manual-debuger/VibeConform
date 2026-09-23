@@ -19,6 +19,12 @@ var taskfile []byte
 //go:embed templates/lefthook.yml
 var lefthookConfig []byte
 
+// guard is the PreToolUse guard the hook:guard task runs; see
+// docs/specs/0021-agent-hooks-task-interface.md.
+//
+//go:embed templates/guard.py
+var guard []byte
+
 type pyrepotoolingModule struct{}
 
 // New returns the py-repo-tooling module.
@@ -54,6 +60,13 @@ func (pyrepotoolingModule) Resolve(_ context.Context, _ *module.Context) ([]reso
 			Path:      "lefthook.yml",
 			Ownership: resource.Generated,
 			Content:   lefthookConfig,
+		},
+		{
+			// Default mode: it is run through an interpreter, never executed
+			// directly, so no mode bit can switch it off.
+			Path:      ".claude/hooks/guard.py",
+			Ownership: resource.Generated,
+			Content:   guard,
 		},
 	}, nil
 }

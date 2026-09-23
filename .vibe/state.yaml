@@ -1,11 +1,13 @@
 schema: 2
-vibe_version: v0.2.0-alpha.1.0.20260923051543-c4cd4c284bd2+dirty
+vibe_version: v0.2.0-alpha.1.0.20260923082450-ee65fc0799fd+dirty
 standard: prod-go/v1
 resources:
     .claude/hooks/block-dangerous.sh:
         sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
     .claude/hooks/block-secret-files.sh:
         sha256: a12815be5dd837f16ef67099a647ec207d494f5066329ddcf4a0a495ca52fedb
+    .claude/hooks/guard.go:
+        sha256: 4fd4fb6999701d5c186197cdfbf655dec3b2ad315808a48737ffe563ea44b37b
     .claude/settings.json:
         sha256: e2e0c9f3fd612ac657dc0123ac306460446ff7ebd6bc07a665a4bf7163bbab21
     .codex/config.toml:
@@ -21,6 +23,6 @@ resources:
     .golangci.yml:
         sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
     Taskfile.yml:
-        sha256: c6051236ebf42b0d9dce31a8bd96e1ef522119fb7ba4e2a97d9d747983ec8e32
+        sha256: 176d6af2e8e832f67d2a640674470bef1b87dcd91037b1676d3f6d3fac940b2c
     lefthook.yml:
         sha256: 39b86742ce5cf94c5451adbc236b5be86c8cfd2acc717160424c363e6511fcdc

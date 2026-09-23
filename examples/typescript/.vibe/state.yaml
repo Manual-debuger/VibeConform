@@ -1,11 +1,13 @@
 schema: 2
-vibe_version: v0.2.0-alpha.1.0.20260923080556-a089e61eb5ff+dirty
+vibe_version: v0.2.0-alpha.1.0.20260923082450-ee65fc0799fd+dirty
 standard: prod-ts/v1
 resources:
     .claude/hooks/block-dangerous.sh:
         sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
     .claude/hooks/block-secret-files.sh:
         sha256: a12815be5dd837f16ef67099a647ec207d494f5066329ddcf4a0a495ca52fedb
+    .claude/hooks/guard.mjs:
+        sha256: 0b87aac2f45cc14d5e37aef64e1d67c103ba411733b45bab4bcdb63a660c674b
     .claude/settings.json:
         sha256: e2e0c9f3fd612ac657dc0123ac306460446ff7ebd6bc07a665a4bf7163bbab21
     .codex/config.toml:
@@ -21,7 +23,7 @@ resources:
     .prettierrc.json:
         sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
     Taskfile.yml:
-        sha256: 4a522379cfdb3060bdb823dd774e9e7104df0831ef72f1e85d3aa454a59ef11c
+        sha256: 7090d5370eefc775c86938186a0adeb1b08424c0860eeef6b8f93f3041cad5da
     eslint.config.js:
         sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
     lefthook.yml:

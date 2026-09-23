@@ -54,6 +54,18 @@ tasks:
     cmds:
       - vibe audit --repo-root .
 
+  # Called by Claude Code and Codex, not by people: .claude/settings.json
+  # and .codex/hooks.json run "task -x hook:guard" before every shell
+  # command and file edit. No desc, so it stays out of task --list. The -x
+  # in that command matters: without it Task reports the guard's deny
+  # (exit 2) as 201, and both agents treat 201 as allow. The name is
+  # reserved like every task here. See
+  # docs/specs/0021-agent-hooks-task-interface.md.
+  hook:guard:
+    silent: true
+    cmds:
+      - node .claude/hooks/guard.mjs .claude/hooks/policy.json
+
   verify:
     desc: Local verification gate — native language tooling only, never
       VibeConform itself; CI runs these checks plus "task audit" in its own

@@ -1,11 +1,13 @@
 schema: 2
-vibe_version: v0.2.0-alpha.1.0.20260923051543-c4cd4c284bd2+dirty
+vibe_version: v0.2.0-alpha.1.0.20260923082450-ee65fc0799fd+dirty
 standard: prod-py/v1
 resources:
     .claude/hooks/block-dangerous.sh:
         sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
     .claude/hooks/block-secret-files.sh:
         sha256: a12815be5dd837f16ef67099a647ec207d494f5066329ddcf4a0a495ca52fedb
+    .claude/hooks/guard.py:
+        sha256: d15a801d77f29a4114bf54b70b0376c346d2a77d4318cb7c70c24cd7d75e84d6
     .claude/settings.json:
         sha256: e2e0c9f3fd612ac657dc0123ac306460446ff7ebd6bc07a665a4bf7163bbab21
     .codex/config.toml:
@@ -19,7 +21,7 @@ resources:
     .github/workflows/ci.yml:
         sha256: d4e4ab4b6879d0661bdfe6141b0f345e3d924dde616a3cdfca75074704592d11
     Taskfile.yml:
-        sha256: 35bd33c3d8b53215f5af8d346348ef1a692cc8b45fa5c6119f4abd8efb57b20b
+        sha256: b3baf419e455dedea3a6e07c89e4f6b031eb350032372d7ba9c8bafb77ad27b2
     lefthook.yml:
         sha256: 9cbde339d40f685b9770ab9eab4c61a871b402649bfae53253ec6a387af796d1
     pyrightconfig.json:
