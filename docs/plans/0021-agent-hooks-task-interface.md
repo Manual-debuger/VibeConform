@@ -351,6 +351,21 @@ Required before the pull request:
 - **The end-to-end test fails rather than skips** when
   `VIBE_GUARD_E2E_DIR` is set but `task` is missing, so a CI leg cannot
   pass having run nothing.
+- **The first CI run on the PR failed twice, for reasons Windows couldn't
+  show.**
+  - `TestSyncCmdAppliesResourceModes` still expected
+    `block-dangerous.sh` at `0755`. It skips on Windows, so it passed
+    locally. It now checks the guard at the default `0644`, and
+    `TestWriteResourceAppliesDeclaredMode` keeps the non-default path
+    covered.
+  - Every `hook-guard.yml` leg failed its stdout check. Under GitHub
+    Actions, Task prints `::error title=Task 'hook:guard' failed::…` to
+    stdout whenever a task fails, and a deny is a failure. Reproduced
+    locally with `GITHUB_ACTIONS=true`. The check now applies to allows
+    only: agents parse stdout on exit 0, while on exit 2 they block
+    regardless and take the reason from stderr. The same annotation
+    appears if an agent itself runs under GitHub Actions, and is harmless
+    there for the same reason.
 - **This repository's own `.sh` hooks were deleted last**, just before
   pushing. The reason was to keep the implementing session guarded if it
   still ran the bash hooks it had loaded at startup. It turned out not to

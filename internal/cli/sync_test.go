@@ -164,9 +164,13 @@ func TestSyncCmdAppliesResourceModes(t *testing.T) {
 		t.Fatalf("sync returned error: %v", err)
 	}
 
+	// Since spec 0021 every shipped resource uses the default mode: the
+	// agent guard is run through an interpreter, so it no longer needs to
+	// be executable. The guard is checked explicitly because it is the file
+	// that used to be 0755.
 	for path, want := range map[string]os.FileMode{
-		".claude/hooks/block-dangerous.sh": 0o755,
-		".golangci.yml":                    0o644,
+		".claude/hooks/guard.go": 0o644,
+		".golangci.yml":          0o644,
 	} {
 		info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(path)))
 		if err != nil {
@@ -175,6 +179,33 @@ func TestSyncCmdAppliesResourceModes(t *testing.T) {
 		if got := info.Mode().Perm(); got != want {
 			t.Errorf("%s mode = %v, want %v", path, got, want)
 		}
+	}
+}
+
+// TestWriteResourceAppliesDeclaredMode keeps the non-default path covered
+// now that no shipped resource declares a mode: Resource.Mode still exists
+// (docs/decisions/0006-resource-file-mode.md), so sync must still honor it.
+func TestWriteResourceAppliesDeclaredMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not model Unix permission bits; this would test the platform, not sync")
+	}
+
+	dir := t.TempDir()
+	r := resource.Resource{
+		Path:      "bin/tool.sh",
+		Ownership: resource.Generated,
+		Content:   []byte("#!/bin/sh\n"),
+		Mode:      0o755,
+	}
+	if err := writeResource(dir, r); err != nil {
+		t.Fatalf("writeResource: %v", err)
+	}
+	info, err := os.Stat(filepath.Join(dir, "bin", "tool.sh"))
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o755 {
+		t.Errorf("mode = %v, want 0755", got)
 	}
 }
 

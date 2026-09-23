@@ -86,9 +86,15 @@ func runCorpus(t *testing.T, dir string, argv ...string) {
 				if code != 0 {
 					t.Errorf("exit %d, want 0 (allow); stderr: %s", code, stderr.String())
 				}
-			}
-			if stdout.Len() != 0 {
-				t.Errorf("guard wrote to stdout (%q); agents may parse stdout as JSON", stdout.String())
+				// Only on allow: both agents parse stdout as JSON on exit 0,
+				// so stray output there could change the decision. On exit 2
+				// they block regardless and take the reason from stderr.
+				// That matters in CI: under GitHub Actions, Task prints an
+				// "::error title=Task 'hook:guard' failed::" annotation to
+				// stdout whenever a task fails, which a deny is.
+				if stdout.Len() != 0 {
+					t.Errorf("allowed with output on stdout (%q); agents parse stdout on exit 0", stdout.String())
+				}
 			}
 		})
 	}
