@@ -30,8 +30,8 @@ func TestExitCode(t *testing.T) {
 }
 
 func TestNonConformantErrorMessage(t *testing.T) {
-	err := &nonConformantError{drifted: 2, conflicts: 1}
-	if want := "not conformant: 2 drifted, 1 conflicts"; err.Error() != want {
+	err := &nonConformantError{drifted: 2, outOfDate: 3, conflicts: 1}
+	if want := "not conformant: 2 drifted, 3 out of date, 1 conflicts"; err.Error() != want {
 		t.Errorf("Error() = %q, want %q", err.Error(), want)
 	}
 }

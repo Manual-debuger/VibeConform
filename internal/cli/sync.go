@@ -240,7 +240,9 @@ func applyResource(repoRoot string, rp resourcePlan, next *state.State, counts *
 
 	key := stateKey(rp.Resource.Path)
 	switch rp.Decision {
-	case reconcile.Create, reconcile.Overwrite:
+	// LocalDrift and OutOfDate both write the target; they differ only in
+	// what audit says about how the repository got here (spec 0019).
+	case reconcile.Create, reconcile.LocalDrift, reconcile.OutOfDate:
 		if err := writeResource(repoRoot, rp.Resource); err != nil {
 			return "", err
 		}

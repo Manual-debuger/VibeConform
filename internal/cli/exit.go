@@ -20,11 +20,13 @@ const (
 // reach a verdict at all.
 type nonConformantError struct {
 	drifted   int
+	outOfDate int
 	conflicts int
 }
 
 func (e *nonConformantError) Error() string {
-	return fmt.Sprintf("not conformant: %d drifted, %d conflicts", e.drifted, e.conflicts)
+	return fmt.Sprintf("not conformant: %d drifted, %d out of date, %d conflicts",
+		e.drifted, e.outOfDate, e.conflicts)
 }
 
 // ExitCode maps an error returned by the vibe command tree to a process

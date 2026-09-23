@@ -33,31 +33,31 @@ change.
 
 ### C1 — split the `Overwrite` decision
 
-- [ ] `internal/reconcile/reconcile.go`: replace `Overwrite` with
+- [x] `internal/reconcile/reconcile.go`: replace `Overwrite` with
       `LocalDrift` (`C != P`, `T == P`) and `OutOfDate` (`C == P`,
       `T != P`). Update `String()`.
-- [ ] Update the package doc's truth table and rationale. Record the
+- [x] Update the package doc's truth table and rationale. Record the
       property that makes the split sound: within the former `Overwrite`
       branch exactly one of the two conditions can hold, because if both
       held then `C == T` and `Decide` would have returned `NoChange`
       earlier. That sentence is the whole justification; write it down.
-- [ ] `internal/cli/audit.go`: distinct `auditLine` messages —
+- [x] `internal/cli/audit.go`: distinct `auditLine` messages —
       `drifted (edited since last sync; run vibe sync to restore)` and
       `out of date (standard moved; run vibe sync to update)`.
-- [ ] `internal/cli/audit.go`: count `OutOfDate` separately from
+- [x] `internal/cli/audit.go`: count `OutOfDate` separately from
       `drifted`. Decide the summary line's shape — spec 0019 flags this as
       an output-contract change. Proposal: `N resources checked, N drifted,
       N out of date, N conflicts`, always printing all four so the line's
       arity is stable for anything parsing it.
-- [ ] `internal/cli/diff.go` and `internal/cli/sync.go`: handle both values
+- [x] `internal/cli/diff.go` and `internal/cli/sync.go`: handle both values
       where `Overwrite` was handled. Both still mean "write the target" —
       the action is identical, only the explanation differs. Do **not**
       fork the plan walk; issue #22 names that as a thing to preserve.
-- [ ] Check whether `.golangci.yml` enables an exhaustiveness linter. If
+- [x] Check whether `.golangci.yml` enables an exhaustiveness linter. If
       it does, every switch is found for free; if not, grep for
       `reconcile.` across `internal/` and confirm by hand that no site was
       missed.
-- [ ] Table-test `Decide` exhaustively over all eight rows, asserting the
+- [x] Table-test `Decide` exhaustively over all eight rows, asserting the
       two former-`Overwrite` rows now return different values.
 
 ### C2 — ADR 0010 and the semver dependency
@@ -148,6 +148,11 @@ change.
 - [ ] `docs/architecture/overview.md`: update the three-way reconciliation
       section, which still states the collapsed model
       (`current == previous` → safe replacement).
+- [ ] `docs/specs/0009-vibe-audit-v2.md` — it is accepted-and-implemented,
+      and its output examples and decision table (`| Overwrite | drifted
+      (run vibe sync) |`) are now superseded. Do **not** rewrite it; it is
+      a record of what was decided then. Add a short forward-pointer to
+      spec 0019 at the top, the way an amended decision record should read.
 - [ ] `README.md` — review; expected no change beyond the `vibe audit`
       one-liner's exit-code parenthetical if it overstates.
 
