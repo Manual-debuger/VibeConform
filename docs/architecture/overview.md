@@ -65,6 +65,13 @@ mechanism. See `docs/decisions/0003-resource-ownership.md` and
   project-owned file.
 - `project-owned` — read-only context; never written.
 
+`generated` owning the whole file does not mean a repository has no
+recourse: a generated file may delegate to an unmanaged sibling by a
+documented extension point, as `Taskfile.yml` does to `Taskfile.local.yml`.
+That is a seam beside a wholly-generated file, not a weaker ownership mode
+— the ownership of `Taskfile.yml` itself is unchanged. See
+`docs/decisions/0009-managed-file-local-extension.md`.
+
 ## Three-way reconciliation
 
 Adopted from [Copier](https://github.com/copier-org/copier):
@@ -206,6 +213,23 @@ steps. A generated repository's language verification must not require a
 its CI `conformance` job stay independently invocable, VibeConform-specific
 checks layered on top, not folded into what `verify` means by "the code is
 correct."
+
+Since spec 0018, all three standards resolve `vibe` the same way in
+`audit`: a `PATH` lookup (`vibe audit --repo-root .`). Go previously used
+`go run ./cmd/vibe`, which resolved only in this repository and left every
+external `prod-go/v1` adopter with a `task audit` — and so a CI
+`conformance` job — that could not run. The Go `conformance` job's
+`Install vibe` step is conditional as a result; see
+`docs/decisions/0008-self-hosting-probe-in-shipped-templates.md` for why a
+published release is the wrong binary for this repository to audit itself
+with.
+
+The managed target set is fixed and extended, never overridden. A
+repository's own tasks go in a project-owned `Taskfile.local.yml`, which
+the generated `Taskfile.yml` includes optionally; Task treats a name
+collision as a hard error, so the verification interface stays what the
+standard says it is. See
+`docs/decisions/0009-managed-file-local-extension.md`.
 
 ### `vibe check`'s safe-fallback contract
 
