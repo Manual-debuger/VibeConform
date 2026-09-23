@@ -3,6 +3,7 @@ package tsrepotooling
 import (
 	"bytes"
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -63,14 +64,16 @@ func TestResolveDeterministic(t *testing.T) {
 func TestRequiredTools(t *testing.T) {
 	requirer, ok := New().(module.ToolRequirer)
 	if !ok {
-		t.Fatal("ts-repo-tooling should declare task and lefthook; it does not implement ToolRequirer")
+		t.Fatal("ts-repo-tooling should declare task, lefthook, and pnpm; it does not implement ToolRequirer")
 	}
 
 	tools := requirer.RequiredTools()
-	if len(tools) != 2 {
-		t.Fatalf("RequiredTools() = %+v, want 2 entries", tools)
+	if len(tools) != 3 {
+		t.Fatalf("RequiredTools() = %+v, want 3 entries", tools)
 	}
-	for _, want := range []string{"task", "lefthook"} {
+	// pnpm is required on PATH here, not in ts-tooling: every command this
+	// module generates runs through it (spec 0020).
+	for _, want := range []string{"task", "lefthook", "pnpm"} {
 		found := false
 		for _, tool := range tools {
 			if tool.Name == want {
@@ -80,6 +83,50 @@ func TestRequiredTools(t *testing.T) {
 		if !found {
 			t.Errorf("RequiredTools() missing %q", want)
 		}
+	}
+}
+
+// TestTaskfileUsesPnpm guards spec 0020: every entry point runs through
+// pnpm, and through pnpm exec specifically, so a missing devDependency
+// fails instead of being fetched.
+func TestTaskfileUsesPnpm(t *testing.T) {
+	assertNoNpm(t, "Taskfile.yml", taskfile)
+	for _, want := range []string{
+		"pnpm exec prettier --write",
+		"pnpm exec prettier --check",
+		"pnpm exec eslint .",
+		"pnpm exec tsc --noEmit",
+		"pnpm test",
+	} {
+		if !bytes.Contains(taskfile, []byte(want)) {
+			t.Errorf("Taskfile.yml does not run %q", want)
+		}
+	}
+}
+
+// TestLefthookUsesPnpm is TestTaskfileUsesPnpm for the git hooks.
+func TestLefthookUsesPnpm(t *testing.T) {
+	assertNoNpm(t, "lefthook.yml", lefthookConfig)
+	for _, want := range []string{
+		"pnpm exec prettier --check {staged_files}",
+		"pnpm exec eslint {staged_files}",
+		"pnpm exec tsc --noEmit",
+		"pnpm test",
+	} {
+		if !bytes.Contains(lefthookConfig, []byte(want)) {
+			t.Errorf("lefthook.yml does not run %q", want)
+		}
+	}
+}
+
+// npmOrNpx matches npm or npx as whole words, so "pnpm" does not count.
+var npmOrNpx = regexp.MustCompile(`\bnp[mx]\b`)
+
+// assertNoNpm fails if content invokes npm or npx anywhere.
+func assertNoNpm(t *testing.T, name string, content []byte) {
+	t.Helper()
+	for _, found := range npmOrNpx.FindAll(content, -1) {
+		t.Errorf("%s still runs %s; prod-ts uses pnpm (spec 0020)", name, found)
 	}
 }
 
