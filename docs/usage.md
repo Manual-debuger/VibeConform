@@ -524,7 +524,8 @@ through. `ts-repo-tooling`/`py-repo-tooling` and `github-ci-ts`/`github-ci-py`
 close that gap:
 
 - `ts-repo-tooling`'s `Taskfile.yml` shells out to `eslint`/`prettier`/`tsc`
-  via `npx` (project-local, not assumed on `PATH`); `py-repo-tooling`'s shells
+  via `pnpm exec` (project-local, not assumed on `PATH`; see "`prod-ts` uses
+  pnpm" below); `py-repo-tooling`'s shells
   out to `ruff`/`pyright`/`pytest` via `uv run`. All three expose the same
   target names (`fmt`, `fmt:check`, `lint`, `typecheck`, `test`, `audit`,
   `verify`, `verify-ci`), plus Go's language-specific `test:race`,
@@ -542,7 +543,50 @@ close that gap:
   in-workflow to install `task` and `vibe` themselves), calling those
   Taskfile targets. Each also gets its own `dependabot.yml`: the Go one
   hardcodes `package-ecosystem: gomod`, so it isn't reusable as-is —
-  `github-ci-ts` declares `npm`, `github-ci-py` declares `pip`.
+  `github-ci-ts` declares `npm` (Dependabot's ecosystem for pnpm too),
+  `github-ci-py` declares `pip`.
+
+### `prod-ts` uses pnpm
+
+Since spec 0020, every command `prod-ts/v1` generates runs through
+[pnpm](https://pnpm.io/): `pnpm exec prettier`/`eslint`/`tsc` and `pnpm test`
+in `Taskfile.yml` and `lefthook.yml`, and `pnpm install --frozen-lockfile` in
+CI. `pnpm exec` only runs what the repository installed, so a missing
+devDependency fails instead of being fetched, and pnpm's strict
+`node_modules` fails an import of anything `package.json` doesn't declare.
+
+What the standard needs from your repository:
+
+- **`pnpm` on `PATH`.** Install it globally: the standalone installer,
+  `npm install -g pnpm`, or Corepack on Node versions that still ship it.
+  `vibe sync` warns when it is missing.
+- **A `packageManager` field in `package.json`**, e.g.
+  `"packageManager": "pnpm@10.34.5"`. CI's `pnpm/action-setup` step reads
+  the version from it; the standard pins no pnpm version of its own, the
+  same way it pins no eslint version. Without the field that step fails.
+- **A committed `pnpm-lock.yaml`.** CI installs with `--frozen-lockfile`, so
+  a lockfile that is missing or out of date fails the job.
+
+**Keep `packageManager` at pnpm 10 or below.** Dependabot's `npm` ecosystem
+supports pnpm v7 to v10. A newer `packageManager` leaves Dependabot unable to
+update `pnpm-lock.yaml`, even though everything else works.
+
+**Moving an existing `prod-ts` repository from npm.** After upgrading
+`vibe`, `vibe audit` reports `Taskfile.yml`, `lefthook.yml`, and
+`.github/workflows/ci.yml` as out of date (exit 3), and `vibe sync` rewrites
+them. The rest is yours, because `package.json` and lockfiles are
+project-owned:
+
+1. Run `pnpm import` to turn `package-lock.json` into `pnpm-lock.yaml`, then
+   delete `package-lock.json`. The resolved versions carry over.
+2. Add the `packageManager` field.
+3. Run `task verify`. A `Cannot find module` error means code was importing a
+   package it never declared, which npm's hoisting allowed; add it to
+   `package.json`.
+
+`vibe sync` does not print these steps: it cannot tell whether you have
+already done them, and a warning that fires on a repository that already
+migrated would teach you to ignore it.
 
 What's still true from M2:
 
@@ -568,7 +612,7 @@ Python 3.12, and the rule sets as written.
 `examples/typescript/` and `examples/python/` in this repository are real
 repositories declaring these standards, holding the exact output of syncing
 them, plus real source (`src/`, `tests/`) and pinned dev dependencies
-(`package.json`/`package-lock.json`, `pyproject.toml`/`uv.lock`) that
+(`package.json`/`pnpm-lock.yaml`, `pyproject.toml`/`uv.lock`) that
 VibeConform itself does not manage. They are the same worked example that
 VibeConform itself is for `prod-go/v1` — and, since this is a Go repository
 that never resolves either language module, they are also what keeps those

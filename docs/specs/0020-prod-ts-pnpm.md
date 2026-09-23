@@ -1,6 +1,6 @@
 # Spec 0020: `prod-ts/v1` Uses pnpm
 
-Status: draft, awaiting approval.
+Status: accepted and implemented.
 
 ## Problem
 
