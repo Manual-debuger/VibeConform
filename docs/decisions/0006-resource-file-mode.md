@@ -62,3 +62,15 @@ must produce an executable file directly.
   and recreated, for the new default to apply.
 - `Ownership` and `Mode` stay orthogonal: ownership says whether VibeConform
   may write the file, mode says what it writes it as.
+
+## Note, 2026-09-23: no shipped resource depends on mode any more
+
+Spec 0021 replaced the bash hook scripts, the only resources that needed
+`0o755`, with guards launched through an interpreter (`go run`, `node`,
+`uv run`) by `task -x hook:guard`. A guard run that way ignores its mode
+bit, so a `chmod -x` can no longer switch it off. The unaudited-mode gap
+above therefore no longer weakens any guardrail VibeConform ships.
+
+The decision itself stands: `Resource.Mode` still exists, is still applied
+on write, and still does not take part in reconciliation. Auditing mode
+becomes worth its cost again only if a future resource must be executable.

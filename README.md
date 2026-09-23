@@ -16,9 +16,10 @@
 > [`docs/specs/0010-github-ci-module.md`](docs/specs/0010-github-ci-module.md)),
 > `repo-tooling` (`Taskfile.yml`, `lefthook.yml`, see
 > [`docs/specs/0011-repo-tooling-module.md`](docs/specs/0011-repo-tooling-module.md)),
-> and `agent-config` (Claude/Codex settings and the hook scripts that block
-> destructive commands, see
-> [`docs/specs/0012-agent-config-module.md`](docs/specs/0012-agent-config-module.md)).
+> and `agent-config` (Claude/Codex settings that run `task -x hook:guard`
+> to block destructive commands, and the policy it enforces, see
+> [`docs/specs/0012-agent-config-module.md`](docs/specs/0012-agent-config-module.md)
+> and [`docs/specs/0021-agent-hooks-task-interface.md`](docs/specs/0021-agent-hooks-task-interface.md)).
 > `vibe diff` previews the reconciliation VibeConform would perform for that
 > resource against `.vibe/state.yaml` — see
 > [`docs/specs/0006-reconcile-diff-v1.md`](docs/specs/0006-reconcile-diff-v1.md).

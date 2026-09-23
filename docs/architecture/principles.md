@@ -51,9 +51,10 @@ How to apply:
   only at the I/O boundary.
 - Content is written exactly as resolved, with no line-ending translation;
   `* text=auto eol=lf` in `.gitattributes` keeps checkouts hashing the same.
-- Anything Unix-only (file mode bits, bash hook scripts, extensionless
-  binaries) is called out in `docs/usage.md` together with what a Windows
-  user sees instead.
+- Anything Unix-only (file mode bits, extensionless binaries) is called
+  out in `docs/usage.md` together with what a Windows user sees instead.
+  Agent hooks are the worked example: they were bash scripts until spec
+  0021 and now run through Task on each standard's own runtime.
 - Output and errors say what happened and what to run next. Exit codes are
   part of the contract (`internal/cli/exit.go`), so scripts and CI never
   have to parse prose.

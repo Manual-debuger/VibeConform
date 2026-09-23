@@ -48,12 +48,20 @@ system.
 
 ## Guardrails
 
-- `.codex/config.toml` and `.codex/hooks.json` block destructive shell
-  patterns (`git reset --hard`, `git push --force`, `rm -rf`, etc.) at the
-  tool-call level where the current Codex hooks mechanism supports it.
-- `.claude/settings.json` and `.claude/hooks/block-dangerous.sh` block the
-  same class of destructive Bash patterns for Claude Code, but do not cover
-  PowerShell equivalents unless a pattern is added there too.
+- `.claude/settings.json` and `.codex/hooks.json` run `task -x hook:guard`
+  before tool calls. It runs `.claude/hooks/guard.go` against
+  `.claude/hooks/policy.json`, which blocks destructive commands (`rm -rf`,
+  `git reset --hard`, `git push --force`, PowerShell's recursive forced
+  `Remove-Item`, …) in Bash and PowerShell calls, and, for Claude Code,
+  edits to secret-looking files. The rules live in
+  `internal/module/agents/policy.go`; change them there, not in the
+  generated `policy.json`.
+- Known gaps (`docs/usage.md`, "The agent guard"): Codex on Windows fires
+  no hook for shell commands, and Codex has no file-edit hook at all. A
+  Taskfile that fails to load turns the guard off. A dangerous pattern
+  quoted inside a command still matches.
+- Agents load hooks at session start. After changing the guard, verify it
+  in a **new** session.
 
 These are guardrails, not a complete enforcement boundary — apply the same
 judgment regardless of which agent runtime is in use.

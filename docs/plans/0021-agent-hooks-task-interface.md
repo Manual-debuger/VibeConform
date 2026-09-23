@@ -84,36 +84,36 @@ exist, which would make this repository's own guard fail open mid-branch.
 
 ### C1: policy table, subset check, corpus
 
-- [ ] `internal/module/agents/policy.go`: the `Rule` type (`ID`, `Tool`
+- [x] `internal/module/agents/policy.go`: the `Rule` type (`ID`, `Tool`
       — `command` or `file_path` — `Pattern`, and `Message`) and the
       `Policy` table, ported one-for-one from `block-dangerous.sh` (six
       rules) and `block-secret-files.sh` (one rule).
-- [ ] Port every POSIX bracket class (`[[:space:]]`) to `\s`: Python `re`
+- [x] Port every POSIX bracket class (`[[:space:]]`) to `\s`: Python `re`
       and JavaScript `RegExp` have no POSIX classes.
-- [ ] `renderPolicy()` produces deterministic JSON (fixed field order,
+- [x] `renderPolicy()` produces deterministic JSON (fixed field order,
       two-space indent, trailing newline, LF), under a top-level
       `"version": 1`.
-- [ ] `policy_test.go`:
-  - [ ] `TestPolicyPatternsInPortableSubset` rejects lookaround,
+- [x] `policy_test.go`:
+  - [x] `TestPolicyPatternsInPortableSubset` rejects lookaround,
         backreferences, possessive or atomic groups, named groups, POSIX
         classes, `\A`/`\z`, and inline flags other than `(?i)`. Each
         pattern must also compile with Go's `regexp`.
-  - [ ] `TestRenderPolicyDeterministic`.
-  - [ ] `TestPolicyIsFaithfulPort`: every `deny()` message from the old
+  - [x] `TestRenderPolicyDeterministic`.
+  - [x] `TestPolicyIsFaithfulPort`: every `deny()` message from the old
         scripts appears in exactly one rule. This stops the port from
         silently dropping a rule.
-- [ ] `internal/module/agents/testdata/guard_corpus.json`: cases of
+- [x] `internal/module/agents/testdata/guard_corpus.json`: cases of
       `{name, payload, want: "deny"|"allow"}`. It covers:
-  - [ ] each rule, positive and near-miss;
-  - [ ] the known false positive (a command that only *quotes* a
+  - [x] each rule, positive and near-miss;
+  - [x] the known false positive (a command that only *quotes* a
         dangerous one inside a string argument), expected **allow**
         because the match runs on the parsed command. Note that a heredoc
         body is still part of `command` and still matches: recorded as
         **deny**, with a comment pointing at the spec's limitation;
-  - [ ] malformed JSON containing a dangerous string, expected **deny**
+  - [x] malformed JSON containing a dangerous string, expected **deny**
         through the raw fallback;
-  - [ ] an unknown `tool_name`, expected raw matching;
-  - [ ] a Codex-shaped payload (`tool_name: "Bash"`) and Claude-shaped
+  - [x] an unknown `tool_name`, expected raw matching;
+  - [x] a Codex-shaped payload (`tool_name: "Bash"`) and Claude-shaped
         `Bash`, `PowerShell`, `Write`, and `Edit` payloads.
 
 ### C3: guards and `hook:guard` (committed before C2)
@@ -132,31 +132,31 @@ Guard contract, identical in all three runtimes:
 `policy.json` is loaded relative to the guard file's own directory, not
 the working directory.
 
-- [ ] `internal/module/repotooling/templates/guard.go`: `package main`,
+- [x] `internal/module/repotooling/templates/guard.go`: `package main`,
       standard library only (`encoding/json`, `regexp`, `os`,
       `path/filepath`, `runtime`). Emitted to `.claude/hooks/guard.go`.
       Because the directory is dot-prefixed, `go build ./...` and
       golangci-lint skip it. Confirm this with `task verify`.
-- [ ] `internal/module/tsrepotooling/templates/guard.mjs`: Node standard
+- [x] `internal/module/tsrepotooling/templates/guard.mjs`: Node standard
       library only (`node:fs`, `node:path`, `node:url`).
-- [ ] `internal/module/pyrepotooling/templates/guard.py`: standard library
+- [x] `internal/module/pyrepotooling/templates/guard.py`: standard library
       only (`json`, `re`, `sys`, `pathlib`). Requires Python 3.12 (the
       standard's version) and no third-party packages, so `uv run
       --no-project` needs nothing installed.
-- [ ] Each repo-tooling `Taskfile.yml` template gains the task below. It
+- [x] Each repo-tooling `Taskfile.yml` template gains the task below. It
       has no `desc`, so it stays out of `task --list`, and `silent: true`.
       - Go: `go run .claude/hooks/guard.go`
       - TS: `node .claude/hooks/guard.mjs`
       - Python: `uv run --no-project python .claude/hooks/guard.py`
-- [ ] Each repo-tooling module's `Resolve` adds the guard resource, placed
+- [x] Each repo-tooling module's `Resolve` adds the guard resource, placed
       after `lefthook.yml`, using the default mode.
-- [ ] Module tests: resource order, LF check, `hook:guard` present with no
+- [x] Module tests: resource order, LF check, `hook:guard` present with no
       `desc`, and the guard's path matching what the task runs.
-- [ ] Go test `TestGuardGoCorpus` (in `repotooling`): `go build` the
+- [x] Go test `TestGuardGoCorpus` (in `repotooling`): `go build` the
       embedded `guard.go` into `t.TempDir()`, write `policy.json` beside
       it, and run every corpus case. Skipped only when `go` is unavailable,
       which can't happen in CI.
-- [ ] Measure the cost through `task -x hook:guard` in each root: first
+- [x] Measure the cost through `task -x hook:guard` in each root: first
       `go run`, cached `go run`, `node`, and `uv run --no-project`. Record
       the numbers under Verification. If first-run `go run` is over ~5 s,
       stop and raise it before continuing, rather than silently accepting
@@ -164,42 +164,42 @@ the working directory.
 
 ### C2: `agent-config` calls Task
 
-- [ ] `templates/claude/settings.json`: both matchers run `task -x
+- [x] `templates/claude/settings.json`: both matchers run `task -x
       hook:guard`.
-- [ ] `templates/codex/hooks.json`: the documented nested schema, with
+- [x] `templates/codex/hooks.json`: the documented nested schema, with
       matcher `Bash`, `type: command`, and `command: "task -x hook:guard"`.
       No `commandWindows`, since the command is identical.
-- [ ] `agents.go`:
-  - [ ] drop both `.sh` resources and `hookMode`;
-  - [ ] add `.claude/hooks/policy.json` with content from
+- [x] `agents.go`:
+  - [x] drop both `.sh` resources and `hookMode`;
+  - [x] add `.claude/hooks/policy.json` with content from
         `renderPolicy()`. This is the first resource whose content is
         computed rather than embedded; `Resolve` stays deterministic.
-- [ ] `agents_test.go`:
-  - [ ] `TestAgentConfigsCallTaskWithExitCode`: every agent config's
+- [x] `agents_test.go`:
+  - [x] `TestAgentConfigsCallTaskWithExitCode`: every agent config's
         command is exactly `task -x hook:guard`. This is the `-x`
         regression test.
-  - [ ] `TestCodexHooksMatchDocumentedSchema`: unmarshal and assert the
+  - [x] `TestCodexHooksMatchDocumentedSchema`: unmarshal and assert the
         nested shape.
-- [ ] `internal/standard/standard_test.go`,
+- [x] `internal/standard/standard_test.go`,
       `TestAgentConfigWiring`: for every registered standard that
       composes `agent-config`, the resolved `Taskfile.yml` defines
       `hook:guard` (parsed as YAML, not substring-matched). The file its
       command names is also a resolved resource.
-- [ ] Rebuild, then sync the root and both examples, then audit all three.
+- [x] Rebuild, then sync the root and both examples, then audit all three.
       The old `.sh` files still exist but are no longer referenced.
-- [ ] **This repository's own guard is now the new one.** Smoke-test it in
+- [ ] **(Pending: needs a new session.)** **This repository's own guard is now the new one.** Smoke-test it in
       this session: ask the agent to run a denied command and confirm the
       denial, and confirm an ordinary command still runs.
 
 ### C4: end-to-end corpus in CI
 
-- [ ] `internal/module/agents/guard_e2e_test.go`,
+- [x] `internal/module/agents/guard_e2e_test.go`,
       `TestGuardCorpusEndToEnd`: when `VIBE_GUARD_E2E_DIR` is set, run
       every corpus case through `task -x hook:guard` in that directory,
       the exact string the agent configs contain. Assert exit codes: `2`
       for deny, `0` for allow. Skipped when the variable is unset, so
       `task verify` stays fast and needs no Node or uv.
-- [ ] New hand-authored workflow, `.github/workflows/hook-guard.yml`. It
+- [x] New hand-authored workflow, `.github/workflows/hook-guard.yml`. It
       isn't a module resource, for the same reason `examples.yml` isn't.
       - Matrix: `root` (`prod-go`), `examples/typescript`, and
         `examples/python`, crossed with `ubuntu-latest` and
@@ -212,27 +212,27 @@ the working directory.
 
 ### C5: docs and cleanup
 
-- [ ] Delete `.claude/hooks/block-dangerous.sh` and
+- [x] Delete `.claude/hooks/block-dangerous.sh` and
       `block-secret-files.sh` in the root and both examples.
-- [ ] `docs/usage.md`:
-  - [ ] Replace the file-mode paragraph: hooks are no longer mode-bit
+- [x] `docs/usage.md`:
+  - [x] Replace the file-mode paragraph: hooks are no longer mode-bit
         dependent.
-  - [ ] Document `hook:guard` as a reserved task name.
-  - [ ] List the known limitations from the spec.
-  - [ ] Add adopter migration steps: delete the old `.sh` files.
-  - [ ] Update "What `prod-go/v1` manages" (resource table).
-- [ ] `docs/decisions/0006-resource-file-mode.md`: dated note that no
+  - [x] Document `hook:guard` as a reserved task name.
+  - [x] List the known limitations from the spec.
+  - [x] Add adopter migration steps: delete the old `.sh` files.
+  - [x] Update "What `prod-go/v1` manages" (resource table).
+- [x] `docs/decisions/0006-resource-file-mode.md`: dated note that no
       shipped resource depends on mode any more.
-- [ ] `AGENTS.md` Guardrails: rewrite for the new mechanism and its
+- [x] `AGENTS.md` Guardrails: rewrite for the new mechanism and its
       limitations. This also fixes issue #26, item 11.
-- [ ] `.codex/README.md`:
-  - [ ] the new `hooks.json` shape;
-  - [ ] the schema fix;
-  - [ ] the Windows `PreToolUse` gap (codex#24453);
-  - [ ] the existing missing file-edit guard.
-- [ ] `docs/architecture/overview.md` package list: `agents/` described as
+- [x] `.codex/README.md`:
+  - [x] the new `hooks.json` shape;
+  - [x] the schema fix;
+  - [x] the Windows `PreToolUse` gap (codex#24453);
+  - [x] the existing missing file-edit guard.
+- [x] `docs/architecture/overview.md` package list: `agents/` described as
       "Claude/Codex config + guard policy".
-- [ ] Spec 0021 status: "accepted and implemented". Tick this checklist
+- [x] Spec 0021 status: "accepted and implemented". Tick this checklist
       and record verification.
 
 ## Verification
@@ -247,6 +247,99 @@ Required before the pull request:
 - The live smoke test from C2, in a Claude Code session on this machine.
 - CI: `CI / gate`, `examples.yml`, and all six `hook-guard.yml` legs
   green.
+
+### Observed locally (Windows 11, 2026-09-23)
+
+- **Corpus in-process** (`go test ./internal/module/agents`): all 41 cases
+  pass against each guard, with nothing skipped.
+  - Go: built from the template.
+  - Node: `node guard.mjs`.
+  - Python: `uv run --no-project python guard.py`.
+
+  A deliberately broken Node guard (never returning a match) failed 19
+  cases, then passed again once restored. (The C3 commit message says 42
+  cases; the count is 41.)
+- **Corpus end to end** (`TestGuardCorpusEndToEnd` through `task -x
+  hook:guard`): all 41 pass in the root, `examples/typescript`, and
+  `examples/python`. The first run failed every deny case in the root; see
+  Deviations.
+- **Mutation check on `-x`:** removing `-x` from `.codex/hooks.json` fails
+  `TestAgentConfigsCallTaskWithExitCode`.
+- **Wiring test:** `TestAgentConfigWiring` passes for `prod-go/v1`,
+  `prod-ts/v1`, and `prod-py/v1`.
+- **Verify, lint, audit:**
+  - `task lint` at the root: 0 issues.
+  - `go test ./...`: all pass.
+  - `task verify` in both examples: exit 0. Their own eslint, Prettier,
+    ruff, and pyright now cover the guard files.
+  - `vibe audit` in all three roots: conformant.
+- **Cost per tool call** (payload `ls`, through `task -x hook:guard`):
+
+  | Runtime | Time |
+  |---|---|
+  | `go run`, cold (empty `GOCACHE`) | 3822 ms |
+  | `go run`, warm | 213–244 ms |
+  | `node` | 135–180 ms |
+  | `uv run --no-project python` | 297–319 ms |
+
+  The cold Go run is under the 5 s stop threshold, and paid once per
+  change to `guard.go`.
+- **What a deny looks like on stderr:** the guard's message first, then
+  `exit status 2` (from `go run`) and Task's
+  `task: Failed to run task "hook:guard": exit status 2`. The reason the
+  agent shows is the first line.
+- **No stray files:** running hooks in the three roots left no `.task/`
+  directory and no new `.venv`. `examples/python` already had its `.venv`
+  from `uv sync`, so a fresh uv project was not tested for `.venv`
+  creation.
+- **Not yet done: the live smoke test.** Claude Code snapshots hooks when
+  a session starts, so the session that wrote this change still ran the
+  old bash hooks throughout. It needs a new session.
+
+### Deviations from the checklist
+
+- **`go run` swallows the guard's exit code. Every `hook:guard` command
+  now ends in `|| exit 2`.** The end-to-end test showed that `go run`
+  reports its program's exit 2 as 1, so `prod-go`'s guard would have
+  *allowed* everything it was meant to deny, through the very path
+  agents use. The in-process tests couldn't see this because they run a
+  built binary.
+
+  The suffix fixes it for Go. Applied to all three standards, it also
+  makes any failure after Task starts the task a deny: a compile error, a
+  missing `node` or `uv`, an unreadable policy. That is stricter than the
+  spec, which accepted failing open when a runtime is missing, and it is
+  recorded there. `TestGoRunReportsGuardDenyAsOne` pins `go run`'s
+  behavior.
+- **Each rule has a `raw` pattern as well as a `pattern`.** The fallback
+  matches the payload text with the old scripts' own patterns, so it is
+  exactly as strict as they were. They differ only for the secret-file
+  rule, whose old pattern matches the JSON around the path.
+- **The guard takes the policy path as its argument** instead of finding
+  it next to its own source, which `go run` compiles away.
+- **`policy.json` is rendered in Prettier's style**, with short string
+  arrays on one line. `prod-ts`'s `fmt:check` runs Prettier over
+  `**/*.json`, `.claude/` included, and failed on `json.Encoder`'s layout.
+- **The examples' linters check the guards.** eslint required
+  `{ cause }` on a rethrown error; ruff reformatted the Python guard. The
+  templates were formatted to each standard's own rules, which is also a
+  standing check that adopters' tooling accepts them.
+- **Claude Code gets one matcher, `Bash|PowerShell|Write|Edit`,** rather
+  than two entries: one guard handles both kinds of call. `MultiEdit` is
+  in the policy's file-edit tools, since the `Edit` matcher (a regular
+  expression) routes it to the guard.
+- **The corpus contradicted the spec's claim about quoted commands.** A
+  pattern quoted inside a command argument still matches, because it is
+  part of `tool_input.command`. The corpus records that as *deny*, and the
+  spec is corrected. What parsing does fix is a pattern in a *different*
+  field, such as `description`, which the old hook denied.
+- **`TestGuardCorpusGo` lives in `internal/module/agents`,** next to the
+  other runtimes and `renderPolicy`, not in `repotooling`.
+- **The end-to-end test fails rather than skips** when
+  `VIBE_GUARD_E2E_DIR` is set but `task` is missing, so a CI leg cannot
+  pass having run nothing.
+- **This repository's own `.sh` hooks were deleted last**, just before
+  pushing, so the session doing the work kept a working guard until then.
 
 ## Pull request
 

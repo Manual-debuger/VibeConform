@@ -1,6 +1,6 @@
 # Spec 0021: Agent Hooks Behind a Task Interface, Run on the Language Runtime
 
-Status: draft, awaiting approval.
+Status: accepted and implemented.
 
 ## Problem
 
@@ -15,9 +15,16 @@ and `.claude/hooks/block-secret-files.sh`. Claude Code runs them as
    condition is false, so the hook exits 0 and allows the command (see
    Design notes).
 2. **They match text, not commands.** The scripts `grep -E` the raw
-   tool-call JSON, so a command that merely *mentions* a dangerous pattern
-   is blocked. Filing issue #26 hit this: a `gh issue create` whose body
-   quoted a PowerShell recursive delete was denied.
+   tool-call JSON, so a pattern anywhere in the payload blocks the call,
+   including in a Bash call's `description` field. Filing issue #26 hit a
+   related case: a `gh issue create` whose body quoted a PowerShell
+   recursive delete was denied.
+
+   *Correction, found while implementing:* the issue #26 case is not fixed
+   by this spec. The quoted body is part of `tool_input.command`, so
+   matching the parsed command still denies it. What parsing does fix is
+   matching fields other than the command. The shared corpus records both
+   cases; see "Known limitations".
 3. **The policy is untested.** Nothing runs the patterns against known
    allow/deny cases. A regex edit that stops matching a destructive
    command ships green, and a hook that allows everything looks exactly
@@ -65,7 +72,7 @@ three standards. Its resources:
 
 | Resource | Change |
 |---|---|
-| `.claude/settings.json` | Both matchers (`Bash\|PowerShell` and `Write\|Edit`) run `task -x hook:guard` |
+| `.claude/settings.json` | One `PreToolUse` entry, matcher `Bash\|PowerShell\|Write\|Edit`, runs `task -x hook:guard` |
 | `.codex/hooks.json` | Rewritten to Codex's documented schema (problem 6): one `PreToolUse` entry with `matcher: "Bash"` and a `hooks` array holding `{"type": "command", "command": "task -x hook:guard"}`. No `commandWindows`, since the command is identical on every OS. |
 | `.codex/config.toml` | unchanged |
 | `.claude/hooks/policy.json` | **new**: the shared policy (see 3) |
@@ -144,6 +151,22 @@ for any failing command, and the agent treats 201 as a non-blocking hook
 error, **allowing** the command. `-x` is therefore part of the contract, not
 a style choice, and a test asserts that every generated agent config calls
 `task -x hook:guard` exactly (principle 1).
+
+*Added during implementation:* every `hook:guard` command ends in
+`|| exit 2`. Running the corpus through Task showed that `go run` does not
+pass its program's exit code through: the guard's `2` comes out as `1`,
+and `prod-go`'s guard would have allowed everything it was meant to
+block. The suffix fixes that, and it also makes any other failure after
+the task starts a deny: a compile error, a missing `node` or `uv`, an
+unreadable policy. That is deliberately stricter than the rest of this
+spec, which accepted failing open when a runtime is missing. A test pins
+`go run`'s behavior, so the reason for the workaround stays visible.
+
+The guard takes the policy path as its only argument
+(`.claude/hooks/policy.json`, relative to the Taskfile, which is where Task
+runs it) rather than locating it beside its own source file. That is
+simpler in all three runtimes, and it survives `go run`, which compiles
+the guard to a temporary directory.
 
 ### 5. Wiring is checked, not assumed
 
@@ -226,7 +249,8 @@ Recorded in `docs/usage.md` and in a comment in each template:
   This applies to `task` exactly as it did to bash.
 - **Quoted content still matches.** Matching the parsed command still
   blocks a heredoc or string argument whose *content* contains a dangerous
-  pattern. Fewer cases than today, but not zero.
+  pattern, such as the issue #26 `gh issue create` body. Parsing removes
+  only matches in *other* fields, such as a Bash call's `description`.
 - **Canary.** No automated check can observe an agent's own hook dispatch.
   The manual test is to ask the agent to run a denied command and expect a
   denial.
