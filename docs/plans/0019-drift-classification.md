@@ -161,28 +161,56 @@ change.
 
 ### C5 — documentation
 
-- [ ] `docs/usage.md`, `vibe audit` section: document the three outcomes
+- [x] `docs/usage.md`, `vibe audit` section: document the three outcomes
       (`drifted`, `out of date`, `conflict`), the exit codes including the
       new `3` and the stale-binary `1`, and what each one means for a
       reader who did not change anything.
-- [ ] `docs/usage.md`: document `.vibe/state.yaml` schema 2 and that a
+- [x] `docs/usage.md`: document `.vibe/state.yaml` schema 2 and that a
       schema-1 file keeps working until the next sync.
-- [ ] `docs/usage.md`: the stale-`~/go/bin` warning added in spec 0018 can
+- [x] `docs/usage.md`: the stale-`~/go/bin` warning added in spec 0018 can
       now point at the real guard rather than only warning.
-- [ ] `docs/architecture/overview.md`: update the three-way reconciliation
+- [x] `docs/architecture/overview.md`: update the three-way reconciliation
       section, which still states the collapsed model
       (`current == previous` → safe replacement).
-- [ ] `docs/specs/0009-vibe-audit-v2.md` — it is accepted-and-implemented,
+- [x] `docs/specs/0009-vibe-audit-v2.md` — it is accepted-and-implemented,
       and its output examples and decision table (`| Overwrite | drifted
       (run vibe sync) |`) are now superseded. Do **not** rewrite it; it is
       a record of what was decided then. Add a short forward-pointer to
       spec 0019 at the top, the way an amended decision record should read.
-- [ ] `README.md` — review; expected no change beyond the `vibe audit`
+- [x] `README.md` — review; expected no change beyond the `vibe audit`
       one-liner's exit-code parenthetical if it overstates.
 
 ## Verification
 
 Recorded as run, with observed output, not as intent.
+
+### The guard caught a bug in its own tooling
+
+Worth recording because it was not staged. After C5's doc pass, `vibe
+audit` refused to judge this repository:
+
+```
+Error: audit: this vibe (v0.2.0-alpha.1.0.20260923051543-c4cd4c284bd2+dirty)
+is older than the one that last synced this repository
+(v0.2.0-alpha.1.0.20260923120009-f2c001260e4b+dirty)
+```
+
+`c4cd4c2` is the child of `f2c0012`, so a later commit had stamped an
+earlier timestamp. Cause: the `task build` stamp used git's
+`--date=format-local`, which renders in whatever `TZ` the shell carries.
+One build rendered local time (`120009`, UTC+08:00) and a later one
+rendered UTC (`051543`), so the two were not comparable. Go pseudo-version
+timestamps are UTC by definition.
+
+Fixed by forcing `TZ=UTC` in the stamp; verified the output is now
+identical under `TZ=Asia/Tokyo` and `TZ=America/New_York`. Resetting the
+recorded provenance to a UTC-based stamp needed one deliberate
+`--allow-downgrade` sync — the first real use of the escape hatch, and the
+case it exists for.
+
+Two things this demonstrates that a unit test could not: the guard fires on
+a genuine inconsistency nobody constructed, and refusing rather than
+reverting left the repository untouched while the tooling was fixed.
 
 - [ ] Every regression test above watched failing before it is relied on;
       outputs pasted here.

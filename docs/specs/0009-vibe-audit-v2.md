@@ -1,6 +1,15 @@
 # Spec 0009: `vibe audit` (v2 — strict conformance gate)
 
-Status: accepted and implemented.
+Status: accepted and implemented. **Partly superseded by
+`docs/specs/0019-drift-classification.md`**, which splits the `Overwrite`
+decision below into `LocalDrift` and `OutOfDate`, gives them distinct
+messages, adds exit code `3` for out-of-date-only, and makes a `vibe` older
+than the one that last synced the repository decline to give a verdict.
+
+The output examples and the decision table in this document are therefore
+the pre-0019 contract. They are left as written: this is a record of what
+was decided then, not a description of current behaviour. See
+`docs/usage.md` for the latter.
 
 ## Problem
 

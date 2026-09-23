@@ -120,18 +120,33 @@ on a conformant repository:
 ```
 standard: prod-go/v1
 .golangci.yml: ok
-1 resource checked, 0 drifted, 0 conflicts
+1 resource checked, 0 drifted, 0 out of date, 0 conflicts
 conformant
 ```
 
-and on one that has drifted:
+on one where a managed file was edited:
 
 ```
 standard: prod-go/v1
-.golangci.yml: drifted (run vibe sync)
-1 resource checked, 1 drifted, 0 conflicts
+.golangci.yml: drifted (edited since last sync; run vibe sync to restore)
+1 resource checked, 1 drifted, 0 out of date, 0 conflicts
 not conformant
 ```
+
+and on one nobody touched, where the standard moved on instead:
+
+```
+standard: prod-go/v1
+.golangci.yml: out of date (standard moved; run vibe sync to update)
+1 resource checked, 0 drifted, 1 out of date, 0 conflicts
+not conformant
+last synced by vibe v0.2.0; this vibe is v0.3.0
+```
+
+Those last two are different situations and, since spec 0019, say so.
+Before it, both printed `drifted`, so upgrading `vibe` told everyone who
+had changed nothing that files they never opened had drifted. `sync` fixes
+either one; only the first is anyone's mistake.
 
 **Flags:**
 
@@ -145,7 +160,8 @@ not conformant
 |---|---|---|
 | `ok` | file matches the standard | yes |
 | `missing (run vibe sync)` | the standard resolves it, the file isn't there | no |
-| `drifted (run vibe sync)` | file differs from the standard, and `sync` can fix it | no |
+| `drifted (edited since last sync; run vibe sync to restore)` | the file was changed after VibeConform wrote it | no |
+| `out of date (standard moved; run vibe sync to update)` | the file is exactly as VibeConform last wrote it; the standard has since changed | no |
 | `conflict: manual changes detected` | file and standard both moved; `sync` won't touch it | no |
 | `not yet checked (unsupported ownership)` | no command handles this ownership mode yet | not counted |
 
@@ -154,16 +170,41 @@ not conformant
 | Code | Meaning |
 |---|---|
 | `0` | conformant |
-| `2` | audited successfully, repository is **not** conformant |
-| `1` | could not answer: `vibe.yaml` missing/unreadable, unregistered `(standard, version)`, malformed `.vibe/state.yaml`, or an I/O failure |
+| `3` | conformant except **out of date**: nothing was edited, the standard moved |
+| `2` | audited successfully, repository is **not** conformant — something was edited, is missing, or conflicts |
+| `1` | could not answer: `vibe.yaml` missing/unreadable, unregistered `(standard, version)`, malformed `.vibe/state.yaml`, an I/O failure, or a `vibe` older than the one that last synced this repository |
 
-The `1` / `2` split is the point of the command in CI: only a `2` is fixed by
-running `vibe sync`. A `1` means the check itself is broken.
+The split is the point of the command in CI. A `2` or a `3` is fixed by
+running `vibe sync`; a `1` means the check itself could not run.
+
+`3` is separate from `2` so a `conformance` job can decide for itself
+whether being behind the standard should fail the build. It is non-zero by
+default, because the repository *is* behind — the generated workflow treats
+any non-zero exit as a failure, and a repository that wants to tolerate
+being out of date has to say so deliberately. Mixed findings report `2`:
+anything worse than out-of-date outranks it.
 
 ```
 Error: audit: open vibe.yaml: no such file or directory
 Error: audit: standard: no such standard prod-go/v99
 ```
+
+**When `vibe` itself is out of date**, `audit` declines to judge rather
+than reporting drift:
+
+```
+11 resources checked, 0 drifted, 0 out of date, 0 conflicts
+no verdict: this vibe is v0.1.0, older than the v0.3.0 that last synced this
+repository. Its templates predate this repository's state, so the
+findings above cannot be trusted and vibe sync would revert managed
+files. Upgrade vibe and audit again.
+```
+
+This is exit `1`, not `2` or `3`: the repository may be in perfect shape,
+and it is the install that is behind. Following a `drifted` message here
+would have been actively destructive — `vibe sync` with an older binary
+rewrites managed files from its own older templates and records the result
+as correct. `sync` refuses outright for the same reason; see below.
 
 **Behavior to know:**
 
@@ -293,6 +334,31 @@ does not exist yet.
 | Flag          | Default | Meaning                          |
 |---------------|---------|-----------------------------------|
 | `--repo-root` | `.`     | Directory to read `vibe.yaml` and write resources under |
+| `--allow-downgrade` | `false` | Write even though this `vibe` is older than the one that last synced this repository |
+
+**`sync` refuses to run backwards.** If `.vibe/state.yaml` records that a
+newer `vibe` last synced this repository, an older one stops before writing
+anything:
+
+```
+Error: sync: this vibe (v0.1.0) is older than the one that last synced this
+repository (v0.3.0); upgrade vibe and run again: syncing would revert managed
+files to older templates; pass --allow-downgrade if that is what you mean
+```
+
+Without this, an older binary rewrites every managed file from its own
+older templates and then records the result as correct — so the repository
+ends up *certified* conformant while carrying reverted content, and the
+next `audit` with a current binary disagrees. It is easy to reach by
+accident: a `vibe` left in `~/go/bin` by an earlier `go install` wins the
+`PATH` lookup that `task audit` uses.
+
+Reverting on purpose is legitimate, which is what `--allow-downgrade` is
+for. It has to be typed, not stumbled into.
+
+The check only fires when both versions are comparable. An unrecorded
+writer (any `.vibe/state.yaml` written before schema 2) or an unstamped
+build never blocks a sync — see "`.vibe/state.yaml`" below.
 
 **What each decision does:**
 
@@ -606,12 +672,19 @@ template and every root still reports conformant.
 
 A related trap, now that `task audit` resolves `vibe` from `PATH` rather
 than compiling one: if an older `vibe` is installed in `~/go/bin` from a
-previous `go install`, `task audit` picks *that* up and reports files you
-just regenerated as `drifted (run vibe sync)`. The binary is out of date,
-not the repository. Run `./bin/vibe audit` directly when in doubt, and note
-that on Windows `go build -o bin/vibe` produces an extensionless file that
-`PATH` lookup will not find as `vibe` — hence `./bin/vibe` above rather
-than putting `bin/` on `PATH`.
+previous `go install`, `task audit` picks *that* up rather than the one you
+just built. Since spec 0019 this is caught rather than silently believed —
+`audit` declines to give a verdict and `sync` refuses to write, both naming
+the two versions. Upgrade or remove the stale install; `./bin/vibe audit`
+run directly is the quickest way to confirm which binary is answering.
+
+`task build` stamps the binary it produces with a version derived from git,
+which is what makes that comparison possible at all. An unstamped build
+reports `dev`, and two `dev` binaries are indistinguishable.
+
+Note also that on Windows `go build -o bin/vibe` produces an extensionless
+file that `PATH` lookup will not find as `vibe` — hence `./bin/vibe` above
+rather than putting `bin/` on `PATH`.
 
 Still hand-maintained here, by the non-goals above:
 `.github/workflows/release.yml`, `.goreleaser.yaml`, `.gitignore`,
@@ -628,9 +701,50 @@ version: v1
 
 There is no `.vibe/lock.yaml` and no component graph yet — and no overrides:
 a repository either conforms to `prod-go/v1` as written or it does not.
-`.vibe/state.yaml` exists once you run `vibe sync`; it is machine-owned
-bookkeeping — commit it, but don't hand-edit it. Editing `vibe.yaml` by hand is safe and expected —
-`init` only exists to create the first one.
+Editing `vibe.yaml` by hand is safe and expected — `init` only exists to
+create the first one.
+
+## `.vibe/state.yaml`
+
+Machine-owned bookkeeping, written only by `vibe sync`. Commit it; don't
+hand-edit it.
+
+```yaml
+schema: 2
+vibe_version: v0.3.0
+standard: prod-go/v1
+resources:
+    .golangci.yml:
+        sha256: 6bb1…
+```
+
+The `resources` map is what reconciliation compares against: it records the
+content VibeConform last wrote, so `audit` can tell a file you changed from
+a file the standard changed.
+
+The three fields above it are provenance, added in schema 2 (spec 0019).
+They record which `vibe` wrote the file, which is the one thing the hashes
+cannot express — a hash says the target moved, not whether it moved forward
+or backward. That is what lets `sync` refuse to run backwards.
+
+- **A file with none of them is a schema-1 file** and keeps working
+  unchanged. Every `.vibe/state.yaml` written before spec 0019 is one.
+  Nothing is inferred from their absence: an unrecorded writer is unknown,
+  not old, so no direction is claimed and no sync is blocked. The next
+  `vibe sync` fills them in.
+- **Older binaries read schema 2 fine.** The fields are ignored by anything
+  that doesn't know them, so upgrading some machines and not others is not
+  a migration.
+- **`vibe_version` is only compared when both sides are real versions.**
+  An unstamped build reports `dev`, which is not a version and is never
+  treated as one. `go install …@latest` and released binaries both report
+  a real version.
+- **`standard` is recorded but not yet checked.** Nothing currently
+  compares it to `vibe.yaml`.
+- **There is no timestamp**, deliberately: it would rewrite the file on
+  every sync and churn its diff for nothing. `vibe_version` does change
+  when the binary does, which is the intended cost of recording provenance
+  at all.
 
 ## Removing VibeConform
 

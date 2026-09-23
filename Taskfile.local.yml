@@ -26,7 +26,13 @@ tasks:
       # BELOW -9-gBBB — see docs/decisions/0010-semver-comparison-dependency.md.
       - |
         sha=$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
-        ts=$(git show -s --format=%cd --date=format-local:%Y%m%d%H%M%S HEAD 2>/dev/null || echo 00000000000000)
+        # TZ=UTC is not optional. Go pseudo-version timestamps are UTC, and
+        # "format-local" renders in whatever TZ the shell happens to carry,
+        # so two builds of the same repository under different TZ produce
+        # timestamps that do not compare. That made a later commit stamp an
+        # earlier time than its parent and tripped the downgrade guard
+        # against this very repository.
+        ts=$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M%S HEAD 2>/dev/null || echo 00000000000000)
         tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
         case "$tag" in
           "")  base="v0.0.0-" ;;

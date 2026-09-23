@@ -86,11 +86,31 @@ new desired state
 reconciliation
 ```
 
-- `current == previous` → safe replacement.
 - `current == target` → no change.
+- `current == previous`, `target != previous` → **out of date**: the
+  repository is exactly as VibeConform last wrote it and the standard has
+  moved on. Safe replacement.
+- `current != previous`, `target == previous` → **local drift**: the
+  managed file was edited after it was written. Safe replacement too, but a
+  different thing to tell the user.
 - `current != previous` and `target != previous` → conflict, surfaced to the
   user rather than silently overwritten.
 - `project-owned` → never overwritten.
+
+The two middle cases both mean "write the target", and spec 0006 therefore
+collapsed them into one decision. Spec 0019 separates them because they
+differ in whose doing it is: reporting a moved standard as drift told
+adopters who had changed nothing that files they never opened had drifted.
+No extra recorded state was needed — the two conditions are mutually
+exclusive wherever both are reachable, so the distinction was already
+implied by the three hashes.
+
+What hashes cannot express is *direction*: a target that moved because the
+binary is newer looks identical to one that moved because the binary is
+older. `.vibe/state.yaml` schema 2 records which `vibe` last wrote it, so
+`sync` can refuse to run backwards instead of reverting managed files and
+recording the result as correct. Provenance is absent from pre-0019 state
+files, and absent means unknown — never old.
 
 ## Audit / diff / sync UX
 

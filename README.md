@@ -4,9 +4,11 @@
 > and audits itself in CI.** `vibe init` writes a `vibe.yaml` desired-state file (see
 > [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `vibe
 > audit` is the conformance gate: it checks every resolved resource against
-> the repository and exits `2` when the repository is not conformant, `1`
-> when it cannot answer at all
-> (see [`docs/specs/0009-vibe-audit-v2.md`](docs/specs/0009-vibe-audit-v2.md)).
+> the repository and exits `2` when a managed file was edited, `3` when
+> nothing was edited but the standard moved on, and `1` when it cannot
+> answer at all
+> (see [`docs/specs/0009-vibe-audit-v2.md`](docs/specs/0009-vibe-audit-v2.md)
+> and [`docs/specs/0019-drift-classification.md`](docs/specs/0019-drift-classification.md)).
 > The `prod-go`/`v1` standard composes four modules: `go-tooling`
 > (a fixed `.golangci.yml`, see
 > [`docs/specs/0005-gotooling-module.md`](docs/specs/0005-gotooling-module.md))
