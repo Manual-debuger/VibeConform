@@ -10,6 +10,8 @@ func TestCompareWriters(t *testing.T) {
 		nextRelease = "v0.3.0"
 		pseudoNew   = "v0.2.1-0.20260923031702-1c7666bdead1"
 		pseudoOld   = "v0.2.1-0.20260101000000-aaaaaaaaaaaa"
+		// What Go derives when it can see the commit but no tag.
+		untaggedPseudo = "v0.0.0-20260923052227-9d9211608f9a"
 	)
 
 	tests := []struct {
@@ -32,6 +34,15 @@ func TestCompareWriters(t *testing.T) {
 		{"no provenance recorded", "", release, WriterUnknown},
 		{"both absent", "", "", WriterUnknown},
 		{"garbage", release, "not-a-version", WriterUnknown},
+
+		// A binary built from a checkout with no tags, which is what
+		// actions/checkout produces by default. Go derives v0.0.0-… because
+		// it can see the commit but no tag; that is an absence of version
+		// information, not version zero, and ordering it declares the
+		// newest possible binary stale.
+		{"untagged build against a release", release, untaggedPseudo, WriterUnknown},
+		{"release against an untagged build", untaggedPseudo, release, WriterUnknown},
+		{"two untagged builds", untaggedPseudo, "v0.0.0-20270101000000-bbbbbbbbbbbb", WriterUnknown},
 	}
 
 	for _, tt := range tests {

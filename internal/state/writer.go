@@ -1,6 +1,29 @@
 package state
 
-import "golang.org/x/mod/semver"
+import (
+	"strings"
+
+	"golang.org/x/mod/semver"
+)
+
+// untagged reports whether v is a pseudo-version Go derived with no tag to
+// build on, which it renders as v0.0.0-<timestamp>-<revision>.
+//
+// Such a version carries no position: it says "this commit, and no tag was
+// visible", not "version zero". Ordering it would be actively wrong,
+// because v0.0.0-… sorts below every real tag. A CI job that checks out
+// without tags — the default for actions/checkout, which fetches depth 1
+// and no tags — builds a binary from the very newest source and has it
+// report v0.0.0-…, so comparing it would declare the freshest possible
+// binary stale and refuse to audit. That is the exact false accusation
+// spec 0019 exists to remove, so it is treated as unorderable instead.
+//
+// A binary with real version information is unaffected: a release reports
+// its tag, go install reports the module version it resolved, and
+// Taskfile.local.yml's stamp bases its pseudo-version on the newest tag.
+func untagged(v string) bool {
+	return strings.HasPrefix(v, "v0.0.0-")
+}
 
 // WriterOrder is how the running vibe binary's version relates to the one
 // recorded as having last written .vibe/state.yaml.
@@ -58,6 +81,9 @@ func (o WriterOrder) String() string {
 // callers are given no path to semver.Compare of their own.
 func CompareWriters(recorded, running string) WriterOrder {
 	if !semver.IsValid(recorded) || !semver.IsValid(running) {
+		return WriterUnknown
+	}
+	if untagged(recorded) || untagged(running) {
 		return WriterUnknown
 	}
 	switch semver.Compare(running, recorded) {

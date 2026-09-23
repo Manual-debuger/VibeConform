@@ -271,6 +271,7 @@ The resulting rule:
 |---|---|---|
 | absent (schema 1) | any | unorderable — no direction claim |
 | either invalid (`dev`) | — | unorderable — no direction claim |
+| either `v0.0.0-<ts>-<rev>` | — | unorderable — no tag was visible to the build |
 | both valid, running > recorded | | repository out of date; `sync` proceeds |
 | both valid, equal | | templates differ within one version — unorderable in the direction sense; report both, no claim |
 | both valid, running < recorded | | **stale binary**; `audit` exits 1, `sync` refuses without `--allow-downgrade` |
@@ -278,6 +279,18 @@ The resulting rule:
 "Unorderable" is never an error and never blocks: it reports both versions
 and falls through to increment 1's classification, which needs no
 provenance at all.
+
+The `v0.0.0-…` row was added after CI rejected this spec's own pull
+request. `actions/checkout` fetches depth 1 and no tags, so a binary built
+in CI from the newest possible source has Go derive `v0.0.0-<ts>-<rev>` —
+there is a commit to name but no tag to build on. That sorts below every
+real tag, so the guard declared the freshest binary stale and refused to
+audit: the same false accusation this spec exists to remove, reappearing
+one layer down. A `v0.0.0-` pseudo-version means *no version information
+was available*, not *version zero*, and must not be ordered. Binaries with
+real version information are unaffected — a release reports its tag,
+`go install` reports the module version it resolved, and the
+`Taskfile.local.yml` stamp bases its pseudo-version on the newest tag.
 
 ## A new production dependency: `golang.org/x/mod/semver`
 
