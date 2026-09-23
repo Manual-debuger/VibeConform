@@ -62,25 +62,25 @@ change.
 
 ### C2 — ADR 0010 and the semver dependency
 
-- [ ] `go get golang.org/x/mod`. Confirm it is the **only** module added to
+- [x] `go get golang.org/x/mod`. Confirm it is the **only** module added to
       `go.mod`'s `require` blocks, and that `go list -deps
       golang.org/x/mod/semver` resolves to stdlib only.
-- [ ] Write `docs/decisions/0010-semver-comparison-dependency.md` in house
+- [x] Write `docs/decisions/0010-semver-comparison-dependency.md` in house
       format: the need, the measured footprint, the rejected hand-rolled
       alternative and why (the backwards `-42-g…` result is the argument —
       quote it), and that ordering is only ever consulted when both
       operands are valid.
-- [ ] Add a small internal helper — location to settle in implementation,
+- [x] Add a small internal helper — location to settle in implementation,
       likely `internal/state` or a new leaf — exposing something like
       `CompareWriters(recorded, running string) (order int, ok bool)`,
       where `ok` is false unless **both** are `semver.IsValid`. Callers get
       no way to accidentally use `Compare`'s `-1`-for-invalid.
-- [ ] **Regression test for the trap, watched failing first**: assert that
+- [x] **Regression test for the trap, watched failing first**: assert that
       `dev` against a released version returns `ok == false`, and write it
       against a deliberately naive implementation that calls
       `semver.Compare` directly, to confirm the test catches it. A test
       that cannot fail is worse than none.
-- [ ] Table-test ordering: pseudo-version > the release it descends from;
+- [x] Table-test ordering: pseudo-version > the release it descends from;
       two pseudo-versions by commit time; equal versions; both-invalid.
 
 ### C3 — provenance in `.vibe/state.yaml`
