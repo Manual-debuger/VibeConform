@@ -3,6 +3,7 @@ package githubts
 import (
 	"bytes"
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -73,6 +74,42 @@ func TestDependabotIsNPMNotGoMod(t *testing.T) {
 	}
 	if bytes.Contains(dependabotConfig, []byte("gomod")) {
 		t.Error("dependabot.yml still names the Go ecosystem")
+	}
+}
+
+// TestWorkflowUsesPnpm guards spec 0020's CI half: every Node job installs
+// through pnpm with a frozen lockfile, sets pnpm up with a SHA-pinned action
+// before Node (setup-node's pnpm cache needs pnpm on PATH), and no longer
+// runs npm.
+func TestWorkflowUsesPnpm(t *testing.T) {
+	wf := string(ciWorkflow)
+	if strings.Contains(wf, "npm ci") {
+		t.Error("ci.yml still installs with npm ci")
+	}
+
+	nodeJobs := strings.Count(wf, "uses: actions/setup-node@")
+	if nodeJobs == 0 {
+		t.Fatal("ci.yml sets up Node in no job")
+	}
+	if got := strings.Count(wf, "pnpm install --frozen-lockfile"); got != nodeJobs {
+		t.Errorf("ci.yml has %d frozen pnpm installs for %d Node jobs, want one each", got, nodeJobs)
+	}
+	if got := strings.Count(wf, "cache: pnpm"); got != nodeJobs {
+		t.Errorf("ci.yml has %d setup-node steps with cache: pnpm, want %d", got, nodeJobs)
+	}
+	pin := regexp.MustCompile(`uses: pnpm/action-setup@[0-9a-f]{40} # v`)
+	if got := len(pin.FindAllString(wf, -1)); got != nodeJobs {
+		t.Errorf("ci.yml has %d SHA-pinned pnpm/action-setup steps, want %d", got, nodeJobs)
+	}
+
+	// Jobs are the two-space-indented keys under jobs:. Within each one,
+	// pnpm must be set up before Node.
+	for _, job := range regexp.MustCompile(`(?m)^  [a-z_]+:$`).Split(wf, -1)[1:] {
+		pnpm := strings.Index(job, "pnpm/action-setup@")
+		node := strings.Index(job, "actions/setup-node@")
+		if node >= 0 && (pnpm < 0 || pnpm > node) {
+			t.Errorf("a job sets up Node before pnpm:\n%s", job)
+		}
 	}
 }
 

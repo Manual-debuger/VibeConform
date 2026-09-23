@@ -2,6 +2,7 @@
   "name": "vibeconform-example-typescript",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "test": "echo \"no tests yet\""
   },

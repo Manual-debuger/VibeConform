@@ -73,11 +73,15 @@ func TestRequiredTools(t *testing.T) {
 
 	// The reason this is one entry and not four: eslint, prettier, and tsc
 	// are project-local, so requiring them on PATH would warn on every
-	// correctly configured repository.
-	for _, projectLocal := range []string{"eslint", "prettier", "tsc", "npm", "pnpm"} {
+	// correctly configured repository. The package manager is not
+	// project-local — pnpm is on PATH, and ts-repo-tooling declares it,
+	// because its commands are what run pnpm (spec 0020). It stays off this
+	// list because this module's lint configuration never invokes a package
+	// manager.
+	for _, notRequiredHere := range []string{"eslint", "prettier", "tsc", "npm", "pnpm"} {
 		for _, tool := range tools {
-			if tool.Name == projectLocal {
-				t.Errorf("%s is project-local; requiring it on PATH warns on healthy repositories", projectLocal)
+			if tool.Name == notRequiredHere {
+				t.Errorf("ts-tooling requires %s; only node runs its configuration", notRequiredHere)
 			}
 		}
 	}

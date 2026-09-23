@@ -7,16 +7,16 @@ pre-commit:
   commands:
     prettier:
       glob: "*.{js,jsx,ts,tsx,json,css,md}"
-      run: npx prettier --check {staged_files}
+      run: pnpm exec prettier --check {staged_files}
       fail_text: "Run 'task fmt' to format staged files."
     eslint:
       glob: "*.{js,jsx,ts,tsx}"
-      run: npx eslint {staged_files}
+      run: pnpm exec eslint {staged_files}
 
 pre-push:
   parallel: false
   commands:
     typecheck:
-      run: npx tsc --noEmit
+      run: pnpm exec tsc --noEmit
     test:
-      run: npm test
+      run: pnpm test
