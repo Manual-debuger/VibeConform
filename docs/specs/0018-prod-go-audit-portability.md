@@ -4,10 +4,16 @@ Status: accepted. Implementation plan: `docs/plans/0018-prod-go-audit-portabilit
 
 Closes issue #20.
 
-Decisions taken at approval, resolving the two open questions below:
-increment 4 proceeds as **(a)** (`build`/`run` removed in this spec), and
-the ADR in "ADR" is **approved** as
-`docs/decisions/0008-self-hosting-probe-in-shipped-templates.md`.
+Decisions taken at approval:
+
+- Increment 4 removes `build`/`run` from the shipped standard **and** adds
+  a project-owned `Taskfile.local.yml` include seam, to **all three**
+  repo-tooling templates. This replaces the narrower "delete them" option
+  the spec originally offered: the principle at stake is that VibeConform
+  manages a defined part of a repository, and build/run commands are
+  repository-specific even within one language.
+- Both ADRs are approved: 0008 (self-hosting probe) and 0009 (managed-file
+  local extension).
 
 ## Problem
 
@@ -230,64 +236,103 @@ regression, for the reason spec 0017 already documented: template and live
 file move together under `vibe sync`, so reintroducing the self-hosted form
 and re-syncing leaves all three repositories reporting conformant.
 
-### 4. `build` and `run` — decision required at approval
+### 4. Stop shipping `build`/`run`; add a project-owned extension seam
 
-Two options, to be settled before implementation begins:
+`build` and `run` hardcode this repository's layout and are removed from
+`internal/module/repotooling/templates/Taskfile.yml`. Nothing references
+either task: not `lefthook.yml`, not any CI job, not any test (none
+enumerate task names), and no document outside the template's own `desc`
+line.
 
-**(a) Fix in this spec.** Remove `build` and `run` from
-`internal/module/repotooling/templates/Taskfile.yml`. They are developer
-tasks for VibeConform's own CLI, not part of what `prod-go/v1` means, and
-neither TS nor PY ships an equivalent. Nothing references either task:
-`lefthook.yml` does not, no CI job does, no test enumerates task names, and
-no document mentions `task build` or `task run` outside the template's own
-`desc` line.
+The governing principle is broader than the leak, and is the reason this
+increment is not a plain deletion. **VibeConform manages a defined part of
+a repository, not all of it.** How a repository builds and runs its own
+artifacts is repository-specific even within one language — two Go
+repositories sharing `prod-go/v1` may build a CLI, a library, or nothing at
+all. A standard has no business asserting a `build` command. `docs/usage.md`
+already conceded exactly this when explaining why TS/PY omit the pair
+("those build the `vibe` binary this repository ships, which doesn't
+generalize to an adopting repository"); it recorded the conclusion as a
+TS/PY omission instead of a Go defect.
 
-Removing them does leave a gap. `go build -o bin/vibe ./cmd/vibe` is the
-first step of the managed-file cycle every template change must follow, and
-after this increment it appears in no template and no document —
-`AGENTS.md` says "rebuild" without naming the command, and the only written
-occurrences are in `docs/plans/0017`, a historical record. So (a) carries
-an obligation: write the command into `docs/usage.md`'s "VibeConform
-manages itself" section, which already describes the cycle in prose. That
-is a better home than a shipped task in any case, since the cycle is
-specific to maintaining VibeConform and meaningless to an adopter.
+But `Taskfile.yml` is `resource.Generated` — VibeConform owns the whole
+file — so removal alone leaves a repository with nowhere to put its own
+tasks, and this repository specifically loses `task build`. So removal is
+paired with a seam. All three repo-tooling templates gain, below
+`version: "3"`:
 
-**(b) Defer to a follow-up issue.** Keep this spec to exactly what #20
-names, and file the `build`/`run` leak separately.
+```yaml
+includes:
+  local:
+    taskfile: ./Taskfile.local.yml
+    optional: true
+    flatten: true
+```
 
-Recommendation: **(a)**. The cost of deferring is not zero. Every
-template change forces a regenerated `Taskfile.yml` in three repositories
-plus three `.vibe/state.yaml` updates, and — per issue #22 — pushes every
-existing adopter into a `drifted` report they did not cause. Doing both
-fixes in one sync cycle pays that cost once. The risk is also low and
-one-directional: removing a task that cannot work for any adopter cannot
-break an adopter, and for this repository it is a local convenience with a
-documented one-line equivalent.
+`Taskfile.local.yml` is project-owned: never generated, never written,
+never read by `vibe`. This repository creates one holding the `build` and
+`run` tasks it is losing, so `task build` and `task run -- --help` keep
+working here exactly as before, while `prod-go/v1` stops asserting them.
 
-Against (a): it widens a spec whose value is being small, and `task run`
-may be in a maintainer's muscle memory. If that matters, (b) is a
-legitimate call and this spec proceeds with increments 1–3 unchanged.
+Verified against the pinned Task version (v3.53.1, the `TASK_VERSION` in
+all three CI templates):
 
-## ADR
+- **Absent** — the adopter default — is a no-op. `task verify` exits 0 with
+  no warning. `optional: true` is what makes this true.
+- **Present** — `flatten: true` merges the tasks at top level, so they are
+  invoked bare (`task build`), appear in `task --list`, and receive
+  `{{.CLI_ARGS}}` normally, rather than being namespaced `local:build`.
+- **Colliding** — a local file defining a task the managed file already
+  defines is a hard error: Task exits **203** with
+  `Found multiple tasks (verify) included by "local"`. It does not
+  silently override.
 
-Increment 2 qualifies a constraint spec 0016 set — it permits a shipped
-template to name a path that only this repository populates, provided the
-reference is a probe with a generic fallback. Future template work will
-need to know where that line is, and a spec's design notes are not where
-someone looks for a standing rule.
+That third property is what makes the seam safe rather than a hole in the
+standard. A repository can *add* tasks; it cannot redefine `verify`,
+`audit`, `lint`, or `test`. Spec 0017's invariant survives unchanged, and
+so does the `conformance` gate: an adopter cannot neuter `audit` by
+shadowing it, because Task refuses to run at all.
 
-Recommendation: a short `docs/decisions/0008-self-hosting-in-shipped-
-templates.md` recording the rule and its limits (probe with fallback, yes;
-unconditional layout dependency, no). Slug and exact wording in the plan.
+All three templates, not Go only. TS and PY have the identical need — an
+adopter's build command does not generalize in any language — and giving
+the seam to Go alone would recreate, in a new shape, precisely the
+Go-vs-TS/PY asymmetry this increment exists to remove.
 
-Spec 0017's increment 3 decided *against* an ADR on the grounds that its
-content extended a paragraph already present in
-`docs/architecture/overview.md`. This is the opposite case: there is no
-existing paragraph, and the content is a constraint on future decisions
-rather than a description of current behaviour.
+Removal leaves one documentation gap. `go build -o bin/vibe ./cmd/vibe` is
+the first step of the managed-file cycle every template change must follow;
+once `task build` is gone it appears in no template and no document
+(`AGENTS.md` says "rebuild" without naming the command, and the only
+written occurrences are in `docs/plans/0017`, a historical record). This
+repository's new `Taskfile.local.yml` carries it as `task build`, and
+`docs/usage.md`'s "VibeConform manages itself" section states it
+explicitly, so the cycle is written down independently of a task
+definition.
 
-If the maintainer prefers this live in the spec alone, increment 2 is
-unaffected — the ADR records the decision, it does not make it.
+## ADRs
+
+Two, both short.
+
+**`docs/decisions/0008-self-hosting-probe-in-shipped-templates.md`** —
+increment 2 qualifies a constraint spec 0016 set, permitting a shipped
+template to name a path only this repository populates *when the reference
+is a probe with a generic fallback*. Future template work needs to know
+where that line is, and a spec's design notes are not where someone looks
+for a standing rule.
+
+**`docs/decisions/0009-managed-file-local-extension.md`** — increment 4
+establishes how a repository extends a wholly-generated resource without
+becoming non-conformant. This is an ownership-model decision and belongs
+beside `docs/decisions/0003-resource-ownership.md`, which defines
+`generated` as "VibeConform owns the whole file" and left no seam. It
+should record that the mechanism is Task's own `includes`, not a
+VibeConform feature — `vibe` gains no code, and the collision-is-an-error
+property that makes it safe is Task's behaviour, not something VibeConform
+enforces.
+
+Spec 0017's increment 3 decided *against* an ADR because its content
+extended a paragraph already present in `docs/architecture/overview.md`.
+Both of these are the opposite case: no existing paragraph, and content
+that constrains future decisions rather than describing current behaviour.
 
 ## Acceptance criteria
 
@@ -314,13 +359,34 @@ unaffected — the ADR records the decision, it does not make it.
   pass.
 - `actionlint` accepts the regenerated `.github/workflows/ci.yml`
   (`task workflows:lint`, already part of `task verify`).
+- All three repo-tooling templates declare the `Taskfile.local.yml`
+  include, identically. `build` and `run` are absent from all three.
+- This repository has a project-owned, committed `Taskfile.local.yml`, and
+  `task build` and `task run -- --help` behave exactly as they did before
+  the change. `vibe audit` does not list it — it is unmanaged, like
+  `AGENTS.md` and `.gitignore`.
+- `examples/typescript` and `examples/python` have **no**
+  `Taskfile.local.yml`, and `task verify` still passes in both with no
+  `vibe` on `PATH`. This is the adopter default path — the seam must cost
+  a repository that ignores it nothing at all.
+- A `Taskfile.local.yml` that redefines a managed task (`verify`) fails
+  loudly rather than overriding it. Confirmed by observation, since the
+  standard's integrity now rests on Task's collision behaviour rather than
+  on anything VibeConform checks.
+- The minimum Task version supporting `includes.flatten` is established and
+  recorded, and it is at or below the pinned `TASK_VERSION` (v3.53.1). A
+  contributor running an older Task locally must get a clear failure, not
+  silently namespaced tasks.
 - This repository's own `conformance` job passes on the pull request — the
   end-to-end proof of increment 2, since the job runs the new install step
   and audits the PR's own regenerated files against the PR's own templates.
 - `docs/usage.md` and `docs/architecture/overview.md` reflect that
-  `prod-go`'s `task audit` requires `vibe` on `PATH` like TS/PY, and that
-  the Go `conformance` job installs it. `README.md` updated only if a
-  statement in it became false.
+  `prod-go`'s `task audit` requires `vibe` on `PATH` like TS/PY, that the
+  Go `conformance` job installs it, and that all three standards expose one
+  identical target set extensible via `Taskfile.local.yml`. In particular
+  `docs/usage.md:452-455`'s "minus `build`/`run`" clause becomes false and
+  must be rewritten. `README.md` updated only if a statement in it became
+  false.
 
 ## Explicit non-goals
 
@@ -341,7 +407,15 @@ unaffected — the ADR records the decision, it does not make it.
   decided there, not here.
 - **No new standards, no module renames, no manifest format change.** The
   self-hosting distinction is made by the template at runtime, not by a new
-  `vibe.yaml` field.
+  `vibe.yaml` field, and the extension seam is Task's own `includes`, not a
+  VibeConform mechanism.
+- **No change to `vibe`'s code.** Every increment is template and
+  documentation content. `Taskfile.local.yml` is not a resource, not a
+  known filename, and not referenced anywhere in `internal/` — `vibe`
+  neither creates it, reads it, validates it, nor audits it.
+- **No ownership-model change.** `Taskfile.yml` stays `resource.Generated`;
+  ADR 0009 documents a seam *alongside* a wholly-generated file, not a move
+  to `structured-patch` or `managed-section` ownership for it.
 - **No release tag.** Merging this does not ship it. Adopters reach it when
   a tag is cut, and that release's notes must tell them to run `vibe sync`.
 
@@ -363,7 +437,15 @@ unaffected — the ADR records the decision, it does not make it.
 - `.github/workflows/examples.yml` needs no change. It is unmanaged, it
   already builds `vibe` from source into `$RUNNER_TEMP/bin` before running
   `task audit` against the TS/PY fixtures, and increment 1 does not alter
-  those fixtures' `audit` task.
+  those fixtures' `audit` task. It does, however, become the live proof of
+  increment 4's adopter default: it runs `task verify` in two repositories
+  that declare the include and have no `Taskfile.local.yml`.
+- Increment 4 widens the change beyond the Go template — the TS and PY
+  repo-tooling templates now change too, so `examples/typescript` and
+  `examples/python` both get a regenerated `Taskfile.yml`. Their
+  `.github/workflows/ci.yml` files should still show no diff: `githubts`
+  and `githubpy` are untouched, and only increment 2 alters a CI template.
+  A diff there means something resolved that should not have.
 - The examples' own generated `.github/workflows/ci.yml` files are inert —
   GitHub only runs workflows under the repository root's
   `.github/workflows/` — so they are drift alarms for the `githubts`/
