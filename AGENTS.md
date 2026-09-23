@@ -8,7 +8,9 @@ system.
 ## Before non-trivial work
 
 1. Read `docs/architecture/overview.md` and any relevant `docs/decisions/*`
-   before changing package boundaries or the module/resource model.
+   before changing package boundaries or the module/resource model, and
+   `docs/architecture/principles.md` before changing what a module
+   generates.
 2. For anything beyond a small fix, produce or update a plan under
    `docs/plans/` following: requirement → spec → implementation plan →
    repository impact analysis → implementation → tests → verification →
