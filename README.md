@@ -74,14 +74,21 @@ full design, including how it adapts ideas from
 
 ## Core philosophy
 
-> If a rule can be expressed mechanically, do not leave it only in an AI
-> prompt.
+1. **If a rule can be expressed mechanically, do not leave it only in an
+   AI prompt.** Procedural guidance belongs in agent instructions
+   (`AGENTS.md`, `CLAUDE.md`); mechanical rules belong in deterministic
+   tooling (`Taskfile.yml`, CI, linters, hooks, `vibe audit`).
+2. **Easy to use, cross-platform.** Windows and Linux are both
+   first-class; a repository that conforms on one conforms on the other.
+3. **Easy to install and easy to remove.** What VibeConform generates
+   stands on third-party tools (`task`, `lefthook`, `go`, `uv`, `ruff`,
+   `npm`/`pnpm`, …), not on `vibe`. Where `vibe` is unavoidable it is
+   confined, removable on its own, and has a fallback.
 
-Procedural guidance belongs in agent instructions (`AGENTS.md`,
-`CLAUDE.md`); mechanical rules belong in deterministic tooling (`Taskfile.yml`,
-CI, linters). This repository's own guardrails are meant to be the
-reference example for the production standard VibeConform will eventually
-enforce on other repositories — see the bootstrap rationale in
+See [`docs/architecture/principles.md`](docs/architecture/principles.md)
+for what each one means in practice. This repository's own guardrails are
+meant to be the reference example for the production standard VibeConform
+enforces on other repositories — see the bootstrap rationale in
 [`docs/plans/0001-bootstrap.md`](docs/plans/0001-bootstrap.md).
 
 ## Intended CLI

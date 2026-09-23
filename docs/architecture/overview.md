@@ -4,6 +4,11 @@ Status: living document. This is the authoritative technical description of
 VibeConform's design; Notion (or any other project tracker) holds roadmap
 and status, never competing architecture.
 
+The design principles every change is held to — mechanical rules over
+prompts, Windows/Linux parity, and generated output that stands on
+third-party tools rather than `vibe` — are in
+`docs/architecture/principles.md`.
+
 ## Conceptual model
 
 ```text
