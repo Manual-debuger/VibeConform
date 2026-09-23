@@ -286,7 +286,11 @@ Recorded as run, with observed output, not as intent.
       output. If it does *not* drift, the argument for the `if` branch is
       weaker than the spec states and the spec needs correcting before
       this lands.
-- [ ] This repository's own `conformance` job green on the pull request.
+- [x] This repository's own `conformance` job green on the pull request.
+      Confirmed on PR #24: the job took the `if` branch, built `vibe` from
+      the PR's working tree, and `task audit` reported
+      `11 resources checked, 0 drifted, 0 conflicts / conformant`. All 13
+      checks pass.
       This is the end-to-end proof of increment 2 and the only one that
       exercises the new install step for real — the job builds `vibe` from
       the PR's working tree and audits the PR's own regenerated files
@@ -378,10 +382,10 @@ Neither blocks this work; both were found while verifying it.
 
 ## Pull request
 
-- [ ] Branch `feature/prod-go-audit-portability` off `main`, merge commit
+- [x] Branch `feature/prod-go-audit-portability` off `main`, merge commit
       (not squash), opened as a PR — not merged. Merging is the
       maintainer's call.
-- [ ] Fill in `.github/pull_request_template.md` truthfully, including
+- [x] Fill in `.github/pull_request_template.md` truthfully, including
       `Closes #20` so the issue closes on merge. Tick the regression-test
       box only on the strength of the observed failure above; if any
       checkbox does not apply, write why instead of ticking it. (PR #21
