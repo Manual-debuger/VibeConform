@@ -60,8 +60,11 @@ system.
   no hook for shell commands, and Codex has no file-edit hook at all. A
   Taskfile that fails to load turns the guard off. A dangerous pattern
   quoted inside a command still matches.
-- Agents load hooks at session start. After changing the guard, verify it
-  in a **new** session.
+- The guard is live in this repository: a Bash command that merely
+  *contains* a denied pattern, even inside a heredoc, is refused. Write such
+  text with a file-editing tool rather than through the shell. After
+  changing the guard, check it with the canary in `docs/usage.md` rather
+  than assuming when the running agent picked the change up.
 
 These are guardrails, not a complete enforcement boundary — apply the same
 judgment regardless of which agent runtime is in use.

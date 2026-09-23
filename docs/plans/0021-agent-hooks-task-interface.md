@@ -187,9 +187,10 @@ the working directory.
       command names is also a resolved resource.
 - [x] Rebuild, then sync the root and both examples, then audit all three.
       The old `.sh` files still exist but are no longer referenced.
-- [ ] **(Pending: needs a new session.)** **This repository's own guard is now the new one.** Smoke-test it in
+- [x] **This repository's own guard is now the new one.** Smoke-test it in
       this session: ask the agent to run a denied command and confirm the
-      denial, and confirm an ordinary command still runs.
+      denial, and confirm an ordinary command still runs. (Done without
+      asking; see "Live smoke test" under Verification.)
 
 ### C4: end-to-end corpus in CI
 
@@ -292,9 +293,21 @@ Required before the pull request:
   directory and no new `.venv`. `examples/python` already had its `.venv`
   from `uv sync`, so a fresh uv project was not tested for `.venv`
   creation.
-- **Not yet done: the live smoke test.** Claude Code snapshots hooks when
-  a session starts, so the session that wrote this change still ran the
-  old bash hooks throughout. It needs a new session.
+- **Live smoke test: done by accident, in the implementing session.** I
+  had expected Claude Code to keep the hooks it loaded at session start.
+  It didn't: once C2 changed `.claude/settings.json`, the session ran the
+  new guard.
+  - **Deny path:** after the PR was opened, a Bash heredoc writing a
+    memory note merely *mentioned* `git branch -D` as example text. It was
+    refused with `[task -x hook:guard]: Blocked: git branch -D
+    force-deletes a branch…`, then `exit status 2` and Task's line. That
+    is a real deny through the real path, and also the documented "quoted
+    content still matches" limitation happening live.
+  - **Allow path:** every Bash, Write, and Edit call between C2 and the PR
+    (builds, syncs, test runs, commits, the push) went through the guard
+    and was allowed.
+  - `docs/usage.md` and `AGENTS.md` previously claimed agents load hooks
+    only at startup. They were corrected to say "check, don't assume".
 
 ### Deviations from the checklist
 
@@ -339,7 +352,10 @@ Required before the pull request:
   `VIBE_GUARD_E2E_DIR` is set but `task` is missing, so a CI leg cannot
   pass having run nothing.
 - **This repository's own `.sh` hooks were deleted last**, just before
-  pushing, so the session doing the work kept a working guard until then.
+  pushing. The reason was to keep the implementing session guarded if it
+  still ran the bash hooks it had loaded at startup. It turned out not to
+  be (see "Live smoke test"), so the ordering was harmless but
+  unnecessary.
 
 ## Pull request
 

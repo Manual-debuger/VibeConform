@@ -697,10 +697,13 @@ shouldn't:
   reset --hard…"` is denied.
 
 **Checking it fires.** No automated check can see an agent's own hook
-dispatch. The manual canary: start a new session and ask the agent to run
+dispatch. The manual canary: ask the agent to run
 `git branch -D some-branch-that-does-not-exist`. It should be refused with
-the guard's message. Agents read their hook configuration when a session
-starts, so an already-running session keeps whatever it loaded.
+the guard's message, prefixed `[task -x hook:guard]`. Don't assume when an
+agent picks up a changed configuration: Claude Code switched to the new
+guard mid-session while this was being built, while other agents or
+versions may only read it at startup. Run the canary in the session you
+actually mean to rely on.
 
 **Moving from the bash hooks.** Repositories synced before spec 0021 have
 `.claude/hooks/block-dangerous.sh` and `block-secret-files.sh`. After
