@@ -197,6 +197,11 @@ func TestGuardCorpusEndToEnd(t *testing.T) {
 	if dir == "" {
 		t.Skip("VIBE_GUARD_E2E_DIR not set")
 	}
-	task := requireTool(t, "task")
+	// Fail, don't skip: whoever set the variable asked for this check, and a
+	// skipped end-to-end run would report green having proved nothing.
+	task, err := exec.LookPath("task")
+	if err != nil {
+		t.Fatalf("VIBE_GUARD_E2E_DIR is set but task is not on PATH: %v", err)
+	}
 	runCorpus(t, dir, task, "-x", "hook:guard")
 }
