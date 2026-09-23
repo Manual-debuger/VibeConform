@@ -32,10 +32,10 @@ system.
 - Do not introduce a production dependency without recording why (an ADR
   under `docs/decisions/` for anything non-trivial).
 - Run `task verify` **and** `task audit` before declaring work done. Since
-  spec 0017 `verify` covers native language tooling only and no longer
+  spec 0017, `verify` covers native language tooling only and no longer
   depends on `audit`, so a hand-edited managed file passes `verify` locally
-  and fails the `conformance` job in CI. Do not claim success with failing
-  checks.
+  and fails only later, in CI's `conformance` job. Do not claim success
+  with failing checks.
 - Use repository intelligence (GitNexus, if configured) when a change has
   cross-file impact — it augments the compiler/linter/tests, it does not
   replace them.
