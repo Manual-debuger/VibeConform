@@ -1,8 +1,13 @@
 # Spec 0018: Make `prod-go/v1`'s `task audit` work outside this repository
 
-Status: draft, awaiting approval.
+Status: accepted. Implementation plan: `docs/plans/0018-prod-go-audit-portability.md`.
 
 Closes issue #20.
+
+Decisions taken at approval, resolving the two open questions below:
+increment 4 proceeds as **(a)** (`build`/`run` removed in this spec), and
+the ADR in "ADR" is **approved** as
+`docs/decisions/0008-self-hosting-probe-in-shipped-templates.md`.
 
 ## Problem
 
@@ -62,18 +67,34 @@ resource generated from that template. This repository's own `conformance`
 job *is* the shipped template's output; there is no hand-written copy to
 make differ.
 
-`@latest` is wrong here for two independent reasons:
+`@latest` is wrong here, and not for the reason it first appears. Two tags
+exist (`v0.1.0-alpha.1`, `v0.2.0-alpha.1`), both prereleases, so
+`go install …@latest` does resolve — Go falls back to the newest prerelease
+when no release version is tagged. The step would not fail; it would
+install a binary carrying *that tag's* embedded templates.
 
-1. **No release exists yet.** This repository must be able to audit itself
-   before its first tag. (Spec 0013 step B has gated on `task audit` since
-   M1; that gate cannot depend on an artifact that does not exist.)
-2. **Even after a release, it would be wrong.** A pull request that changes
-   an embedded template changes the generated file alongside it, in the
-   same commit, as `AGENTS.md` requires. An `@latest` binary carries the
-   *released* templates, so it would compare this PR's regenerated files
-   against the previous release's templates and report drift. Every
-   template-change PR would go red — including this one. `@latest` makes
-   the repository structurally unable to evolve its own standards.
+That is the problem. A pull request that changes an embedded template
+changes the generated file alongside it, in the same commit, as `AGENTS.md`
+requires. An `@latest` binary compares the PR's regenerated files against
+the previous tag's templates and reports drift. Every template-change PR
+would go red — including this one — and it would go red with a message
+saying a file the author *did* correctly regenerate has drifted. `@latest`
+makes the repository structurally unable to evolve its own standards, and
+does it confusingly rather than loudly.
+
+This is not hypothetical, and the condition is live today.
+`v0.2.0-alpha.1` was tagged 2026-09-21; spec 0017's changes to
+`repotooling/templates/Taskfile.yml` and `ci/github/templates/ci.yml`
+landed 2026-09-22 (`9c0cde6`, `618c671`). A `vibe` installed from `@latest`
+right now embeds pre-0017 templates and would report both of those files as
+drifted against current `main`. The implementation plan should confirm that
+empirically rather than assume it — it is the cheapest available proof that
+the `if` branch is load-bearing.
+
+Note that this is issue #22's ambiguity seen from the inside: the binary is
+out of date, the repository is not, and `audit` has no vocabulary for the
+difference. Spec 0018 routes around it for this one job; it does not fix
+it.
 
 So the install step must resolve `vibe` from the working tree when the
 repository is VibeConform itself, and from a release otherwise. Spec 0016
@@ -216,11 +237,20 @@ Two options, to be settled before implementation begins:
 **(a) Fix in this spec.** Remove `build` and `run` from
 `internal/module/repotooling/templates/Taskfile.yml`. They are developer
 tasks for VibeConform's own CLI, not part of what `prod-go/v1` means, and
-neither TS nor PY ships an equivalent. This repository keeps them by a
-means that does not ship to adopters — decided in the plan; the likely
-shape is that `AGENTS.md`'s managed-file cycle already spells out
-`go build -o bin/vibe ./cmd/vibe` directly, so the `build` task may simply
-have no replacement worth adding.
+neither TS nor PY ships an equivalent. Nothing references either task:
+`lefthook.yml` does not, no CI job does, no test enumerates task names, and
+no document mentions `task build` or `task run` outside the template's own
+`desc` line.
+
+Removing them does leave a gap. `go build -o bin/vibe ./cmd/vibe` is the
+first step of the managed-file cycle every template change must follow, and
+after this increment it appears in no template and no document —
+`AGENTS.md` says "rebuild" without naming the command, and the only written
+occurrences are in `docs/plans/0017`, a historical record. So (a) carries
+an obligation: write the command into `docs/usage.md`'s "VibeConform
+manages itself" section, which already describes the cycle in prose. That
+is a better home than a shipped task in any case, since the cycle is
+specific to maintaining VibeConform and meaningless to an adopter.
 
 **(b) Defer to a follow-up issue.** Keep this spec to exactly what #20
 names, and file the `build`/`run` leak separately.
