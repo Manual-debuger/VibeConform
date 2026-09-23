@@ -85,26 +85,26 @@ change.
 
 ### C3 — provenance in `.vibe/state.yaml`
 
-- [ ] `internal/state`: add top-level `Schema int`, `VibeVersion string`,
+- [x] `internal/state`: add top-level `Schema int`, `VibeVersion string`,
       `Standard string`. `Load` must accept a file with none of them
       (schema 1) without error and without inventing values.
-- [ ] `Save` writes `schema: 2`, the running binary's version, and
+- [x] `Save` writes `schema: 2`, the running binary's version, and
       `<standard>/<version>`. Field order in the marshalled file should be
       stable so state diffs stay readable.
-- [ ] Thread the running version into `Save`'s callers. `cmd/vibe/main.go`
+- [x] Thread the running version into `Save`'s callers. `cmd/vibe/main.go`
       already holds it (`var version = "dev"`, ldflags-overridden) and
       passes it to `cli.NewRootCmd`; it currently goes no further than
       cobra's `Version` field.
-- [ ] **No timestamp field.** Spec 0019 rules it out: it would churn the
+- [x] **No timestamp field.** Spec 0019 rules it out: it would churn the
       file on every sync.
-- [ ] `standard` is written but not yet read. Say so in the field's doc
+- [x] `standard` is written but not yet read. Say so in the field's doc
       comment, so nobody assumes a check exists.
-- [ ] Backward compatibility test: the three committed state files in this
+- [x] Backward compatibility test: the three committed state files in this
       repository (root, `examples/typescript`, `examples/python`) are
       schema 1 today. Assert `Load` handles a schema-1 fixture and that
       classification is unaffected — run the full audit against all three
       **before** any sync rewrites them.
-- [ ] Forward compatibility, verified by observation: a pre-0019 binary
+- [x] Forward compatibility, verified by observation: a pre-0019 binary
       reads a schema-2 file unaffected. Already confirmed once by hand
       against a `v0.2.0-alpha.1` binary; redo it against the real
       schema-2 output rather than a hand-edited approximation.
@@ -124,6 +124,21 @@ change.
       0019's increment 4. Add `--allow-downgrade` to override.
 - [ ] Regression test, watched failing: sync refuses when running < recorded,
       and proceeds with `--allow-downgrade`.
+- [ ] **Decide the churn question before stamping.** As of C3 every local
+      build reports `dev`, so `vibe_version` is identical for everyone and
+      the field never changes. Stamping makes it per-build: two
+      contributors, or one contributor across two commits, write different
+      pseudo-versions, so any `vibe sync` rewrites the line even when no
+      managed content changed — a committed diff with no substance, and a
+      merge-conflict surface on a file three roots share.
+
+      Mostly it coincides with commits that already rewrite `state.yaml`
+      (a template change moves the hashes anyway), so the marginal cost is
+      one line. The exception is a no-op sync. Options: accept it; write
+      `vibe_version` only when something else in the state actually
+      changed; or leave local builds unstamped and accept no local
+      ordering. Raise it rather than picking silently — it trades the
+      protection C4 exists for against diff noise in a committed file.
 - [ ] `Taskfile.local.yml` (this repository's own, project-owned): stamp
       `task build` with a Go-style pseudo-version,
       `vX.Y.(Z+1)-0.<commit-time-UTC>-<12-char-sha>`, derived from git.

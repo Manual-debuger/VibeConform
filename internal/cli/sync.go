@@ -74,8 +74,15 @@ func runSync(cmd *cobra.Command, repoRoot string) error {
 	warnMissingTools(cmd.ErrOrStderr(), p.Standard)
 
 	// Start from what was recorded before, so resources this run refuses to
-	// touch — conflicts — keep the entry they already had.
-	next := &state.State{Resources: make(map[string]state.ResourceState, len(p.Previous.Resources))}
+	// touch — conflicts — keep the entry they already had. Provenance is
+	// this run's, not the previous one's: the file records who wrote it
+	// last, and that is about to be us (spec 0019).
+	next := &state.State{
+		Schema:      state.SchemaVersion,
+		VibeVersion: runningVersion(cmd),
+		Standard:    fmt.Sprintf("%s/%s", p.Standard.Name, p.Standard.Version),
+		Resources:   make(map[string]state.ResourceState, len(p.Previous.Resources)),
+	}
 	maps.Copy(next.Resources, p.Previous.Resources)
 
 	var counts syncCounts

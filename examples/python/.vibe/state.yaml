@@ -1,3 +1,6 @@
+schema: 2
+vibe_version: dev
+standard: prod-py/v1
 resources:
     .claude/hooks/block-dangerous.sh:
         sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
