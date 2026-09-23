@@ -20,6 +20,12 @@ var taskfile []byte
 //go:embed templates/lefthook.yml
 var lefthookConfig []byte
 
+// guard is the PreToolUse guard the hook:guard task runs; see
+// docs/specs/0021-agent-hooks-task-interface.md.
+//
+//go:embed templates/guard.mjs
+var guard []byte
+
 type tsrepotoolingModule struct{}
 
 // New returns the ts-repo-tooling module.
@@ -58,6 +64,13 @@ func (tsrepotoolingModule) Resolve(_ context.Context, _ *module.Context) ([]reso
 			Path:      "lefthook.yml",
 			Ownership: resource.Generated,
 			Content:   lefthookConfig,
+		},
+		{
+			// Default mode: it is run through an interpreter, never executed
+			// directly, so no mode bit can switch it off.
+			Path:      ".claude/hooks/guard.mjs",
+			Ownership: resource.Generated,
+			Content:   guard,
 		},
 	}, nil
 }

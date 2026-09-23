@@ -1,0 +1,89 @@
+name: Hook guard
+
+# Runs the shared guard corpus (internal/module/agents/testdata) through the
+# exact command the generated agent configs contain, task -x hook:guard, in
+# a repository synced to each standard, on Linux and Windows. That checks
+# the Taskfile wiring, Task's -x exit-code passthrough, the "|| exit 2"
+# fail-closed suffix, and each runtime's guard in one step. See
+# docs/specs/0021-agent-hooks-task-interface.md.
+#
+# The in-process tests (go test ./...) already run the Go guard, and the
+# Node and Python guards where those runtimes happen to be installed. Only
+# this workflow proves each one through Task, and on Windows.
+#
+# Hand-authored rather than a job in ci.yml, for the same reason as
+# examples.yml: ci.yml is a resource shipped to every adopting repository,
+# and a job naming examples/ would leak this repository's layout into it.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hook-guard-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.0"
+  TASK_VERSION: "v3.53.1"
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  corpus:
+    name: ${{ matrix.standard }} (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        standard: [prod-go, prod-ts, prod-py]
+        include:
+          - standard: prod-go
+            dir: .
+          - standard: prod-ts
+            dir: examples/typescript
+          - standard: prod-py
+            dir: examples/python
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Go runs the test harness for every standard, and is prod-go's guard
+      # runtime.
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Setup Node
+        if: matrix.standard == 'prod-ts'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install uv
+        if: matrix.standard == 'prod-py'
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      - name: Run the corpus through task -x hook:guard
+        env:
+          VIBE_GUARD_E2E_DIR: ${{ github.workspace }}/${{ matrix.dir }}
+        run: go test -count=1 -run TestGuardCorpusEndToEnd -v ./internal/module/agents
+
+  gate:
+    name: Hook guard / gate
+    if: always()
+    needs: [corpus]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every corpus leg to have succeeded
+        run: |
+          if [ "${{ needs.corpus.result }}" != "success" ]; then
+            echo "A hook-guard corpus leg did not succeed: ${{ needs.corpus.result }}"
+            exit 1
+          fi

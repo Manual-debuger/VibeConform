@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "tools": {
+    "command": ["Bash", "PowerShell"],
+    "file_path": ["Edit", "MultiEdit", "Write"]
+  },
+  "rules": [
+    {
+      "id": "rm-rf",
+      "field": "command",
+      "pattern": "rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)(\\s|\"|$)",
+      "raw": "rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)(\\s|\"|$)",
+      "message": "Blocked: rm -rf (or equivalent) is a destructive operation. Ask the user to run it themselves if intended."
+    },
+    {
+      "id": "remove-item-recurse-force",
+      "field": "command",
+      "pattern": "Remove-Item[^\"\\\\]*-Recurse[^\"\\\\]*-Force|Remove-Item[^\"\\\\]*-Force[^\"\\\\]*-Recurse",
+      "raw": "Remove-Item[^\"\\\\]*-Recurse[^\"\\\\]*-Force|Remove-Item[^\"\\\\]*-Force[^\"\\\\]*-Recurse",
+      "message": "Blocked: Remove-Item -Recurse -Force is a destructive operation. Ask the user to run it themselves if intended."
+    },
+    {
+      "id": "git-reset-hard",
+      "field": "command",
+      "pattern": "git\\s+reset\\s+--hard",
+      "raw": "git\\s+reset\\s+--hard",
+      "message": "Blocked: git reset --hard discards uncommitted work. Ask the user to run it themselves if intended."
+    },
+    {
+      "id": "git-clean-fd",
+      "field": "command",
+      "pattern": "git\\s+clean\\s+-[a-zA-Z]*f[a-zA-Z]*d|git\\s+clean\\s+-[a-zA-Z]*d[a-zA-Z]*f",
+      "raw": "git\\s+clean\\s+-[a-zA-Z]*f[a-zA-Z]*d|git\\s+clean\\s+-[a-zA-Z]*d[a-zA-Z]*f",
+      "message": "Blocked: git clean -fd (or equivalent) permanently deletes untracked files. Ask the user to run it themselves if intended."
+    },
+    {
+      "id": "git-push-force",
+      "field": "command",
+      "pattern": "git\\s+push[^\"\\\\]*(--force(\\s|\"|$)|\\s-f(\\s|\"|$))",
+      "raw": "git\\s+push[^\"\\\\]*(--force(\\s|\"|$)|\\s-f(\\s|\"|$))",
+      "message": "Blocked: git push --force can overwrite remote history. Ask the user to run it themselves if intended."
+    },
+    {
+      "id": "git-branch-force-delete",
+      "field": "command",
+      "pattern": "git\\s+branch\\s+-D",
+      "raw": "git\\s+branch\\s+-D",
+      "message": "Blocked: git branch -D force-deletes a branch. Ask the user to run it themselves if intended."
+    },
+    {
+      "id": "secret-file",
+      "field": "file_path",
+      "pattern": "(\\.env(\\.[a-zA-Z]+)?|\\.pem|\\.key|id_rsa|id_ed25519|credentials\\.json|\\.npmrc|\\.netrc)$",
+      "raw": "\"file_path\"\\s*:\\s*\"[^\"]*(\\.env(\\.[a-zA-Z]+)?|\\.pem|\\.key|id_rsa|id_ed25519|credentials\\.json|\\.npmrc|\\.netrc)\"",
+      "message": "Blocked: this looks like a secret/credential file. Ask the user to edit it themselves."
+    }
+  ]
+}

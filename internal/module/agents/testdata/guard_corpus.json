@@ -1,0 +1,55 @@
+{
+  "comment": "Allow/deny cases every guard runtime must agree on (spec 0021). Each case has either payload (a JSON tool call) or stdin (raw text, for malformed input). want is deny (exit 2) or allow (exit 0). Not a resource: nothing ships this file.",
+  "cases": [
+    {"name": "rm -rf", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "rm -rf build"}}},
+    {"name": "rm -fr", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "rm -fr build"}}},
+    {"name": "rm -rf at end of command", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "cd /tmp && rm -rf"}}},
+    {"name": "rm -r without force", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "rm -r build"}}},
+    {"name": "rm a single file", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "rm notes.txt"}}},
+
+    {"name": "Remove-Item -Recurse -Force", "want": "deny", "payload": {"tool_name": "PowerShell", "tool_input": {"command": "Remove-Item -Recurse -Force build"}}},
+    {"name": "Remove-Item -Force -Recurse", "want": "deny", "payload": {"tool_name": "PowerShell", "tool_input": {"command": "Remove-Item build -Force -Recurse"}}},
+    {"name": "Remove-Item without both flags", "want": "allow", "payload": {"tool_name": "PowerShell", "tool_input": {"command": "Remove-Item build -Recurse"}}},
+    {"name": "Remove-Item with a quoted path before the flags (gap carried over from the bash hook)", "want": "allow", "payload": {"tool_name": "PowerShell", "tool_input": {"command": "Remove-Item \"build dir\" -Recurse -Force"}}},
+
+    {"name": "git reset --hard", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git reset --hard HEAD~1"}}},
+    {"name": "git reset --soft", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "git reset --soft HEAD~1"}}},
+
+    {"name": "git clean -fd", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git clean -fd"}}},
+    {"name": "git clean -dfx", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git clean -dfx"}}},
+    {"name": "git clean dry run", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "git clean -n"}}},
+
+    {"name": "git push --force", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git push --force origin main"}}},
+    {"name": "git push -f", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git push -f origin main"}}},
+    {"name": "git push --force-with-lease", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "git push --force-with-lease origin feature"}}},
+    {"name": "git push", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "git push -u origin feature"}}},
+
+    {"name": "git branch -D", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git branch -D old-feature"}}},
+    {"name": "git branch -d", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "git branch -d merged-feature"}}},
+
+    {"name": "Write .env", "want": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.env", "content": "X=1"}}},
+    {"name": "Edit .env.local", "want": "deny", "payload": {"tool_name": "Edit", "tool_input": {"file_path": "/repo/.env.local", "old_string": "a", "new_string": "b"}}},
+    {"name": "Write a .pem", "want": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "certs/server.pem", "content": ""}}},
+    {"name": "Edit id_rsa", "want": "deny", "payload": {"tool_name": "Edit", "tool_input": {"file_path": "/home/u/.ssh/id_rsa", "old_string": "a", "new_string": "b"}}},
+    {"name": "MultiEdit .npmrc", "want": "deny", "payload": {"tool_name": "MultiEdit", "tool_input": {"file_path": "/repo/.npmrc", "edits": []}}},
+    {"name": "Windows path to credentials.json", "want": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "C:\\repo\\credentials.json", "content": "{}"}}},
+    {"name": "Write a source file named env", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "src/env.ts", "content": "export {}"}}},
+    {"name": "Write .envrc", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/.envrc", "content": ""}}},
+
+    {"name": "a pattern in the description, not the command (the old hook denied this)", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "ls", "description": "list files before rm -rf cleanup"}}},
+    {"name": "a script body containing a pattern is not a command", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "scripts/clean.sh", "content": "rm -rf build"}}},
+    {"name": "a secret-file name inside a command is not a file edit", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "cat .env.example"}}},
+    {"name": "a pattern quoted inside a command argument still matches (known limitation)", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "gh issue create --body 'never run git reset --hard here'"}}},
+
+    {"name": "Codex-shaped payload", "want": "deny", "payload": {"session_id": "s", "turn_id": "t", "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "git reset --hard"}}},
+    {"name": "Codex-shaped benign payload", "want": "allow", "payload": {"session_id": "s", "turn_id": "t", "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "go test ./..."}}},
+
+    {"name": "malformed JSON falls back to raw matching", "want": "deny", "stdin": "{\"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"git reset --hard\""},
+    {"name": "malformed benign JSON", "want": "allow", "stdin": "{\"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"ls\""},
+    {"name": "empty stdin", "want": "allow", "stdin": ""},
+    {"name": "unknown tool falls back to raw matching", "want": "deny", "payload": {"tool_name": "SomeNewTool", "tool_input": {"cmd": "git branch -D x"}}},
+    {"name": "unknown benign tool", "want": "allow", "payload": {"tool_name": "SomeNewTool", "tool_input": {"cmd": "ls"}}},
+    {"name": "known tool missing its field falls back to raw matching", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"script": "git clean -fd"}}},
+    {"name": "raw fallback for a file edit uses the old JSON-shaped pattern", "want": "deny", "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"/repo/.env\", \"content\": "}
+  ]
+}

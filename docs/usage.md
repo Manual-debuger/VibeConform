@@ -438,8 +438,8 @@ its modules compose:
 |---|---|
 | `go-tooling` | `.golangci.yml` |
 | `github-ci` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
-| `repo-tooling` | `Taskfile.yml`, `lefthook.yml` |
-| `agent-config` | `.claude/settings.json`, `.claude/hooks/block-dangerous.sh`, `.claude/hooks/block-secret-files.sh`, `.codex/config.toml`, `.codex/hooks.json` |
+| `repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.go` |
+| `agent-config` | `.claude/settings.json`, `.claude/hooks/policy.json`, `.codex/config.toml`, `.codex/hooks.json` |
 
 Deliberately **not** managed, and left for you to maintain by hand:
 
@@ -468,14 +468,12 @@ The generated `conformance` job installs it for you. Nothing else in
 `task verify-ci` are native language tooling only, so a contributor with no
 `vibe` installed can still run the full verification gate.
 
-**File modes.** Resources are written `0644`, except the agent hook scripts,
-which are written `0755` — a hook script that is not executable does not run,
-and it fails open. Mode is applied on write but is **not** audited: a
-`chmod -x` on a hook script disables a guardrail and `vibe audit` will still
-report the repository conformant. See
-`docs/decisions/0006-resource-file-mode.md`. On Windows, Unix permission bits
-are not modeled at all, so the executable bit comes from your git checkout
-rather than from `sync`.
+**File modes.** Every resource is written `0644`. Mode is applied on write but
+is **not** audited (`docs/decisions/0006-resource-file-mode.md`). Since spec
+0021 nothing depends on it: the agent guards are run through an interpreter,
+never executed directly, so no `chmod` can switch them off. Until then, the
+bash hook scripts were written `0755`, and a `chmod -x` silently disabled
+them.
 
 Syncing `lefthook.yml` writes the configuration **and** registers the hooks,
 by running `lefthook install` at the end of a clean sync. Writing the config
@@ -507,14 +505,14 @@ vibe sync
 |---|---|---|
 | `prod-ts/v1` | `ts-tooling` | `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json` |
 | `prod-ts/v1` | `github-ci-ts` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
-| `prod-ts/v1` | `ts-repo-tooling` | `Taskfile.yml`, `lefthook.yml` |
+| `prod-ts/v1` | `ts-repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.mjs` |
 | `prod-py/v1` | `python-tooling` | `ruff.toml`, `pyrightconfig.json` |
 | `prod-py/v1` | `github-ci-py` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
-| `prod-py/v1` | `py-repo-tooling` | `Taskfile.yml`, `lefthook.yml` |
+| `prod-py/v1` | `py-repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.py` |
 
 Both also compose `agent-config`, which is language-neutral, so a TypeScript
 or Python repository gets the same `.claude/` and `.codex/` guardrails a Go
-one does.
+one does. Only the guard's language differs; see "The agent guard" below.
 
 **As of M3 these are complete standards, not lint/format/typecheck only.**
 Through M2 they composed neither `repo-tooling` nor `github-ci` — a
@@ -629,6 +627,90 @@ adopting repository): it runs `task verify` inside each example with no
 `vibe` on `PATH`, then builds `vibe` from source and runs `task audit` as a
 separate step, so a template change that breaks linting fails CI, not just
 a byte-comparison test.
+
+## The agent guard
+
+Every standard configures Claude Code and Codex to run a guard before each
+shell command and, for Claude Code, each file edit. It blocks a short list
+of destructive commands (`rm -rf`, `git reset --hard`, `git push --force`,
+and a few more) and edits to files that conventionally hold secrets
+(`.env`, `*.pem`, `id_rsa`, …). See
+`docs/specs/0021-agent-hooks-task-interface.md`.
+
+How it fits together:
+
+- `.claude/settings.json` and `.codex/hooks.json` run the same command in
+  every standard: `task -x hook:guard`.
+- `Taskfile.yml` defines `hook:guard`, which runs the guard on the
+  standard's own runtime: `go run .claude/hooks/guard.go` for `prod-go`,
+  `node .claude/hooks/guard.mjs` for `prod-ts`, and
+  `uv run --no-project python .claude/hooks/guard.py` for `prod-py`.
+- All three guards read the same rules from `.claude/hooks/policy.json`.
+
+Nothing on that path calls `vibe`, so the guard keeps working after you
+remove VibeConform.
+
+**`hook:guard` is reserved.** Like `verify` and `audit`, it is a managed
+task, and `Taskfile.local.yml` cannot redefine it. It has no `desc`, so
+`task --list` doesn't show it: agents call it, people don't. To try it by
+hand:
+
+```console
+$ echo '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | task -x hook:guard; echo $?
+0
+```
+
+**It fails closed once it starts.** A denied command exits `2` with the
+reason on stderr. Every `hook:guard` command ends in `|| exit 2`, so any
+other failure after Task starts the task is a deny too: an unreadable
+`policy.json`, a Go compile error, a missing `node` or `uv`. (`go run`
+reports its program's exit `2` as `1`, which is how this was found.) When
+every tool call is suddenly blocked with a `guard:` message, fix what it
+names; the agent can't do it for you until you do.
+
+**Known limitations**, where the guard does *not* run, or allows what it
+shouldn't:
+
+- **A Taskfile that won't load turns the guard off.** A YAML error in
+  `Taskfile.yml` or `Taskfile.local.yml`, or a task name in
+  `Taskfile.local.yml` that collides with a managed one, stops Task before
+  the guard runs. Both agents treat any exit other than `2` as allow.
+  `task verify` breaks at the same moment, so it rarely goes unnoticed for
+  long.
+- **The nearest Taskfile wins.** Task searches upward from the agent's
+  current directory. In a subdirectory with its own `Taskfile.yml`, that
+  file's `hook:guard` runs. If it has none, Task exits `200` and the
+  command is allowed.
+- **Codex on Windows** fires no `PreToolUse` hook for shell commands
+  ([openai/codex#24453](https://github.com/openai/codex/issues/24453)), so
+  Codex has no command guard there.
+- **Codex has no file-edit hook**, so there is no Codex secret-file guard on
+  any platform.
+- **Claude Code on Windows without Git Bash** runs hooks through
+  PowerShell. If that shell cannot start, the hook never runs and the
+  command is allowed
+  ([anthropics/claude-code#90077](https://github.com/anthropics/claude-code/issues/90077)).
+- **Matching is textual.** The guard matches the parsed command, not the
+  whole tool call, so a dangerous pattern in a Bash call's `description`
+  no longer blocks it. But a pattern *inside* the command still matches,
+  even inside a quoted argument or a heredoc: `gh issue create --body "…git
+  reset --hard…"` is denied.
+
+**Checking it fires.** No automated check can see an agent's own hook
+dispatch. The manual canary: ask the agent to run
+`git branch -D some-branch-that-does-not-exist`. It should be refused with
+the guard's message, prefixed `[task -x hook:guard]`. Don't assume when an
+agent picks up a changed configuration: Claude Code switched to the new
+guard mid-session while this was being built, while other agents or
+versions may only read it at startup. Run the canary in the session you
+actually mean to rely on.
+
+**Moving from the bash hooks.** Repositories synced before spec 0021 have
+`.claude/hooks/block-dangerous.sh` and `block-secret-files.sh`. After
+upgrading `vibe`, `sync` writes the new files, but, as for any resource a
+standard stops resolving, it does **not** delete the old ones. Nothing
+references them any more, so they do nothing; delete them yourself, and
+restart any running agent session.
 
 ## Adding your own tasks: `Taskfile.local.yml`
 

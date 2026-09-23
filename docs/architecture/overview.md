@@ -184,7 +184,7 @@ internal/
     gotooling/              # .golangci.yml
     ci/github/              # GitHub Actions workflow, dependabot, PR template
     repotooling/            # Taskfile.yml, lefthook.yml
-    agents/                 # Claude/Codex config + hook scripts
+    agents/                 # Claude/Codex config + guard policy (policy.json)
     tstooling/              # eslint, prettier, tsconfig base
     pythontooling/          # ruff, pyright
   resource/                 # resource + ownership + file mode model
