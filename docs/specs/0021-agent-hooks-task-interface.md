@@ -7,7 +7,7 @@ Status: draft, awaiting approval.
 `agent-config` ships two bash scripts, `.claude/hooks/block-dangerous.sh`
 and `.claude/hooks/block-secret-files.sh`. Claude Code runs them as
 `PreToolUse` hooks, and Codex runs `block-dangerous.sh` through
-`.codex/hooks.json`. Five things are wrong with that:
+`.codex/hooks.json`. Six things are wrong with that:
 
 1. **They need bash and `grep`.** Neither is part of a stock Windows
    install, and principle 2 (`docs/architecture/principles.md`) treats
@@ -29,6 +29,22 @@ and `.claude/hooks/block-secret-files.sh`. Claude Code runs them as
 5. **The launch command depends on the shell.** `.claude/settings.json`
    uses `${CLAUDE_PROJECT_DIR}/…`, which only bash expands. Codex uses a
    path relative to a working directory it doesn't guarantee.
+6. **The Codex hook config doesn't match Codex's schema.** Codex's
+   documented `hooks.json` nests handlers under a matcher:
+
+   ```json
+   {"hooks": {"PreToolUse": [{"matcher": "…", "hooks": [{"type": "command", "command": "…"}]}]}}
+   ```
+
+   `agent-config` ships a flat entry instead, with no `matcher`, no inner
+   `hooks` array, and no `type`:
+
+   ```json
+   {"hooks": {"PreToolUse": [{"command": "…", "commandWindows": "…"}]}}
+   ```
+
+   Codex may never have run the guard at all. That is a separate bug from
+   the other five, and this spec fixes it because it rewrites the same file.
 
 ## Design in one paragraph
 
@@ -50,7 +66,7 @@ three standards. Its resources:
 | Resource | Change |
 |---|---|
 | `.claude/settings.json` | Both matchers (`Bash\|PowerShell` and `Write\|Edit`) run `task -x hook:guard` |
-| `.codex/hooks.json` | `command` and `commandWindows` are both `task -x hook:guard` |
+| `.codex/hooks.json` | Rewritten to Codex's documented schema (problem 6): one `PreToolUse` entry with `matcher: "Bash"` and a `hooks` array holding `{"type": "command", "command": "task -x hook:guard"}`. No `commandWindows`, since the command is identical on every OS. |
 | `.codex/config.toml` | unchanged |
 | `.claude/hooks/policy.json` | **new**: the shared policy (see 3) |
 | `.claude/hooks/block-dangerous.sh`, `block-secret-files.sh` | **dropped** from the module |
@@ -136,6 +152,10 @@ in `internal/standard` asserts that every registered standard composing
 `agent-config` also resolves a `Taskfile.yml` defining `hook:guard`, plus
 the guard file that task runs. A standard that forgot one fails the build,
 not an agent session.
+
+The Codex fix gets the same treatment. A test decodes `.codex/hooks.json`
+into the documented nested shape and fails on the flat one, so a
+regression to it cannot ship green.
 
 ### 6. A shared test corpus, run through the real command
 
