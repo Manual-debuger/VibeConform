@@ -54,8 +54,10 @@ func diffLine(d reconcile.Decision) string {
 		return "create (no file on disk)"
 	case reconcile.NoChange:
 		return "no change"
-	case reconcile.Overwrite:
-		return "would update (drift from last applied state)"
+	case reconcile.LocalDrift:
+		return "would update (file edited since last applied state)"
+	case reconcile.OutOfDate:
+		return "would update (standard moved since last applied state)"
 	case reconcile.Conflict:
 		return "conflict: manual changes detected, review before sync"
 	default:

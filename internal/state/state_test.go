@@ -3,6 +3,7 @@ package state
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -135,5 +136,93 @@ func TestSaveEmptyStateLoadsAsEmptyMap(t *testing.T) {
 	}
 	if len(got.Resources) != 0 {
 		t.Errorf("Load: got %v, want empty", got.Resources)
+	}
+}
+
+// TestLoadSchema1FileLeavesProvenanceZero pins backward compatibility with
+// every .vibe/state.yaml written before spec 0019 — which is to say, every
+// one that exists today, in this repository and in every adopter's.
+//
+// The fields must come back zero rather than defaulted. An empty
+// VibeVersion means "nobody recorded this", and CompareWriters is built to
+// refuse to order it; a plausible-looking default here would travel all the
+// way to a confident verdict about a repository nothing is known about.
+func TestLoadSchema1FileLeavesProvenanceZero(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".vibe"), 0o750); err != nil {
+		t.Fatalf("seeding .vibe dir: %v", err)
+	}
+	// Exactly the shape spec 0006 wrote: a bare resources map.
+	schema1 := "resources:\n    .golangci.yml:\n        sha256: abc123\n"
+	path := filepath.Join(dir, ".vibe", "state.yaml")
+	if err := os.WriteFile(path, []byte(schema1), 0o600); err != nil {
+		t.Fatalf("seeding state: %v", err)
+	}
+
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load of a schema-1 file must not fail: %v", err)
+	}
+	if s.Schema != 0 {
+		t.Errorf("Schema = %d, want 0 (absent means pre-0019, not version 0)", s.Schema)
+	}
+	if s.VibeVersion != "" {
+		t.Errorf("VibeVersion = %q, want empty", s.VibeVersion)
+	}
+	if s.Standard != "" {
+		t.Errorf("Standard = %q, want empty", s.Standard)
+	}
+	if got := s.Resources[".golangci.yml"].SHA256; got != "abc123" {
+		t.Errorf("resource hash = %q, want abc123 — the resources map must "+
+			"still parse exactly as before", got)
+	}
+
+	// The whole point: an unknown writer is unorderable, so no direction is
+	// claimed about a repository whose state predates provenance.
+	if got := CompareWriters(s.VibeVersion, "v0.3.0"); got != WriterUnknown {
+		t.Errorf("CompareWriters(%q, v0.3.0) = %v, want Unknown", s.VibeVersion, got)
+	}
+}
+
+// TestSaveRecordsProvenance is the counterpart: a file this version writes
+// carries the schema and the writer, so the next run can tell whether it is
+// older or newer than whatever produced the repository.
+func TestSaveRecordsProvenance(t *testing.T) {
+	dir := t.TempDir()
+	in := &State{
+		Schema:      SchemaVersion,
+		VibeVersion: "v0.3.0",
+		Standard:    "prod-go/v1",
+		Resources:   map[string]ResourceState{".golangci.yml": {SHA256: "abc123"}},
+	}
+	if err := Save(dir, in); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	out, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if out.Schema != SchemaVersion {
+		t.Errorf("Schema = %d, want %d", out.Schema, SchemaVersion)
+	}
+	if out.VibeVersion != "v0.3.0" {
+		t.Errorf("VibeVersion = %q, want v0.3.0", out.VibeVersion)
+	}
+	if out.Standard != "prod-go/v1" {
+		t.Errorf("Standard = %q, want prod-go/v1", out.Standard)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(dir, ".vibe", "state.yaml"))
+	if err != nil {
+		t.Fatalf("reading state: %v", err)
+	}
+	// No timestamp: spec 0019 rules one out because it would rewrite the
+	// file on every sync and churn its diff for no reconciliation benefit.
+	for _, banned := range []string{"synced_at", "timestamp", "written_at"} {
+		if strings.Contains(string(raw), banned) {
+			t.Errorf("state file contains %q; state must stay content-derived "+
+				"and deterministic:\n%s", banned, raw)
+		}
 	}
 }

@@ -36,16 +36,19 @@ var installGitHooks = runLefthookInstall
 
 func newSyncCmd() *cobra.Command {
 	var repoRoot string
+	var allowDowngrade bool
 
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Reconcile the repository against the desired standard",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSync(cmd, repoRoot)
+			return runSync(cmd, repoRoot, allowDowngrade)
 		},
 	}
 	cmd.Flags().StringVar(&repoRoot, "repo-root", ".", "repository root to sync")
+	cmd.Flags().BoolVar(&allowDowngrade, "allow-downgrade", false,
+		"write managed files even though this vibe is older than the one that last synced this repository")
 
 	return cmd
 }
@@ -58,7 +61,7 @@ type syncCounts struct {
 	conflicts int
 }
 
-func runSync(cmd *cobra.Command, repoRoot string) error {
+func runSync(cmd *cobra.Command, repoRoot string, allowDowngrade bool) error {
 	p, err := buildPlan(repoRoot)
 	if err != nil {
 		return fmt.Errorf("sync: %w", err)
@@ -69,13 +72,33 @@ func runSync(cmd *cobra.Command, repoRoot string) error {
 		return fmt.Errorf("sync: %w", err)
 	}
 
+	// Refuse before writing anything, not after. An older binary's
+	// templates predate this repository's state, so syncing would revert
+	// managed files and then record the reverted content as correct —
+	// verified to undo entire specs in one command (spec 0019). Reverting
+	// on purpose is legitimate, so there is an opt-in, but it has to be
+	// typed rather than stumbled into.
+	recorded, running := p.Previous.VibeVersion, runningVersion(cmd)
+	if state.CompareWriters(recorded, running) == state.WriterRunningOlder && !allowDowngrade {
+		return fmt.Errorf("sync: %w: syncing would revert managed files to older "+
+			"templates; pass --allow-downgrade if that is what you mean",
+			&staleBinaryError{recorded: recorded, running: running})
+	}
+
 	// Before anything is written: if this machine cannot run what the
 	// standard configures, say so above the report rather than below it.
 	warnMissingTools(cmd.ErrOrStderr(), p.Standard)
 
 	// Start from what was recorded before, so resources this run refuses to
-	// touch — conflicts — keep the entry they already had.
-	next := &state.State{Resources: make(map[string]state.ResourceState, len(p.Previous.Resources))}
+	// touch — conflicts — keep the entry they already had. Provenance is
+	// this run's, not the previous one's: the file records who wrote it
+	// last, and that is about to be us (spec 0019).
+	next := &state.State{
+		Schema:      state.SchemaVersion,
+		VibeVersion: runningVersion(cmd),
+		Standard:    fmt.Sprintf("%s/%s", p.Standard.Name, p.Standard.Version),
+		Resources:   make(map[string]state.ResourceState, len(p.Previous.Resources)),
+	}
 	maps.Copy(next.Resources, p.Previous.Resources)
 
 	var counts syncCounts
@@ -240,7 +263,9 @@ func applyResource(repoRoot string, rp resourcePlan, next *state.State, counts *
 
 	key := stateKey(rp.Resource.Path)
 	switch rp.Decision {
-	case reconcile.Create, reconcile.Overwrite:
+	// LocalDrift and OutOfDate both write the target; they differ only in
+	// what audit says about how the repository got here (spec 0019).
+	case reconcile.Create, reconcile.LocalDrift, reconcile.OutOfDate:
 		if err := writeResource(repoRoot, rp.Resource); err != nil {
 			return "", err
 		}
