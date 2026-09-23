@@ -1,5 +1,5 @@
 schema: 2
-vibe_version: dev
+vibe_version: v0.2.0-alpha.1.0.20260923120009-f2c001260e4b+dirty
 standard: prod-ts/v1
 resources:
     .claude/hooks/block-dangerous.sh:

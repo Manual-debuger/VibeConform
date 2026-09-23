@@ -36,16 +36,19 @@ var installGitHooks = runLefthookInstall
 
 func newSyncCmd() *cobra.Command {
 	var repoRoot string
+	var allowDowngrade bool
 
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Reconcile the repository against the desired standard",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSync(cmd, repoRoot)
+			return runSync(cmd, repoRoot, allowDowngrade)
 		},
 	}
 	cmd.Flags().StringVar(&repoRoot, "repo-root", ".", "repository root to sync")
+	cmd.Flags().BoolVar(&allowDowngrade, "allow-downgrade", false,
+		"write managed files even though this vibe is older than the one that last synced this repository")
 
 	return cmd
 }
@@ -58,7 +61,7 @@ type syncCounts struct {
 	conflicts int
 }
 
-func runSync(cmd *cobra.Command, repoRoot string) error {
+func runSync(cmd *cobra.Command, repoRoot string, allowDowngrade bool) error {
 	p, err := buildPlan(repoRoot)
 	if err != nil {
 		return fmt.Errorf("sync: %w", err)
@@ -67,6 +70,19 @@ func runSync(cmd *cobra.Command, repoRoot string) error {
 	out := cmd.OutOrStdout()
 	if _, err := fmt.Fprintf(out, "standard: %s/%s\n", p.Standard.Name, p.Standard.Version); err != nil {
 		return fmt.Errorf("sync: %w", err)
+	}
+
+	// Refuse before writing anything, not after. An older binary's
+	// templates predate this repository's state, so syncing would revert
+	// managed files and then record the reverted content as correct —
+	// verified to undo entire specs in one command (spec 0019). Reverting
+	// on purpose is legitimate, so there is an opt-in, but it has to be
+	// typed rather than stumbled into.
+	recorded, running := p.Previous.VibeVersion, runningVersion(cmd)
+	if state.CompareWriters(recorded, running) == state.WriterRunningOlder && !allowDowngrade {
+		return fmt.Errorf("sync: %w: syncing would revert managed files to older "+
+			"templates; pass --allow-downgrade if that is what you mean",
+			&staleBinaryError{recorded: recorded, running: running})
 	}
 
 	// Before anything is written: if this machine cannot run what the

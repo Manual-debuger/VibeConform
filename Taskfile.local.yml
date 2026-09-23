@@ -12,9 +12,32 @@ version: "3"
 
 tasks:
   build:
-    desc: Build the vibe binary into ./bin.
+    desc: Build the vibe binary into ./bin, stamped so its version orders.
     cmds:
-      - go build -o bin/vibe ./cmd/vibe
+      # An unstamped build reports "dev", which is not valid semver, so
+      # state.CompareWriters cannot order it and spec 0019's downgrade guard
+      # stays dormant on exactly the binary a contributor uses. Stamping a
+      # Go-style pseudo-version fixes that: it sorts above the release it
+      # descends from, so running a stale ~/go/bin release against state
+      # this build wrote is recognised as a downgrade and refused.
+      #
+      # Raw "git describe" output would NOT work here. Semver compares
+      # prerelease identifiers lexically, so v0.2.0-alpha.1-42-gAAA sorts
+      # BELOW -9-gBBB — see docs/decisions/0010-semver-comparison-dependency.md.
+      - |
+        sha=$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+        ts=$(git show -s --format=%cd --date=format-local:%Y%m%d%H%M%S HEAD 2>/dev/null || echo 00000000000000)
+        tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        case "$tag" in
+          "")  base="v0.0.0-" ;;
+          *-*) base="$tag.0." ;;
+          *)   n=${tag#v}; patch=${n##*.}; head=${n%.*}
+               base="v$head.$((patch+1))-0." ;;
+        esac
+        version="$base$ts-$sha"
+        git diff --quiet HEAD 2>/dev/null || version="$version+dirty"
+        go build -ldflags "-X main.version=$version" -o bin/vibe ./cmd/vibe
+        echo "built bin/vibe $version"
 
   run:
     desc: 'Run the CLI, e.g. task run -- --help.'

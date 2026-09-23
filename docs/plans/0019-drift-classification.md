@@ -111,26 +111,35 @@ change.
 
 ### C4 — exit codes, guards, and the build stamp
 
-- [ ] `internal/cli/exit.go`: exit `3` when the only findings are
+- [x] `internal/cli/exit.go`: exit `3` when the only findings are
       `OutOfDate` (no `LocalDrift`, no `Conflict`). Mixed findings keep
       exit `2` — the more serious wins.
-- [ ] `audit`: when the running binary is orderably **older** than the
+- [x] `audit`: when the running binary is orderably **older** than the
       recorded writer, do not report repository non-conformance. Exit `1`
       (could-not-answer) with a message naming both versions.
-- [ ] `audit`: on any `OutOfDate` resource where provenance exists, print
+- [x] `audit`: on any `OutOfDate` resource where provenance exists, print
       the recorded and running versions, whether or not they order. Making
       the mismatch visible is the part that works in every case.
-- [ ] `sync`: refuse a backwards write, with the message drafted in spec
+- [x] `sync`: refuse a backwards write, with the message drafted in spec
       0019's increment 4. Add `--allow-downgrade` to override.
-- [ ] Regression test, watched failing: sync refuses when running < recorded,
+- [x] Regression test, watched failing: sync refuses when running < recorded,
       and proceeds with `--allow-downgrade`.
-- [ ] **Decide the churn question before stamping.** As of C3 every local
+- [x] **Decide the churn question before stamping.** As of C3 every local
       build reports `dev`, so `vibe_version` is identical for everyone and
       the field never changes. Stamping makes it per-build: two
       contributors, or one contributor across two commits, write different
       pseudo-versions, so any `vibe sync` rewrites the line even when no
       managed content changed — a committed diff with no substance, and a
       merge-conflict surface on a file three roots share.
+
+      **Decided: accept it.** The churn is provenance doing its job, and it
+      mostly rides along with commits that already rewrite `state.yaml`.
+      Observed consequence worth knowing: a binary built mid-change stamps
+      `+dirty`, so the committed provenance usually carries it. That is
+      accurate rather than untidy, and semver ignores build metadata in
+      precedence, so it does not affect ordering. Fallback if the noise
+      proves annoying is to write `vibe_version` only when something else
+      in the state changed.
 
       Mostly it coincides with commits that already rewrite `state.yaml`
       (a template change moves the hashes anyway), so the marginal cost is
@@ -139,12 +148,12 @@ change.
       changed; or leave local builds unstamped and accept no local
       ordering. Raise it rather than picking silently — it trades the
       protection C4 exists for against diff noise in a committed file.
-- [ ] `Taskfile.local.yml` (this repository's own, project-owned): stamp
+- [x] `Taskfile.local.yml` (this repository's own, project-owned): stamp
       `task build` with a Go-style pseudo-version,
       `vX.Y.(Z+1)-0.<commit-time-UTC>-<12-char-sha>`, derived from git.
       Handle the no-tag and dirty-tree cases so the task never fails on a
       fresh clone.
-- [ ] Verify by building: a stamped local binary compares **greater** than
+- [x] Verify by building: a stamped local binary compares **greater** than
       the release it descends from, so the motivating case — a stale
       `~/go/bin` release run against state written by a local build — is
       detected. Check the format by running the comparison, not by reading

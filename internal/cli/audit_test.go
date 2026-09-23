@@ -87,9 +87,12 @@ func TestAuditCmdReportsOutOfDateWhenStandardMoved(t *testing.T) {
 	}
 	recordState(t, dir, ".golangci.yml", sha256Hex(stale))
 
+	// Exit 3, not 2: being behind the standard is non-zero — the repository
+	// is in fact out of date — but distinct, so a conformance job can decide
+	// for itself whether that is a failure (spec 0019).
 	out, err := runAuditIn(t, dir)
-	if code := ExitCode(err); code != 2 {
-		t.Fatalf("ExitCode = %d, want 2 (err %v)\n%s", code, err, out)
+	if code := ExitCode(err); code != 3 {
+		t.Fatalf("ExitCode = %d, want 3 (err %v)\n%s", code, err, out)
 	}
 
 	assertAuditOutput(t, out,
