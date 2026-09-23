@@ -27,27 +27,27 @@ tasks:
   fmt:
     desc: Apply Prettier formatting.
     cmds:
-      - npx prettier --write "**/*.{js,jsx,ts,tsx,json,css,md}"
+      - pnpm exec prettier --write "**/*.{js,jsx,ts,tsx,json,css,md}"
 
   fmt:check:
     desc: Fail if any file is not Prettier-formatted (CI-safe, no writes).
     cmds:
-      - npx prettier --check "**/*.{js,jsx,ts,tsx,json,css,md}"
+      - pnpm exec prettier --check "**/*.{js,jsx,ts,tsx,json,css,md}"
 
   lint:
     desc: Run eslint.
     cmds:
-      - npx eslint .
+      - pnpm exec eslint .
 
   typecheck:
     desc: Type-check with tsc, emitting nothing.
     cmds:
-      - npx tsc --noEmit
+      - pnpm exec tsc --noEmit
 
   test:
     desc: Run the test suite.
     cmds:
-      - npm test
+      - pnpm test
 
   audit:
     desc: Check this repository against the standard its vibe.yaml declares.

@@ -2,7 +2,8 @@
 // points: the Taskfile that CI, git hooks, and docs all call rather than
 // duplicating command lists, and the lefthook configuration that runs fast
 // checks before a commit. Mirrors internal/module/repotooling's shape for
-// prod-go/v1. See docs/specs/0016-ts-py-tooling-parity.md.
+// prod-go/v1. See docs/specs/0016-ts-py-tooling-parity.md. Every command
+// runs through pnpm; see docs/specs/0020-prod-ts-pnpm.md.
 package tsrepotooling
 
 import (
@@ -31,13 +32,16 @@ func (tsrepotoolingModule) Name() string {
 }
 
 // RequiredTools reports the binaries this module's two resources are
-// instructions for. Both are normally installed globally rather than per
-// project, so their absence from PATH is a real finding rather than a
-// false alarm about how the repository manages its dependencies.
+// instructions for. All three are normally installed globally rather than
+// per project, so their absence from PATH is a real finding rather than a
+// false alarm about how the repository manages its dependencies. pnpm is
+// the one that runs the project-local tools (spec 0020); eslint, prettier,
+// and tsc themselves stay undeclared, as ts-tooling explains.
 func (tsrepotoolingModule) RequiredTools() []module.Tool {
 	return []module.Tool{
 		{Name: "task", Why: "every verification entry point Taskfile.yml defines"},
 		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers"},
+		{Name: "pnpm", Why: "every Taskfile and lefthook command, which run through pnpm exec"},
 	}
 }
 

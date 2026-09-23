@@ -1,9 +1,10 @@
 // Package githubts provides the TypeScript variant of the GitHub CI
-// module: a workflow on actions/setup-node instead of actions/setup-go,
-// its own dependency-update policy (npm, not gomod), and the
-// language-neutral pull request template. Mirrors
-// internal/module/ci/github's shape for prod-go/v1. See
-// docs/specs/0016-ts-py-tooling-parity.md.
+// module: a workflow on actions/setup-node and pnpm instead of
+// actions/setup-go, its own dependency-update policy (Dependabot's npm
+// ecosystem, which also covers pnpm, not gomod), and the language-neutral
+// pull request template. Mirrors internal/module/ci/github's shape for
+// prod-go/v1. See docs/specs/0016-ts-py-tooling-parity.md and
+// docs/specs/0020-prod-ts-pnpm.md.
 package githubts
 
 import (

@@ -1,5 +1,5 @@
 schema: 2
-vibe_version: v0.2.0-alpha.1.0.20260923051543-c4cd4c284bd2+dirty
+vibe_version: v0.2.0-alpha.1.0.20260923080556-a089e61eb5ff+dirty
 standard: prod-ts/v1
 resources:
     .claude/hooks/block-dangerous.sh:
@@ -17,14 +17,14 @@ resources:
     .github/pull_request_template.md:
         sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
     .github/workflows/ci.yml:
-        sha256: a8535cd09d2231e168f076bda1a86dd5153ccba0c21837f17dd14e203b247f9e
+        sha256: 5f2acb7f7274f2f34ae7f09ba4fb13016b797a97d2b1329ade917d623948fd45
     .prettierrc.json:
         sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
     Taskfile.yml:
-        sha256: 5ddf59196a1cb6f809fa487ae9a96903349a9a18a2d3a5191efa6dfb792c00a2
+        sha256: 4a522379cfdb3060bdb823dd774e9e7104df0831ef72f1e85d3aa454a59ef11c
     eslint.config.js:
         sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
     lefthook.yml:
-        sha256: 27e505c630f347f743745a74046b63a93332ddbb39c2964e3a61d9de3b264b0c
+        sha256: bf22c3b73ba1c4880f6fe2bd7a155794f02db6acf2c897d01369a0b9e78dc8b6
     tsconfig.base.json:
         sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217
