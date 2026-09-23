@@ -6,11 +6,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// notImplementedDoc is where errNotImplemented points: the architecture
+// overview's "Not built yet" list, which tracks what these commands wait on.
+const notImplementedDoc = "docs/architecture/overview.md"
+
 // errNotImplemented reports a command that is intentionally scaffolded but not
 // yet implemented, so agents and users get a clear signal instead of a silent
 // no-op.
 func errNotImplemented(cmd string) error {
-	return fmt.Errorf("%s: not implemented yet (see docs/plans/0014-m2-milestone.md)", cmd)
+	return fmt.Errorf("%s: not implemented yet (see %s)", cmd, notImplementedDoc)
 }
 
 func newCheckCmd() *cobra.Command {

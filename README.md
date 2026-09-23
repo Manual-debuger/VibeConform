@@ -127,7 +127,7 @@ go test ./...
 verification interface; CI runs the same tasks:
 
 ```bash
-task verify     # fmt check, build, lint, race tests, mod tidy, govulncheck, actionlint
+task verify     # fmt check, build, lint, tests, go mod tidy/verify, govulncheck, actionlint
 ```
 
 ## Repository layout
@@ -137,7 +137,7 @@ cmd/vibe/          CLI entrypoint
 internal/cli/      Command tree (root + init/audit/diff/sync/check/doctor)
 internal/manifest/ vibe.yaml parsing
 internal/standard/ Named, versioned standard registry
-internal/module/   Module composition interface + the four modules
+internal/module/   Module composition interface + the ten modules the three standards compose
 internal/resource/ Resource + ownership + file mode model
 internal/reconcile/ Three-way decision engine
 internal/state/    .vibe/state.yaml read/write

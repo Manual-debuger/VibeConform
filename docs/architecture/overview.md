@@ -31,8 +31,9 @@ repo integrations
 `vibe.yaml` is human-owned desired state: which standard and version a
 repository conforms to, plus repository-specific overrides. Machine-owned
 state (`.vibe/lock.yaml`, `.vibe/state.yaml`) records what was last resolved
-and applied, enabling three-way reconciliation. Neither file is required to
-exist yet; they are introduced once the resolver lands.
+and applied, enabling three-way reconciliation. `.vibe/state.yaml` exists
+today: `vibe sync` writes it and `vibe audit`/`vibe diff` read it.
+`.vibe/lock.yaml` does not exist yet (see "Internal package layout" below).
 
 ## Module/component composition
 
@@ -174,7 +175,7 @@ systems through provider abstractions:
 
 ## Internal package layout
 
-Present after M1:
+Present today:
 
 ```text
 internal/
@@ -182,8 +183,12 @@ internal/
   standard/                 # versioned standard definitions
   module/                   # module composition interface + optional ToolRequirer
     gotooling/              # .golangci.yml
-    ci/github/              # GitHub Actions workflow, dependabot, PR template
-    repotooling/            # Taskfile.yml, lefthook.yml
+    ci/github/              # GitHub Actions workflow, dependabot, PR template (prod-go)
+    ci/githubts/            # the same, for prod-ts
+    ci/githubpy/            # the same, for prod-py
+    repotooling/            # Taskfile.yml, lefthook.yml, Go guard (prod-go)
+    tsrepotooling/          # Taskfile.yml, lefthook.yml, Node guard (prod-ts)
+    pyrepotooling/          # Taskfile.yml, lefthook.yml, Python guard (prod-py)
     agents/                 # Claude/Codex config + guard policy (policy.json)
     tstooling/              # eslint, prettier, tsconfig base
     pythontooling/          # ruff, pyright

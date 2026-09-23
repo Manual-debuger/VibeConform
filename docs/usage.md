@@ -63,8 +63,7 @@ go run ./cmd/vibe --help
 ### `vibe init <standard> <version>`
 
 Writes a `vibe.yaml` file declaring the standard and version a repository
-intends to conform to. This is the only command with a real
-implementation right now — see `docs/specs/0002-vibe-init.md`.
+intends to conform to — see `docs/specs/0002-vibe-init.md`.
 
 ```bash
 vibe init prod-go v1
@@ -89,9 +88,12 @@ vibe init prod-go v1 --repo-root ./some/other/repo
 
 **Behavior to know:**
 
-- `standard` and `version` are free-form strings today. Nothing checks
-  that `standard` refers to a real, known standard — that validation
-  doesn't exist yet (see `docs/specs/0003-standard-registry.md`).
+- `init` writes `standard` and `version` as given, without checking them
+  against the standard registry (`internal/standard`, see
+  `docs/specs/0003-standard-registry.md`). `audit`, `diff` and `sync` do
+  check: against an unregistered pair they fail with
+  `standard: no such standard <name>/<version>`. The registered standards
+  are `prod-go`, `prod-ts` and `prod-py`, each at `v1`.
 - `init` **never overwrites** an existing `vibe.yaml`. There is no
   `--force` flag; if you need to change it, edit or delete the file
   yourself. Running `init` again against an existing `vibe.yaml` fails
@@ -244,7 +246,12 @@ standard: prod-go/v1
 
 ```
 standard: prod-go/v1
-.golangci.yml: would update (drift from last applied state)
+.golangci.yml: would update (file edited since last applied state)
+```
+
+```
+standard: prod-go/v1
+.golangci.yml: would update (standard moved since last applied state)
 ```
 
 ```
@@ -421,7 +428,7 @@ Not implemented. Each returns an explicit error rather than silently doing
 nothing or exiting 0:
 
 ```
-Error: check: not implemented yet (see docs/plans/0014-m2-milestone.md)
+Error: check: not implemented yet (see docs/architecture/overview.md)
 ```
 
 Don't script against these expecting real output — they exist as
