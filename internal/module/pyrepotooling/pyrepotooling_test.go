@@ -120,7 +120,7 @@ func TestHookGuardTask(t *testing.T) {
 	if !task.Silent {
 		t.Error("hook:guard is not silent; Task would echo the command into the agent's hook output")
 	}
-	want := "uv run --no-project python .claude/hooks/guard.py .claude/hooks/policy.json"
+	want := "uv run --no-project python .claude/hooks/guard.py .claude/hooks/policy.json || exit 2"
 	if len(task.Cmds) != 1 || task.Cmds[0] != want {
 		t.Errorf("hook:guard cmds = %v, want [%q]", task.Cmds, want)
 	}

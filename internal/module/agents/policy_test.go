@@ -135,6 +135,31 @@ func TestRenderPolicyDeterministic(t *testing.T) {
 	}
 }
 
+// TestRenderPolicyIsPrettierStyle pins the one formatting choice that
+// differs from json.Encoder: short string arrays on one line, the way
+// Prettier writes them. prod-ts's fmt:check would otherwise fail on the
+// policy.json it generates. The examples.yml TypeScript job runs Prettier
+// over the real file; this pins the rule locally.
+func TestRenderPolicyIsPrettierStyle(t *testing.T) {
+	out, err := renderPolicy(policy)
+	if err != nil {
+		t.Fatalf("renderPolicy: %v", err)
+	}
+	for _, want := range []string{
+		`    "command": ["Bash", "PowerShell"],`,
+		`    "file_path": ["Edit", "MultiEdit", "Write"]`,
+	} {
+		if !bytes.Contains(out, []byte(want+"\n")) {
+			t.Errorf("policy.json lacks the line %q", want)
+		}
+	}
+
+	long := []byte("{\n  \"k\": [\n    \"" + strings.Repeat("a", 40) + "\",\n    \"" + strings.Repeat("b", 40) + "\"\n  ]\n}\n")
+	if got := collapseStringArrays(long); !bytes.Equal(got, long) {
+		t.Errorf("an array wider than %d columns was collapsed:\n%s", printWidth, got)
+	}
+}
+
 func TestRenderPolicyRejectsUnsortedTools(t *testing.T) {
 	p := policy
 	p.Tools = map[Field][]string{FieldCommand: {"PowerShell", "Bash"}}

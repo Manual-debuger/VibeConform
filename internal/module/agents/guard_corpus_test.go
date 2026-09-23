@@ -147,6 +147,31 @@ func TestGuardCorpusGo(t *testing.T) {
 	runCorpus(t, dir, bin, "policy.json")
 }
 
+// TestGoRunReportsGuardDenyAsOne pins why every hook:guard command ends in
+// "|| exit 2" (plan 0021). go run does not pass its program's exit code
+// through: the guard's deny (2) comes out as 1, which both agents treat as
+// allow. Found by TestGuardCorpusEndToEnd; this runs in every go test, so if
+// go run ever starts propagating the code, the reason for the workaround is
+// visibly gone rather than silently assumed.
+func TestGoRunReportsGuardDenyAsOne(t *testing.T) {
+	dir := guardDir(t)
+	src := guardTemplate(t, "repotooling", "guard.go")
+	// #nosec G204 -- fixed arguments
+	cmd := exec.Command("go", "run", src, "policy.json")
+	cmd.Dir = dir
+	cmd.Stdin = bytes.NewReader([]byte(`{"tool_name": "Bash", "tool_input": {"command": "git branch -D x"}}`))
+
+	err := cmd.Run()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) {
+		t.Fatalf("go run of a denying guard: err = %v, want an exit error", err)
+	}
+	if got := exit.ExitCode(); got != 1 {
+		t.Errorf("go run exit code = %d; the \"|| exit 2\" workaround assumes 1. "+
+			"Re-check whether it is still needed", got)
+	}
+}
+
 // TestGuardCorpusNode runs the prod-ts guard when node is installed.
 func TestGuardCorpusNode(t *testing.T) {
 	node := requireTool(t, "node")

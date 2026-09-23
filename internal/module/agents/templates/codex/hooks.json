@@ -2,8 +2,13 @@
   "hooks": {
     "PreToolUse": [
       {
-        "command": "bash .claude/hooks/block-dangerous.sh",
-        "commandWindows": "bash .claude/hooks/block-dangerous.sh"
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "task -x hook:guard"
+          }
+        ]
       }
     ]
   }

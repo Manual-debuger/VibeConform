@@ -56,10 +56,14 @@ tasks:
   # (exit 2) as 201, and both agents treat 201 as allow. The name is
   # reserved like every task here. See
   # docs/specs/0021-agent-hooks-task-interface.md.
+  #
+  # "|| exit 2" turns any failure inside the task into a deny rather than
+  # an allow: go run reports a program's exit 2 as 1, and a missing or
+  # broken runtime would otherwise let every tool call through.
   hook:guard:
     silent: true
     cmds:
-      - uv run --no-project python .claude/hooks/guard.py .claude/hooks/policy.json
+      - uv run --no-project python .claude/hooks/guard.py .claude/hooks/policy.json || exit 2
 
   verify:
     desc: Local verification gate — native language tooling only, never

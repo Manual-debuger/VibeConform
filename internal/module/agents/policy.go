@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
+	"strings"
 )
 
 // Field names the part of a tool call a rule inspects. The guard maps a
@@ -118,5 +120,37 @@ func renderPolicy(p Policy) ([]byte, error) {
 	if err := enc.Encode(p); err != nil {
 		return nil, fmt.Errorf("render policy: %w", err)
 	}
-	return buf.Bytes(), nil
+	return collapseStringArrays(buf.Bytes()), nil
+}
+
+// multilineStringArray matches an indented JSON array whose elements are
+// all plain strings with no escapes, one per line, as json.Encoder writes
+// them.
+var multilineStringArray = regexp.MustCompile(`(?m)^( *)("[^"\\\n]*": )\[\n((?: *"[^"\\\n]*",?\n)+) *\]`)
+
+// printWidth is the widest line collapseStringArrays will produce:
+// Prettier's default print width, below prod-ts's configured 100, so the
+// result is stable under either.
+const printWidth = 80
+
+// collapseStringArrays puts each short array of plain strings on one line,
+// which is how Prettier formats JSON. prod-ts's fmt:check runs Prettier
+// over **/*.json, .claude/ included, so a policy.json in json.Encoder's
+// one-element-per-line style would fail every adopter's format check.
+// Arrays that would not fit stay expanded, as Prettier leaves them.
+func collapseStringArrays(b []byte) []byte {
+	return multilineStringArray.ReplaceAllFunc(b, func(m []byte) []byte {
+		parts := multilineStringArray.FindSubmatch(m)
+		indent, key, body := parts[1], parts[2], parts[3]
+
+		var elems []string
+		for line := range strings.SplitSeq(strings.TrimSpace(string(body)), "\n") {
+			elems = append(elems, strings.TrimSuffix(strings.TrimSpace(line), ","))
+		}
+		oneLine := string(indent) + string(key) + "[" + strings.Join(elems, ", ") + "]"
+		if len(oneLine) > printWidth {
+			return m
+		}
+		return []byte(oneLine)
+	})
 }
