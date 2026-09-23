@@ -151,3 +151,47 @@ func TestAuditStillInvokesVibe(t *testing.T) {
 		})
 	}
 }
+
+// TestAuditInvokesVibeFromPath pins spec 0018's invariant: audit must reach
+// vibe as a binary resolved from PATH, not by compiling one out of the
+// repository being audited. `go run ./cmd/vibe audit` only ever worked here,
+// because this repository vendors cmd/vibe; every external prod-go/v1 adopter
+// got that same generated line and a task that could not run (issue #20).
+//
+// TestAuditStillInvokesVibe above does not cover this. It matches the substring
+// "vibe", which both `go run ./cmd/vibe audit` and `vibe audit` satisfy — spec
+// 0017's invariant is about whether audit reaches vibe, not how. The two tests
+// are complementary and neither subsumes the other.
+//
+// The requirement is stated positively — audit's vibe invocation is a bare
+// PATH lookup — rather than by blacklisting today's known-bad forms, so a new
+// way of smuggling in a repository-local path fails this test without anyone
+// having to think of it first.
+func TestAuditInvokesVibeFromPath(t *testing.T) {
+	for _, rel := range repoToolingTaskfiles {
+		t.Run(rel, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.FromSlash(rel))
+			if err != nil {
+				t.Fatalf("reading template: %v", err)
+			}
+
+			var doc taskfileDoc
+			if err := yaml.Unmarshal(raw, &doc); err != nil {
+				t.Fatalf("parsing template: %v", err)
+			}
+
+			for _, cmd := range doc.shellClosure(t, "audit") {
+				if !strings.Contains(cmd, "vibe") {
+					continue
+				}
+				fields := strings.Fields(cmd)
+				if len(fields) == 0 || fields[0] != "vibe" {
+					t.Errorf("task audit runs %q; vibe must be invoked as a "+
+						"PATH-resolved binary (`vibe audit --repo-root .`), not built "+
+						"or run out of the repository under audit (spec 0018) — "+
+						"an adopting repository has no cmd/vibe package", cmd)
+				}
+			}
+		})
+	}
+}

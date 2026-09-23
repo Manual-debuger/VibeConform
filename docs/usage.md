@@ -390,6 +390,17 @@ Deliberately **not** managed, and left for you to maintain by hand:
   the ones VibeConform writes and hashes. Managing the file that determines
   how your own outputs are compared is a loop worth entering deliberately,
   with its own spec.
+- `Taskfile.local.yml` — your own tasks, deliberately outside the managed
+  set. See "Adding your own tasks" below.
+
+**`task audit` needs `vibe` on `PATH`.** All three standards generate the
+same `audit` task (`vibe audit --repo-root .`), so a repository that has
+not installed `vibe` gets a clear failure —
+`"vibe": executable file not found in $PATH` — rather than a silent pass.
+The generated `conformance` job installs it for you. Nothing else in
+`Taskfile.yml` depends on `vibe`: since spec 0017, `task verify` and
+`task verify-ci` are native language tooling only, so a contributor with no
+`vibe` installed can still run the full verification gate.
 
 **File modes.** Resources are written `0644`, except the agent hook scripts,
 which are written `0755` — a hook script that is not executable does not run,
@@ -448,11 +459,18 @@ close that gap:
 
 - `ts-repo-tooling`'s `Taskfile.yml` shells out to `eslint`/`prettier`/`tsc`
   via `npx` (project-local, not assumed on `PATH`); `py-repo-tooling`'s shells
-  out to `ruff`/`pyright`/`pytest` via `uv run`. Both expose the same target
-  names `prod-go/v1`'s Taskfile does (`fmt`, `fmt:check`, `lint`, `typecheck`,
-  `test`, `audit`, `verify`, `verify-ci`), minus `build`/`run` — those build
-  the `vibe` binary this repository ships, which doesn't generalize to an
-  adopting repository.
+  out to `ruff`/`pyright`/`pytest` via `uv run`. All three expose the same
+  target names (`fmt`, `fmt:check`, `lint`, `typecheck`, `test`, `audit`,
+  `verify`, `verify-ci`), plus Go's language-specific `test:race`,
+  `mod:verify`, `security`, and `workflows:lint`.
+
+  That set is the whole of what a standard asserts. Until spec 0018,
+  `prod-go/v1` also shipped `build` and `run`, which built and ran *this*
+  repository's CLI — commands no adopter could use and that don't
+  generalize in any language, since two Go repositories on the same
+  standard may build a CLI, a library, several binaries, or nothing.
+  Repository-specific tasks now live in `Taskfile.local.yml` instead (see
+  below).
 - `github-ci-ts`/`github-ci-py` run on `actions/setup-node` /
   `astral-sh/setup-uv` instead of `actions/setup-go` (Go is still installed
   in-workflow to install `task` and `vibe` themselves), calling those
@@ -502,6 +520,59 @@ adopting repository): it runs `task verify` inside each example with no
 separate step, so a template change that breaks linting fails CI, not just
 a byte-comparison test.
 
+## Adding your own tasks: `Taskfile.local.yml`
+
+`Taskfile.yml` is fully generated, so adding a task to it directly makes the
+repository non-conformant. Put repository-specific tasks — build, run,
+deploy, migrations, whatever you actually need — in a `Taskfile.local.yml`
+beside it:
+
+```yaml
+version: "3"
+
+tasks:
+  build:
+    desc: Build the service binary.
+    cmds:
+      - go build -o bin/server ./cmd/server
+```
+
+```console
+$ task build
+task: [build] go build -o bin/server ./cmd/server
+```
+
+The generated `Taskfile.yml` includes it automatically. Three things to
+know:
+
+- **It is optional.** With no such file the include does nothing — no
+  warning, no error. Most repositories never need one.
+- **It is yours.** `vibe` never creates, writes, reads, validates, or
+  audits it. It will not appear in `vibe audit` output, and `vibe sync`
+  will not touch it. Commit it like any other project configuration.
+- **It extends the standard; it cannot override it.** Defining a task the
+  generated file already defines is a hard error, not a silent override:
+
+  ```console
+  $ task verify
+  task: Found multiple tasks (verify) included by "local"
+  $ echo $?
+  203
+  ```
+
+  So you can add `build`, but you cannot redefine `verify`, `audit`,
+  `lint`, or `test` — which is what stops the seam from being a way around
+  the conformance gate.
+
+Requires Task v3.39.0 or newer. Older versions ignore `flatten` and namespace
+the tasks instead, so `task build` fails with `Task "build" does not exist`
+while `task --list` shows `local:build` — a confusing failure that names the
+wrong problem. The `TASK_VERSION` pinned in the generated CI workflow is well
+above that floor; only a local install can be too old.
+
+See `docs/decisions/0009-managed-file-local-extension.md` for why the
+standard stops at the verification interface.
+
 ## VibeConform manages itself
 
 This repository is the worked example: it has a `vibe.yaml` declaring
@@ -515,9 +586,36 @@ managed file means changing its template under `internal/module/`, rebuilding
 the file and the updated state. Editing the file directly makes the
 repository non-conformant, and `task audit` fails.
 
+Concretely, for every template change, in one commit:
+
+```bash
+# 1. edit the template under internal/module/**/templates/
+task build                                  # go build -o bin/vibe ./cmd/vibe
+./bin/vibe sync --repo-root .
+./bin/vibe sync --repo-root examples/typescript
+./bin/vibe sync --repo-root examples/python
+./bin/vibe audit --repo-root .              # expect: conformant
+./bin/vibe audit --repo-root examples/typescript
+./bin/vibe audit --repo-root examples/python
+# 2. commit the template, the regenerated files, and .vibe/state.yaml
+```
+
+The rebuild is not optional and is the classic way to waste an afternoon:
+`go:embed` resolves at build time, so a stale binary syncs the *old*
+template and every root still reports conformant.
+
+A related trap, now that `task audit` resolves `vibe` from `PATH` rather
+than compiling one: if an older `vibe` is installed in `~/go/bin` from a
+previous `go install`, `task audit` picks *that* up and reports files you
+just regenerated as `drifted (run vibe sync)`. The binary is out of date,
+not the repository. Run `./bin/vibe audit` directly when in doubt, and note
+that on Windows `go build -o bin/vibe` produces an extensionless file that
+`PATH` lookup will not find as `vibe` — hence `./bin/vibe` above rather
+than putting `bin/` on `PATH`.
+
 Still hand-maintained here, by the non-goals above:
 `.github/workflows/release.yml`, `.goreleaser.yaml`, `.gitignore`,
-`.gitattributes`, `AGENTS.md`, `CLAUDE.md`.
+`.gitattributes`, `AGENTS.md`, `CLAUDE.md`, `Taskfile.local.yml`.
 
 ## What `vibe.yaml` means today
 
@@ -552,9 +650,16 @@ pieces are concentrated and removable on their own:
   as a permanently red `gate`.)
 - Delete the `audit` task from `Taskfile.yml`. Once `vibe.yaml` is gone it
   has nothing to check against and exits 1 with
-  `Error: audit: open vibe.yaml: no such file or directory` — leaving it
-  in place breaks nothing else, since nothing in `Taskfile.yml` depends on
-  it, but it is a task that can now only fail.
+  `Error: audit: open vibe.yaml: no such file or directory` — or, if
+  `vibe` was never on `PATH` to begin with, `"vibe": executable file not
+  found in $PATH`. Either way, leaving it in place breaks nothing else,
+  since nothing in `Taskfile.yml` depends on it, but it is a task that can
+  now only fail.
+- Leave the `includes:` block at the top of `Taskfile.yml` alone unless you
+  want to. It is ordinary Task configuration, not a VibeConform mechanism,
+  and it keeps working after teardown: your `Taskfile.local.yml` — which
+  `vibe` never owned — goes on being included exactly as before. Removing
+  the block means folding those tasks back into `Taskfile.yml` by hand.
 
 Everything else `vibe sync` wrote — `.golangci.yml`, `eslint`/`prettier`/
 `tsconfig`, `ruff`/`pyright` config, the rest of `Taskfile.yml`, the

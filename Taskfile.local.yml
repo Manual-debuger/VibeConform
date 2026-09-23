@@ -1,0 +1,22 @@
+version: "3"
+
+# Project-owned, and deliberately not managed by VibeConform: these tasks
+# build and run this repository's own CLI, which is exactly the kind of
+# thing a standard has no business asserting for every adopter. They lived
+# in prod-go/v1's Taskfile.yml template until spec 0018 moved them here.
+# See docs/decisions/0009-managed-file-local-extension.md.
+#
+# Tasks here are merged into the generated Taskfile.yml unprefixed, so
+# "task build" works as before. Defining a task the generated file already
+# defines is a hard error (Task exits 203), not an override.
+
+tasks:
+  build:
+    desc: Build the vibe binary into ./bin.
+    cmds:
+      - go build -o bin/vibe ./cmd/vibe
+
+  run:
+    desc: 'Run the CLI, e.g. task run -- --help.'
+    cmds:
+      - go run ./cmd/vibe {{.CLI_ARGS}}

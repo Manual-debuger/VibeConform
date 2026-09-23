@@ -1,5 +1,19 @@
 version: "3"
 
+# Repository-specific tasks — build, run, deploy, whatever this repository
+# happens to need — belong in a project-owned Taskfile.local.yml, which
+# VibeConform never writes, reads, or audits. The include is optional: with
+# no such file it does nothing. Tasks defined there are available
+# unprefixed, but cannot redefine a task below — Task exits 203 on a name
+# collision rather than silently overriding, so the verification interface
+# stays what the standard says it is. Requires Task v3.39.0 or newer.
+# See docs/decisions/0009-managed-file-local-extension.md.
+includes:
+  local:
+    taskfile: ./Taskfile.local.yml
+    optional: true
+    flatten: true
+
 # Task's built-in shell (mvdan.cc/sh) interprets POSIX-style syntax
 # identically on Windows/Linux/macOS, so these commands need no per-OS
 # branching.
@@ -58,7 +72,7 @@ tasks:
   audit:
     desc: Check this repository against the standard its vibe.yaml declares.
     cmds:
-      - go run ./cmd/vibe audit --repo-root .
+      - vibe audit --repo-root .
 
   verify:
     desc: Local verification gate — native language tooling only, never
@@ -79,13 +93,3 @@ tasks:
     desc: Alias used by CI so the workflow and local docs never drift.
     cmds:
       - task: verify
-
-  build:
-    desc: Build the vibe binary into ./bin.
-    cmds:
-      - go build -o bin/vibe ./cmd/vibe
-
-  run:
-    desc: 'Run the CLI, e.g. task run -- --help.'
-    cmds:
-      - go run ./cmd/vibe {{.CLI_ARGS}}

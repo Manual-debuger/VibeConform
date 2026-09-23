@@ -149,6 +149,21 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Install task
         run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      - name: Install vibe
+        run: |
+          if [ -d ./cmd/vibe ]; then
+            # Self-hosting: this repository provides cmd/vibe, so audit
+            # against the working tree's embedded templates. Installing a
+            # published release instead would compare a pull request's
+            # regenerated files against the previous release's templates
+            # and report drift on every template change.
+            # See docs/decisions/0008-self-hosting-probe-in-shipped-templates.md.
+            mkdir -p "$RUNNER_TEMP/bin"
+            go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          else
+            go install github.com/Manual-debuger/VibeConform/cmd/vibe@latest
+          fi
       - name: task audit
         run: task audit
 
