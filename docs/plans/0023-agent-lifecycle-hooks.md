@@ -285,12 +285,24 @@ Ubuntu, Task v3.53.1 and v3.39.0 built into a scratch `GOBIN`).
   added. `docs/usage.md` still names `core.fsmonitor` and
   `core.untrackedCache`.
 
-## Open after spikes
+## Decided after spikes
 
-- **`prod-ts` `hook:format` is over the 1-second budget** because of
-  `pnpm exec`'s ~1 s startup: Prettier ~1.1 s, and ESLint `--fix` a further
-  ~1.8–2.2 s. Under the rule the spec set, both would move to `hook:check`.
-  That would leave TS with no synchronous formatting at all.
+- **`prod-ts` `hook:format` budget** (maintainer's decision, 2026-09-24,
+  option A of four). `pnpm exec`'s ~1 s startup put Prettier at ~1.1 s and
+  `eslint --fix` at ~1.8–2.2 s. The budget is restated as about 1 s beyond
+  the package manager's startup:
+  - Prettier stays synchronous.
+  - `eslint --fix` is dropped from `hook:format`. ESLint findings still
+    come from `hook:check`.
+
+  Rejected:
+  - Moving both steps to `hook:check`, which leaves TS with no formatting
+    after edits.
+  - Calling `prettier.cjs` by its path inside the package, which is
+    fragile.
+  - A 3-second TS budget.
+
+  Spec 4.2 and resolved question 6 are amended.
 
 ## Verification record
 

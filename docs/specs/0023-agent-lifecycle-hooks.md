@@ -192,7 +192,7 @@ accepted, because formatters are idempotent and the repository's
 | Standard | Formatting | Cheap fix |
 |---|---|---|
 | `prod-go` | `gofmt -w` | `goimports -w` (adds and removes imports) |
-| `prod-ts` | `prettier --cache --write` (the `fmt` extension set) | `eslint --cache --fix` |
+| `prod-ts` | `prettier --cache --write` (the `fmt` extension set) | none: ESLint findings come from `hook:check` (resolved question 6) |
 | `prod-py` | `ruff format` | `ruff check --fix` |
 
 **Behaviour.** The edit has already happened, so this can't block it. On
@@ -412,6 +412,18 @@ or a dependency.
    `hook:check`, with the measurement recorded in the plan. `goimports` and
    `ruff check --fix` are expected to stay synchronous; `eslint --fix` with
    type-aware rules is the likeliest to move.
+
+   *Added during implementation:* the spikes (plan 0023) found that
+   `pnpm exec` alone costs about 1 second on Windows, before any tool
+   runs, and that `node_modules/.bin` shims don't run in Task's shell there,
+   so there's no portable way around it. The budget is therefore restated
+   as **about 1 second beyond the package manager's own startup**. Under
+   it, `prod-ts` keeps `prettier --cache --write` synchronous (~1.1 s
+   measured). `eslint --fix` (~1.8–2.2 s) is dropped from `hook:format`.
+   `hook:check` still runs `eslint --cache`, so ESLint findings reach the
+   model in the background, but nothing applies ESLint fixes
+   automatically. `prod-go` (~300 ms) and `prod-py` (~320 ms) are
+   unaffected.
 
 ## Follow-on work
 
