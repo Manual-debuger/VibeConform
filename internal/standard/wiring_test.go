@@ -2,6 +2,7 @@ package standard
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -41,7 +42,7 @@ func TestAgentConfigWiring(t *testing.T) {
 
 			taskfile, ok := resources["Taskfile.yml"]
 			if !ok {
-				t.Fatal("composes agent-config but resolves no Taskfile.yml to define hook:guard")
+				t.Fatal("composes agent-config but resolves no Taskfile.yml to define the hook tasks")
 			}
 			var tf struct {
 				Tasks map[string]struct {
@@ -51,6 +52,23 @@ func TestAgentConfigWiring(t *testing.T) {
 			if err := yaml.Unmarshal(taskfile.Content, &tf); err != nil {
 				t.Fatalf("parsing Taskfile.yml: %v", err)
 			}
+
+			// Every hook either agent runs must name a task this standard's
+			// Taskfile defines (spec 0023 extends this from hook:guard to
+			// every event).
+			for _, config := range []string{".claude/settings.json", ".codex/hooks.json"} {
+				for _, command := range configCommands(t, resources, config) {
+					name, ok := strings.CutPrefix(command, "task -x ")
+					if !ok {
+						t.Errorf("%s runs %q, which is not a task -x command", config, command)
+						continue
+					}
+					if _, ok := tf.Tasks[name]; !ok {
+						t.Errorf("%s runs %q, but Taskfile.yml defines no %s", config, command, name)
+					}
+				}
+			}
+
 			task, ok := tf.Tasks["hook:guard"]
 			if !ok {
 				t.Fatalf("Taskfile.yml defines no hook:guard, which %q calls", agents.GuardCommand)
@@ -80,6 +98,37 @@ func TestAgentConfigWiring(t *testing.T) {
 			}
 		})
 	}
+}
+
+// configCommands returns every hook command in an agent config resource.
+func configCommands(t *testing.T, resources map[string]resource.Resource, path string) []string {
+	t.Helper()
+	r, ok := resources[path]
+	if !ok {
+		t.Fatalf("agent-config resolves no %s", path)
+	}
+	var cfg struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(r.Content, &cfg); err != nil {
+		t.Fatalf("parsing %s: %v", path, err)
+	}
+	var commands []string
+	for _, entries := range cfg.Hooks {
+		for _, e := range entries {
+			for _, h := range e.Hooks {
+				commands = append(commands, h.Command)
+			}
+		}
+	}
+	if len(commands) == 0 {
+		t.Fatalf("%s runs no hook commands", path)
+	}
+	return commands
 }
 
 // TestEveryStandardComposesConformance pins spec 0022: the conformance job

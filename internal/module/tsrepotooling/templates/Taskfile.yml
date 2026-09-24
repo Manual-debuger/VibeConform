@@ -32,25 +32,32 @@ tasks:
   # modules generate (Taskfile.yml, lefthook.yml, .github/*, .vibe/*.yaml).
   # Reformatting those is not this repository's job — they are owned by
   # their module template, not by the adopting repository's style.
+  #
+  # Every cache below lives under node_modules, which a Node repository
+  # already ignores, so nothing shows up in git status (spec 0023). A cold
+  # CI checkout has no cache and checks everything.
   fmt:
     desc: Apply Prettier formatting.
     cmds:
-      - pnpm exec prettier --write "**/*.{js,jsx,ts,tsx,json,css,md}"
+      - pnpm exec prettier --write --cache "**/*.{js,jsx,ts,tsx,json,css,md}"
 
   fmt:check:
     desc: Fail if any file is not Prettier-formatted (CI-safe, no writes).
     cmds:
-      - pnpm exec prettier --check "**/*.{js,jsx,ts,tsx,json,css,md}"
+      - pnpm exec prettier --check --cache "**/*.{js,jsx,ts,tsx,json,css,md}"
 
+  # ESLint's cache does not track dependencies between files, so a
+  # type-aware rule can report a stale result locally until the file itself
+  # changes. CI starts cold and is unaffected.
   lint:
     desc: Run eslint.
     cmds:
-      - pnpm exec eslint .
+      - pnpm exec eslint . --cache --cache-location node_modules/.cache/eslint/
 
   typecheck:
     desc: Type-check with tsc, emitting nothing.
     cmds:
-      - pnpm exec tsc --noEmit
+      - pnpm exec tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/tsbuildinfo
 
   test:
     desc: Run the test suite.
@@ -73,10 +80,119 @@ tasks:
     cmds:
       - node .claude/hooks/guard.mjs .claude/hooks/policy.json || exit 2
 
+  # The other agent hooks (spec 0023). Like hook:guard, agents call these
+  # through "task -x hook:<name>", and none has a desc. Exit 2 is the one
+  # code both agents show the model; the scripts use only Task's built-in
+  # shell and git, so they behave the same on Windows and Linux.
+  # Task runs each cmd with errexit, so every command that can fail on a
+  # healthy machine (a missing runtime, no commit yet) ends in "|| true"
+  # or "|| echo missing"; unguarded, it would end the script early.
+  #
+  # Session start: a few lines of facts for the agent's context. Never
+  # installs, builds, tests, or starts anything; those stay explicit tasks.
+  # It doesn't repeat AGENTS.md, which both agents load themselves.
+  hook:context:
+    silent: true
+    cmds:
+      - |
+        if ! git rev-parse --git-dir >/dev/null 2>&1; then
+          echo "Repo: {{base .ROOT_DIR}} (not a git repository)"
+          exit 0
+        fi
+        echo "Repo: {{base .ROOT_DIR}}"
+        b="$(git branch --show-current 2>/dev/null || true)"
+        [ -n "$b" ] || b="detached at $(git rev-parse --short HEAD 2>/dev/null || echo "an unborn branch")"
+        echo "Branch: $b"
+        status="$(git status --short 2>/dev/null || true)"
+        state=clean
+        [ -z "$status" ] || state=dirty
+        for p in rebase-merge:rebase rebase-apply:rebase MERGE_HEAD:merge CHERRY_PICK_HEAD:cherry-pick REVERT_HEAD:revert BISECT_LOG:bisect; do
+          if [ -e "$(git rev-parse --git-path "${p%%:*}")" ]; then state="$state, ${p#*:} in progress"; fi
+        done
+        echo "State: $state"
+        echo "Node: $(node --version 2>/dev/null || echo missing)"
+        echo "pnpm: $(pnpm --version 2>/dev/null || echo missing)"
+        echo "Task: {{.TASK_VERSION}}"
+        n=0
+        while IFS= read -r line; do
+          [ -n "$line" ] || continue
+          n=$((n+1))
+          [ "$n" -le 20 ] && list="$list$line
+        "
+        done <<EOF
+        $status
+        EOF
+        echo "Dirty files: $n"
+        printf '%s' "$list"
+        [ "$n" -le 20 ] || echo "… and $((n-20)) more"
+        dirstat="$(git diff --dirstat=files,0 HEAD 2>/dev/null || true)"
+        if [ -n "$dirstat" ]; then
+          echo "Affected components:"
+          echo "$dirstat"
+        fi
+
+  # After each file edit: format the changed files git reports (tracked
+  # changes plus untracked files it doesn't ignore), not the whole
+  # repository, with fmt's extensions. No eslint --fix here: with pnpm
+  # exec's own startup it takes about two seconds per edit, over the
+  # budget spec 0023 sets, so ESLint's findings come from hook:check
+  # instead. NUL-separated names keep paths with spaces intact, and the
+  # list is checked first because GNU xargs runs its command even with no
+  # input.
+  hook:format:
+    silent: true
+    cmds:
+      - |
+        list() {
+          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md' 2>/dev/null || true
+          git ls-files -z --others --exclude-standard -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md'
+        }
+        [ -n "$(list)" ] || exit 0
+        list | xargs -0 pnpm exec prettier --write --cache --log-level warn || exit 2
+
+  # After each file edit, in the background: verify:fast's incremental
+  # checks, except fmt:check. Agents run all of an event's hooks in
+  # parallel, so this starts while hook:format may still be writing the
+  # file; hook:done checks formatting at the end of the turn. The tools'
+  # output goes to stderr, which is what the agent is shown.
+  hook:check:
+    silent: true
+    cmds:
+      - task -s lint typecheck test 1>&2 || exit 2
+
+  # When the agent ends its turn: the same checks, as a gate. A failure
+  # blocks the stop once. If the agent stops again with the checks still
+  # failing (stop_hook_active), the stop goes through, with the failure
+  # printed, rather than looping forever on something it can't fix.
+  hook:done:
+    silent: true
+    cmds:
+      - |
+        case "$(cat)" in
+          *'"stop_hook_active":true'*|*'"stop_hook_active": true'*)
+            task -s verify:fast 1>&2 && exit 0
+            echo "hook:done: verify:fast still fails; this stop was already blocked once, so it goes through." >&2
+            exit 0
+            ;;
+        esac
+        task -s verify:fast 1>&2 || exit 2
+
   verify:
     desc: Local verification gate — native language tooling only, never
       VibeConform itself; "task audit" is VibeConform's check, which CI
       runs in its own Conformance workflow.
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: typecheck
+      - task: test
+
+  # The agents' Stop hook and background check run this after edits (spec
+  # 0023). For prod-ts it is all of verify, made incremental by the caches
+  # above; it exists so every standard offers the same name.
+  verify:fast:
+    desc: Fast incremental verification (cached format, lint, typecheck,
+      then test); what the agents' Stop hook runs. Same steps as verify.
     cmds:
       - task: fmt:check
       - task: lint

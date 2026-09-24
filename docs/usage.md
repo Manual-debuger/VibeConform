@@ -574,9 +574,10 @@ close that gap:
   pnpm" below); `py-repo-tooling`'s shells
   out to `ruff`/`pyright`/`pytest` via `uv run`. All three expose the same
   target names (`fmt`, `fmt:check`, `lint`, `typecheck`, `test`, `audit`,
-  `verify`, `verify-ci`; `audit` is defined in the included
+  `verify`, `verify:fast`, `verify-ci`; `audit` is defined in the included
   `Taskfile.vibe.yml`), plus Go's language-specific `test:race`,
-  `mod:verify`, `security`, and `workflows:lint`.
+  `mod:verify`, `security`, and `workflows:lint`. They also define the
+  hidden `hook:*` tasks the agents call (see "Agent hooks" below).
 
   That set is the whole of what a standard asserts. Until spec 0018,
   `prod-go/v1` also shipped `build` and `run`, which built and ran *this*
@@ -677,7 +678,189 @@ adopting repository): it runs `task verify` inside each example with no
 separate step, so a template change that breaks linting fails CI, not just
 a byte-comparison test.
 
-## The agent guard
+## Agent hooks
+
+Every standard configures Claude Code (`.claude/settings.json`) and Codex
+(`.codex/hooks.json`) to run five hooks. Each one is a hidden task in the
+generated `Taskfile.yml`, called as `task -x hook:<name>`, the same command
+in every standard and on every OS. See
+`docs/specs/0021-agent-hooks-task-interface.md` and
+`docs/specs/0023-agent-lifecycle-hooks.md`.
+
+| When | Task | What it does | Blocks? |
+|---|---|---|---|
+| Session start | `hook:context` | prints a few lines of facts into the agent's context | no |
+| Before a shell command or file edit | `hook:guard` | denies destructive commands and secret-file edits | yes |
+| After a file edit | `hook:format` | formats the changed files, with cheap fixes | no (tool already ran) |
+| After a file edit, in the background | `hook:check` | runs the incremental checks | no |
+| When the agent ends its turn | `hook:done` | runs `task verify:fast` as a gate | yes, once per stop |
+
+Nothing on these paths calls `vibe`, so all five keep working after you
+remove VibeConform. Every `hook:*` name is reserved like `verify`:
+`Taskfile.local.yml` can't redefine it. They have no `desc`, so
+`task --list` doesn't show them.
+
+**Exit 2 is the only code that reaches the agent.** On exit 2 both agents
+show the model the hook's stderr; any other exit is treated as a
+non-blocking error. That's why every command is `task -x …` (without `-x`,
+Task reports a failure as 201) and why each hook ends its failing paths in
+`exit 2`.
+
+### `verify:fast` and the tool caches
+
+`hook:check` and `hook:done` run the fast, incremental part of `verify`,
+which you can also run yourself:
+
+| Standard | `task verify:fast` runs | Only in `task verify` |
+|---|---|---|
+| `prod-go` | `fmt:check`, `typecheck`, `lint`, `test` | `security`, `mod:verify`, `workflows:lint` |
+| `prod-ts` | same as `verify` | none |
+| `prod-py` | same as `verify` | none |
+
+"Affected" comes from each tool's own cache, not from anything
+VibeConform computes:
+
+- **Go:** `go test ./...` reuses a package's cached result unless the
+  package, or anything it imports, changed. So only affected tests rerun,
+  including packages that depend on your change. golangci-lint caches its
+  analysis. Don't add `-count=1` to `test`: it turns the cache off.
+- **TypeScript:** ESLint `--cache`, Prettier `--cache`, and
+  `tsc --incremental` keep their caches under `node_modules/.cache/`,
+  which a Node repository already ignores. ESLint's cache doesn't track
+  links between files, so a type-aware rule can report a stale result
+  locally until the file itself changes. CI starts cold and is unaffected.
+- **Python:** Ruff caches by default (in `.ruff_cache/`, which ignores
+  itself). `pyright` and `pytest` have no changed-only mode and run whole.
+- **`pnpm test` is yours.** `prod-ts` doesn't choose a test runner. If you
+  use Vitest or Jest, put its changed-only mode in your own `test` script
+  (`vitest related`/`--changed`, `jest --findRelatedTests`/`--changedSince`).
+
+`task verify` remains the full gate, and CI runs it.
+
+### `hook:context` (session start)
+
+Plain text on stdout, which both agents add to the model's context:
+
+```console
+$ task hook:context
+Repo: VibeConform
+Branch: feature/agent-lifecycle-hooks
+State: dirty
+Go: go1.27.0
+Task: 3.53.1
+Dirty files: 2
+ M internal/module/agents/agents.go
+?? docs/notes.md
+Affected components:
+ 100.0% internal/module/agents/
+```
+
+`State` also names a rebase, merge, cherry-pick, revert, or bisect in
+progress. The runtime lines depend on the standard: `Go` for `prod-go`,
+`Node` and `pnpm` for `prod-ts`, `uv` and `Python` for `prod-py`. A missing
+tool shows as `missing`. The list stops after 20 files with `… and N more`.
+
+It only looks. It never installs dependencies, builds, runs tests, starts
+services, or runs migrations; those stay explicit tasks. It doesn't repeat
+`AGENTS.md`, which both agents load themselves, and it always exits 0.
+
+`git status` is fast even on large repositories (about 85 ms on a
+100,000-file checkout with Git for Windows' default settings). If yours is
+slower, enable git's own speed-ups, `core.fsmonitor` and
+`core.untrackedCache`. VibeConform doesn't set them for you.
+
+### `hook:format` (after each edit)
+
+Formats the files git reports as changed: tracked changes plus untracked
+files git doesn't ignore, filtered to the extensions `task fmt` covers.
+Not the whole repository, and not only the file just edited: your own
+uncommitted edits get formatted too.
+
+| Standard | Runs on the changed files |
+|---|---|
+| `prod-go` | `goimports -w` (also adds and drops imports), then `gofmt -w` |
+| `prod-ts` | `prettier --write --cache` |
+| `prod-py` | `ruff format`, then `ruff check --fix` (safe fixes only; remaining findings are `hook:check`'s to report) |
+
+`prod-ts` doesn't run `eslint --fix` here: through `pnpm exec` it takes
+about two seconds per edit, over the one-second budget spec 0023 sets.
+ESLint's findings still arrive through `hook:check`.
+
+It prints nothing when it succeeds. A formatter that fails, on a syntax
+error for instance, exits 2 and the agent sees the error. After it runs,
+the agent's copy of the file is out of date until it reads the file again.
+
+### `hook:check` (after each edit, in the background)
+
+Runs `typecheck`, `lint`, and `test` (in the standard's `verify` order),
+without blocking the agent. It leaves out `fmt:check` because both agents
+run an event's hooks in parallel, so it starts while `hook:format` may
+still be writing the file.
+
+- **Claude Code** runs it with `asyncRewake`: on failure it wakes the
+  session and shows the output as a system reminder. (Plain `async` would
+  discard the result.)
+- **Codex** runs it with `async`, and delivers the output at the next safe
+  point: after the current model request, or at the next user turn.
+
+Quick successive edits start overlapping runs. Codex caps them at eight
+per session.
+
+### `hook:done` (end of turn)
+
+Runs `task verify:fast`. If it fails, the hook exits 2 and the agent
+can't stop: Claude Code keeps working with the failure as its reason, and
+Codex continues the turn with it as the next prompt.
+
+It blocks **once per stop**. If the agent stops again with the checks
+still failing, the payload's `stop_hook_active` is `true`, and the stop
+goes through with the failure printed. That keeps a failure the agent
+can't fix (a flaky test, a missing tool) from looping forever. Claude Code
+has its own cap of eight blocks; Codex documents none. It's a deliberate
+soft spot: CI is still the authoritative gate, and `task audit` isn't part
+of it at all.
+
+To try it by hand, give it a payload on stdin. It reads stdin, so with
+nothing piped it waits:
+
+```console
+$ echo '{"stop_hook_active": false}' | task -x hook:done; echo $?
+0
+```
+
+### Checking the hooks fire
+
+As for the guard, no automated check can see an agent's own hook dispatch.
+In the session you mean to rely on:
+
+- **Session start:** ask the agent what branch it's on without letting it
+  run anything. It should know from the context.
+- **Format:** ask it to write a badly formatted file; it should come back
+  formatted.
+- **Check:** break a test in an edit; the failure should reach the agent
+  without it running the tests.
+- **Stop:** leave the test broken and let it finish; the first stop should
+  be refused, and the second let through.
+
+**Known limitations** of these four, beyond the guard's (below), which
+mostly apply to them too:
+
+- **A Taskfile that won't load turns them off**, and **the nearest
+  Taskfile wins**, exactly as for the guard. A subdirectory Taskfile
+  without the hook tasks makes each hook a non-blocking error.
+- **The Stop gate is only as fast as your cached tests.** Go re-checks
+  every file and environment lookup a cached test made before it reuses
+  the result, so a suite that looks up many paths is slow even when fully
+  cached.
+- **Pre-existing failures block the first stop too.** `verify:fast` checks
+  the whole repository, not only what the agent changed. The second stop
+  goes through.
+- **Codex on Windows** fires no hooks for shell commands
+  ([openai/codex#24453](https://github.com/openai/codex/issues/24453)). The
+  file-edit and lifecycle hooks are unaffected by that issue, but haven't
+  been confirmed on Windows.
+
+### The agent guard
 
 Every standard configures Claude Code and Codex to run a guard before each
 shell command and, for Claude Code, each file edit. It blocks a short list

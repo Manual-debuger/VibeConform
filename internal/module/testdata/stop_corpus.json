@@ -1,0 +1,44 @@
+{
+  "cases": [
+    {
+      "name": "first stop, compact JSON",
+      "stdin": "{\"session_id\":\"s\",\"hook_event_name\":\"Stop\",\"stop_hook_active\":false}",
+      "active": false
+    },
+    {
+      "name": "first stop, spaced JSON",
+      "stdin": "{\"session_id\": \"s\", \"hook_event_name\": \"Stop\", \"stop_hook_active\": false}",
+      "active": false
+    },
+    {
+      "name": "already blocked once, compact JSON",
+      "stdin": "{\"session_id\":\"s\",\"hook_event_name\":\"Stop\",\"stop_hook_active\":true}",
+      "active": true
+    },
+    {
+      "name": "already blocked once, spaced JSON",
+      "stdin": "{\"session_id\": \"s\", \"hook_event_name\": \"Stop\", \"stop_hook_active\": true}",
+      "active": true
+    },
+    {
+      "name": "already blocked once, pretty-printed JSON",
+      "stdin": "{\n  \"session_id\": \"s\",\n  \"stop_hook_active\": true\n}\n",
+      "active": true
+    },
+    {
+      "name": "field missing",
+      "stdin": "{\"session_id\":\"s\",\"hook_event_name\":\"Stop\"}",
+      "active": false
+    },
+    {
+      "name": "invalid JSON",
+      "stdin": "not json",
+      "active": false
+    },
+    {
+      "name": "empty stdin",
+      "stdin": "",
+      "active": false
+    }
+  ]
+}

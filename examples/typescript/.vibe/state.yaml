@@ -1,5 +1,5 @@
 schema: 2
-vibe_version: v0.2.0-alpha.1.0.20260923095733-ebab9e6f4821+dirty
+vibe_version: v0.2.0-alpha.1.0.20260924082303-2c4407010a00+dirty
 standard: prod-ts/v1
 resources:
     .claude/hooks/block-dangerous.sh:
@@ -11,11 +11,11 @@ resources:
     .claude/hooks/policy.json:
         sha256: baed785884d9244755d691de7058cccc9a7a7092b385cac53e44837ef62b3bd8
     .claude/settings.json:
-        sha256: 25eb1aa7a9afba17c64c604db3a4a47fdd76183099cbc0a37c0bbf3a0bdefd18
+        sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
     .codex/config.toml:
         sha256: 0e2463f33a69a35951284567fba5559d3543d47e6ec381433235671d2dd5ac74
     .codex/hooks.json:
-        sha256: 3841518527d76b211d1d3bc4a531584764d979813f832511252b68a4391821cc
+        sha256: 111f23cbbe96e0497b71c0da25ac19143b1a5862e1c62e45ba1c20ecf93fc2c7
     .github/dependabot.yml:
         sha256: f8535549e33ea260cf307d5d96e74a0af625211e90b524a56856bd00a516a6dc
     .github/pull_request_template.md:
@@ -29,7 +29,7 @@ resources:
     Taskfile.vibe.yml:
         sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     Taskfile.yml:
-        sha256: cf1775d63bb53f1960749ca1e2a6f3ce25480b9873a5d8e4ebf30152667f89a1
+        sha256: eceea258a185a23f3afdf24ea11b49fddcdb8b11a78fb7042a0bd3f836373683
     eslint.config.js:
         sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
     lefthook.yml:

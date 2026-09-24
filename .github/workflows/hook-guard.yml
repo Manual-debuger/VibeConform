@@ -7,6 +7,14 @@ name: Hook guard
 # fail-closed suffix, and each runtime's guard in one step. See
 # docs/specs/0021-agent-hooks-task-interface.md.
 #
+# It also runs the other agent hooks (spec 0023) through Task on both OSes:
+# the Stop corpus against hook:done, hook:context's output, and hook:format
+# on a real unformatted file in each synced repository. Those scripts lean
+# on shell and xargs behaviour that differs between Task's built-in
+# Windows utilities and GNU ones on Linux, which is why both OSes run them.
+# The workflow name and check names predate those hooks and stay as they
+# are, so branch protection doesn't change.
+#
 # The in-process tests (go test ./...) already run the Go guard, and the
 # Node and Python guards where those runtimes happen to be installed. Only
 # this workflow proves each one through Task, and on Windows.
@@ -44,10 +52,13 @@ jobs:
         include:
           - standard: prod-go
             dir: .
+            lang: go
           - standard: prod-ts
             dir: examples/typescript
+            lang: ts
           - standard: prod-py
             dir: examples/python
+            lang: py
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -58,6 +69,13 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
+      # hook:format runs the repository's own formatter, installed as a
+      # project dependency, so prod-ts needs pnpm and its node_modules.
+      - name: Setup pnpm
+        if: matrix.standard == 'prod-ts'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: examples/typescript/package.json
       - name: Setup Node
         if: matrix.standard == 'prod-ts'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -74,6 +92,27 @@ jobs:
         env:
           VIBE_GUARD_E2E_DIR: ${{ github.workspace }}/${{ matrix.dir }}
         run: go test -count=1 -run TestGuardCorpusEndToEnd -v ./internal/module/agents
+      # The formatters hook:format calls: goimports is a PATH tool for
+      # prod-go (as in ci.yml); Prettier and Ruff are project dependencies.
+      - name: Install goimports
+        if: matrix.standard == 'prod-go'
+        run: go install golang.org/x/tools/cmd/goimports@latest
+      - name: Install dependencies (prod-ts)
+        if: matrix.standard == 'prod-ts'
+        working-directory: examples/typescript
+        run: pnpm install --frozen-lockfile
+      - name: Install dependencies (prod-py)
+        if: matrix.standard == 'prod-py'
+        working-directory: examples/python
+        run: uv sync
+      # VIBE_HOOKS_E2E turns "task not on PATH" from a skip into a failure,
+      # so this step can't pass having run nothing.
+      - name: Run the other agent hooks through task
+        env:
+          VIBE_HOOKS_E2E: "1"
+          VIBE_HOOKS_E2E_DIR: ${{ github.workspace }}/${{ matrix.dir }}
+          VIBE_HOOKS_E2E_LANG: ${{ matrix.lang }}
+        run: go test -count=1 -run "TestHook|TestCommandWords" -v ./internal/module
 
   gate:
     name: Hook guard / gate

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -76,18 +77,31 @@ func TestResolveDeterministic(t *testing.T) {
 	}
 }
 
-// hookCommands returns every command a Claude Code or Codex hooks config
-// runs, decoding the documented nested shape. It fails the test if the
-// config is not in that shape, which is what the flat Codex config shipped
-// before spec 0021 was.
-func hookCommands(t *testing.T, name string, data []byte) (matchers, commands []string) {
+// hookHandler is one command a hooks config runs for one event.
+type hookHandler struct {
+	event       string
+	matcher     *string
+	command     string
+	timeout     int
+	async       bool
+	asyncRewake bool
+}
+
+// hookHandlers returns every handler a Claude Code or Codex hooks config
+// declares, decoding the documented nested shape strictly for every event.
+// It fails the test if the config is not in that shape, which is what the
+// flat Codex config shipped before spec 0021 was.
+func hookHandlers(t *testing.T, name string, data []byte) []hookHandler {
 	t.Helper()
 	var cfg struct {
 		Hooks map[string][]struct {
 			Matcher *string `json:"matcher"`
 			Hooks   []struct {
-				Type    string `json:"type"`
-				Command string `json:"command"`
+				Type        string `json:"type"`
+				Command     string `json:"command"`
+				Timeout     int    `json:"timeout"`
+				Async       bool   `json:"async"`
+				AsyncRewake bool   `json:"asyncRewake"`
 			} `json:"hooks"`
 		} `json:"hooks"`
 	}
@@ -97,50 +111,125 @@ func hookCommands(t *testing.T, name string, data []byte) (matchers, commands []
 		t.Fatalf("%s is not in the documented hooks shape: %v", name, err)
 	}
 
-	entries := cfg.Hooks["PreToolUse"]
-	if len(entries) == 0 {
-		t.Fatalf("%s has no PreToolUse entries", name)
-	}
-	for _, e := range entries {
-		if e.Matcher == nil {
-			t.Errorf("%s has a PreToolUse entry with no matcher", name)
-		} else {
-			matchers = append(matchers, *e.Matcher)
-		}
-		if len(e.Hooks) == 0 {
-			t.Errorf("%s has a PreToolUse entry with no hooks array; this is the flat shape Codex does not read", name)
-		}
-		for _, h := range e.Hooks {
-			if h.Type != "command" {
-				t.Errorf("%s hook type = %q, want command", name, h.Type)
+	var handlers []hookHandler
+	for event, entries := range cfg.Hooks {
+		for _, e := range entries {
+			if len(e.Hooks) == 0 {
+				t.Errorf("%s has a %s entry with no hooks array; this is the flat shape Codex does not read", name, event)
 			}
-			commands = append(commands, h.Command)
+			for _, h := range e.Hooks {
+				if h.Type != "command" {
+					t.Errorf("%s %s hook type = %q, want command", name, event, h.Type)
+				}
+				handlers = append(handlers, hookHandler{event, e.Matcher, h.Command, h.Timeout, h.Async, h.AsyncRewake})
+			}
 		}
+	}
+	return handlers
+}
+
+// hookCommands returns the matchers and commands of one event's handlers.
+func hookCommands(t *testing.T, name string, data []byte, event string) (matchers, commands []string) {
+	t.Helper()
+	for _, h := range hookHandlers(t, name, data) {
+		if h.event != event {
+			continue
+		}
+		if h.matcher == nil {
+			t.Errorf("%s has a %s entry with no matcher", name, event)
+		} else {
+			matchers = append(matchers, *h.matcher)
+		}
+		commands = append(commands, h.command)
+	}
+	if len(commands) == 0 {
+		t.Fatalf("%s has no %s entries", name, event)
 	}
 	return matchers, commands
 }
 
+// hookCommandsByName are the only commands either config may run: one
+// fixed command per task, the same in every standard.
+var hookCommandsByName = []string{GuardCommand, ContextCommand, FormatCommand, CheckCommand, DoneCommand}
+
 // TestAgentConfigsCallTaskWithExitCode is the -x regression test. Without
-// -x, Task exits 201 when the guard denies, and both agents treat 201 as
-// allow: every guardrail would silently stop guarding.
+// -x, Task exits 201 when a hook exits 2, and both agents treat 201 as a
+// non-blocking error: every guardrail would silently stop guarding, and
+// every failed check would silently pass (spec 0021, and spec 0023 for the
+// other events).
 func TestAgentConfigsCallTaskWithExitCode(t *testing.T) {
+	for _, c := range hookCommandsByName {
+		if !strings.HasPrefix(c, "task -x hook:") || strings.Count(c, " ") != 2 {
+			t.Errorf("hook command %q is not of the form \"task -x hook:<name>\"", c)
+		}
+	}
 	for name, data := range map[string][]byte{
 		".claude/settings.json": claudeSettings,
 		".codex/hooks.json":     codexHooks,
 	} {
-		_, commands := hookCommands(t, name, data)
-		for _, c := range commands {
-			if c != GuardCommand {
-				t.Errorf("%s runs %q, want exactly %q", name, c, GuardCommand)
+		for _, h := range hookHandlers(t, name, data) {
+			if !slices.Contains(hookCommandsByName, h.command) {
+				t.Errorf("%s %s runs %q, want one of %q", name, h.event, h.command, hookCommandsByName)
 			}
 		}
+	}
+}
+
+// wantHandler is one row of spec 0023's section 1 table.
+type wantHandler struct {
+	event, matcher, command string
+	timeout                 int
+	async, asyncRewake      bool
+}
+
+// TestAgentHookEvents pins spec 0023's section 1 table for both configs:
+// every event, its matcher, command, timeout, and async option. Claude Code
+// discards the output of an "async" hook, so its background check must use
+// asyncRewake, which wakes the model on exit 2; Codex has only "async",
+// which delivers the output at the next safe point.
+func TestAgentHookEvents(t *testing.T) {
+	for name, tc := range map[string]struct {
+		data []byte
+		want []wantHandler
+	}{
+		".claude/settings.json": {claudeSettings, []wantHandler{
+			{"SessionStart", "startup|resume|clear", ContextCommand, 30, false, false},
+			{"PreToolUse", "Bash|PowerShell|Write|Edit", GuardCommand, 0, false, false},
+			{"PostToolUse", "Write|Edit|MultiEdit|NotebookEdit", FormatCommand, 60, false, false},
+			{"PostToolUse", "Write|Edit|MultiEdit|NotebookEdit", CheckCommand, 300, false, true},
+			{"Stop", "", DoneCommand, 600, false, false},
+		}},
+		".codex/hooks.json": {codexHooks, []wantHandler{
+			{"SessionStart", "startup|resume|clear", ContextCommand, 30, false, false},
+			{"PreToolUse", "Bash", GuardCommand, 0, false, false},
+			{"PostToolUse", "apply_patch|Edit|Write", FormatCommand, 60, false, false},
+			{"PostToolUse", "apply_patch|Edit|Write", CheckCommand, 300, true, false},
+			{"Stop", "", DoneCommand, 600, false, false},
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var got []wantHandler
+			for _, h := range hookHandlers(t, name, tc.data) {
+				matcher := ""
+				if h.matcher != nil {
+					matcher = *h.matcher
+				}
+				got = append(got, wantHandler{h.event, matcher, h.command, h.timeout, h.async, h.asyncRewake})
+			}
+			key := func(w wantHandler) string { return w.event + "\x00" + w.command }
+			slices.SortFunc(got, func(a, b wantHandler) int { return strings.Compare(key(a), key(b)) })
+			slices.SortFunc(tc.want, func(a, b wantHandler) int { return strings.Compare(key(a), key(b)) })
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("handlers =\n%+v\nwant\n%+v", got, tc.want)
+			}
+		})
 	}
 }
 
 // TestClaudeMatcherCoversCommandsAndEdits checks that Claude Code routes
 // every tool kind the policy has rules for to the guard.
 func TestClaudeMatcherCoversCommandsAndEdits(t *testing.T) {
-	matchers, _ := hookCommands(t, ".claude/settings.json", claudeSettings)
+	matchers, _ := hookCommands(t, ".claude/settings.json", claudeSettings, "PreToolUse")
 	joined := strings.Join(matchers, "|")
 	for _, tools := range policy.Tools {
 		for _, tool := range tools {
@@ -158,15 +247,15 @@ func TestClaudeMatcherCoversCommandsAndEdits(t *testing.T) {
 // shipped .codex/hooks.json was a flat list with no matcher, no inner hooks
 // array, and no type, which Codex's documented schema does not describe.
 func TestCodexHooksMatchDocumentedSchema(t *testing.T) {
-	matchers, commands := hookCommands(t, ".codex/hooks.json", codexHooks)
+	matchers, commands := hookCommands(t, ".codex/hooks.json", codexHooks, "PreToolUse")
 	if len(matchers) != 1 || matchers[0] != "Bash" {
-		t.Errorf(".codex/hooks.json matchers = %v, want [Bash]", matchers)
+		t.Errorf(".codex/hooks.json PreToolUse matchers = %v, want [Bash]", matchers)
 	}
 	if len(commands) != 1 {
-		t.Errorf(".codex/hooks.json runs %d commands, want 1", len(commands))
+		t.Errorf(".codex/hooks.json PreToolUse runs %d commands, want 1", len(commands))
 	}
 	if bytes.Contains(codexHooks, []byte("commandWindows")) {
-		t.Error(".codex/hooks.json sets commandWindows; the guard command is the same on every OS")
+		t.Error(".codex/hooks.json sets commandWindows; every hook command is the same on every OS")
 	}
 }
 

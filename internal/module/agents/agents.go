@@ -28,6 +28,20 @@ import (
 // treat any exit other than 2 as allow.
 const GuardCommand = "task -x hook:guard"
 
+// The other hooks both agents run (spec 0023), each a task the standard's
+// repo-tooling module defines. The -x matters for the same reason as for
+// GuardCommand: a failed check exits 2 only if Task passes the code through.
+const (
+	// ContextCommand runs at session start; its stdout becomes context.
+	ContextCommand = "task -x hook:context"
+	// FormatCommand runs after each file edit.
+	FormatCommand = "task -x hook:format"
+	// CheckCommand runs after each file edit, in the background.
+	CheckCommand = "task -x hook:check"
+	// DoneCommand runs when the agent ends its turn, as a gate.
+	DoneCommand = "task -x hook:done"
+)
+
 //go:embed templates/claude/settings.json
 var claudeSettings []byte
 

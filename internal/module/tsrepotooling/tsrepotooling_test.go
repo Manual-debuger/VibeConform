@@ -106,6 +106,23 @@ func TestTaskfileUsesPnpm(t *testing.T) {
 	}
 }
 
+// TestTaskfileUsesCaches pins spec 0023's section 3: the tools behind
+// verify:fast cache their work, so the Stop hook and the async check redo
+// only what changed. Every cache lives under node_modules, which every
+// Node repository already ignores; VibeConform manages no .gitignore.
+func TestTaskfileUsesCaches(t *testing.T) {
+	for _, want := range []string{
+		"pnpm exec prettier --write --cache ",
+		"pnpm exec prettier --check --cache ",
+		"pnpm exec eslint . --cache --cache-location node_modules/.cache/eslint/",
+		"pnpm exec tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/tsbuildinfo",
+	} {
+		if !bytes.Contains(taskfile, []byte(want)) {
+			t.Errorf("Taskfile.yml does not run %q", want)
+		}
+	}
+}
+
 // TestLefthookUsesPnpm is TestTaskfileUsesPnpm for the git hooks.
 func TestLefthookUsesPnpm(t *testing.T) {
 	assertNoNpm(t, "lefthook.yml", lefthookConfig)
