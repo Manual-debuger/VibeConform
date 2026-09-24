@@ -68,89 +68,105 @@ Four commits, each leaving the tree green.
 
 Regression tests first, watched failing:
 
-- [ ] `conformance_test.go`: name `vibe-conformance`; resolves
+- [x] `conformance_test.go`: name `vibe-conformance`; resolves
       `.github/workflows/conformance.yml` then `Taskfile.vibe.yml`,
       `Generated`, slash paths, deterministic, LF, and templates match the
       live root files.
-- [ ] `conformance.yml`: parses; single job whose name is
+- [x] `conformance.yml`: parses; single job whose name is
       `Conformance / audit`; its last step runs `task audit`; no `@latest`
       anywhere; no `go install` of `vibe`; self-hosting probe present.
-- [ ] `Taskfile.vibe.yml`: only task `audit`. Every `vibe` invocation is
+- [x] `Taskfile.vibe.yml`: only task `audit`. Every `vibe` invocation is
       bare `vibe …` or `go install github.com/Manual-debuger/VibeConform/cmd/vibe@…`
       (replaces `TestAuditInvokesVibeFromPath` / `TestAuditStillInvokesVibe`
       for this file).
-- [ ] Behaviour test (skipped unless `task` is on PATH): copy
+- [x] Behaviour test (skipped unless `task` is on PATH): copy
       `Taskfile.vibe.yml` into a temp dir and set a PATH with neither
       `vibe` nor `go`, only `task`'s own directory. Table: no state file,
       `dev`, `v0.3.0+dirty`, missing key: each exits non-zero and prints
       the reason. `v0.2.0-alpha.1` with no `go`: non-zero, and the message
       names `go`. The same table drives the `state.Pinnable` test in C2.
-- [ ] `verify_independence_test.go`: no command anywhere in any
+- [x] `verify_independence_test.go`: no command anywhere in any
       repo-tooling Taskfile mentions `vibe`; each Taskfile has no `audit`
       task and includes `./Taskfile.vibe.yml` with `optional: true` and
       `flatten: true`.
-- [ ] Each CI template test: no `conformance` job, `gate.needs` excludes
+- [x] Each CI template test: no `conformance` job, `gate.needs` excludes
       it, and the file does not contain `vibe`.
-- [ ] `tools_test.go` `TestRegisteredModulesDeclareTheirTools`: expect
+- [x] `tools_test.go` `TestRegisteredModulesDeclareTheirTools`: expect
       `go`, `goimports`, `govulncheck` and `actionlint` from
       `repo-tooling`. Add the same for `prod-py/v1` `uv` from
       `py-repo-tooling`.
-- [ ] `repotooling_test.go` and `pyrepotooling_test.go` `RequiredTools`
+- [x] `repotooling_test.go` and `pyrepotooling_test.go` `RequiredTools`
       expectations.
-- [ ] `wiring_test.go`: every registered standard includes
+- [x] `wiring_test.go`: every registered standard includes
       `vibe-conformance`.
 
 Then implementation:
 
-- [ ] `internal/module/conformance/{conformance.go,templates/conformance.yml,templates/Taskfile.vibe.yml}`
-- [ ] `standard.go` wiring.
-- [ ] CI templates: remove `conformance`; replace the "remove all three"
+- [x] `internal/module/conformance/{conformance.go,templates/conformance.yml,templates/Taskfile.vibe.yml}`
+- [x] `standard.go` wiring.
+- [x] CI templates: remove `conformance`; replace the "remove all three"
       comment with a pointer to `conformance.yml`.
-- [ ] Taskfile templates: remove `audit`, add include, reword `verify` desc.
-- [ ] `RequiredTools` additions, each with its `Why`.
-- [ ] Rebuild `vibe` (fresh binary, per the CRLF / stale-embed hazard).
+- [x] Taskfile templates: remove `audit`, add include, reword `verify` desc.
+- [x] `RequiredTools` additions, each with its `Why`.
+- [x] Rebuild `vibe` (fresh binary, per the CRLF / stale-embed hazard).
       Run `vibe sync` in the root, `examples/typescript` and
       `examples/python`. `task verify` and `task audit` pass in each.
-- [ ] `examples.yml` still calls `task audit` after building `vibe`. No
+- [x] `examples.yml` still calls `task audit` after building `vibe`. No
       change is expected; confirm.
 
 ### C2: `Pinnable` and sync warning
 
-- [ ] `state.Pinnable` test from the shared table.
-- [ ] `sync` tests: warns for `dev` without `cmd/vibe`; silent when
+- [x] `state.Pinnable` test from the shared table.
+- [x] `sync` tests: warns for `dev` without `cmd/vibe`; silent when
       `cmd/vibe` exists; silent for a pinnable version; exit code
       unchanged.
-- [ ] Implement `state.Pinnable` and the warning in `runSync`, after the
+- [x] Implement `state.Pinnable` and the warning in `runSync`, after the
       missing-tool warnings, on stderr.
 
 ### C3: docs
 
-- [ ] `docs/usage.md`:
+- [x] `docs/usage.md`:
   - "Removing VibeConform" becomes four deletions, plus the inert include.
   - A new "`task audit` without vibe installed" subsection covering
     pinning, the fallback, the failure messages and the 3a warning.
   - The per-standard "manages" lists gain the two files.
   - Required checks: `CI / gate` and `Conformance / audit`.
-- [ ] `docs/architecture/overview.md`: package layout gains
+- [x] `docs/architecture/overview.md`: package layout gains
       `internal/module/conformance`.
-- [ ] `docs/architecture/principles.md`: "every CI job except
+- [x] `docs/architecture/principles.md`: "every CI job except
       `conformance`" becomes "every workflow except `conformance.yml`";
       update the mechanism table if it cites the old location.
-- [ ] `AGENTS.md`, `README.md`: wording that places `audit` in
+- [x] `AGENTS.md`, `README.md`: wording that places `audit` in
       `Taskfile.yml` or conformance in `ci.yml`.
-- [ ] ADR 0008: a one-line note that the probe moved to `conformance.yml`
+- [x] ADR 0008: a one-line note that the probe moved to `conformance.yml`
       and is now shared.
-- [ ] `grep -rn "conformance job\|needs.conformance\|vibe@latest"`
+- [x] `grep -rn "conformance job\|needs.conformance\|vibe@latest"`
       returns only history (specs and plans up to 0021).
-- [ ] Spec 0022 status: accepted and implemented.
+- [x] Spec 0022 status: accepted and implemented.
 
 ### C4: verification
 
-- [ ] `task verify` and `task audit` at the root and in both examples.
-- [ ] Manual fallback on Windows with `vibe` off PATH: state `dev` fails
+- [x] `task verify` and `task audit` at the root and in both examples.
+- [x] Manual fallback on Windows with `vibe` off PATH: state `dev` fails
       loudly. A temp copy with state `v0.2.0-alpha.1` resolves
       `go install …@v0.2.0-alpha.1`; a non-zero verdict is expected, because
       that release's templates differ.
 - [ ] Push. CI reports `CI / gate`, `Conformance / audit` and
       `Examples / gate` green.
 - [ ] The PR body gives the branch-protection step for the maintainer.
+
+## Verification record (2026-09-24, Windows 11, go1.27.0, Task v3.53.1)
+
+- `go test ./internal/... ./cmd/...`: all pass. `TestAuditFallbackNeverPassesSilently`
+  ran 14 cases through Task's real shell, including CRLF state files.
+- Root: `task verify` green (golangci-lint 0 issues, govulncheck clean,
+  actionlint accepts `conformance.yml`); `task audit` conformant.
+- `examples/typescript`, `examples/python`: `task verify` and `task audit`
+  green after re-sync.
+- Fallback, live: in a temp copy with `vibe_version: v0.2.0-alpha.1` and
+  no `vibe` on PATH, `task -x audit` installed that release into
+  `$(go env GOCACHE)/vibeconform/v0.2.0-alpha.1`, ran it, and exited 2
+  (drift, expected against that release's older templates), which
+  confirms exit codes pass through.
+- The sync warning is silent at the root (which has `cmd/vibe`) and fires in
+  `examples/python` for a `+dirty` build, as specified.

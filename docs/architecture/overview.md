@@ -186,6 +186,7 @@ internal/
     ci/github/              # GitHub Actions workflow, dependabot, PR template (prod-go)
     ci/githubts/            # the same, for prod-ts
     ci/githubpy/            # the same, for prod-py
+    conformance/            # conformance.yml + Taskfile.vibe.yml: the only files that run vibe
     repotooling/            # Taskfile.yml, lefthook.yml, Go guard (prod-go)
     tsrepotooling/          # Taskfile.yml, lefthook.yml, Node guard (prod-ts)
     pyrepotooling/          # Taskfile.yml, lefthook.yml, Python guard (prod-py)
@@ -244,12 +245,20 @@ its CI `conformance` job stay independently invocable, VibeConform-specific
 checks layered on top, not folded into what `verify` means by "the code is
 correct."
 
+Since spec 0022, those checks are also *physically* separate. They live in
+the `vibe-conformance` module's two files, `Taskfile.vibe.yml` (included
+optionally by `Taskfile.yml`) and `.github/workflows/conformance.yml`.
+Nothing in `Taskfile.yml` or `ci.yml` refers to `vibe`, so removing
+VibeConform deletes files instead of editing shared ones.
+
 Since spec 0018, all three standards resolve `vibe` the same way in
-`audit`: a `PATH` lookup (`vibe audit --repo-root .`). Go previously used
+`audit`: a `PATH` lookup (`vibe audit --repo-root .`). Since spec 0022,
+when that lookup fails, `audit` falls back to installing exactly the
+`vibe_version` `.vibe/state.yaml` records. Go previously used
 `go run ./cmd/vibe`, which resolved only in this repository and left every
 external `prod-go/v1` adopter with a `task audit` — and so a CI
-`conformance` job — that could not run. The Go `conformance` job's
-`Install vibe` step is conditional as a result; see
+`conformance` job — that could not run. The conformance job's
+self-hosting build step is conditional as a result; see
 `docs/decisions/0008-self-hosting-probe-in-shipped-templates.md` for why a
 published release is the wrong binary for this repository to audit itself
 with.
