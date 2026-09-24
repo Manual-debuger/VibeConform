@@ -24,8 +24,9 @@ const devVersion = "dev"
 // vibe: "go install github.com/.../cmd/vibe@latest" compiles from source
 // without GoReleaser, so main.version keeps its default and the binary
 // would report "dev" despite being a specific published release. That is
-// not cosmetic — the generated CI conformance job installs vibe exactly
-// that way, so every adopter's binary would be unorderable and spec 0019's
+// not cosmetic — task audit's fallback installs vibe exactly that way
+// (go install …@<recorded version>, spec 0022), and so do most adopters,
+// so every adopter's binary would be unorderable and spec 0019's
 // stale-binary guard would never fire for the population it exists to
 // protect.
 //

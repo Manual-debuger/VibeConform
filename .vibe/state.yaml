@@ -1,5 +1,5 @@
 schema: 2
-vibe_version: v0.2.0-alpha.1.0.20260923082700-8c4312c8599a+dirty
+vibe_version: v0.2.0-alpha.1.0.20260923095733-ebab9e6f4821+dirty
 standard: prod-go/v1
 resources:
     .claude/hooks/block-dangerous.sh:
@@ -21,10 +21,14 @@ resources:
     .github/pull_request_template.md:
         sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
     .github/workflows/ci.yml:
-        sha256: a804b675d0a2faadd098acd25459b2587113ec0504d3c867f0e3f9de7a0699fa
+        sha256: 63d9279abb97aba78246a6395660e50dada613f38e2ec451009bc632036282de
+    .github/workflows/conformance.yml:
+        sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
     .golangci.yml:
         sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
+    Taskfile.vibe.yml:
+        sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     Taskfile.yml:
-        sha256: fcb9b4054dbe13a4eee5c9b544ad65d51c3743ccfcf277c1a357fcfe1e97148c
+        sha256: c23b496c728e9d598a3b62cea257267c87b179d30ee205f377651357123e070b
     lefthook.yml:
         sha256: 39b86742ce5cf94c5451adbc236b5be86c8cfd2acc717160424c363e6511fcdc

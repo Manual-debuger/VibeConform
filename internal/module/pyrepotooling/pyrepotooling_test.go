@@ -65,14 +65,15 @@ func TestResolveDeterministic(t *testing.T) {
 func TestRequiredTools(t *testing.T) {
 	requirer, ok := New().(module.ToolRequirer)
 	if !ok {
-		t.Fatal("py-repo-tooling should declare task and lefthook; it does not implement ToolRequirer")
+		t.Fatal("py-repo-tooling should declare task, lefthook, and uv; it does not implement ToolRequirer")
 	}
 
 	tools := requirer.RequiredTools()
-	if len(tools) != 2 {
-		t.Fatalf("RequiredTools() = %+v, want 2 entries", tools)
+	if len(tools) != 3 {
+		t.Fatalf("RequiredTools() = %+v, want 3 entries", tools)
 	}
-	for _, want := range []string{"task", "lefthook"} {
+	// uv since spec 0022: every Taskfile and lefthook command runs through it.
+	for _, want := range []string{"task", "lefthook", "uv"} {
 		found := false
 		for _, tool := range tools {
 			if tool.Name == want {

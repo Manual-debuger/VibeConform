@@ -77,7 +77,7 @@ How to apply:
 - A generated command that can be expressed with a third-party tool must
   be. `task verify` and `task verify-ci` depend on native language tooling
   only, never on `vibe` (spec 0017), and the same applies to git hooks and
-  every CI job except `conformance`.
+  every workflow except `conformance.yml` (spec 0022).
 - Where `vibe` is genuinely necessary — the conformance check itself —
   confine it: to as few files, tasks, and jobs as possible, each labeled as
   VibeConform's and removable on its own. `docs/usage.md`'s "Removing
@@ -106,3 +106,4 @@ How to apply:
 | 2 | Task's portable shell, slash-separated resource paths, byte-exact writes, and CI's `ubuntu-latest`/`windows-latest` test matrix |
 | 3 | `task verify` has no `vibe` dependency (spec 0017); `Taskfile.local.yml` is plain Task `includes`, not a VibeConform mechanism |
 | 3 | `sync` warns about missing tools but never installs them (spec 0014) |
+| 3 | `vibe` is confined to `conformance.yml` and `Taskfile.vibe.yml`, so removal is deleting files; `task audit` installs the recorded `vibe_version` when `vibe` is absent and fails loudly otherwise (spec 0022) |

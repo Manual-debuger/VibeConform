@@ -336,6 +336,22 @@ warning that fires on a healthy repository teaches you to ignore the ones
 that matter. Environment-aware checking is what `vibe doctor` is for, and it
 does not exist yet.
 
+One more stderr warning, about the binary rather than the machine. A `vibe`
+built locally reports `dev` or a `+dirty` version, and that is what `sync`
+records as `vibe_version`. `task audit` cannot fetch such a version when
+`vibe` is not installed (see "`task audit`, with or without `vibe`" below),
+so CI's conformance check would fail:
+
+```
+warning: vibe dev is not a released or pseudo-version, so task audit
+cannot pin it; CI's conformance check will fail unless vibe is on PATH.
+Sync with a released vibe (go install github.com/Manual-debuger/VibeConform/cmd/vibe@<tag>) before pushing.
+```
+
+It is skipped in a repository that contains `cmd/vibe`. That means
+VibeConform itself, whose conformance job builds `vibe` from source instead
+of pinning it (`docs/decisions/0008-self-hosting-probe-in-shipped-templates.md`).
+
 **Flags:**
 
 | Flag          | Default | Meaning                          |
@@ -445,6 +461,7 @@ its modules compose:
 |---|---|
 | `go-tooling` | `.golangci.yml` |
 | `github-ci` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
+| `vibe-conformance` | `.github/workflows/conformance.yml`, `Taskfile.vibe.yml` |
 | `repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.go` |
 | `agent-config` | `.claude/settings.json`, `.claude/hooks/policy.json`, `.codex/config.toml`, `.codex/hooks.json` |
 
@@ -466,14 +483,35 @@ Deliberately **not** managed, and left for you to maintain by hand:
 - `Taskfile.local.yml` — your own tasks, deliberately outside the managed
   set. See "Adding your own tasks" below.
 
-**`task audit` needs `vibe` on `PATH`.** All three standards generate the
-same `audit` task (`vibe audit --repo-root .`), so a repository that has
-not installed `vibe` gets a clear failure —
-`"vibe": executable file not found in $PATH` — rather than a silent pass.
-The generated `conformance` job installs it for you. Nothing else in
-`Taskfile.yml` depends on `vibe`: since spec 0017, `task verify` and
-`task verify-ci` are native language tooling only, so a contributor with no
-`vibe` installed can still run the full verification gate.
+**`task audit`, with or without `vibe`.** All three standards get the same
+`audit` task, in `Taskfile.vibe.yml`, which `Taskfile.yml` includes
+optionally. It takes the first of these that applies (spec 0022):
+
+1. If `vibe` is on `PATH`, it runs `vibe audit --repo-root .`.
+2. Otherwise it reads `vibe_version` from `.vibe/state.yaml`. It installs
+   exactly that version with
+   `go install github.com/Manual-debuger/VibeConform/cmd/vibe@<version>` into
+   `$(go env GOCACHE)/vibeconform/<version>`, and runs it. Later runs reuse
+   the binary.
+3. Otherwise it says why it could not run and exits 1: `go` is missing,
+   there is no state file, or the recorded version is `dev` or `+dirty`,
+   which no module proxy serves.
+
+It never exits 0 without `vibe audit` having run. Step 2 pins the result:
+CI runs the exact `vibe` that last synced the repository, so a new
+VibeConform release cannot change CI's verdict. Moving to a new `vibe` is
+an ordinary `vibe sync` with the newer binary, and it shows up as a
+reviewable change to `vibe_version`. It uses `go install` rather than
+`go run` because `go run` reports every non-zero exit as 1, which would
+blur "not conformant" (2) and "could not answer" (1).
+
+The generated `.github/workflows/conformance.yml` runs `task audit` in its
+own job, `Conformance / audit`, separate from `ci.yml`'s `CI / gate`. The
+job has no step that installs `vibe`; step 2 obtains it. Make both checks
+required in branch protection. Nothing else in `Taskfile.yml` depends on
+`vibe`: since spec 0017, `task verify` and `task verify-ci` use native
+language tooling only, so a contributor with no `vibe` installed can still
+run the full verification gate.
 
 **File modes.** Every resource is written `0644`. Mode is applied on write but
 is **not** audited (`docs/decisions/0006-resource-file-mode.md`). Since spec
@@ -517,9 +555,12 @@ vibe sync
 | `prod-py/v1` | `github-ci-py` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
 | `prod-py/v1` | `py-repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.py` |
 
-Both also compose `agent-config`, which is language-neutral, so a TypeScript
-or Python repository gets the same `.claude/` and `.codex/` guardrails a Go
-one does. Only the guard's language differs; see "The agent guard" below.
+Both also compose two language-neutral modules. `vibe-conformance`
+provides `.github/workflows/conformance.yml` and `Taskfile.vibe.yml`,
+exactly as it does for `prod-go`. `agent-config` gives a TypeScript or
+Python repository the same `.claude/` and `.codex/` guardrails a Go
+repository gets; only the guard's language differs (see "The agent guard"
+below).
 
 **As of M3 these are complete standards, not lint/format/typecheck only.**
 Through M2 they composed neither `repo-tooling` nor `github-ci` — a
@@ -533,7 +574,8 @@ close that gap:
   pnpm" below); `py-repo-tooling`'s shells
   out to `ruff`/`pyright`/`pytest` via `uv run`. All three expose the same
   target names (`fmt`, `fmt:check`, `lint`, `typecheck`, `test`, `audit`,
-  `verify`, `verify-ci`), plus Go's language-specific `test:race`,
+  `verify`, `verify-ci`; `audit` is defined in the included
+  `Taskfile.vibe.yml`), plus Go's language-specific `test:race`,
   `mod:verify`, `security`, and `workflows:lint`.
 
   That set is the whole of what a standard asserts. Until spec 0018,
@@ -545,7 +587,7 @@ close that gap:
   below).
 - `github-ci-ts`/`github-ci-py` run on `actions/setup-node` /
   `astral-sh/setup-uv` instead of `actions/setup-go` (Go is still installed
-  in-workflow to install `task` and `vibe` themselves), calling those
+  in-workflow to install `task`), calling those
   Taskfile targets. Each also gets its own `dependabot.yml`: the Go one
   hardcodes `package-ecosystem: gomod`, so it isn't reusable as-is —
   `github-ci-ts` declares `npm` (Dependabot's ecosystem for pnpm too),
@@ -883,34 +925,25 @@ or backward. That is what lets `sync` refuse to run backwards.
 
 Nothing generated depends on VibeConform staying installed to keep
 working: `task verify`/`task verify-ci` depend only on native language
-tooling (spec 0017), never on a `vibe` binary. The VibeConform-specific
-pieces are concentrated and removable on their own:
+tooling (spec 0017), never on a `vibe` binary. Since spec 0022, every
+VibeConform-specific piece is a file of its own, so removing it means
+deleting four things and editing none:
 
-- Delete `.vibe/` and `vibe.yaml`.
-- Remove the `conformance` job from `.github/workflows/ci.yml` — in three
-  places, not two: the job itself, its entry in `gate`'s `needs` list, and
-  its `"${{ needs.conformance.result }}"` line in `gate`'s `for result in`
-  loop. Miss the third and the expression evaluates to the empty string,
-  which is not `success`, so `gate` fails on every run afterward. (The Go
-  standard's `actionlint` job catches the dangling reference;
-  `prod-ts`/`prod-py` CI has no equivalent job, so there it surfaces only
-  as a permanently red `gate`.)
-- Delete the `audit` task from `Taskfile.yml`. Once `vibe.yaml` is gone it
-  has nothing to check against and exits 1 with
-  `Error: audit: open vibe.yaml: no such file or directory` — or, if
-  `vibe` was never on `PATH` to begin with, `"vibe": executable file not
-  found in $PATH`. Either way, leaving it in place breaks nothing else,
-  since nothing in `Taskfile.yml` depends on it, but it is a task that can
-  now only fail.
-- Leave the `includes:` block at the top of `Taskfile.yml` alone unless you
-  want to. It is ordinary Task configuration, not a VibeConform mechanism,
-  and it keeps working after teardown: your `Taskfile.local.yml` — which
-  `vibe` never owned — goes on being included exactly as before. Removing
-  the block means folding those tasks back into `Taskfile.yml` by hand.
+- `vibe.yaml`
+- `.vibe/`
+- `.github/workflows/conformance.yml`. Also drop `Conformance / audit`
+  from your branch protection's required checks, or pull requests will
+  wait forever for a check that no longer runs.
+- `Taskfile.vibe.yml`
+
+`Taskfile.yml`'s `includes:` block then names two optional files that
+don't have to exist: `Taskfile.local.yml` (yours, never `vibe`'s) and the
+deleted `Taskfile.vibe.yml`. An optional include of a missing file does
+nothing, so both can stay. Delete the `vibe` entry whenever you like.
 
 Everything else `vibe sync` wrote — `.golangci.yml`, `eslint`/`prettier`/
-`tsconfig`, `ruff`/`pyright` config, the rest of `Taskfile.yml`, the
-language CI jobs — is ordinary project configuration at that point, no
+`tsconfig`, `ruff`/`pyright` config, the rest of `Taskfile.yml`, `ci.yml`
+and its `CI / gate` — is ordinary project configuration at that point, no
 different from having written it by hand.
 `.github/workflows/examples.yml` in this repository demonstrates the split
 for its own TS/PY fixtures: `task verify` runs first, with no `vibe` on

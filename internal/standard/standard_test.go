@@ -21,7 +21,7 @@ func TestLookupProdGoV1ModulesInOrder(t *testing.T) {
 		t.Fatalf("Lookup returned error: %v", err)
 	}
 
-	want := []string{"go-tooling", "github-ci", "repo-tooling", "agent-config"}
+	want := []string{"go-tooling", "github-ci", "vibe-conformance", "repo-tooling", "agent-config"}
 	if len(s.Modules) != len(want) {
 		t.Fatalf("prod-go/v1 has %d modules, want %d", len(s.Modules), len(want))
 	}

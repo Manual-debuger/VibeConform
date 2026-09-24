@@ -9,11 +9,14 @@
 > answer at all
 > (see [`docs/specs/0009-vibe-audit-v2.md`](docs/specs/0009-vibe-audit-v2.md)
 > and [`docs/specs/0019-drift-classification.md`](docs/specs/0019-drift-classification.md)).
-> The `prod-go`/`v1` standard composes four modules: `go-tooling`
+> The `prod-go`/`v1` standard composes five modules: `go-tooling`
 > (a fixed `.golangci.yml`, see
 > [`docs/specs/0005-gotooling-module.md`](docs/specs/0005-gotooling-module.md))
 > `github-ci` (CI workflow, Dependabot config, PR template, see
 > [`docs/specs/0010-github-ci-module.md`](docs/specs/0010-github-ci-module.md)),
+> `vibe-conformance` (the `Conformance` workflow and `Taskfile.vibe.yml`'s
+> `task audit`, the only generated files that run `vibe`, see
+> [`docs/specs/0022-conformance-isolation.md`](docs/specs/0022-conformance-isolation.md)),
 > `repo-tooling` (`Taskfile.yml`, `lefthook.yml`, see
 > [`docs/specs/0011-repo-tooling-module.md`](docs/specs/0011-repo-tooling-module.md)),
 > and `agent-config` (Claude/Codex settings that run `task -x hook:guard`
@@ -31,7 +34,7 @@
 > missing from `PATH`.
 > This repository declares `prod-go`/`v1` in its own `vibe.yaml`, commits
 > `.vibe/state.yaml`, and runs `vibe audit` against itself in CI — every file
-> those four modules manage is generated from a module template rather than
+> those five modules manage is generated from a module template rather than
 > hand-maintained (see
 > [`docs/specs/0013-dogfood-self-management.md`](docs/specs/0013-dogfood-self-management.md)).
 > M2 added `prod-ts`/`v1` and `prod-py`/`v1` as lint/format/typecheck-only
@@ -137,7 +140,7 @@ cmd/vibe/          CLI entrypoint
 internal/cli/      Command tree (root + init/audit/diff/sync/check/doctor)
 internal/manifest/ vibe.yaml parsing
 internal/standard/ Named, versioned standard registry
-internal/module/   Module composition interface + the ten modules the three standards compose
+internal/module/   Module composition interface + the eleven modules the three standards compose
 internal/resource/ Resource + ownership + file mode model
 internal/reconcile/ Three-way decision engine
 internal/state/    .vibe/state.yaml read/write

@@ -59,6 +59,16 @@ application: it builds `./cmd/vibe` into `$RUNNER_TEMP/bin` when that
 directory exists, and otherwise runs the same `go install …@latest` its
 `githubts`/`githubpy` siblings already ship.
 
+**Update (spec 0022).** The probe moved to the shared
+`.github/workflows/conformance.yml`, owned by the language-neutral
+`vibe-conformance` module, so all three standards now ship it. The
+fallback is no longer `go install …@latest` in the workflow. The step
+simply does nothing when `cmd/vibe` is absent, and `task audit` installs
+the `vibe_version` recorded in `.vibe/state.yaml`. The "Go-only"
+consequence below describes the situation before that change. In a
+TypeScript or Python repository the branch is now inert, not absent: it
+costs one `if` and saves keeping three workflow templates.
+
 ## Consequences
 
 - The probe is Go-only. A TypeScript or Python repository never provides a

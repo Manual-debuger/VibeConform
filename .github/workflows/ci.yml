@@ -126,51 +126,10 @@ jobs:
       - name: task security
         run: task security
 
-  conformance:
-    name: conformance
-    runs-on: ubuntu-latest
-    # VibeConform's own check, independent of the language jobs above —
-    # task verify/verify-ci never depend on it (spec 0017). Safe to remove
-    # if this repository stops using VibeConform, but remove all three of:
-    # this job, its entry in gate's `needs` below, and its line in gate's
-    # `for result in` list. Dropping it from `needs` alone leaves
-    # needs.conformance.result evaluating to the empty string, which fails
-    # gate on every run. See docs/usage.md's "Removing VibeConform".
-    #
-    # Gating since docs/specs/0013-dogfood-self-management.md's step B. A
-    # managed file edited directly instead of through its module template
-    # fails here: vibe audit exits 2 for drift, 1 if it could not answer.
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
-      - name: Install vibe
-        run: |
-          if [ -d ./cmd/vibe ]; then
-            # Self-hosting: this repository provides cmd/vibe, so audit
-            # against the working tree's embedded templates. Installing a
-            # published release instead would compare a pull request's
-            # regenerated files against the previous release's templates
-            # and report drift on every template change.
-            # See docs/decisions/0008-self-hosting-probe-in-shipped-templates.md.
-            mkdir -p "$RUNNER_TEMP/bin"
-            go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
-            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-          else
-            go install github.com/Manual-debuger/VibeConform/cmd/vibe@latest
-          fi
-      - name: task audit
-        run: task audit
-
   gate:
     name: CI / gate
     if: always()
-    needs: [lint, actionlint, mod-tidy, test, race, security, conformance]
+    needs: [lint, actionlint, mod-tidy, test, race, security]
     runs-on: ubuntu-latest
     steps:
       - name: Require all upstream jobs to have succeeded
@@ -181,8 +140,7 @@ jobs:
             "${{ needs.mod-tidy.result }}" \
             "${{ needs.test.result }}" \
             "${{ needs.race.result }}" \
-            "${{ needs.security.result }}" \
-            "${{ needs.conformance.result }}"; do
+            "${{ needs.security.result }}"; do
             if [ "$result" != "success" ]; then
               echo "A required job did not succeed: $result"
               exit 1

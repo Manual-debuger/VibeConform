@@ -211,6 +211,11 @@ func TestRegisteredModulesDeclareTheirTools(t *testing.T) {
 		"golangci-lint": "go-tooling",
 		"task":          "repo-tooling",
 		"lefthook":      "repo-tooling",
+		// Spec 0022: every binary Taskfile.yml and lefthook.yml call.
+		"go":          "repo-tooling",
+		"goimports":   "repo-tooling",
+		"govulncheck": "repo-tooling",
+		"actionlint":  "repo-tooling",
 	} {
 		if got := declared[tool]; got != wantModule {
 			t.Errorf("%s declared by %q, want %q", tool, got, wantModule)
