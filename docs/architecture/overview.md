@@ -159,8 +159,12 @@ components:
     depends_on: [contracts]
 ```
 
-The graph engine is not built at bootstrap time (see
-`docs/plans/0001-bootstrap.md`).
+Since spec 0025, `vibe.yaml` carries this list as `components:`
+(`id`, `path`, `profile`; ADR 0012), and `prod-mono/v1` resolves from it:
+each component gets its profile's single-language configuration at its
+path, and the root `Taskfile.yml` and `ci.yml` fan out to every component.
+`depends_on` and the graph engine are still not built, so every task runs
+every component (see `docs/plans/0001-bootstrap.md`).
 
 ## Repository intelligence and Skills Manager boundaries
 
@@ -179,17 +183,20 @@ Present today:
 
 ```text
 internal/
-  manifest/                 # vibe.yaml parsing
+  manifest/                 # vibe.yaml parsing, including components (ADR 0012)
   standard/                 # versioned standard definitions
   module/                   # module composition interface + optional ToolRequirer
     gotooling/              # .golangci.yml
     ci/github/              # GitHub Actions workflow, dependabot, PR template (prod-go)
     ci/githubts/            # the same, for prod-ts
     ci/githubpy/            # the same, for prod-py
+    ci/githubmono/          # the same, one job per component, for prod-mono
     conformance/            # conformance.yml + Taskfile.vibe.yml: the only files that run vibe
     repotooling/            # Taskfile.yml, lefthook.yml, Go guard (prod-go)
     tsrepotooling/          # Taskfile.yml, lefthook.yml, Node guard (prod-ts)
     pyrepotooling/          # Taskfile.yml, lefthook.yml, Python guard (prod-py)
+    monorepotooling/        # root + per-component Taskfiles, lefthook.yml, guard (prod-mono)
+    monotooling/            # each component's language config, re-rooted (prod-mono)
     agents/claude/          # Claude Code settings + guard policy (policy.json)
     agents/codex/           # Codex config; hooks suspended (spec 0024)
     tstooling/              # eslint, prettier, tsconfig base
@@ -202,7 +209,8 @@ internal/
 ```
 
 Since M2, `examples/typescript` and `examples/python` hold real repositories
-declaring the language standards, synced and committed. They are the drift
+declaring the language standards, synced and committed; since spec 0025,
+`examples/monorepo` does the same for `prod-mono/v1`. They are the drift
 alarm for modules this repository cannot dogfood: a Go repository never
 resolves `tstooling` or `pythontooling`, so without them those templates
 would have no live counterpart, which is the role `.golangci.yml` plays for

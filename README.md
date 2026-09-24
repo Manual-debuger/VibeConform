@@ -49,6 +49,10 @@
 > and gave `prod-ts`/`prod-py` their own `repo-tooling`/`github-ci` variants,
 > so they are now complete standards rather than lint configuration — see
 > [`docs/specs/0016-ts-py-tooling-parity.md`](docs/specs/0016-ts-py-tooling-parity.md).
+> `prod-mono`/`v1` manages a polyglot monorepo: Go, TypeScript, and Python
+> components declared in `vibe.yaml`'s `components:` list, each configured
+> as its single-language standard would configure a repository — see
+> [`docs/specs/0025-prod-mono.md`](docs/specs/0025-prod-mono.md).
 > `check` and `doctor` still return "not implemented yet."
 > Nothing described below as "eventually" or "will" exists yet. See
 > [`docs/plans/0007-m1-milestone.md`](docs/plans/0007-m1-milestone.md),
