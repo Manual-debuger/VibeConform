@@ -149,4 +149,31 @@ unaffected, since `.claude/settings.json` doesn't change in any commit.
 
 ## Verification record
 
-To be filled in at C4.
+2026-09-24, Windows 11, Go 1.27.0, Task 3.53.1, `vibe` rebuilt from the
+branch (`go install ./cmd/vibe`) before every audit and sync.
+
+- **C1:** `task verify` passed and `task audit` reported 13 resources,
+  0 drifted, 0 out of date, with no sync: the split is byte-identical.
+- **C2:** `vibe sync` at the root and in both examples updated exactly
+  `.codex/config.toml` and `.codex/hooks.json` (plus `.vibe/state.yaml`)
+  and left every other resource unchanged. `pnpm exec prettier --check
+  .codex/hooks.json` in `examples/typescript` passed.
+- **C4:**
+  - `task verify` and `task audit` pass at the root; `task verify` and
+    `vibe audit` pass in `examples/typescript` and `examples/python`.
+  - `vibe diff` against a worktree of `main` reports exactly
+    `.codex/config.toml` and `.codex/hooks.json` as "would update
+    (standard moved since last applied state)" and the other 11 resources,
+    all of `.claude/` included, as no change.
+
+Found during implementation, left out of scope (spec 0024 changes nothing
+Claude Code runs), and added to the spec's follow-on work:
+
+- `hook:format` fails when Claude Code's working directory is a
+  subdirectory: `git diff --relative` and `git ls-files` print paths
+  relative to the repository root (Task runs from the Taskfile's
+  directory), but on Windows the formatter resolves them against the
+  agent's directory ("GetFileAttributesEx … cannot find the path"). From
+  the root it passes.
+- The repo-tooling `Taskfile.yml` templates' comments still say the hook
+  tasks are called by Claude Code and Codex.

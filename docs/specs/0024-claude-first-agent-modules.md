@@ -1,8 +1,9 @@
 # Spec 0024: Claude First, One Module per Agent, Codex Hooks Suspended
 
-Status: accepted (2026-09-24), with the proposed answer to both open
-questions: keep composing `codex-config`, and nest the packages. Not yet
-implemented.
+Status: implemented (2026-09-24), with the proposed answer to both open
+questions: keep composing `codex-config`, and nest the packages. See
+`docs/plans/0024-claude-first-agent-modules.md` for the verification
+record.
 
 ## Problem
 
@@ -211,3 +212,8 @@ After upgrading `vibe`, in a repository on any standard:
   Windows shows exit codes or JSON decisions being honoured.
 - Dropping `codex-config` from the standards, if Codex support is later
   retired rather than resumed.
+- `hook:format` from a subdirectory: on Windows it fails because the
+  root-relative paths git prints are resolved against the agent's working
+  directory (found during implementation; see the plan).
+- The repo-tooling `Taskfile.yml` templates' comments still describe the
+  hook tasks as called by Claude Code and Codex.
