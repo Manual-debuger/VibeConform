@@ -151,9 +151,9 @@ Then implementation:
       loudly. A temp copy with state `v0.2.0-alpha.1` resolves
       `go install …@v0.2.0-alpha.1`; a non-zero verdict is expected, because
       that release's templates differ.
-- [ ] Push. CI reports `CI / gate`, `Conformance / audit` and
+- [x] Push. CI reports `CI / gate`, `Conformance / audit` and
       `Examples / gate` green.
-- [ ] The PR body gives the branch-protection step for the maintainer.
+- [x] The PR body gives the branch-protection step for the maintainer.
 
 ## Verification record (2026-09-24, Windows 11, go1.27.0, Task v3.53.1)
 
