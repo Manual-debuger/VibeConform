@@ -190,7 +190,8 @@ internal/
     repotooling/            # Taskfile.yml, lefthook.yml, Go guard (prod-go)
     tsrepotooling/          # Taskfile.yml, lefthook.yml, Node guard (prod-ts)
     pyrepotooling/          # Taskfile.yml, lefthook.yml, Python guard (prod-py)
-    agents/                 # Claude/Codex config + guard policy (policy.json)
+    agents/claude/          # Claude Code settings + guard policy (policy.json)
+    agents/codex/           # Codex config; hooks suspended (spec 0024)
     tstooling/              # eslint, prettier, tsconfig base
     pythontooling/          # ruff, pyright
   resource/                 # resource + ownership + file mode model

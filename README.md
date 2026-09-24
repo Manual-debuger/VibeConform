@@ -19,12 +19,14 @@
 > [`docs/specs/0022-conformance-isolation.md`](docs/specs/0022-conformance-isolation.md)),
 > `repo-tooling` (`Taskfile.yml`, `lefthook.yml`, see
 > [`docs/specs/0011-repo-tooling-module.md`](docs/specs/0011-repo-tooling-module.md)),
-> and `agent-config` (Claude/Codex settings that run `task -x hook:guard`
+> `claude-config` (Claude Code settings that run `task -x hook:guard`
 > to block destructive commands, plus session context, formatting after
 > edits, background checks, and a `verify:fast` gate at stop, see
 > [`docs/specs/0012-agent-config-module.md`](docs/specs/0012-agent-config-module.md),
 > [`docs/specs/0021-agent-hooks-task-interface.md`](docs/specs/0021-agent-hooks-task-interface.md),
-> and [`docs/specs/0023-agent-lifecycle-hooks.md`](docs/specs/0023-agent-lifecycle-hooks.md)).
+> and [`docs/specs/0023-agent-lifecycle-hooks.md`](docs/specs/0023-agent-lifecycle-hooks.md)),
+> and `codex-config` (Codex settings, with hooks suspended, see
+> [`docs/specs/0024-claude-first-agent-modules.md`](docs/specs/0024-claude-first-agent-modules.md)).
 > `vibe diff` previews the reconciliation VibeConform would perform for that
 > resource against `.vibe/state.yaml` — see
 > [`docs/specs/0006-reconcile-diff-v1.md`](docs/specs/0006-reconcile-diff-v1.md).

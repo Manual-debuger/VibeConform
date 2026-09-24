@@ -218,6 +218,15 @@ it. This was checked against both runtimes' documentation on 2026-09-24:
   request and tool calls finish, or at the next user turn if no turn is
   active. It runs at most eight background hooks per session.
 
+*Corrected 2026-09-24 (spec 0024):* two statements above were wrong.
+Claude Code does not discard an `async` hook's output: it delivers the
+hook's JSON `additionalContext` and `systemMessage` on the next turn. It
+doesn't act on exit 2 or stderr, though, and doesn't wake an idle session,
+so `asyncRewake` is still the right choice. And Codex delivers only JSON
+`additionalContext`/`systemMessage` from a background hook; a live canary
+confirmed that stderr with exit 2 never reaches the model. Spec 0024
+suspended Codex hooks as a result.
+
 **What runs.** `verify:fast`'s steps except `fmt:check`
 (`task -s typecheck lint test` for `prod-go`, `task -s lint typecheck test`
 for the others). "Affected" comes from each tool's cache:
