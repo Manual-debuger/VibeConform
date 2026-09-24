@@ -61,25 +61,25 @@ pass.
 Under Task v3.53.1 (the CI pin) and the minimum version the templates
 declare, on Windows 11 and Linux:
 
-- [ ] **`xargs -r`** (question 2): Task's built-in `xargs` with empty
+- [x] **`xargs -r`** (question 2): Task's built-in `xargs` with empty
       stdin, with and without `-r`. Also a path containing a space. If
       `-r` is unsupported, settle the empty-list guard form.
-- [ ] **Template functions** (question 3): `splitLines`, `len`, slicing
+- [x] **Template functions** (question 3): `splitLines`, `len`, slicing
       (`slice` or `until`/`range` with an index), and `base .ROOT_DIR`.
       Find the lowest Task version that has all of them.
-- [ ] **`Stop` pattern**: `case "$(cat)" in …` inside a `cmds` entry
+- [x] **`Stop` pattern**: `case "$(cat)" in …` inside a `cmds` entry
       reads the hook's stdin on both OSes. Test with compact JSON, spaced
       JSON, and the field missing.
-- [ ] **Git state probes**: `git rev-parse --git-path MERGE_HEAD` and the
+- [x] **Git state probes**: `git rev-parse --git-path MERGE_HEAD` and the
       rest, with the shell's `test -e`, in a worktree and a normal clone.
-- [ ] **`uv python find`** (question 5): on a machine or CI runner with no
+- [x] **`uv python find`** (question 5): on a machine or CI runner with no
       uv-managed Python and `UV_PYTHON_DOWNLOADS` unset, confirm it
       downloads nothing (watch `uv python dir` before and after).
-- [ ] **`hook:format` latency** (question 6): a warm run for a one-file
+- [x] **`hook:format` latency** (question 6): a warm run for a one-file
       change in each example and at the root, per step. Any step over the
       1-second budget moves to `hook:check`, and the spec's 4.2 table is
       amended to match.
-- [ ] **`git status` timing** (question 4): `hook:context` here, and on a
+- [x] **`git status` timing** (question 4): `hook:context` here, and on a
       synthetic checkout of about 100k files, against the 30-second
       timeout.
 
@@ -227,9 +227,70 @@ Then implementation:
 - [ ] Push. `CI / gate`, `Conformance / audit`, `Examples / gate` and
       `Hook guard / gate` are green.
 
-## Spike results
+## Spike results (2026-09-24)
 
-*(Filled in during step 0.)*
+Run on Windows 11 (Task v3.53.1, Git for Windows) and on Linux (WSL
+Ubuntu, Task v3.53.1 and v3.39.0 built into a scratch `GOBIN`).
+
+- **`xargs`** (question 2). *Windows:* Task's built-in `xargs` (u-root)
+  wins over Git's `xargs.exe` on `PATH`. It has no `-r` ("flag provided but
+  not defined: -r", exit 1). It runs nothing on empty input, splits on
+  whitespace, and supports `-0`. *Linux:* Task has no built-in core
+  utilities there, so GNU `xargs` runs, and it **runs the command once on
+  empty input** (`RAN[]`). `-r` therefore can't be used on Windows, and
+  isn't implied on Linux. **Use the fallback:** each cmd skips when the
+  git list is empty, then pipes `git … -z` into `xargs -0` so paths with
+  spaces survive. Spec 4.2 is amended.
+- **Template functions** (question 3). `base .ROOT_DIR`, `splitLines`,
+  `trim`, `len`, `slice`, `join`, `range` with an index, and `sub` all work
+  on both OSes, and on Task v3.39.0. **The minimum Task version stays
+  v3.39.0.**
+- **`Stop` pattern.** `case "$(cat)" in …` inside a cmd reads the hook's
+  stdin on both OSes and on v3.39.0. Compact JSON, `": true"` with a space,
+  and pretty-printed JSON across lines match. `false`, a missing field, and
+  invalid JSON don't.
+- **Git state.** `git rev-parse --git-path <name>` plus `[ -e … ]` detects
+  a merge in progress in a normal clone and in a linked worktree, and
+  clears after `git merge --abort`.
+- **`uv python find`** (question 5). With an empty `HOME` and a `PATH`
+  holding only `uv` (Linux, uv 0.12.10) it exits 2 with "No interpreter
+  found in virtual environments, managed installations, or search path",
+  and the managed-Python directory is never created. **It doesn't
+  download.** On Windows the same isolation isn't possible, because uv
+  also finds interpreters through the registry (PEP 514), which is
+  lookup, not download.
+- **`hook:format` latency** (question 6), warm, one file, milliseconds:
+
+  | Step | Time |
+  |---|---|
+  | Task startup | ~75 |
+  | git changed-file list (`diff` + `ls-files`) | ~100 |
+  | `goimports -l` / `gofmt -l` | ~70 / ~45 |
+  | `uv run ruff format --check` / `uv run ruff check --fix --diff` | ~70 / ~70 |
+  | `pnpm exec node -e 0` (**pnpm overhead alone**) | ~1030 |
+  | `pnpm exec prettier --cache --check` | ~1100 |
+  | `node …/prettier.cjs --cache --check` (no pnpm) | ~105 |
+  | `pnpm exec eslint --cache --fix-dry-run`, cache hit / miss | ~1800 / ~2200 |
+  | `pnpm exec tsc --noEmit --incremental` (for `hook:check`) | ~1400 |
+
+  `prod-go` totals about 300 ms and `prod-py` about 320 ms, both within
+  the budget. **`prod-ts` misses it** on `pnpm exec`'s startup alone.
+  `node_modules/.bin/prettier` doesn't run in Task's shell on Windows (the
+  shim is a shell script, exit 201), so there's no portable way to skip
+  pnpm. **Decision needed. See "Open after spikes".**
+- **`git status`** (question 4). On a synthetic 100,000-file repository:
+  `git status --short` ~84 ms with Git for Windows' default
+  `core.fscache`, ~315 ms with it off; `git diff --dirstat` ~66 ms. This
+  repository: ~50 ms. Far under the 30-second timeout, so no flag is
+  added. `docs/usage.md` still names `core.fsmonitor` and
+  `core.untrackedCache`.
+
+## Open after spikes
+
+- **`prod-ts` `hook:format` is over the 1-second budget** because of
+  `pnpm exec`'s ~1 s startup: Prettier ~1.1 s, and ESLint `--fix` a further
+  ~1.8–2.2 s. Under the rule the spec set, both would move to `hook:check`.
+  That would leave TS with no synchronous formatting at all.
 
 ## Verification record
 

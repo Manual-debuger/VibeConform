@@ -170,15 +170,19 @@ Synchronous, `timeout: 60`.
 git's own pathspec filtering by extension:
 
 ```sh
-{ git diff --name-only --diff-filter=d HEAD -- '*.go'
-  git ls-files --others --exclude-standard -- '*.go'; } | xargs -r goimports -w
+files="$(git diff --name-only --diff-filter=d HEAD -- '*.go'; git ls-files --others --exclude-standard -- '*.go')"
+[ -z "$files" ] || { git diff -z --name-only --diff-filter=d HEAD -- '*.go'; git ls-files -z --others --exclude-standard -- '*.go'; } | xargs -0 goimports -w || exit 2
 ```
 
-`-r` skips the run on an empty list (resolved question 2).
+*Added during implementation:* the spikes (plan 0023) ruled out
+`xargs -r`. Task's built-in `xargs` on Windows rejects `-r`, and on Linux,
+where Task has no built-in core utilities, GNU `xargs` runs the command
+once on empty input. So each cmd skips on an empty list first. It then
+passes NUL-separated names (`-z`, `-0`), which both `xargs`
+implementations accept, so paths containing spaces survive.
 
-`--diff-filter=d` drops deleted files. Task's built-in core utilities
-include `xargs` on Windows, so this runs the same everywhere
-(principle 2). The file the agent just edited is always in this set. So
+`--diff-filter=d` drops deleted files. The form above behaves the same on
+Windows and Linux (principle 2). The file the agent just edited is always in this set. So
 is anything else uncommitted, including the user's own edits. That is
 accepted, because formatters are idempotent and the repository's
 `fmt:check` would demand it anyway. No hook payload is parsed.
