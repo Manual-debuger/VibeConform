@@ -77,6 +77,15 @@ jobs:
       - name: task verify
         working-directory: examples/typescript
         run: task verify
+      # What the agents' Stop hook and session start run (spec 0023), on
+      # real fixture source. hook-guard.yml tests the hook scripts
+      # themselves; this proves they work in a synced example.
+      - name: task verify:fast
+        working-directory: examples/typescript
+        run: task verify:fast
+      - name: task hook:context
+        working-directory: examples/typescript
+        run: task hook:context
       # GOEXE is ".exe" on Windows and empty elsewhere. An extensionless
       # vibe is not found by PATH lookup on Windows.
       - name: Build vibe from source
@@ -110,6 +119,12 @@ jobs:
       - name: task verify
         working-directory: examples/python
         run: task verify
+      - name: task verify:fast
+        working-directory: examples/python
+        run: task verify:fast
+      - name: task hook:context
+        working-directory: examples/python
+        run: task hook:context
       - name: Build vibe from source
         run: |
           mkdir -p "$RUNNER_TEMP/bin"

@@ -234,14 +234,29 @@ Then implementation:
 
 ### C4: CI
 
-- [ ] `hook-guard.yml`: run the new end-to-end tests next to
+- [x] `hook-guard.yml`: run the new end-to-end tests next to
       `TestGuardCorpusEndToEnd` on the existing standard × OS matrix. Keep
       the job and check names unchanged, so branch protection is
       untouched. Update the header comment to say the workflow now covers
       all agent hooks.
-- [ ] `examples.yml`: `task verify:fast` and `task hook:context` in each
+- [x] `examples.yml`: `task verify:fast` and `task hook:context` in each
       example, after the existing `task verify`.
-- [ ] `actionlint` passes (`task workflows:lint`).
+- [x] `actionlint` passes (`task workflows:lint`).
+
+*As built:*
+
+- **Each leg installs what its `hook:format` calls.** `goimports` for
+  `prod-go`, as `ci.yml` does. For `prod-ts`, pnpm and
+  `pnpm install --frozen-lockfile`, because Prettier is a project
+  dependency. For `prod-py`, `uv sync` for Ruff.
+- **One new step runs `-run "TestHook|TestCommandWords"`** with
+  `VIBE_HOOKS_E2E=1`, and with `VIBE_HOOKS_E2E_DIR` and
+  `VIBE_HOOKS_E2E_LANG` (a new matrix field) set for the leg. Under
+  `VIBE_HOOKS_E2E=1` a missing `task` fails the step instead of skipping.
+  `TestHookFormatGo` requires `goimports` only when the language is `go`.
+  Simulated locally for all three legs: 0 skips, all green.
+- **In `examples.yml`**, `verify:fast` and `hook:context` run after
+  `task verify` in both example jobs, TypeScript on Linux and Windows.
 
 ### C5: docs
 

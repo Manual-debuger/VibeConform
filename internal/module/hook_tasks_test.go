@@ -464,8 +464,10 @@ func TestHookContextOutsideGit(t *testing.T) {
 func TestHookFormatGo(t *testing.T) {
 	task := taskOnPath(t)
 	if _, err := exec.LookPath("goimports"); err != nil {
-		if os.Getenv("VIBE_HOOKS_E2E") != "" {
-			t.Fatalf("VIBE_HOOKS_E2E is set but goimports is not on PATH: %v", err)
+		// Only the prod-go leg of the hook-guard workflow installs
+		// goimports; it sets VIBE_HOOKS_E2E_LANG=go.
+		if os.Getenv("VIBE_HOOKS_E2E_LANG") == "go" {
+			t.Fatalf("VIBE_HOOKS_E2E_LANG=go but goimports is not on PATH: %v", err)
 		}
 		t.Skip("goimports not on PATH")
 	}
