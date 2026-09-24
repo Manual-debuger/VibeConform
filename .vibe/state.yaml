@@ -1,5 +1,5 @@
 schema: 2
-vibe_version: v0.2.0-alpha.1.0.20260924074155-c86dde2dbf36+dirty
+vibe_version: v0.2.0-alpha.1.0.20260924075331-2e966794d2b6+dirty
 standard: prod-go/v1
 resources:
     .claude/hooks/block-dangerous.sh:
@@ -29,6 +29,6 @@ resources:
     Taskfile.vibe.yml:
         sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     Taskfile.yml:
-        sha256: 9e69dde090e4af80bab4fc494632b1cb029b5cda26565846075b08c2961463c8
+        sha256: 28b34183c7feb79546869f810d8fbec7d5a9becd9e07ce3f61775785c1b4de57
     lefthook.yml:
         sha256: 39b86742ce5cf94c5451adbc236b5be86c8cfd2acc717160424c363e6511fcdc

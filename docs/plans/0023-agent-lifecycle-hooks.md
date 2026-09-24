@@ -124,25 +124,25 @@ Then implementation:
 
 Regression tests first:
 
-- [ ] Each repo-tooling test, following `TestHookGuardTask`: `hook:context`,
+- [x] Each repo-tooling test, following `TestHookGuardTask`: `hook:context`,
       `hook:format`, `hook:check`, `hook:done` exist, have no `desc`, and
       are `silent`. `hook:check` and `hook:done` both run `verify:fast`.
       Every `hook:format` cmd ends in `|| exit 2`.
-- [ ] `hooks_test.go`, context allowlist: every command word in
+- [x] `hooks_test.go`, context allowlist: every command word in
       `hook:context` (its cmds and its `sh:` variables, split on `|`, `;`,
       `&&`, `||`) is one of `git`, `go`, `node`, `pnpm`, `uv`, `task`,
       `test`, `echo`, `printf`. Otherwise the test fails. It also fails if
       `hook:context` calls another task.
-- [ ] `hooks_test.go`, format scope: every `hook:format` cmd takes its
+- [x] `hooks_test.go`, format scope: every `hook:format` cmd takes its
       files from `git diff --name-only --diff-filter=d HEAD` plus
       `git ls-files --others --exclude-standard`, with a pathspec that
       matches the extension set its `fmt` task uses.
-- [ ] `stop_corpus.json` plus an in-process test: each case (field true,
+- [x] `stop_corpus.json` plus an in-process test: each case (field true,
       compact and spaced JSON, false, missing, invalid JSON) with a stub
       `verify:fast` that fails. Expected: exit 2 unless
       `stop_hook_active` is true, in which case exit 0 with the failure
       still printed.
-- [ ] End-to-end tests, gated by environment variables like
+- [x] End-to-end tests, gated by environment variables like
       `TestGuardCorpusEndToEnd`: the `Stop` corpus through
       `task -x hook:done`; `hook:format` on an empty changed set (exit 0,
       nothing run) and on one unformatted file (file comes back formatted);
@@ -151,9 +151,46 @@ Regression tests first:
 
 Then implementation:
 
-- [ ] The four tasks in each template, using the spike results.
-- [ ] Rebuild and sync, examples first, then the root. `task verify` and
+- [x] The four tasks in each template, using the spike results.
+- [x] Rebuild and sync, examples first, then the root. `task verify` and
       `task audit` in each.
+
+*As built.* All C2 tests are in `internal/module/hook_tasks_test.go`,
+table-driven over the three templates, next to C1's `hooks_test.go`. The
+Stop cases are in `internal/module/testdata/stop_corpus.json`. Other
+differences from the checklist above:
+
+- **The allowlist test parses the scripts.** A shell-aware
+  `commandWords` takes the first word of every segment, split on pipes,
+  lists, `$(`, `then`, `do`, and `else`, skipping assignments.
+  `TestCommandWords` pins that it catches a heavy command hidden in a
+  substitution, a list, or after an assignment. `task` isn't allowed in
+  `hook:context` at all. Each script is a single cmd, since
+  `hook:context` needs no `sh:` variables.
+- **`hook:check` and `hook:done` call `task -s verify:fast 1>&2 || exit 2`**
+  rather than `- task: verify:fast`:
+  - With `-x`, a failing subtask's own code comes through (go test's 1),
+    and both agents act only on 2.
+  - `-s` drops Task's command echo.
+  - `1>&2` matters because go test prints failures on stdout, and an
+    agent shows the model stderr on exit 2.
+- **`hook:format` keeps stdout empty on success**, because agents parse
+  stdout on exit 0: Prettier gets `--log-level warn`, `ruff format` gets
+  `--quiet`, and the fix step is
+  `ruff check --fix --exit-zero --silent`. Remaining Ruff findings are
+  `hook:check`'s to report, so the format hook doesn't fail on them.
+- **Tracked changes use `git diff --relative`**, so in a subdirectory
+  Taskfile (`examples/*`) the paths are relative to it, as `ls-files`'
+  already are. `hook:context`'s `git status` still reports the whole
+  repository, with `../` paths, which is the context an agent wants.
+- **What runs where:**
+  - `TestHookDoneBlocksOnce`, `TestHookContextOutput`,
+    `TestHookContextOutsideGit` and `TestHookFormatGo` run whenever
+    `task` (and, for the last, `goimports`) is on PATH. Under
+    `VIBE_HOOKS_E2E=1` they fail instead of skipping.
+  - `TestHookFormatEndToEnd` needs `VIBE_HOOKS_E2E_DIR` and
+    `VIBE_HOOKS_E2E_LANG`, and ran green locally at the root and in both
+    examples. C4 wires it into `hook-guard.yml`.
 
 ### C3: agent-config registers the events
 
