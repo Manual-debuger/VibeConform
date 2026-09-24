@@ -1,4 +1,4 @@
-package agents
+package claude
 
 import (
 	"bytes"
@@ -128,7 +128,7 @@ func requireTool(t *testing.T, name string) string {
 // repo-tooling module.
 func guardTemplate(t *testing.T, module, file string) string {
 	t.Helper()
-	path, err := filepath.Abs(filepath.Join("..", module, "templates", file))
+	path, err := filepath.Abs(filepath.Join("..", "..", module, "templates", file))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestGuardCorpusGo(t *testing.T) {
 	}
 	// #nosec G204 -- fixed arguments
 	build := exec.Command("go", "build", "-o", bin, "./templates")
-	build.Dir = filepath.Join("..", "repotooling")
+	build.Dir = filepath.Join("..", "..", "repotooling")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building guard.go: %v\n%s", err, out)
 	}

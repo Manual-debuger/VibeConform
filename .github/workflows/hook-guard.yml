@@ -1,6 +1,6 @@
 name: Hook guard
 
-# Runs the shared guard corpus (internal/module/agents/testdata) through the
+# Runs the shared guard corpus (internal/module/agents/claude/testdata) through the
 # exact command the generated agent configs contain, task -x hook:guard, in
 # a repository synced to each standard, on Linux and Windows. That checks
 # the Taskfile wiring, Task's -x exit-code passthrough, the "|| exit 2"
@@ -91,7 +91,7 @@ jobs:
       - name: Run the corpus through task -x hook:guard
         env:
           VIBE_GUARD_E2E_DIR: ${{ github.workspace }}/${{ matrix.dir }}
-        run: go test -count=1 -run TestGuardCorpusEndToEnd -v ./internal/module/agents
+        run: go test -count=1 -run TestGuardCorpusEndToEnd -v ./internal/module/agents/claude
       # The formatters hook:format calls: goimports is a PATH tool for
       # prod-go (as in ci.yml); Prettier and Ruff are project dependencies.
       - name: Install goimports
