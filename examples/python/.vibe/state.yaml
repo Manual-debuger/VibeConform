@@ -1,5 +1,5 @@
 schema: 2
-vibe_version: v0.2.0-alpha.1.0.20260923082700-8c4312c8599a+dirty
+vibe_version: v0.2.0-alpha.1.0.20260923095733-ebab9e6f4821+dirty
 standard: prod-py/v1
 resources:
     .claude/hooks/block-dangerous.sh:
@@ -21,9 +21,13 @@ resources:
     .github/pull_request_template.md:
         sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
     .github/workflows/ci.yml:
-        sha256: d4e4ab4b6879d0661bdfe6141b0f345e3d924dde616a3cdfca75074704592d11
+        sha256: 4ee29f4fec08fedb9ac5a7ca84455b4d81732d73a714f92e54a879c13def96f5
+    .github/workflows/conformance.yml:
+        sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
+    Taskfile.vibe.yml:
+        sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     Taskfile.yml:
-        sha256: 055919fffe7b1db828e9e872a50a212f6835d769e5a3287e26602190a408118a
+        sha256: 6c7d0130617ea574e6205578dbdab8a7e8b810753e5239e1fdf22ebce2936844
     lefthook.yml:
         sha256: 9cbde339d40f685b9770ab9eab4c61a871b402649bfae53253ec6a387af796d1
     pyrightconfig.json:

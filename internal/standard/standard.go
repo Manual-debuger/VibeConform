@@ -11,6 +11,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/github"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubpy"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubts"
+	"github.com/Manual-debuger/VibeConform/internal/module/conformance"
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/pyrepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/pythontooling"
@@ -66,7 +67,7 @@ func init() {
 		Name:    "prod-go",
 		Version: "v1",
 		// Order matters: audit, diff, and sync report in module order.
-		Modules: []module.Module{gotooling.New(), github.New(), repotooling.New(), agents.New()},
+		Modules: []module.Module{gotooling.New(), github.New(), conformance.New(), repotooling.New(), agents.New()},
 	})
 
 	// Through M2 these composed only their language-tooling module plus
@@ -74,16 +75,19 @@ func init() {
 	// prod-ts/prod-py got lint config but no verification entry point at
 	// all. Spec 0016 closes that gap with each language's own repo-tooling
 	// and github-ci variant, in the same module order prod-go uses
-	// (language tooling, CI, repo-tooling, agent-config).
+	// (language tooling, CI, repo-tooling, agent-config). Spec 0022 adds
+	// vibe-conformance to all three, directly after CI: it holds the
+	// conformance workflow and task audit, the only generated files that
+	// run vibe.
 	Register(Standard{
 		Name:    "prod-ts",
 		Version: "v1",
-		Modules: []module.Module{tstooling.New(), githubts.New(), tsrepotooling.New(), agents.New()},
+		Modules: []module.Module{tstooling.New(), githubts.New(), conformance.New(), tsrepotooling.New(), agents.New()},
 	})
 
 	Register(Standard{
 		Name:    "prod-py",
 		Version: "v1",
-		Modules: []module.Module{pythontooling.New(), githubpy.New(), pyrepotooling.New(), agents.New()},
+		Modules: []module.Module{pythontooling.New(), githubpy.New(), conformance.New(), pyrepotooling.New(), agents.New()},
 	})
 }

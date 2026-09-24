@@ -1,0 +1,61 @@
+name: Conformance
+
+# VibeConform's own check, and the only workflow that runs vibe. Every
+# language job lives in ci.yml and never depends on it (spec 0017). If this
+# repository stops using VibeConform, delete this file together with
+# Taskfile.vibe.yml, vibe.yaml, and .vibe/ — nothing else refers to it.
+# See docs/specs/0022-conformance-isolation.md and docs/usage.md's
+# "Removing VibeConform".
+#
+# A managed file edited directly instead of through its module template
+# fails here: vibe audit exits 2 for drift, 1 if it could not answer.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.0"
+  TASK_VERSION: "v3.53.1"
+
+jobs:
+  audit:
+    # Named in full, like CI / gate, so the required-check name branch
+    # protection needs is exactly this string.
+    name: Conformance / audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      # No vibe install step: task audit runs the vibe version recorded in
+      # .vibe/state.yaml when none is on PATH, so CI's verdict cannot change
+      # without a change to this repository (spec 0022).
+      - name: Build vibe from source (self-hosting only)
+        run: |
+          if [ -d ./cmd/vibe ]; then
+            # This repository provides cmd/vibe, so audit against the
+            # working tree's embedded templates. Running a published
+            # release instead would compare a pull request's regenerated
+            # files against the previous release's templates and report
+            # drift on every template change.
+            # See docs/decisions/0008-self-hosting-probe-in-shipped-templates.md.
+            mkdir -p "$RUNNER_TEMP/bin"
+            go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+      - name: task audit
+        run: task audit

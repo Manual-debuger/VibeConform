@@ -81,3 +81,18 @@ func TestAgentConfigWiring(t *testing.T) {
 		})
 	}
 }
+
+// TestEveryStandardComposesConformance pins spec 0022: the conformance job
+// and task audit no longer live in any language module, so a standard
+// without vibe-conformance would silently lose its conformance check.
+func TestEveryStandardComposesConformance(t *testing.T) {
+	for k, s := range registry {
+		found := false
+		for _, m := range s.Modules {
+			found = found || m.Name() == "vibe-conformance"
+		}
+		if !found {
+			t.Errorf("%s/%s does not compose vibe-conformance", k.name, k.version)
+		}
+	}
+}

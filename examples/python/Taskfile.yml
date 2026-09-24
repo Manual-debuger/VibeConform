@@ -13,6 +13,14 @@ includes:
     taskfile: ./Taskfile.local.yml
     optional: true
     flatten: true
+  # VibeConform's own tasks (task audit), kept out of this file so that
+  # removing VibeConform is deleting Taskfile.vibe.yml, not editing this
+  # one. Optional for the same reason: with the file gone, this include
+  # does nothing. See docs/specs/0022-conformance-isolation.md.
+  vibe:
+    taskfile: ./Taskfile.vibe.yml
+    optional: true
+    flatten: true
 
 # Task's built-in shell (mvdan.cc/sh) interprets POSIX-style syntax
 # identically on Windows/Linux/macOS, so these commands need no per-OS
@@ -44,11 +52,6 @@ tasks:
     cmds:
       - uv run pytest
 
-  audit:
-    desc: Check this repository against the standard its vibe.yaml declares.
-    cmds:
-      - vibe audit --repo-root .
-
   # Called by Claude Code and Codex, not by people: .claude/settings.json
   # and .codex/hooks.json run "task -x hook:guard" before every shell
   # command and file edit. No desc, so it stays out of task --list. The -x
@@ -67,8 +70,8 @@ tasks:
 
   verify:
     desc: Local verification gate — native language tooling only, never
-      VibeConform itself; CI runs these checks plus "task audit" in its own
-      conformance job.
+      VibeConform itself; "task audit" is VibeConform's check, which CI
+      runs in its own Conformance workflow.
     cmds:
       - task: fmt:check
       - task: lint

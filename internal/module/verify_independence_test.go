@@ -118,11 +118,17 @@ func TestVerifyNeverInvokesVibe(t *testing.T) {
 	}
 }
 
-// TestAuditStillInvokesVibe is the other half of the invariant above: verify
-// must not reach vibe, but audit still must. Without this, deleting the audit
-// task altogether would make TestVerifyNeverInvokesVibe pass while removing the
-// conformance check the CI conformance job depends on.
-func TestAuditStillInvokesVibe(t *testing.T) {
+// TestRepoToolingTaskfilesNeverInvokeVibe pins spec 0022's isolation: every
+// vibe invocation lives in Taskfile.vibe.yml, which the vibe-conformance
+// module owns and which removing VibeConform deletes. The repo-tooling
+// Taskfile only includes it, optionally, so it keeps working once that file
+// is gone. Checking every task rather than only verify's closure is what
+// makes "delete four files" the whole removal procedure.
+//
+// The audit task's own invariants — it must reach vibe, and only as a
+// PATH-resolved binary or a pinned remote module (specs 0017, 0018) — moved
+// with it to internal/module/conformance.
+func TestRepoToolingTaskfilesNeverInvokeVibe(t *testing.T) {
 	for _, rel := range repoToolingTaskfiles {
 		t.Run(rel, func(t *testing.T) {
 			raw, err := os.ReadFile(filepath.FromSlash(rel))
@@ -135,62 +141,38 @@ func TestAuditStillInvokesVibe(t *testing.T) {
 				t.Fatalf("parsing template: %v", err)
 			}
 
-			if _, ok := doc.Tasks["audit"]; !ok {
-				t.Fatal("no audit task; the CI conformance job runs `task audit`")
+			if _, ok := doc.Tasks["audit"]; ok {
+				t.Error("defines an audit task; it belongs in Taskfile.vibe.yml (spec 0022)")
 			}
-
-			invokesVibe := false
-			for _, cmd := range doc.shellClosure(t, "audit") {
-				if strings.Contains(cmd, "vibe") {
-					invokesVibe = true
+			for name := range doc.Tasks {
+				for _, cmd := range doc.shellClosure(t, name) {
+					if strings.Contains(cmd, "vibe") {
+						t.Errorf("task %s reaches %q, which invokes vibe; only "+
+							"Taskfile.vibe.yml may (spec 0022)", name, cmd)
+					}
 				}
 			}
-			if !invokesVibe {
-				t.Error("task audit no longer invokes vibe; it is the only thing that should")
-			}
-		})
-	}
-}
 
-// TestAuditInvokesVibeFromPath pins spec 0018's invariant: audit must reach
-// vibe as a binary resolved from PATH, not by compiling one out of the
-// repository being audited. `go run ./cmd/vibe audit` only ever worked here,
-// because this repository vendors cmd/vibe; every external prod-go/v1 adopter
-// got that same generated line and a task that could not run (issue #20).
-//
-// TestAuditStillInvokesVibe above does not cover this. It matches the substring
-// "vibe", which both `go run ./cmd/vibe audit` and `vibe audit` satisfy — spec
-// 0017's invariant is about whether audit reaches vibe, not how. The two tests
-// are complementary and neither subsumes the other.
-//
-// The requirement is stated positively — audit's vibe invocation is a bare
-// PATH lookup — rather than by blacklisting today's known-bad forms, so a new
-// way of smuggling in a repository-local path fails this test without anyone
-// having to think of it first.
-func TestAuditInvokesVibeFromPath(t *testing.T) {
-	for _, rel := range repoToolingTaskfiles {
-		t.Run(rel, func(t *testing.T) {
-			raw, err := os.ReadFile(filepath.FromSlash(rel))
-			if err != nil {
-				t.Fatalf("reading template: %v", err)
+			var inc struct {
+				Includes map[string]struct {
+					Taskfile string `yaml:"taskfile"`
+					Optional bool   `yaml:"optional"`
+					Flatten  bool   `yaml:"flatten"`
+				} `yaml:"includes"`
 			}
-
-			var doc taskfileDoc
-			if err := yaml.Unmarshal(raw, &doc); err != nil {
-				t.Fatalf("parsing template: %v", err)
+			if err := yaml.Unmarshal(raw, &inc); err != nil {
+				t.Fatalf("parsing includes: %v", err)
 			}
-
-			for _, cmd := range doc.shellClosure(t, "audit") {
-				if !strings.Contains(cmd, "vibe") {
-					continue
-				}
-				fields := strings.Fields(cmd)
-				if len(fields) == 0 || fields[0] != "vibe" {
-					t.Errorf("task audit runs %q; vibe must be invoked as a "+
-						"PATH-resolved binary (`vibe audit --repo-root .`), not built "+
-						"or run out of the repository under audit (spec 0018) — "+
-						"an adopting repository has no cmd/vibe package", cmd)
-				}
+			vibe, ok := inc.Includes["vibe"]
+			switch {
+			case !ok:
+				t.Error("does not include Taskfile.vibe.yml, so task audit is undefined")
+			case vibe.Taskfile != "./Taskfile.vibe.yml":
+				t.Errorf("vibe include points at %q, want ./Taskfile.vibe.yml", vibe.Taskfile)
+			case !vibe.Optional:
+				t.Error("vibe include is not optional; deleting Taskfile.vibe.yml would break every task")
+			case !vibe.Flatten:
+				t.Error("vibe include is not flattened; task audit would become task vibe:audit")
 			}
 		})
 	}

@@ -1,0 +1,11 @@
+[
+  {"version": "v0.2.0-alpha.1", "pinnable": true, "why": "release tag"},
+  {"version": "v1.4.0", "pinnable": true, "why": "release tag"},
+  {"version": "v0.2.0-alpha.1.0.20260923082700-8c4312c8599a", "pinnable": true, "why": "clean pseudo-version of a pushed commit"},
+  {"version": "v0.2.0-alpha.1.0.20260923082700-8c4312c8599a+dirty", "pinnable": false, "why": "built from a modified working tree"},
+  {"version": "v1.4.0+meta", "pinnable": false, "why": "build metadata no module version carries"},
+  {"version": "dev", "pinnable": false, "why": "unstamped build"},
+  {"version": "(devel)", "pinnable": false, "why": "unstamped build, raw build-info form"},
+  {"version": "1.4.0", "pinnable": false, "why": "module versions start with v"},
+  {"version": "", "pinnable": false, "why": "nothing recorded"}
+]

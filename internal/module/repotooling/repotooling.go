@@ -39,14 +39,20 @@ func (repotoolingModule) Name() string {
 	return "repo-tooling"
 }
 
-// RequiredTools reports the binaries this module's two resources are
-// instructions for. Both are normally installed globally rather than per
-// project, so their absence from PATH is a real finding rather than a
-// false alarm about how the repository manages its dependencies.
+// RequiredTools reports the binaries this module's resources are
+// instructions for: every program Taskfile.yml and lefthook.yml call
+// (spec 0022). All are normally installed globally rather than per project
+// — go install puts the Go tools on PATH — so their absence from PATH is a
+// real finding rather than a false alarm about how the repository manages
+// its dependencies. golangci-lint is go-tooling's, which configures it.
 func (repotoolingModule) RequiredTools() []module.Tool {
 	return []module.Tool{
 		{Name: "task", Why: "every verification entry point Taskfile.yml defines"},
 		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers"},
+		{Name: "go", Why: "every build, test, vet, and module task, and task hook:guard"},
+		{Name: "goimports", Why: "task fmt, task fmt:check, and the pre-commit format check"},
+		{Name: "govulncheck", Why: "task security"},
+		{Name: "actionlint", Why: "task workflows:lint"},
 	}
 }
 
