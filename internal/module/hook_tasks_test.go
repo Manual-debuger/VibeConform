@@ -186,7 +186,9 @@ func commandWords(script string) []string {
 	var words []string
 	for _, segment := range commandSeparators.Split(script, -1) {
 		for word := range strings.FieldsSeq(segment) {
-			word = strings.TrimPrefix(word, "!")
+			// A command at the end of a substitution or quote carries its
+			// closing characters with it: `|| true)"` is the command true.
+			word = strings.TrimRight(strings.TrimPrefix(word, "!"), `)"';`)
 			if word == "" || strings.ContainsAny(word[:1], `"'$*()-<>0123456789}]{…`) {
 				break
 			}
@@ -230,9 +232,9 @@ func TestHookContextRunsNothingHeavy(t *testing.T) {
 // TestCommandWords keeps the allowlist test honest: a heavy command hidden
 // in a substitution, a list, or after an assignment is still found.
 func TestCommandWords(t *testing.T) {
-	script := "x=\"$(docker compose up)\"\n[ -n \"$x\" ] || pnpm install\nif true; then make migrate; fi\nIFS= read -r line\nb=\"detached at $(git rev-parse HEAD)\""
+	script := "x=\"$(docker compose up)\"\n[ -n \"$x\" ] || pnpm install\nif true; then make migrate; fi\nIFS= read -r line\nb=\"detached at $(git rev-parse HEAD)\"\ns=\"$(git status || npm ci)\""
 	got := commandWords(script)
-	for _, want := range []string{"docker", "pnpm", "make", "read", "git"} {
+	for _, want := range []string{"docker", "pnpm", "make", "read", "git", "npm"} {
 		if !slices.Contains(got, want) {
 			t.Errorf("commandWords missed %q; got %v", want, got)
 		}
@@ -356,7 +358,11 @@ func TestHookDoneBlocksOnce(t *testing.T) {
 					if !passing && !strings.Contains(stderr, "verify:fast failed") {
 						t.Errorf("stderr does not carry the failure; the model would see no reason:\n%s", stderr)
 					}
-					if stdout != "" {
+					// Only on exit 0, as in the guard corpus: agents read
+					// stdout then. On exit 2 they block regardless, and
+					// under GitHub Actions Task prints an "::error" annotation
+					// to stdout whenever a task fails.
+					if code == 0 && stdout != "" {
 						t.Errorf("stdout = %q; agents parse stdout on exit 0", stdout)
 					}
 				})
@@ -435,6 +441,58 @@ func TestHookContextOutput(t *testing.T) {
 	}
 }
 
+// TestHookContextWithoutRuntimes is the regression test for the first CI
+// run of spec 0023: Task runs every cmd with errexit, so one unguarded
+// failing command (uv python find with no uv, git diff HEAD before the
+// first commit) ended the script with exit 127 or 128 instead of printing
+// "missing". Here PATH holds only git and task, and the branch has no
+// commit yet; the context must still print every line and exit 0.
+func TestHookContextWithoutRuntimes(t *testing.T) {
+	task := taskOnPath(t)
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not on PATH")
+	}
+	path := filepath.Dir(task) + string(os.PathListSeparator) + filepath.Dir(git)
+	for _, template := range repoToolingTaskfiles {
+		t.Run(template, func(t *testing.T) {
+			dir := t.TempDir()
+			hookTaskfile(t, dir, template, "hook:context", nil)
+			// #nosec G204 -- fixed arguments
+			init := exec.Command(git, "init", "-q", "-b", "main")
+			init.Dir = dir
+			if out, err := init.CombinedOutput(); err != nil {
+				t.Fatalf("git init: %v\n%s", err, out)
+			}
+
+			t.Setenv("PATH", path)
+			code, stdout, stderr := runTask(t, task, dir, "hook:context", "")
+			if code != 0 {
+				t.Fatalf("exit %d; session start must never fail. stderr: %s\nstdout: %s", code, stderr, stdout)
+			}
+			for _, line := range append([]string{"Branch: main", "State: dirty", "Task: ", "Dirty files: 1"}, toolchainLines[template]...) {
+				if !strings.Contains(stdout, line) {
+					t.Errorf("output lacks %q:\n%s", line, stdout)
+				}
+			}
+			// A runtime that isn't on this PATH must say so rather than
+			// vanish.
+			for _, probe := range toolchainLines[template] {
+				tool := strings.ToLower(strings.TrimSuffix(probe, ": "))
+				if tool == "python" {
+					tool = "uv"
+				}
+				if _, err := exec.LookPath(tool); err == nil {
+					continue
+				}
+				if !strings.Contains(stdout, probe+"missing") {
+					t.Errorf("%s is not on PATH, but the output doesn't say %q:\n%s", tool, probe+"missing", stdout)
+				}
+			}
+		})
+	}
+}
+
 // TestHookContextOutsideGit checks that session start in a directory that
 // is not a git repository still succeeds and says so.
 func TestHookContextOutsideGit(t *testing.T) {
@@ -507,6 +565,34 @@ func TestHookFormatGo(t *testing.T) {
 	if code, _, stderr := runTask(t, task, dir, "hook:format", ""); code != 2 || stderr == "" {
 		t.Errorf("syntax error: exit %d with stderr %q, want 2 with the error", code, stderr)
 	}
+
+	// Before the first commit there is no HEAD, so git diff HEAD fails.
+	// Under Task's errexit that used to end the file list before the
+	// untracked files; they must still be formatted.
+	t.Run("no commits yet", func(t *testing.T) {
+		dir := t.TempDir()
+		hookTaskfile(t, dir, "repotooling/templates/Taskfile.yml", "hook:format", nil)
+		// #nosec G204 -- fixed arguments
+		init := exec.Command("git", "init", "-q", "-b", "main")
+		init.Dir = dir
+		if out, err := init.CombinedOutput(); err != nil {
+			t.Fatalf("git init: %v\n%s", err, out)
+		}
+		file := filepath.Join(dir, "a.go")
+		if err := os.WriteFile(file, []byte("package scratch\nfunc  F() {}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if code, _, stderr := runTask(t, task, dir, "hook:format", ""); code != 0 {
+			t.Fatalf("exit %d; stderr: %s", code, stderr)
+		}
+		got, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "package scratch\n\nfunc F() {}\n"; string(got) != want {
+			t.Errorf("untracked file before the first commit = %q, want %q", got, want)
+		}
+	})
 }
 
 // formatSamples are, per standard, an unformatted file and what the

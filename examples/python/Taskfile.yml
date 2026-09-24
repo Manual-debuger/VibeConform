@@ -72,6 +72,9 @@ tasks:
   # through "task -x hook:<name>", and none has a desc. Exit 2 is the one
   # code both agents show the model; the scripts use only Task's built-in
   # shell and git, so they behave the same on Windows and Linux.
+  # Task runs each cmd with errexit, so every command that can fail on a
+  # healthy machine (a missing runtime, no commit yet) ends in "|| true"
+  # or "|| echo missing"; unguarded, it would end the script early.
   #
   # Session start: a few lines of facts for the agent's context. Never
   # installs, builds, tests, or starts anything; those stay explicit tasks.
@@ -87,10 +90,10 @@ tasks:
           exit 0
         fi
         echo "Repo: {{base .ROOT_DIR}}"
-        b="$(git branch --show-current 2>/dev/null)"
+        b="$(git branch --show-current 2>/dev/null || true)"
         [ -n "$b" ] || b="detached at $(git rev-parse --short HEAD 2>/dev/null || echo "an unborn branch")"
         echo "Branch: $b"
-        status="$(git status --short 2>/dev/null)"
+        status="$(git status --short 2>/dev/null || true)"
         state=clean
         [ -z "$status" ] || state=dirty
         for p in rebase-merge:rebase rebase-apply:rebase MERGE_HEAD:merge CHERRY_PICK_HEAD:cherry-pick REVERT_HEAD:revert BISECT_LOG:bisect; do
@@ -98,7 +101,7 @@ tasks:
         done
         echo "State: $state"
         echo "uv: $(uv --version 2>/dev/null || echo missing)"
-        py="$(uv python find 2>/dev/null)"
+        py="$(uv python find 2>/dev/null || true)"
         echo "Python: $([ -n "$py" ] && "$py" --version 2>/dev/null || echo missing)"
         echo "Task: {{.TASK_VERSION}}"
         n=0
@@ -113,7 +116,7 @@ tasks:
         echo "Dirty files: $n"
         printf '%s' "$list"
         [ "$n" -le 20 ] || echo "… and $((n-20)) more"
-        dirstat="$(git diff --dirstat=files,0 HEAD 2>/dev/null)"
+        dirstat="$(git diff --dirstat=files,0 HEAD 2>/dev/null || true)"
         if [ -n "$dirstat" ]; then
           echo "Affected components:"
           echo "$dirstat"
@@ -131,7 +134,7 @@ tasks:
     cmds:
       - |
         list() {
-          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.py' 2>/dev/null
+          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.py' 2>/dev/null || true
           git ls-files -z --others --exclude-standard -- '*.py'
         }
         [ -n "$(list)" ] || exit 0

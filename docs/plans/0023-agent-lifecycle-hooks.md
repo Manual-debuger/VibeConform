@@ -406,6 +406,43 @@ Ubuntu, Task v3.53.1 and v3.39.0 built into a scratch `GOBIN`).
   milliseconds. It changes no behaviour, so it can land as its own small
   change before or after this branch.
 
+## CI findings on PR #32 (2026-09-24)
+
+The first CI run failed `test`, `race`, and all six hook-guard legs, for
+two reasons:
+
+- **Task runs every cmd with errexit.** Checked with a scratch Taskfile:
+  `false; echo after` never echoes. So an unguarded command that fails
+  on a healthy machine ended `hook:context` early. On runners without
+  `uv`, `py="$(uv python find)"` failed with exit 127, and before the first
+  commit `git diff … HEAD` failed with 128. The same `git diff` in
+  `hook:format`'s file list stopped the list before the untracked files.
+  Local runs passed only because every tool was installed and every
+  scratch repository had a commit.
+  - *Fix:* every command that can fail on a healthy machine now ends in
+    `|| true` (or already ended in `|| echo missing`), and a comment in
+    each template says why.
+  - *Regression tests:* `TestHookContextWithoutRuntimes` (PATH holding
+    only git and task, no commit yet) and `TestHookFormatGo/no commits yet`.
+    Both were seen failing first.
+- **Task's GitHub Actions annotation.** Under `GITHUB_ACTIONS`, Task
+  prints `::error title=Task '…' failed::` to stdout whenever a task
+  fails. `TestHookDoneBlocksOnce` demanded empty stdout on exit 2 too. The
+  guard corpus already knew this: agents read stdout only on exit 0. The
+  test now checks stdout only then, and passes locally with
+  `GITHUB_ACTIONS=true`.
+
+`TestHookFormatEndToEnd` passed on all six legs in the first run, so
+formatting works through the real Taskfiles on Linux and Windows.
+
+**First canary result, Claude Code, `hook:check`.** Once the root was
+synced, this session began running the new hooks. After an edit that left
+a test failing, `hook:check`'s `asyncRewake` woke the session. It showed
+the failing `go test` output as a system reminder labelled
+"PostToolUse:Edit", without the agent running the tests. It caught a
+`commandWords` bug that way, which was fixed with a regression case in
+`TestCommandWords`.
+
 ## Verification record
 
 *(Filled in during C6.)*

@@ -1,5 +1,5 @@
 schema: 2
-vibe_version: v0.2.0-alpha.1.0.20260924080642-6533cbcb43f0+dirty
+vibe_version: v0.2.0-alpha.1.0.20260924082303-2c4407010a00+dirty
 standard: prod-py/v1
 resources:
     .claude/hooks/block-dangerous.sh:
@@ -27,7 +27,7 @@ resources:
     Taskfile.vibe.yml:
         sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     Taskfile.yml:
-        sha256: d43e93ba0dd275e7ea6827354f3fb1a3a7080cb049be7002e46878c599312fb7
+        sha256: 8251482115c5533f01eb7fcbb25cd2986d0370f2cbd3b0120a0f1e86e01d307d
     lefthook.yml:
         sha256: 9cbde339d40f685b9770ab9eab4c61a871b402649bfae53253ec6a387af796d1
     pyrightconfig.json:
