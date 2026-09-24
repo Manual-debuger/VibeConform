@@ -196,25 +196,41 @@ differences from the checklist above:
 
 Regression tests first:
 
-- [ ] `agents_test.go`: every hook command in both configs is exactly
+- [x] `agents_test.go`: every hook command in both configs is exactly
       `task -x hook:<name>`, extending `TestAgentConfigsCallTaskWithExitCode`.
       The `PostToolUse` matchers are `Write|Edit|MultiEdit|NotebookEdit`
       for Claude Code and `apply_patch|Edit|Write` for Codex. The
       `hook:check` handler has `asyncRewake: true` and no `async` for
       Claude Code, and `async: true` for Codex. The timeouts match the
       spec's section 1 table.
-- [ ] `TestCodexHooksMatchDocumentedSchema` decodes every event strictly,
+- [x] `TestCodexHooksMatchDocumentedSchema` decodes every event strictly,
       not only `PreToolUse`.
-- [ ] `wiring_test.go`: `TestAgentConfigWiring` walks every command in
+- [x] `wiring_test.go`: `TestAgentConfigWiring` walks every command in
       both configs and requires the named task in the standard's
       `Taskfile.yml`. The guard-specific checks (guard file and
       `policy.json` resolved) stay as they are.
 
 Then implementation:
 
-- [ ] Both templates, and the constants in `agents.go`.
-- [ ] Rebuild; sync the examples, then the root last (dogfooding hazard).
+- [x] Both templates, and the constants in `agents.go`.
+- [x] Rebuild; sync the examples, then the root last (dogfooding hazard).
       `task verify` and `task audit` in each.
+
+*As built:*
+
+- **`hook:check` no longer runs `fmt:check`.** Both agents run every hook
+  matching an event in parallel, so `hook:check` starts alongside
+  `hook:format`. `task -s typecheck lint test` for `prod-go`, and
+  `task -s lint typecheck test` for the others. The C2 shape test pins
+  this. Spec 4.3 is amended. `hook:done` still runs all of `verify:fast`.
+- **The event table is one test.** `TestAgentHookEvents` compares both
+  configs' full handler lists, meaning event, matcher, command, timeout,
+  `async` and `asyncRewake`, with the spec's section 1 table.
+  `hookHandlers` decodes every event strictly, not only `PreToolUse`, so an
+  unknown field or the flat shape fails for any of them.
+- **The wiring test parses both configs itself**
+  (`configCommands` in `internal/standard/wiring_test.go`) and requires
+  every `task -x <name>` to name a task in the standard's `Taskfile.yml`.
 
 ### C4: CI
 

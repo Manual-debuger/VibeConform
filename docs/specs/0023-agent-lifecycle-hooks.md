@@ -218,8 +218,16 @@ it. This was checked against both runtimes' documentation on 2026-09-24:
   request and tool calls finish, or at the next user turn if no turn is
   active. It runs at most eight background hooks per session.
 
-**What runs.** `task verify:fast`. "Affected" comes from each tool's
-cache:
+**What runs.** `verify:fast`'s steps except `fmt:check`
+(`task -s typecheck lint test` for `prod-go`, `task -s lint typecheck test`
+for the others). "Affected" comes from each tool's cache:
+
+*Added during implementation:* `fmt:check` is left out because both
+agents run all hooks matching an event in parallel. `hook:check` starts
+alongside `hook:format`, which may still be rewriting the file, so a
+format check there would fail on the race, not on the code. Formatting is
+`hook:format`'s job, and `hook:done` runs all of `verify:fast`, including
+`fmt:check`, at the end of the turn.
 
 | Standard | Check | Scope |
 |---|---|---|

@@ -157,12 +157,15 @@ tasks:
         list | xargs -0 goimports -w || exit 2
         list | xargs -0 gofmt -w || exit 2
 
-  # After each file edit, in the background: the incremental checks. The
-  # tools' output goes to stderr, which is what the agent is shown.
+  # After each file edit, in the background: verify:fast's incremental
+  # checks, except fmt:check. Agents run all of an event's hooks in
+  # parallel, so this starts while hook:format may still be writing the
+  # file; hook:done checks formatting at the end of the turn. The tools'
+  # output goes to stderr, which is what the agent is shown.
   hook:check:
     silent: true
     cmds:
-      - task -s verify:fast 1>&2 || exit 2
+      - task -s typecheck lint test 1>&2 || exit 2
 
   # When the agent ends its turn: the same checks, as a gate. A failure
   # blocks the stop once. If the agent stops again with the checks still

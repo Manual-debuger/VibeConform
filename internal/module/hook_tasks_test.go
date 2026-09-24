@@ -62,13 +62,28 @@ func TestHookTasksShape(t *testing.T) {
 					t.Errorf("%s is not silent; Task would echo the script into the agent's hook output", name)
 				}
 			}
-			// Both run verify:fast and exit 2 on failure, the one code both
-			// agents act on. -s keeps Task's own command echo out; 1>&2
-			// moves the tools' output (go test prints failures on stdout) to
-			// stderr, which is what an agent shows the model on exit 2.
-			for _, name := range []string{"hook:check", "hook:done"} {
-				if script := hookScript(t, tf, name); !strings.Contains(script, "task -s verify:fast 1>&2 || exit 2") {
-					t.Errorf("%s does not run %q:\n%s", name, "task -s verify:fast 1>&2 || exit 2", script)
+			// Both exit 2 on failure, the one code both agents act on. -s
+			// keeps Task's own command echo out; 1>&2 moves the tools'
+			// output (go test prints failures on stdout) to stderr, which is
+			// what an agent shows the model on exit 2.
+			//
+			// hook:done is the gate, so it runs all of verify:fast.
+			// hook:check runs the same steps except fmt:check: agents run
+			// every hook matching an event in parallel, so it starts while
+			// hook:format may still be rewriting the file, and a format
+			// check then would fail on a race, not on the code.
+			var checkSteps []string
+			for _, step := range verifyFastSteps[path] {
+				if step != "fmt:check" {
+					checkSteps = append(checkSteps, step)
+				}
+			}
+			for name, want := range map[string]string{
+				"hook:check": "task -s " + strings.Join(checkSteps, " ") + " 1>&2 || exit 2",
+				"hook:done":  "task -s verify:fast 1>&2 || exit 2",
+			} {
+				if script := hookScript(t, tf, name); !strings.Contains(script, want) {
+					t.Errorf("%s does not run %q:\n%s", name, want, script)
 				}
 			}
 		})

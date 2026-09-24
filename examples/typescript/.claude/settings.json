@@ -1,5 +1,17 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "task -x hook:context",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash|PowerShell|Write|Edit",
@@ -7,6 +19,35 @@
           {
             "type": "command",
             "command": "task -x hook:guard"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "task -x hook:format",
+            "timeout": 60
+          },
+          {
+            "type": "command",
+            "command": "task -x hook:check",
+            "timeout": 300,
+            "asyncRewake": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "task -x hook:done",
+            "timeout": 600
           }
         ]
       }
