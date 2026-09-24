@@ -87,32 +87,37 @@ declare, on Windows 11 and Linux:
 
 Regression tests first, watched failing:
 
-- [ ] Each repo-tooling test: `verify:fast` exists, has a `desc`, and runs
-      exactly the tasks the spec's section 2 table lists, in `verify`'s
-      order.
-- [ ] `tsrepotooling_test.go`: `lint` passes `--cache --cache-location
+- [x] `verify:fast` exists, has a `desc`, and runs exactly the tasks the
+      spec's section 2 table lists, in `verify`'s order, each of which
+      `verify` also runs. *As built:* one table-driven test,
+      `TestVerifyFastIsTheIncrementalSubset` in `internal/module/hooks_test.go`,
+      covers all three templates, next to the verify-independence tests
+      whose Taskfile helpers it reuses, rather than three copies.
+- [x] `tsrepotooling_test.go`: `lint` passes `--cache --cache-location
       node_modules/.cache/eslint/`, `fmt` and `fmt:check` pass `--cache`,
       and `typecheck` passes `--incremental --tsBuildInfoFile
       node_modules/.cache/tsc/tsbuildinfo`. Extend
       `TestTaskfileUsesPnpm`'s neighbours, don't weaken it.
-- [ ] `hooks_test.go`: every `go test` command in `prod-go`'s Taskfile
+- [x] `hooks_test.go`: every `go test` command in `prod-go`'s Taskfile
       passes a package argument and none of the uncacheable flags
       (`-count`, `-coverprofile`, …) except in `test:race`, which is not in
       `verify:fast`.
 
 Then implementation:
 
-- [ ] Cache flags in `tsrepotooling`'s `Taskfile.yml`. `lefthook.yml` is
+- [x] Cache flags in `tsrepotooling`'s `Taskfile.yml`. `lefthook.yml` is
       left alone: `pre-commit` runs on staged files only, and caches there
       buy little.
-- [ ] `verify:fast` in all three templates. `verify` calls the same
-      subtasks, and its `desc` gains a pointer to `verify:fast`.
-- [ ] Rebuild `vibe` (fresh binary, per the CRLF / stale-embed hazard).
+- [x] `verify:fast` in all three templates. `verify` calls the same
+      subtasks. *As built:* the pointer runs the other way: `verify:fast`'s
+      `desc` names `verify` as the full gate, and `verify`'s desc is
+      unchanged. That keeps `task --list` stable for existing adopters.
+- [x] Rebuild `vibe` (fresh binary, per the CRLF / stale-embed hazard).
       Sync `examples/typescript`, `examples/python`, then the root. Run
       `task verify` and `task audit` in each. Run `task verify:fast` twice
       and confirm the second run is cached (`go test` prints `(cached)`;
       ESLint and `tsc` are faster).
-- [ ] `git status` is clean after the runs: no cache file lands outside an
+- [x] `git status` is clean after the runs: no cache file lands outside an
       ignored location.
 
 ### C2: the four hook tasks
@@ -303,6 +308,26 @@ Ubuntu, Task v3.53.1 and v3.39.0 built into a scratch `GOBIN`).
   - A 3-second TS budget.
 
   Spec 4.2 and resolved question 6 are amended.
+
+## C1 findings (2026-09-24)
+
+- Warm `task verify:fast` takes about 11 s at the root, 5 s in
+  `examples/typescript`, and 1.5 s in `examples/python`. `go test` prints
+  `(cached)` for every package, and `git status` is clean after the runs.
+- **The root's 11 s is almost all `internal/cli`'s cached test** (about
+  8.5 s). This predates spec 0023. Go's test log for that package records
+  126,870 `stat` calls, which are `exec.LookPath` probing every
+  `PATH` × `PATHEXT` entry for each required tool, across the sync tests.
+  Go re-checks every one of them before it can reuse the cached result.
+  The result is still cached; only validating it is slow, and on Windows
+  most of all. An adopting repository gets this cost only if its own tests
+  do the same.
+- *Follow-on, not in C1:* the lookup is already swappable
+  (`lookPath` in `internal/cli/tools.go`), but only `tools_test.go` swaps
+  it, and `sync.go`'s `lefthook` check calls `exec.LookPath` directly. If
+  every sync test used a stub, the cached check would drop to
+  milliseconds. It changes no behaviour, so it can land as its own small
+  change before or after this branch.
 
 ## Verification record
 

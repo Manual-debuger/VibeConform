@@ -108,6 +108,20 @@ tasks:
       - task: security
       - task: workflows:lint
 
+  # The agents' Stop hook and background check run this after edits (spec
+  # 0023), so it keeps only what is cheap and incremental: go test's cache
+  # reruns only packages that changed or import something that did, and
+  # golangci-lint caches its analysis. security (network), mod:verify, and
+  # workflows:lint stay in verify, which CI runs.
+  verify:fast:
+    desc: Fast incremental subset of verify (format, build, lint, test);
+      what the agents' Stop hook runs. "task verify" is still the full gate.
+    cmds:
+      - task: fmt:check
+      - task: typecheck
+      - task: lint
+      - task: test
+
   verify-ci:
     desc: Alias used by CI so the workflow and local docs never drift.
     cmds:

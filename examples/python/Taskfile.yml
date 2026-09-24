@@ -78,6 +78,19 @@ tasks:
       - task: typecheck
       - task: test
 
+  # The agents' Stop hook and background check run this after edits (spec
+  # 0023). For prod-py it is all of verify: Ruff caches by default, while
+  # pyright and pytest have no changed-only mode and run whole. It exists
+  # so every standard offers the same name.
+  verify:fast:
+    desc: Fast verification (cached Ruff, then pyright and pytest); what the
+      agents' Stop hook runs. Same steps as verify.
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: typecheck
+      - task: test
+
   verify-ci:
     desc: Alias used by CI so the workflow and local docs never drift.
     cmds:

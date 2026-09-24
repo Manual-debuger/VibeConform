@@ -32,25 +32,32 @@ tasks:
   # modules generate (Taskfile.yml, lefthook.yml, .github/*, .vibe/*.yaml).
   # Reformatting those is not this repository's job — they are owned by
   # their module template, not by the adopting repository's style.
+  #
+  # Every cache below lives under node_modules, which a Node repository
+  # already ignores, so nothing shows up in git status (spec 0023). A cold
+  # CI checkout has no cache and checks everything.
   fmt:
     desc: Apply Prettier formatting.
     cmds:
-      - pnpm exec prettier --write "**/*.{js,jsx,ts,tsx,json,css,md}"
+      - pnpm exec prettier --write --cache "**/*.{js,jsx,ts,tsx,json,css,md}"
 
   fmt:check:
     desc: Fail if any file is not Prettier-formatted (CI-safe, no writes).
     cmds:
-      - pnpm exec prettier --check "**/*.{js,jsx,ts,tsx,json,css,md}"
+      - pnpm exec prettier --check --cache "**/*.{js,jsx,ts,tsx,json,css,md}"
 
+  # ESLint's cache does not track dependencies between files, so a
+  # type-aware rule can report a stale result locally until the file itself
+  # changes. CI starts cold and is unaffected.
   lint:
     desc: Run eslint.
     cmds:
-      - pnpm exec eslint .
+      - pnpm exec eslint . --cache --cache-location node_modules/.cache/eslint/
 
   typecheck:
     desc: Type-check with tsc, emitting nothing.
     cmds:
-      - pnpm exec tsc --noEmit
+      - pnpm exec tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/tsbuildinfo
 
   test:
     desc: Run the test suite.
@@ -77,6 +84,18 @@ tasks:
     desc: Local verification gate — native language tooling only, never
       VibeConform itself; "task audit" is VibeConform's check, which CI
       runs in its own Conformance workflow.
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: typecheck
+      - task: test
+
+  # The agents' Stop hook and background check run this after edits (spec
+  # 0023). For prod-ts it is all of verify, made incremental by the caches
+  # above; it exists so every standard offers the same name.
+  verify:fast:
+    desc: Fast incremental verification (cached format, lint, typecheck,
+      then test); what the agents' Stop hook runs. Same steps as verify.
     cmds:
       - task: fmt:check
       - task: lint
