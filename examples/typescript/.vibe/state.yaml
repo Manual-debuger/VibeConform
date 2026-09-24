@@ -1,5 +1,5 @@
 schema: 2
-vibe_version: v0.2.0-alpha.1.0.20260924082303-2c4407010a00+dirty
+vibe_version: v0.2.0-alpha.1.0.20260924094727-0c8c1c644f83+dirty
 standard: prod-ts/v1
 resources:
     .claude/hooks/block-dangerous.sh:
@@ -13,9 +13,9 @@ resources:
     .claude/settings.json:
         sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
     .codex/config.toml:
-        sha256: 0e2463f33a69a35951284567fba5559d3543d47e6ec381433235671d2dd5ac74
+        sha256: 886d348f8109660e2e05069f7caba033d3035cbb25f1db58b4b80ae9f188c931
     .codex/hooks.json:
-        sha256: 111f23cbbe96e0497b71c0da25ac19143b1a5862e1c62e45ba1c20ecf93fc2c7
+        sha256: 78922a784ee78e9e50587e93628cd3b9d4dfbe49087adc4514e6781cea38cbb9
     .github/dependabot.yml:
         sha256: f8535549e33ea260cf307d5d96e74a0af625211e90b524a56856bd00a516a6dc
     .github/pull_request_template.md:

@@ -60,43 +60,38 @@ func TestResolveDeterministic(t *testing.T) {
 	}
 }
 
-// TestCodexHooksMatchDocumentedSchema fixes the bug spec 0021 found: the
-// shipped .codex/hooks.json was a flat list with no matcher, no inner hooks
-// array, and no type, which Codex's documented schema does not describe.
-func TestCodexHooksMatchDocumentedSchema(t *testing.T) {
+// TestCodexHooksSuspended pins spec 0024. Codex on Windows ignores exit
+// code 2, and its background hooks report only through JSON, so the hooks
+// written for Claude Code's contract are suspended rather than shipped
+// half-working. hooks.json stays a managed file with no hooks, because
+// vibe sync never deletes a file a standard stops producing: an empty file
+// is what removes the old hooks from existing repositories. Lifting the
+// suspension is a new spec, not an edit to make this test pass.
+func TestCodexHooksSuspended(t *testing.T) {
 	var cfg struct {
-		Hooks map[string][]struct {
-			Matcher *string `json:"matcher"`
-			Hooks   []struct {
-				Type    string `json:"type"`
-				Command string `json:"command"`
-				Timeout int    `json:"timeout"`
-				Async   bool   `json:"async"`
-			} `json:"hooks"`
-		} `json:"hooks"`
+		Hooks map[string]json.RawMessage `json:"hooks"`
 	}
 	dec := json.NewDecoder(bytes.NewReader(hooks))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&cfg); err != nil {
-		t.Fatalf(".codex/hooks.json is not in the documented hooks shape: %v", err)
+		t.Fatalf(".codex/hooks.json does not decode as {\"hooks\": {}}: %v", err)
 	}
-	for event, entries := range cfg.Hooks {
-		for _, e := range entries {
-			if len(e.Hooks) == 0 {
-				t.Errorf("%s entry has no hooks array; this is the flat shape Codex does not read", event)
-			}
-			for _, h := range e.Hooks {
-				if h.Type != "command" {
-					t.Errorf("%s hook type = %q, want command", event, h.Type)
-				}
-				if !strings.HasPrefix(h.Command, "task -x hook:") {
-					t.Errorf("%s runs %q, want task -x hook:<name>", event, h.Command)
-				}
-			}
+	if cfg.Hooks == nil {
+		t.Error(".codex/hooks.json has no hooks object; it must be present and empty (spec 0024)")
+	}
+	if len(cfg.Hooks) != 0 {
+		t.Errorf(".codex/hooks.json registers %d events; Codex hooks are suspended by spec 0024", len(cfg.Hooks))
+	}
+
+	// No hooks key: neither "hooks = true", which would say VibeConform
+	// relies on hooks, nor "hooks = false", which would also turn off hooks
+	// a user configured in ~/.codex/.
+	for line := range strings.Lines(string(config)) {
+		key, _, _ := strings.Cut(strings.TrimSpace(line), "=")
+		key = strings.TrimSpace(key)
+		if key == "[features]" || key == "hooks" || key == "codex_hooks" || key == "features.hooks" {
+			t.Errorf(".codex/config.toml sets %q; spec 0024 leaves the hooks feature flag alone", strings.TrimSpace(line))
 		}
-	}
-	if bytes.Contains(hooks, []byte("commandWindows")) {
-		t.Error(".codex/hooks.json sets commandWindows; every hook command is the same on every OS")
 	}
 }
 

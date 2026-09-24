@@ -6,5 +6,6 @@
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 
-[features]
-hooks = true
+# Codex hooks are suspended (VibeConform spec 0024, ADR 0011): .codex/hooks.json
+# is generated with no hooks. "hooks = false" is deliberately not set, so hooks
+# you configure in your own ~/.codex/ keep running.
