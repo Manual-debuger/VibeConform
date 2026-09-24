@@ -9,6 +9,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/Manual-debuger/VibeConform/internal/manifest"
+	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/module/agents/claude"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
@@ -30,13 +32,27 @@ var agentConfigs = []string{".claude/settings.json", ".codex/hooks.json"}
 // configs are checked on their own: whatever commands a module's configs
 // run must name tasks the Taskfile defines. A module whose config runs no
 // hooks, like the suspended codex-config, passes trivially.
+// sampleContext is what a standard resolves against in these tests: nil
+// for a single-language standard, and one component of every profile for a
+// standard that takes components, so every profile's wiring is checked.
+func sampleContext(s Standard) *module.Context {
+	if !s.TakesComponents {
+		return nil
+	}
+	return &module.Context{Components: []manifest.Component{
+		{ID: "api", Path: "services/api", Profile: manifest.ProfileGo},
+		{ID: "web", Path: "apps/web", Profile: manifest.ProfileTS},
+		{ID: "worker", Path: "services/worker", Profile: manifest.ProfilePy},
+	}}
+}
+
 func TestAgentConfigWiring(t *testing.T) {
 	for k, s := range registry {
 		t.Run(k.name+"/"+k.version, func(t *testing.T) {
 			resources := map[string]resource.Resource{}
 			configs := map[string][]string{} // module name -> agent configs it resolves
 			for _, m := range s.Modules {
-				rs, err := m.Resolve(context.Background(), nil)
+				rs, err := m.Resolve(context.Background(), sampleContext(s))
 				if err != nil {
 					t.Fatalf("resolving %s: %v", m.Name(), err)
 				}

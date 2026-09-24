@@ -1,0 +1,73 @@
+version: "3"
+
+# A TypeScript component of a prod-mono/v1 repository: its own pnpm
+# project, with its own package.json and pnpm-lock.yaml. The root
+# Taskfile.yml includes this file under the component's id, so
+# "task <id>:test" at the root runs "task test" here; "task verify" works
+# from this directory too. Every command is prod-ts/v1's, run from the
+# component instead of the repository root. See docs/specs/0025-prod-mono.md.
+#
+# Every cache below lives under this component's node_modules, which a
+# Node project already ignores.
+
+tasks:
+  fmt:
+    desc: Apply Prettier formatting.
+    cmds:
+      - pnpm exec prettier --write --cache "**/*.{js,jsx,ts,tsx,json,css,md}"
+
+  fmt:check:
+    desc: Fail if any file is not Prettier-formatted (CI-safe, no writes).
+    cmds:
+      - pnpm exec prettier --check --cache "**/*.{js,jsx,ts,tsx,json,css,md}"
+
+  # What the agents' hook:format runs after each edit (spec 0023): only the
+  # files git reports as changed or new in this component. NUL-separated
+  # names keep paths with spaces intact, and the list is checked first
+  # because GNU xargs runs its command even with no input. Run it from
+  # this directory, as the root's hook:format does: through the root's
+  # include ("task <id>:fmt:changed") Task's built-in xargs, which Windows
+  # uses, ignores the include's dir.
+  fmt:changed:
+    desc: Format only this component's changed and untracked files.
+    silent: true
+    cmds:
+      - |
+        list() {
+          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md' 2>/dev/null || true
+          git ls-files -z --others --exclude-standard -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md'
+        }
+        [ -n "$(list)" ] || exit 0
+        list | xargs -0 pnpm exec prettier --write --cache --log-level warn || exit 2
+
+  lint:
+    desc: Run eslint.
+    cmds:
+      - pnpm exec eslint . --cache --cache-location node_modules/.cache/eslint/
+
+  typecheck:
+    desc: Type-check with tsc, emitting nothing.
+    cmds:
+      - pnpm exec tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/tsbuildinfo
+
+  test:
+    desc: Run the test suite.
+    cmds:
+      - pnpm test
+
+  verify:
+    desc: Verification gate for this component.
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: typecheck
+      - task: test
+
+  verify:fast:
+    desc: Fast incremental verification; same steps as verify, made
+      incremental by the caches above.
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: typecheck
+      - task: test

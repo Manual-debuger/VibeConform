@@ -43,7 +43,7 @@ func (tsrepotoolingModule) Name() string {
 // false alarm about how the repository manages its dependencies. pnpm is
 // the one that runs the project-local tools (spec 0020); eslint, prettier,
 // and tsc themselves stay undeclared, as ts-tooling explains.
-func (tsrepotoolingModule) RequiredTools() []module.Tool {
+func (tsrepotoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 	return []module.Tool{
 		{Name: "task", Why: "every verification entry point Taskfile.yml defines"},
 		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers"},

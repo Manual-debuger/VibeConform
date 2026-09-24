@@ -87,7 +87,7 @@ func runSync(cmd *cobra.Command, repoRoot string, allowDowngrade bool) error {
 
 	// Before anything is written: if this machine cannot run what the
 	// standard configures, say so above the report rather than below it.
-	warnMissingTools(cmd.ErrOrStderr(), p.Standard)
+	warnMissingTools(cmd.ErrOrStderr(), p.Standard, p.Context)
 	warnUnpinnable(cmd.ErrOrStderr(), repoRoot, runningVersion(cmd))
 
 	// Start from what was recorded before, so resources this run refuses to

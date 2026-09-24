@@ -7,15 +7,32 @@ package module
 import (
 	"context"
 
+	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
 // Context carries whatever a Module needs to resolve resources: the target
-// repository root and, eventually, the parsed vibe.yaml and prior lock
-// state. It is intentionally minimal at bootstrap time.
+// repository root and the parts of vibe.yaml a module may depend on. It is
+// intentionally minimal; fields are added when a module needs them.
+//
+// A nil *Context is valid and means "no repository in particular": a
+// module that reads nothing from it must accept nil, which is how tests
+// resolve a standard in isolation.
 type Context struct {
 	// RepoRoot is the absolute path of the repository being reconciled.
 	RepoRoot string
+	// Components is vibe.yaml's component list, in declaration order.
+	// Empty for every standard that takes none; see
+	// docs/decisions/0012-manifest-components.md.
+	Components []manifest.Component
+}
+
+// ComponentsOf returns mctx's components, or none for a nil context.
+func ComponentsOf(mctx *Context) []manifest.Component {
+	if mctx == nil {
+		return nil
+	}
+	return mctx.Components
 }
 
 // Module resolves its slice of desired state into concrete resources.
@@ -48,6 +65,8 @@ type Tool struct {
 // genuinely have on PATH — a warning that fires on a healthy repository
 // teaches people to ignore the ones that matter.
 type ToolRequirer interface {
-	// RequiredTools lists the binaries this module's resources need.
-	RequiredTools() []Tool
+	// RequiredTools lists the binaries this module's resources need. It
+	// takes the same context as Resolve, since what a module writes (and
+	// so what it needs) may depend on vibe.yaml.
+	RequiredTools(mctx *Context) []Tool
 }

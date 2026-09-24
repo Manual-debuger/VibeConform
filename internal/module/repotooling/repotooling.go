@@ -45,7 +45,7 @@ func (repotoolingModule) Name() string {
 // — go install puts the Go tools on PATH — so their absence from PATH is a
 // real finding rather than a false alarm about how the repository manages
 // its dependencies. golangci-lint is go-tooling's, which configures it.
-func (repotoolingModule) RequiredTools() []module.Tool {
+func (repotoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 	return []module.Tool{
 		{Name: "task", Why: "every verification entry point Taskfile.yml defines"},
 		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers"},

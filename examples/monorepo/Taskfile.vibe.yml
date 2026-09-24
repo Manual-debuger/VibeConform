@@ -1,0 +1,58 @@
+version: "3"
+
+# VibeConform's own tasks, and the only Taskfile that runs vibe. Taskfile.yml
+# includes this file optionally, so deleting it — together with
+# .github/workflows/conformance.yml, vibe.yaml, and .vibe/ — removes
+# VibeConform without breaking any other task.
+# See docs/specs/0022-conformance-isolation.md.
+
+tasks:
+  audit:
+    desc: Check this repository against the standard its vibe.yaml declares.
+    # Written for Task's built-in shell only — no sed, grep, or awk — so it
+    # behaves the same on Windows and Linux.
+    #
+    # 1. vibe on PATH: run it. An older vibe than the one that last synced
+    #    this repository refuses to give a verdict (spec 0019).
+    # 2. Otherwise fetch exactly the vibe_version .vibe/state.yaml records,
+    #    so the verdict cannot change without a change to this repository.
+    #    go install into a per-version directory rather than go run: go run
+    #    reports every non-zero exit as 1, which would hide the difference
+    #    between "not conformant" (2) and "could not answer" (1).
+    # 3. Otherwise say why and exit 1. Never exit 0 without vibe audit.
+    cmds:
+      - |
+        if command -v vibe >/dev/null 2>&1; then
+          vibe audit --repo-root .
+          exit $?
+        fi
+
+        v=""
+        if [ -f .vibe/state.yaml ]; then
+          while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+              vibe_version:*) v="${line#vibe_version:}" ;;
+            esac
+          done < .vibe/state.yaml
+        fi
+        cr="$(printf '\r')"
+        v="${v%"$cr"}"
+        v="${v# }"
+
+        why=""
+        case "$v" in
+          "") why=".vibe/state.yaml records no vibe_version to fetch" ;;
+          v[0-9]*+*) why="the recorded vibe_version $v has build metadata, the mark of a locally built vibe, so it cannot be fetched" ;;
+          v[0-9]*) command -v go >/dev/null 2>&1 || why="go is not on PATH either, so vibe $v cannot be fetched" ;;
+          *) why="the recorded vibe_version $v is not a release or pseudo-version, so it cannot be fetched" ;;
+        esac
+        if [ -n "$why" ]; then
+          echo "task audit: vibe is not on PATH, and $why." >&2
+          echo "Install vibe (go install github.com/Manual-debuger/VibeConform/cmd/vibe@<version>) and run task audit again." >&2
+          exit 1
+        fi
+
+        bin="$(go env GOCACHE)/vibeconform/$v"
+        echo "task audit: vibe is not on PATH; using vibe $v, the version .vibe/state.yaml records." >&2
+        GOBIN="$bin" go install github.com/Manual-debuger/VibeConform/cmd/vibe@"$v" || exit 1
+        "$bin/vibe$(go env GOEXE)" audit --repo-root .

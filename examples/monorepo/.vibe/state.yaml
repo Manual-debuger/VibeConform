@@ -1,0 +1,46 @@
+schema: 2
+vibe_version: v0.2.0-alpha.1.0.20260924095737-8e29aeb31258+dirty
+standard: prod-mono/v1
+resources:
+    .claude/hooks/guard.go:
+        sha256: 4fd4fb6999701d5c186197cdfbf655dec3b2ad315808a48737ffe563ea44b37b
+    .claude/hooks/policy.json:
+        sha256: baed785884d9244755d691de7058cccc9a7a7092b385cac53e44837ef62b3bd8
+    .claude/settings.json:
+        sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
+    .codex/config.toml:
+        sha256: 886d348f8109660e2e05069f7caba033d3035cbb25f1db58b4b80ae9f188c931
+    .codex/hooks.json:
+        sha256: 78922a784ee78e9e50587e93628cd3b9d4dfbe49087adc4514e6781cea38cbb9
+    .github/dependabot.yml:
+        sha256: 1a3acf0186b1f12f28a1451a81b4a95de36d61c6e2ad42afcd13215ae5f1c512
+    .github/pull_request_template.md:
+        sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
+    .github/workflows/ci.yml:
+        sha256: 68e60a857807de8a8cd84dee244ab64fd7ac9b0fc821f614056f19309851d71b
+    .github/workflows/conformance.yml:
+        sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
+    Taskfile.vibe.yml:
+        sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
+    Taskfile.yml:
+        sha256: df199d0f8071dce6b59c58cc9c19f5baf861f412e3f2052b60c2d08dab166252
+    apps/web/.prettierrc.json:
+        sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
+    apps/web/Taskfile.yml:
+        sha256: 60e3dc68b9394612efc67a961d142684f760f73edefe961d52ce20c2f6d7293b
+    apps/web/eslint.config.js:
+        sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
+    apps/web/tsconfig.base.json:
+        sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217
+    lefthook.yml:
+        sha256: 87d2ca78f308bedf1c8591c88e09c6582a0c365c917879a41a5374cde504beaf
+    services/api/.golangci.yml:
+        sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
+    services/api/Taskfile.yml:
+        sha256: aecde63c51a3ff2af11416ba65d0ab4929f752d90306817453c125639d95770a
+    services/worker/Taskfile.yml:
+        sha256: 4554e745ed37a1ecf65c7dc149e8810ae95a324b9eddbe1d6e0b85e3f9b40810
+    services/worker/pyrightconfig.json:
+        sha256: ca1316bdda3ba3c86490ff023de71f39a48fa04105fd03fd888924c36ce0bb43
+    services/worker/ruff.toml:
+        sha256: 29180a6715382235e570cd3501ebe73f20254801d4a919d680d8c6f0c8174ede

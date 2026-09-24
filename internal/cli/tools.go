@@ -29,8 +29,8 @@ type missingTool struct {
 // non-conformance. The repository's files are exactly what the standard
 // says they should be, vibe audit will report it conformant, and sync's
 // exit code must not disagree with audit about the same repository.
-func warnMissingTools(w io.Writer, s *standard.Standard) {
-	for _, t := range missingTools(s) {
+func warnMissingTools(w io.Writer, s *standard.Standard, mctx *module.Context) {
+	for _, t := range missingTools(s, mctx) {
 		// Dropped write errors: a warning that could not be printed must
 		// not fail the command it was only advising.
 		_, _ = fmt.Fprintf(w, "warning: %s not found on PATH (required by %s: %s)\n", t.name, t.module, t.why)
@@ -42,7 +42,7 @@ func warnMissingTools(w io.Writer, s *standard.Standard) {
 // require is reported once, under the first to ask for it: one missing
 // install is one problem, and output has to be deterministic across runs
 // for the same reason resource ordering does.
-func missingTools(s *standard.Standard) []missingTool {
+func missingTools(s *standard.Standard, mctx *module.Context) []missingTool {
 	var missing []missingTool
 	checked := make(map[string]bool)
 
@@ -51,7 +51,7 @@ func missingTools(s *standard.Standard) []missingTool {
 		if !ok {
 			continue
 		}
-		for _, tool := range requirer.RequiredTools() {
+		for _, tool := range requirer.RequiredTools(mctx) {
 			if checked[tool.Name] {
 				continue
 			}

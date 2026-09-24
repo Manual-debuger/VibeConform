@@ -1,0 +1,12 @@
+standard: prod-mono
+version: v1
+components:
+  - id: api
+    path: services/api
+    profile: go
+  - id: web
+    path: apps/web
+    profile: ts
+  - id: worker
+    path: services/worker
+    profile: py

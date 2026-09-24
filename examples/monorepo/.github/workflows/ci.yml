@@ -1,0 +1,161 @@
+name: CI
+
+# Every job below runs a Taskfile target so CI, local dev, and docs never
+# duplicate independent command lists. See Taskfile.yml.
+#
+# One job per component, named by the component's id: each sets up only
+# its own toolchain, installs its dependencies in its own directory, and
+# runs its own verify. CI / gate requires every job, so branch protection
+# needs that one check whatever the component list.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.0"
+  TASK_VERSION: "v3.53.1"
+  GOLANGCI_LINT_VERSION: "v2.13.2"
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # Linux runs the full verify and the race detector; Windows, as in
+  # prod-go, builds and tests.
+  api:
+    name: api (go, ${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # go.mod, not go.sum: a module with no dependencies has no
+          # go.sum, and the cache key needs a file that exists.
+          cache-dependency-path: services/api/go.mod
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      - name: Install goimports, golangci-lint, govulncheck
+        if: runner.os == 'Linux'
+        run: |
+          go install golang.org/x/tools/cmd/goimports@latest
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: task api:verify
+        if: runner.os == 'Linux'
+        run: task api:verify
+      - name: task api:test:race
+        if: runner.os == 'Linux'
+        run: task api:test:race
+      - name: task api:typecheck
+        if: runner.os != 'Linux'
+        run: task api:typecheck
+      - name: task api:test
+        if: runner.os != 'Linux'
+        run: task api:test
+
+  web:
+    name: web (ts)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Before Setup Node: its pnpm cache needs pnpm on PATH. The version
+      # comes from the component's package.json packageManager field,
+      # which the repository owns (docs/specs/0020-prod-ts-pnpm.md).
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: apps/web/package.json
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      - name: Install dependencies
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+      - name: task web:verify
+        run: task web:verify
+
+  worker:
+    name: worker (py)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      - name: Install dependencies
+        working-directory: services/worker
+        run: uv sync
+      - name: task worker:verify
+        run: task worker:verify
+
+  workflows:
+    name: workflows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@latest
+      - name: task workflows:lint
+        run: task workflows:lint
+
+  gate:
+    name: CI / gate
+    if: always()
+    needs: [api, web, worker, workflows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all upstream jobs to have succeeded
+        run: |
+          for result in \
+            "${{ needs.api.result }}" \
+            "${{ needs.web.result }}" \
+            "${{ needs.worker.result }}" \
+            "${{ needs.workflows.result }}"; do
+            if [ "$result" != "success" ]; then
+              echo "A required job did not succeed: $result"
+              exit 1
+            fi
+          done

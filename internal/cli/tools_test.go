@@ -45,7 +45,7 @@ func (m fakeModule) Resolve(_ context.Context, _ *module.Context) ([]resource.Re
 	return nil, nil
 }
 
-func (m fakeModule) RequiredTools() []module.Tool { return m.tools }
+func (m fakeModule) RequiredTools(*module.Context) []module.Tool { return m.tools }
 
 // quietModule implements Module but not ToolRequirer, which is the majority
 // case and must not need a nil-returning method to work.
@@ -64,7 +64,7 @@ func TestWarnMissingToolsNamesToolModuleAndReason(t *testing.T) {
 	}}
 
 	var buf bytes.Buffer
-	warnMissingTools(&buf, s)
+	warnMissingTools(&buf, s, nil)
 
 	want := "warning: golangci-lint not found on PATH (required by go-tooling: task lint)\n"
 	if got := buf.String(); got != want {
@@ -80,7 +80,7 @@ func TestWarnMissingToolsSaysNothingWhenEverythingIsPresent(t *testing.T) {
 	}}
 
 	var buf bytes.Buffer
-	warnMissingTools(&buf, s)
+	warnMissingTools(&buf, s, nil)
 
 	if buf.Len() != 0 {
 		t.Errorf("a fully equipped machine should produce no warnings, got:\n%s", buf.String())
@@ -98,7 +98,7 @@ func TestMissingToolsReportsEachBinaryOnce(t *testing.T) {
 		fakeModule{name: "second", tools: []module.Tool{{Name: "shared"}, {Name: "beta"}}},
 	}}
 
-	got := missingTools(s)
+	got := missingTools(s, nil)
 
 	want := []missingTool{
 		{module: "first", name: "alpha"},
@@ -199,7 +199,7 @@ func TestRegisteredModulesDeclareTheirTools(t *testing.T) {
 		if !ok {
 			continue
 		}
-		for _, tool := range requirer.RequiredTools() {
+		for _, tool := range requirer.RequiredTools(nil) {
 			if tool.Why == "" {
 				t.Errorf("%s requires %s without saying what it is for", mod.Name(), tool.Name)
 			}

@@ -1,0 +1,73 @@
+version: "3"
+
+# A Python component of a prod-mono/v1 repository: its own uv project,
+# with its own pyproject.toml and uv.lock. The root Taskfile.yml includes
+# this file under the component's id, so "task <id>:test" at the root runs
+# "task test" here; "task verify" works from this directory too. Every
+# command is prod-py/v1's, run from the component instead of the
+# repository root. See docs/specs/0025-prod-mono.md.
+
+tasks:
+  fmt:
+    desc: Apply Ruff formatting.
+    cmds:
+      - uv run ruff format .
+
+  fmt:check:
+    desc: Fail if any file is not Ruff-formatted (CI-safe, no writes).
+    cmds:
+      - uv run ruff format --check .
+
+  # What the agents' hook:format runs after each edit (spec 0023): only the
+  # files git reports as changed or new in this component, then Ruff's
+  # safe fixes. Remaining lint findings are lint's to report, so the fix
+  # step is silent and doesn't fail on them. NUL-separated names keep paths
+  # with spaces intact, and the list is checked first because GNU xargs
+  # runs its command even with no input. Run it from
+  # this directory, as the root's hook:format does: through the root's
+  # include ("task <id>:fmt:changed") Task's built-in xargs, which Windows
+  # uses, ignores the include's dir.
+  fmt:changed:
+    desc: Format only this component's changed and untracked Python files.
+    silent: true
+    cmds:
+      - |
+        list() {
+          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.py' 2>/dev/null || true
+          git ls-files -z --others --exclude-standard -- '*.py'
+        }
+        [ -n "$(list)" ] || exit 0
+        list | xargs -0 uv run ruff format --quiet || exit 2
+        list | xargs -0 uv run ruff check --fix --exit-zero --silent || exit 2
+
+  lint:
+    desc: Run Ruff lint checks.
+    cmds:
+      - uv run ruff check .
+
+  typecheck:
+    desc: Type-check with pyright.
+    cmds:
+      - uv run pyright
+
+  test:
+    desc: Run the test suite.
+    cmds:
+      - uv run pytest
+
+  verify:
+    desc: Verification gate for this component.
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: typecheck
+      - task: test
+
+  verify:fast:
+    desc: Fast verification; same steps as verify (Ruff caches, pyright and
+      pytest run whole).
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: typecheck
+      - task: test

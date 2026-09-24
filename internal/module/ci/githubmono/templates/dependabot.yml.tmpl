@@ -1,0 +1,17 @@
+version: 2
+updates:
+[[- range .Components]]
+  - package-ecosystem: [[.Ecosystem]]
+    directory: "/[[.Path]]"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # No auto-merge: dependency PRs are reviewed like any other change.
+[[end]]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
