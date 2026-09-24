@@ -50,19 +50,20 @@ system.
 
 ## Guardrails
 
-- `.claude/settings.json` and `.codex/hooks.json` run `task -x hook:guard`
-  before tool calls. It runs `.claude/hooks/guard.go` against
-  `.claude/hooks/policy.json`, which blocks destructive commands (`rm -rf`,
-  `git reset --hard`, `git push --force`, PowerShell's recursive forced
-  `Remove-Item`, …) in Bash and PowerShell calls, and, for Claude Code,
-  edits to secret-looking files. The rules live in
-  `internal/module/agents/policy.go`; change them there, not in the
-  generated `policy.json`.
-- Known gaps (`docs/usage.md`, "The agent guard"): Codex on Windows fires
-  no hook for shell commands, and Codex has no file-edit hook at all. A
-  Taskfile that fails to load turns the guard off. A dangerous pattern
-  quoted inside a command still matches.
-- The same configs run four more hooks (spec 0023, `docs/usage.md`,
+- `.claude/settings.json` runs `task -x hook:guard` before tool calls. It
+  runs `.claude/hooks/guard.go` against `.claude/hooks/policy.json`, which
+  blocks destructive commands (`rm -rf`, `git reset --hard`,
+  `git push --force`, PowerShell's recursive forced `Remove-Item`, …) in
+  Bash and PowerShell calls, and edits to secret-looking files. The rules
+  live in `internal/module/agents/claude/policy.go`; change them there, not
+  in the generated `policy.json`.
+- Known gaps (`docs/usage.md`, "The agent guard"): a Taskfile that fails
+  to load turns the guard off. A dangerous pattern quoted inside a command
+  still matches.
+- Codex hooks are suspended (spec 0024, ADR 0011): `.codex/hooks.json` is
+  generated with no hooks, so a Codex session here gets no guard and no
+  `Stop` gate. Apply the same rules by judgment.
+- The same settings run four more hooks (spec 0023, `docs/usage.md`,
   "Agent hooks"): session context at start, formatting of changed files
   after each edit, the incremental checks in the background, and
   `verify:fast` as a gate when you stop. A stop with failing checks is

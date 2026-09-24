@@ -463,7 +463,8 @@ its modules compose:
 | `github-ci` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
 | `vibe-conformance` | `.github/workflows/conformance.yml`, `Taskfile.vibe.yml` |
 | `repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.go` |
-| `agent-config` | `.claude/settings.json`, `.claude/hooks/policy.json`, `.codex/config.toml`, `.codex/hooks.json` |
+| `claude-config` | `.claude/settings.json`, `.claude/hooks/policy.json` |
+| `codex-config` | `.codex/config.toml`, `.codex/hooks.json` (no hooks: suspended, see "Codex: hooks suspended") |
 
 Deliberately **not** managed, and left for you to maintain by hand:
 
@@ -557,10 +558,11 @@ vibe sync
 
 Both also compose two language-neutral modules. `vibe-conformance`
 provides `.github/workflows/conformance.yml` and `Taskfile.vibe.yml`,
-exactly as it does for `prod-go`. `agent-config` gives a TypeScript or
-Python repository the same `.claude/` and `.codex/` guardrails a Go
-repository gets; only the guard's language differs (see "The agent guard"
-below).
+exactly as it does for `prod-go`. `claude-config` gives a TypeScript or
+Python repository the same `.claude/` guardrails a Go repository gets;
+only the guard's language differs (see "The agent guard" below).
+`codex-config` writes the same `.codex/` files as for `prod-go`, with
+hooks suspended.
 
 **As of M3 these are complete standards, not lint/format/typecheck only.**
 Through M2 they composed neither `repo-tooling` nor `github-ci` — a
@@ -680,12 +682,12 @@ a byte-comparison test.
 
 ## Agent hooks
 
-Every standard configures Claude Code (`.claude/settings.json`) and Codex
-(`.codex/hooks.json`) to run five hooks. Each one is a hidden task in the
-generated `Taskfile.yml`, called as `task -x hook:<name>`, the same command
-in every standard and on every OS. See
-`docs/specs/0021-agent-hooks-task-interface.md` and
-`docs/specs/0023-agent-lifecycle-hooks.md`.
+Every standard configures Claude Code (`.claude/settings.json`) to run
+five hooks. Each one is a hidden task in the generated `Taskfile.yml`,
+called as `task -x hook:<name>`, the same command in every standard and on
+every OS. See `docs/specs/0021-agent-hooks-task-interface.md` and
+`docs/specs/0023-agent-lifecycle-hooks.md`. Codex hooks are suspended; see
+"Codex: hooks suspended" below.
 
 | When | Task | What it does | Blocks? |
 |---|---|---|---|
@@ -700,8 +702,8 @@ remove VibeConform. Every `hook:*` name is reserved like `verify`:
 `Taskfile.local.yml` can't redefine it. They have no `desc`, so
 `task --list` doesn't show them.
 
-**Exit 2 is the only code that reaches the agent.** On exit 2 both agents
-show the model the hook's stderr; any other exit is treated as a
+**Exit 2 is the only code that reaches the agent.** On exit 2 Claude Code
+shows the model the hook's stderr; any other exit is treated as a
 non-blocking error. That's why every command is `task -x …` (without `-x`,
 Task reports a failure as 201) and why each hook ends its failing paths in
 `exit 2`.
@@ -739,7 +741,7 @@ VibeConform computes:
 
 ### `hook:context` (session start)
 
-Plain text on stdout, which both agents add to the model's context:
+Plain text on stdout, which Claude Code adds to the model's context:
 
 ```console
 $ task hook:context
@@ -749,10 +751,10 @@ State: dirty
 Go: go1.27.0
 Task: 3.53.1
 Dirty files: 2
- M internal/module/agents/agents.go
+ M internal/module/agents/claude/claude.go
 ?? docs/notes.md
 Affected components:
- 100.0% internal/module/agents/
+ 100.0% internal/module/agents/claude/
 ```
 
 `State` also names a rebase, merge, cherry-pick, revert, or bisect in
@@ -762,7 +764,7 @@ tool shows as `missing`. The list stops after 20 files with `… and N more`.
 
 It only looks. It never installs dependencies, builds, runs tests, starts
 services, or runs migrations; those stay explicit tasks. It doesn't repeat
-`AGENTS.md`, which both agents load themselves, and it always exits 0.
+`AGENTS.md`, which the agent loads itself, and it always exits 0.
 
 `git status` is fast even on large repositories (about 85 ms on a
 100,000-file checkout with Git for Windows' default settings). If yours is
@@ -793,30 +795,27 @@ the agent's copy of the file is out of date until it reads the file again.
 ### `hook:check` (after each edit, in the background)
 
 Runs `typecheck`, `lint`, and `test` (in the standard's `verify` order),
-without blocking the agent. It leaves out `fmt:check` because both agents
-run an event's hooks in parallel, so it starts while `hook:format` may
+without blocking the agent. It leaves out `fmt:check` because Claude Code
+runs an event's hooks in parallel, so it starts while `hook:format` may
 still be writing the file.
 
-- **Claude Code** runs it with `asyncRewake`: on failure it wakes the
-  session and shows the output as a system reminder. (Plain `async` would
-  discard the result.)
-- **Codex** runs it with `async`, and delivers the output at the next safe
-  point: after the current model request, or at the next user turn.
+Claude Code runs it with `asyncRewake`: on failure (exit 2) it wakes the
+session straight away and shows the output as a system reminder. A plain
+`async` hook would only deliver JSON `additionalContext` or
+`systemMessage` output, and only on the next turn.
 
-Quick successive edits start overlapping runs. Codex caps them at eight
-per session.
+Quick successive edits start overlapping runs.
 
 ### `hook:done` (end of turn)
 
 Runs `task verify:fast`. If it fails, the hook exits 2 and the agent
-can't stop: Claude Code keeps working with the failure as its reason, and
-Codex continues the turn with it as the next prompt.
+can't stop: Claude Code keeps working with the failure as its reason.
 
 It blocks **once per stop**. If the agent stops again with the checks
 still failing, the payload's `stop_hook_active` is `true`, and the stop
 goes through with the failure printed. That keeps a failure the agent
 can't fix (a flaky test, a missing tool) from looping forever. Claude Code
-has its own cap of eight blocks; Codex documents none. It's a deliberate
+also has its own cap of eight blocks. It's a deliberate
 soft spot: CI is still the authoritative gate, and `task audit` isn't part
 of it at all.
 
@@ -855,15 +854,11 @@ mostly apply to them too:
 - **Pre-existing failures block the first stop too.** `verify:fast` checks
   the whole repository, not only what the agent changed. The second stop
   goes through.
-- **Codex on Windows** fires no hooks for shell commands
-  ([openai/codex#24453](https://github.com/openai/codex/issues/24453)). The
-  file-edit and lifecycle hooks are unaffected by that issue, but haven't
-  been confirmed on Windows.
 
 ### The agent guard
 
-Every standard configures Claude Code and Codex to run a guard before each
-shell command and, for Claude Code, each file edit. It blocks a short list
+Every standard configures Claude Code to run a guard before each shell
+command and each file edit. It blocks a short list
 of destructive commands (`rm -rf`, `git reset --hard`, `git push --force`,
 and a few more) and edits to files that conventionally hold secrets
 (`.env`, `*.pem`, `id_rsa`, …). See
@@ -871,8 +866,8 @@ and a few more) and edits to files that conventionally hold secrets
 
 How it fits together:
 
-- `.claude/settings.json` and `.codex/hooks.json` run the same command in
-  every standard: `task -x hook:guard`.
+- `.claude/settings.json` runs the same command in every standard:
+  `task -x hook:guard`.
 - `Taskfile.yml` defines `hook:guard`, which runs the guard on the
   standard's own runtime: `go run .claude/hooks/guard.go` for `prod-go`,
   `node .claude/hooks/guard.mjs` for `prod-ts`, and
@@ -906,18 +901,13 @@ shouldn't:
 - **A Taskfile that won't load turns the guard off.** A YAML error in
   `Taskfile.yml` or `Taskfile.local.yml`, or a task name in
   `Taskfile.local.yml` that collides with a managed one, stops Task before
-  the guard runs. Both agents treat any exit other than `2` as allow.
+  the guard runs. Claude Code treats any exit other than `2` as allow.
   `task verify` breaks at the same moment, so it rarely goes unnoticed for
   long.
 - **The nearest Taskfile wins.** Task searches upward from the agent's
   current directory. In a subdirectory with its own `Taskfile.yml`, that
   file's `hook:guard` runs. If it has none, Task exits `200` and the
   command is allowed.
-- **Codex on Windows** fires no `PreToolUse` hook for shell commands
-  ([openai/codex#24453](https://github.com/openai/codex/issues/24453)), so
-  Codex has no command guard there.
-- **Codex has no file-edit hook**, so there is no Codex secret-file guard on
-  any platform.
 - **Claude Code on Windows without Git Bash** runs hooks through
   PowerShell. If that shell cannot start, the hook never runs and the
   command is allowed
@@ -943,6 +933,35 @@ upgrading `vibe`, `sync` writes the new files, but, as for any resource a
 standard stops resolving, it does **not** delete the old ones. Nothing
 references them any more, so they do nothing; delete them yourself, and
 restart any running agent session.
+
+### Codex: hooks suspended
+
+Since spec 0024, VibeConform runs no hooks in Codex. `codex-config` still
+writes `.codex/config.toml` (approval policy and sandbox mode) and writes
+`.codex/hooks.json` with no hooks:
+
+```json
+{
+  "hooks": {}
+}
+```
+
+A Codex session in a conformant repository therefore gets no guard, no
+session context, no formatting, and no `Stop` gate from VibeConform.
+`AGENTS.md` still applies, and CI is still the gate.
+
+Why: a live test of Codex 0.156.1 found that on Windows it ignores exit
+code 2, so neither the guard's deny nor the `Stop` gate's block takes
+effect, and that on every platform a background hook's stderr never
+reaches the model. Hooks written for Claude Code's contract don't carry
+over. See `docs/decisions/0011-one-module-per-agent-runtime.md` for the
+results and what resuming would take.
+
+After upgrading `vibe`, `vibe audit` reports both `.codex/` files out of
+date, and `vibe sync` writes them; the old Codex hooks stop running with
+nothing to delete. `.codex/config.toml` no longer sets `hooks = true`, and
+deliberately doesn't set `hooks = false` either, so hooks you configure in
+your own `~/.codex/` keep running.
 
 ## Adding your own tasks: `Taskfile.local.yml`
 

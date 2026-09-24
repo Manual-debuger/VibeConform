@@ -3,46 +3,57 @@ package standard
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/Manual-debuger/VibeConform/internal/module/agents"
+	"github.com/Manual-debuger/VibeConform/internal/module/agents/claude"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
+// agentConfigs are the hook configs an agent module may resolve, each
+// read as a Claude Code / Codex style {"hooks": {event: [{hooks: [...]}]}}
+// document.
+var agentConfigs = []string{".claude/settings.json", ".codex/hooks.json"}
+
 // TestAgentConfigWiring checks the one dependency between modules that the
-// module model cannot express (spec 0021). agent-config's settings run
-// "task -x hook:guard", but the task and the guard it runs come from the
-// standard's repo-tooling module. A standard composing agent-config without
-// them would ship agent configs calling a task that does not exist; Task
-// would exit 200, and both agents treat that as allow. Catch it at build
-// time rather than in an agent session.
+// module model cannot express (spec 0021). claude-config's settings run
+// "task -x hook:guard" and the other hook tasks, but the tasks and the
+// guard come from the standard's repo-tooling module. A standard composing
+// an agent module without them would ship configs calling a task that does
+// not exist; Task would exit 200, and Claude Code treats that as allow.
+// Catch it at build time rather than in an agent session.
+//
+// Since spec 0024 every agent runtime has its own module, so each module's
+// configs are checked on their own: whatever commands a module's configs
+// run must name tasks the Taskfile defines. A module whose config runs no
+// hooks, like the suspended codex-config, passes trivially.
 func TestAgentConfigWiring(t *testing.T) {
 	for k, s := range registry {
 		t.Run(k.name+"/"+k.version, func(t *testing.T) {
 			resources := map[string]resource.Resource{}
-			composesAgentConfig := false
+			configs := map[string][]string{} // module name -> agent configs it resolves
 			for _, m := range s.Modules {
-				if m.Name() == agents.New().Name() {
-					composesAgentConfig = true
-				}
 				rs, err := m.Resolve(context.Background(), nil)
 				if err != nil {
 					t.Fatalf("resolving %s: %v", m.Name(), err)
 				}
 				for _, r := range rs {
 					resources[r.Path] = r
+					if slices.Contains(agentConfigs, r.Path) {
+						configs[m.Name()] = append(configs[m.Name()], r.Path)
+					}
 				}
 			}
-			if !composesAgentConfig {
-				t.Skip("does not compose agent-config")
+			if len(configs) == 0 {
+				t.Skip("composes no agent module")
 			}
 
 			taskfile, ok := resources["Taskfile.yml"]
 			if !ok {
-				t.Fatal("composes agent-config but resolves no Taskfile.yml to define the hook tasks")
+				t.Fatal("composes an agent module but resolves no Taskfile.yml to define the hook tasks")
 			}
 			var tf struct {
 				Tasks map[string]struct {
@@ -53,25 +64,30 @@ func TestAgentConfigWiring(t *testing.T) {
 				t.Fatalf("parsing Taskfile.yml: %v", err)
 			}
 
-			// Every hook either agent runs must name a task this standard's
-			// Taskfile defines (spec 0023 extends this from hook:guard to
-			// every event).
-			for _, config := range []string{".claude/settings.json", ".codex/hooks.json"} {
-				for _, command := range configCommands(t, resources, config) {
-					name, ok := strings.CutPrefix(command, "task -x ")
-					if !ok {
-						t.Errorf("%s runs %q, which is not a task -x command", config, command)
-						continue
-					}
-					if _, ok := tf.Tasks[name]; !ok {
-						t.Errorf("%s runs %q, but Taskfile.yml defines no %s", config, command, name)
+			// Every hook an agent module runs must name a task this
+			// standard's Taskfile defines (spec 0023 extends this from
+			// hook:guard to every event).
+			for module, paths := range configs {
+				for _, config := range paths {
+					for _, command := range configCommands(t, resources[config]) {
+						name, ok := strings.CutPrefix(command, "task -x ")
+						if !ok {
+							t.Errorf("%s: %s runs %q, which is not a task -x command", module, config, command)
+							continue
+						}
+						if _, ok := tf.Tasks[name]; !ok {
+							t.Errorf("%s: %s runs %q, but Taskfile.yml defines no %s", module, config, command, name)
+						}
 					}
 				}
 			}
 
+			if _, ok := configs[claude.New().Name()]; !ok {
+				return
+			}
 			task, ok := tf.Tasks["hook:guard"]
 			if !ok {
-				t.Fatalf("Taskfile.yml defines no hook:guard, which %q calls", agents.GuardCommand)
+				t.Fatalf("Taskfile.yml defines no hook:guard, which %q calls", claude.GuardCommand)
 			}
 			if len(task.Cmds) != 1 {
 				t.Fatalf("hook:guard has %d commands, want 1", len(task.Cmds))
@@ -101,12 +117,9 @@ func TestAgentConfigWiring(t *testing.T) {
 }
 
 // configCommands returns every hook command in an agent config resource.
-func configCommands(t *testing.T, resources map[string]resource.Resource, path string) []string {
+// A config with no hooks returns none.
+func configCommands(t *testing.T, r resource.Resource) []string {
 	t.Helper()
-	r, ok := resources[path]
-	if !ok {
-		t.Fatalf("agent-config resolves no %s", path)
-	}
 	var cfg struct {
 		Hooks map[string][]struct {
 			Hooks []struct {
@@ -115,7 +128,7 @@ func configCommands(t *testing.T, resources map[string]resource.Resource, path s
 		} `json:"hooks"`
 	}
 	if err := json.Unmarshal(r.Content, &cfg); err != nil {
-		t.Fatalf("parsing %s: %v", path, err)
+		t.Fatalf("parsing %s: %v", r.Path, err)
 	}
 	var commands []string
 	for _, entries := range cfg.Hooks {
@@ -124,9 +137,6 @@ func configCommands(t *testing.T, resources map[string]resource.Resource, path s
 				commands = append(commands, h.Command)
 			}
 		}
-	}
-	if len(commands) == 0 {
-		t.Fatalf("%s runs no hook commands", path)
 	}
 	return commands
 }

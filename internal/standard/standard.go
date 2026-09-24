@@ -7,7 +7,8 @@ import (
 	"fmt"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
-	"github.com/Manual-debuger/VibeConform/internal/module/agents"
+	"github.com/Manual-debuger/VibeConform/internal/module/agents/claude"
+	"github.com/Manual-debuger/VibeConform/internal/module/agents/codex"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/github"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubpy"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubts"
@@ -67,7 +68,7 @@ func init() {
 		Name:    "prod-go",
 		Version: "v1",
 		// Order matters: audit, diff, and sync report in module order.
-		Modules: []module.Module{gotooling.New(), github.New(), conformance.New(), repotooling.New(), agents.New()},
+		Modules: []module.Module{gotooling.New(), github.New(), conformance.New(), repotooling.New(), claude.New(), codex.New()},
 	})
 
 	// Through M2 these composed only their language-tooling module plus
@@ -78,16 +79,17 @@ func init() {
 	// (language tooling, CI, repo-tooling, agent-config). Spec 0022 adds
 	// vibe-conformance to all three, directly after CI: it holds the
 	// conformance workflow and task audit, the only generated files that
-	// run vibe.
+	// run vibe. Spec 0024 splits agent-config into one module per agent
+	// runtime, claude-config then codex-config, in the same position.
 	Register(Standard{
 		Name:    "prod-ts",
 		Version: "v1",
-		Modules: []module.Module{tstooling.New(), githubts.New(), conformance.New(), tsrepotooling.New(), agents.New()},
+		Modules: []module.Module{tstooling.New(), githubts.New(), conformance.New(), tsrepotooling.New(), claude.New(), codex.New()},
 	})
 
 	Register(Standard{
 		Name:    "prod-py",
 		Version: "v1",
-		Modules: []module.Module{pythontooling.New(), githubpy.New(), conformance.New(), pyrepotooling.New(), agents.New()},
+		Modules: []module.Module{pythontooling.New(), githubpy.New(), conformance.New(), pyrepotooling.New(), claude.New(), codex.New()},
 	})
 }

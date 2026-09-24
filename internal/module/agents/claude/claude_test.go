@@ -1,4 +1,4 @@
-package agents
+package claude
 
 import (
 	"bytes"
@@ -14,8 +14,8 @@ import (
 )
 
 func TestName(t *testing.T) {
-	if got := New().Name(); got != "agent-config" {
-		t.Errorf("Name() = %q, want %q", got, "agent-config")
+	if got := New().Name(); got != "claude-config" {
+		t.Errorf("Name() = %q, want %q", got, "claude-config")
 	}
 }
 
@@ -34,8 +34,6 @@ func TestResolveReturnsExpectedResourcesInOrder(t *testing.T) {
 	want := []string{
 		".claude/settings.json",
 		".claude/hooks/policy.json",
-		".codex/config.toml",
-		".codex/hooks.json",
 	}
 	if len(resources) != len(want) {
 		t.Fatalf("Resolve returned %d resources, want %d", len(resources), len(want))
@@ -87,10 +85,8 @@ type hookHandler struct {
 	asyncRewake bool
 }
 
-// hookHandlers returns every handler a Claude Code or Codex hooks config
-// declares, decoding the documented nested shape strictly for every event.
-// It fails the test if the config is not in that shape, which is what the
-// flat Codex config shipped before spec 0021 was.
+// hookHandlers returns every handler a Claude Code hooks config declares,
+// decoding the documented nested shape strictly for every event.
 func hookHandlers(t *testing.T, name string, data []byte) []hookHandler {
 	t.Helper()
 	var cfg struct {
@@ -115,7 +111,7 @@ func hookHandlers(t *testing.T, name string, data []byte) []hookHandler {
 	for event, entries := range cfg.Hooks {
 		for _, e := range entries {
 			if len(e.Hooks) == 0 {
-				t.Errorf("%s has a %s entry with no hooks array; this is the flat shape Codex does not read", name, event)
+				t.Errorf("%s has a %s entry with no hooks array", name, event)
 			}
 			for _, h := range e.Hooks {
 				if h.Type != "command" {
@@ -148,12 +144,12 @@ func hookCommands(t *testing.T, name string, data []byte, event string) (matcher
 	return matchers, commands
 }
 
-// hookCommandsByName are the only commands either config may run: one
+// hookCommandsByName are the only commands the settings may run: one
 // fixed command per task, the same in every standard.
 var hookCommandsByName = []string{GuardCommand, ContextCommand, FormatCommand, CheckCommand, DoneCommand}
 
 // TestAgentConfigsCallTaskWithExitCode is the -x regression test. Without
-// -x, Task exits 201 when a hook exits 2, and both agents treat 201 as a
+// -x, Task exits 201 when a hook exits 2, and Claude Code treats 201 as a
 // non-blocking error: every guardrail would silently stop guarding, and
 // every failed check would silently pass (spec 0021, and spec 0023 for the
 // other events).
@@ -163,14 +159,9 @@ func TestAgentConfigsCallTaskWithExitCode(t *testing.T) {
 			t.Errorf("hook command %q is not of the form \"task -x hook:<name>\"", c)
 		}
 	}
-	for name, data := range map[string][]byte{
-		".claude/settings.json": claudeSettings,
-		".codex/hooks.json":     codexHooks,
-	} {
-		for _, h := range hookHandlers(t, name, data) {
-			if !slices.Contains(hookCommandsByName, h.command) {
-				t.Errorf("%s %s runs %q, want one of %q", name, h.event, h.command, hookCommandsByName)
-			}
+	for _, h := range hookHandlers(t, ".claude/settings.json", settings) {
+		if !slices.Contains(hookCommandsByName, h.command) {
+			t.Errorf(".claude/settings.json %s runs %q, want one of %q", h.event, h.command, hookCommandsByName)
 		}
 	}
 }
@@ -182,28 +173,20 @@ type wantHandler struct {
 	async, asyncRewake      bool
 }
 
-// TestAgentHookEvents pins spec 0023's section 1 table for both configs:
-// every event, its matcher, command, timeout, and async option. Claude Code
-// discards the output of an "async" hook, so its background check must use
-// asyncRewake, which wakes the model on exit 2; Codex has only "async",
-// which delivers the output at the next safe point.
+// TestAgentHookEvents pins spec 0023's section 1 table: every event, its
+// matcher, command, timeout, and async option. The background check uses
+// asyncRewake, because only it wakes the model as soon as the hook exits 2;
+// an "async" hook's result waits for the next turn.
 func TestAgentHookEvents(t *testing.T) {
 	for name, tc := range map[string]struct {
 		data []byte
 		want []wantHandler
 	}{
-		".claude/settings.json": {claudeSettings, []wantHandler{
+		".claude/settings.json": {settings, []wantHandler{
 			{"SessionStart", "startup|resume|clear", ContextCommand, 30, false, false},
 			{"PreToolUse", "Bash|PowerShell|Write|Edit", GuardCommand, 0, false, false},
 			{"PostToolUse", "Write|Edit|MultiEdit|NotebookEdit", FormatCommand, 60, false, false},
 			{"PostToolUse", "Write|Edit|MultiEdit|NotebookEdit", CheckCommand, 300, false, true},
-			{"Stop", "", DoneCommand, 600, false, false},
-		}},
-		".codex/hooks.json": {codexHooks, []wantHandler{
-			{"SessionStart", "startup|resume|clear", ContextCommand, 30, false, false},
-			{"PreToolUse", "Bash", GuardCommand, 0, false, false},
-			{"PostToolUse", "apply_patch|Edit|Write", FormatCommand, 60, false, false},
-			{"PostToolUse", "apply_patch|Edit|Write", CheckCommand, 300, true, false},
 			{"Stop", "", DoneCommand, 600, false, false},
 		}},
 	} {
@@ -229,7 +212,7 @@ func TestAgentHookEvents(t *testing.T) {
 // TestClaudeMatcherCoversCommandsAndEdits checks that Claude Code routes
 // every tool kind the policy has rules for to the guard.
 func TestClaudeMatcherCoversCommandsAndEdits(t *testing.T) {
-	matchers, _ := hookCommands(t, ".claude/settings.json", claudeSettings, "PreToolUse")
+	matchers, _ := hookCommands(t, ".claude/settings.json", settings, "PreToolUse")
 	joined := strings.Join(matchers, "|")
 	for _, tools := range policy.Tools {
 		for _, tool := range tools {
@@ -243,24 +226,8 @@ func TestClaudeMatcherCoversCommandsAndEdits(t *testing.T) {
 	}
 }
 
-// TestCodexHooksMatchDocumentedSchema fixes the bug spec 0021 found: the
-// shipped .codex/hooks.json was a flat list with no matcher, no inner hooks
-// array, and no type, which Codex's documented schema does not describe.
-func TestCodexHooksMatchDocumentedSchema(t *testing.T) {
-	matchers, commands := hookCommands(t, ".codex/hooks.json", codexHooks, "PreToolUse")
-	if len(matchers) != 1 || matchers[0] != "Bash" {
-		t.Errorf(".codex/hooks.json PreToolUse matchers = %v, want [Bash]", matchers)
-	}
-	if len(commands) != 1 {
-		t.Errorf(".codex/hooks.json PreToolUse runs %d commands, want 1", len(commands))
-	}
-	if bytes.Contains(codexHooks, []byte("commandWindows")) {
-		t.Error(".codex/hooks.json sets commandWindows; every hook command is the same on every OS")
-	}
-}
-
 func TestTemplatesMatchLiveFiles(t *testing.T) {
-	repoRoot := filepath.Join("..", "..", "..")
+	repoRoot := filepath.Join("..", "..", "..", "..")
 
 	policyJSON, err := renderPolicy(policy)
 	if err != nil {
@@ -271,10 +238,8 @@ func TestTemplatesMatchLiveFiles(t *testing.T) {
 		live     string
 		embedded []byte
 	}{
-		{filepath.Join(".claude", "settings.json"), claudeSettings},
+		{filepath.Join(".claude", "settings.json"), settings},
 		{filepath.Join(".claude", "hooks", "policy.json"), policyJSON},
-		{filepath.Join(".codex", "config.toml"), codexConfig},
-		{filepath.Join(".codex", "hooks.json"), codexHooks},
 	} {
 		t.Run(tc.live, func(t *testing.T) {
 			live, err := os.ReadFile(filepath.Join(repoRoot, tc.live))
@@ -292,13 +257,7 @@ func TestTemplatesMatchLiveFiles(t *testing.T) {
 // TestTemplatesAreLF — see internal/module/ci/github for why CR bytes in an
 // embedded template make the binary's output platform-dependent.
 func TestTemplatesAreLF(t *testing.T) {
-	for name, content := range map[string][]byte{
-		"settings.json": claudeSettings,
-		"config.toml":   codexConfig,
-		"hooks.json":    codexHooks,
-	} {
-		if bytes.Contains(content, []byte("\r")) {
-			t.Errorf("%s contains CR bytes; the working copy it was embedded from is CRLF", name)
-		}
+	if bytes.Contains(settings, []byte("\r")) {
+		t.Error("settings.json contains CR bytes; the working copy it was embedded from is CRLF")
 	}
 }
