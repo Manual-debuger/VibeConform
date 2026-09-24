@@ -260,7 +260,7 @@ Then implementation:
 
 ### C5: docs
 
-- [ ] `docs/usage.md`:
+- [x] `docs/usage.md`:
   - "The agent guard" becomes "Agent hooks", with the guard as one
     subsection. Add one subsection per new hook: what it runs, when it
     blocks, and how to try it by hand, like the guard's `echo … | task -x
@@ -273,17 +273,26 @@ Then implementation:
   - `core.fsmonitor` / `core.untrackedCache` for large repositories.
   - Known limitations from the spec.
   - The manual canary for each hook.
-- [ ] `.codex/README.md`: the new events, `async` delivery, and any gap
+- [x] `.codex/README.md`: the new events, `async` delivery, and any gap
       the Codex canary finds.
-- [ ] `AGENTS.md`: the "run `task verify` and `task audit`" rule stays,
+- [x] `AGENTS.md`: the "run `task verify` and `task audit`" rule stays,
       but gains a sentence saying the `Stop` hook now runs `verify:fast`
       and that `audit` is still manual. The Guardrails section mentions
       the other hooks.
-- [ ] `docs/architecture/principles.md`: add a principle-1 row for the
+- [x] `docs/architecture/principles.md`: add a principle-1 row for the
       `Stop` gate, noting its once-per-stop soft spot.
 - [ ] Spec 0023 status: accepted and implemented. Amend it wherever the
       spikes changed a mechanism, with an "*Added during implementation:*"
-      note, as spec 0021 did.
+      note, as spec 0021 did. *Moved to C6:* the amendments are in (4.2
+      `xargs`, 4.3 `fmt:check`, resolved question 6's budget), but the
+      status waits for the canaries and CI.
+
+*As built:* "The agent guard" stays as a `###` heading under the new
+"## Agent hooks", so the existing references to it in `AGENTS.md` and
+`usage.md` still resolve. `README.md`'s status note gains the four hooks.
+The usage limitations add two that implementation found: a pre-existing
+failure blocks the first stop, and a cached Go suite that looks up many
+paths makes the Stop gate slow (C1 findings).
 
 ### C6: verification
 

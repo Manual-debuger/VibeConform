@@ -37,7 +37,9 @@ system.
   spec 0017, `verify` covers native language tooling only and no longer
   depends on `audit`, so a hand-edited managed file passes `verify` locally
   and fails only later, in CI's `Conformance / audit` check. Do not claim
-  success with failing checks.
+  success with failing checks. The `Stop` hook runs `task verify:fast` at
+  the end of every turn (spec 0023). That is the fast subset, not
+  `verify`, and `task audit` is still yours to run.
 - Use repository intelligence (GitNexus, if configured) when a change has
   cross-file impact — it augments the compiler/linter/tests, it does not
   replace them.
@@ -60,6 +62,12 @@ system.
   no hook for shell commands, and Codex has no file-edit hook at all. A
   Taskfile that fails to load turns the guard off. A dangerous pattern
   quoted inside a command still matches.
+- The same configs run four more hooks (spec 0023, `docs/usage.md`,
+  "Agent hooks"): session context at start, formatting of changed files
+  after each edit, the incremental checks in the background, and
+  `verify:fast` as a gate when you stop. A stop with failing checks is
+  refused once. Their rules live in the repo-tooling `Taskfile.yml`
+  templates, not in the generated `Taskfile.yml`.
 - The guard is live in this repository: a Bash command that merely
   *contains* a denied pattern, even inside a heredoc, is refused. Write such
   text with a file-editing tool rather than through the shell. After

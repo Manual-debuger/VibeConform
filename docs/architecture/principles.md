@@ -102,6 +102,7 @@ How to apply:
 | 1 | Generated `Taskfile.yml` is the canonical verification interface; CI and hooks call its tasks instead of duplicating command lists |
 | 1 | `vibe audit` in CI turns "don't hand-edit managed files" from an `AGENTS.md` sentence into a failing job |
 | 1 | Claude/Codex `PreToolUse` hooks block destructive commands at the tool-call level, not by asking nicely |
+| 1 | The `Stop` hook runs `task verify:fast` before an agent may end its turn, instead of `AGENTS.md` asking it to (spec 0023). Its known soft spot: a second stop with the checks still failing goes through, so a failure the agent can't fix doesn't loop forever; CI remains the gate |
 | 1 | `TestExamplesAreConformant` and the `examples.yml` workflow keep templates this repository cannot dogfood honest |
 | 2 | Task's portable shell, slash-separated resource paths, byte-exact writes, and CI's `ubuntu-latest`/`windows-latest` test matrix |
 | 3 | `task verify` has no `vibe` dependency (spec 0017); `Taskfile.local.yml` is plain Task `includes`, not a VibeConform mechanism |
