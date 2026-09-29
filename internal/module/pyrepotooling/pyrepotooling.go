@@ -42,7 +42,7 @@ func (pyrepotoolingModule) Name() string {
 // false alarm about how the repository manages its dependencies. uv is the
 // one that runs the project-local tools (spec 0022); ruff and pyright
 // themselves stay undeclared, as python-tooling explains.
-func (pyrepotoolingModule) RequiredTools() []module.Tool {
+func (pyrepotoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 	return []module.Tool{
 		{Name: "task", Why: "every verification entry point Taskfile.yml defines"},
 		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers"},

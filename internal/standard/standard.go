@@ -10,10 +10,13 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/agents/claude"
 	"github.com/Manual-debuger/VibeConform/internal/module/agents/codex"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/github"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubmono"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubpy"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubts"
 	"github.com/Manual-debuger/VibeConform/internal/module/conformance"
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/monorepotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/monotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/pyrepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/pythontooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/repotooling"
@@ -29,6 +32,10 @@ type Standard struct {
 	Version string
 	// Modules are the modules this standard composes.
 	Modules []module.Module
+	// TakesComponents is true for a standard that resolves from vibe.yaml's
+	// components: list and requires at least one. Every other standard
+	// accepts none (docs/decisions/0012-manifest-components.md).
+	TakesComponents bool
 }
 
 type key struct {
@@ -91,5 +98,16 @@ func init() {
 		Name:    "prod-py",
 		Version: "v1",
 		Modules: []module.Module{pythontooling.New(), githubpy.New(), conformance.New(), pyrepotooling.New(), claude.New(), codex.New()},
+	})
+
+	// A polyglot monorepo: every module but vibe-conformance and the agent
+	// modules resolves from vibe.yaml's components, in the same module
+	// order as the single-language standards. See
+	// docs/specs/0025-prod-mono.md.
+	Register(Standard{
+		Name:            "prod-mono",
+		Version:         "v1",
+		Modules:         []module.Module{monotooling.New(), githubmono.New(), conformance.New(), monorepotooling.New(), claude.New(), codex.New()},
+		TakesComponents: true,
 	})
 }

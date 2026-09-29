@@ -1,6 +1,9 @@
 package standard
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestLookupHit(t *testing.T) {
 	s, err := Lookup("prod-go", "v1")
@@ -45,4 +48,32 @@ func TestRegisterDuplicatePanics(t *testing.T) {
 		}
 	}()
 	Register(Standard{Name: "prod-go", Version: "v1"})
+}
+
+// TestLookupProdMonoV1 pins prod-mono's module order and that it is the
+// one standard resolving from vibe.yaml's components (spec 0025).
+func TestLookupProdMonoV1(t *testing.T) {
+	s, err := Lookup("prod-mono", "v1")
+	if err != nil {
+		t.Fatalf("Lookup returned error: %v", err)
+	}
+	if !s.TakesComponents {
+		t.Error("prod-mono/v1 does not take components")
+	}
+	want := []string{"mono-tooling", "github-ci-mono", "vibe-conformance", "mono-repo-tooling", "claude-config", "codex-config"}
+	var got []string
+	for _, m := range s.Modules {
+		got = append(got, m.Name())
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("modules %v, want %v", got, want)
+	}
+}
+
+func TestOnlyProdMonoTakesComponents(t *testing.T) {
+	for k, s := range registry {
+		if s.TakesComponents != (k.name == "prod-mono") {
+			t.Errorf("%s/%s: TakesComponents = %v", k.name, k.version, s.TakesComponents)
+		}
+	}
 }

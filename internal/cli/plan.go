@@ -36,6 +36,8 @@ type resourcePlan struct {
 type repoPlan struct {
 	// Standard is the resolved standard vibe.yaml declares.
 	Standard *standard.Standard
+	// Context is what every module resolved against.
+	Context *module.Context
 	// Previous is the state VibeConform last recorded for this repository.
 	Previous *state.State
 	// Resources is one entry per resource the standard's modules resolve,
@@ -66,14 +68,17 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := checkComponents(s, m); err != nil {
+		return nil, err
+	}
 
 	previous, err := state.Load(repoRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	p := &repoPlan{Standard: s, Previous: previous}
-	mctx := &module.Context{RepoRoot: repoRoot}
+	mctx := &module.Context{RepoRoot: repoRoot, Components: m.Components}
+	p := &repoPlan{Standard: s, Context: mctx, Previous: previous}
 	for _, mod := range s.Modules {
 		resources, err := mod.Resolve(context.Background(), mctx)
 		if err != nil {
@@ -89,6 +94,22 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 	}
 
 	return p, nil
+}
+
+// checkComponents refuses a manifest whose components the standard would
+// ignore, or a component standard with nothing to compose: either way the
+// resolved resources would not be what vibe.yaml says
+// (docs/decisions/0012-manifest-components.md).
+func checkComponents(s *standard.Standard, m *manifest.Manifest) error {
+	switch {
+	case s.TakesComponents && len(m.Components) == 0:
+		return fmt.Errorf("%s/%s needs at least one component: add a components: list to %s "+
+			"(each entry an id, a path, and a profile: go, ts, or py)", s.Name, s.Version, manifestFileName)
+	case !s.TakesComponents && len(m.Components) > 0:
+		return fmt.Errorf("%s/%s takes no components, but %s declares %d; "+
+			"use prod-mono for a repository with components", s.Name, s.Version, manifestFileName, len(m.Components))
+	}
+	return nil
 }
 
 // planResource decides the outcome for a single resource by comparing the

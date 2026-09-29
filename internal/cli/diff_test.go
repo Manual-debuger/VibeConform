@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
@@ -126,5 +127,37 @@ func TestDiffCmdFailsIfStandardUnknown(t *testing.T) {
 
 	if err := root.Execute(); err == nil {
 		t.Fatal("expected error for unknown standard/version, got nil")
+	}
+}
+
+// TestPlanRefusesComponentMismatch pins ADR 0012: components on a standard
+// that takes none, or a component standard with none, is an error before
+// anything resolves, never a silently ignored field.
+func TestPlanRefusesComponentMismatch(t *testing.T) {
+	cases := map[string]struct{ manifest, want string }{
+		"prod-go with components": {
+			"standard: prod-go\nversion: v1\ncomponents:\n  - {id: api, path: api, profile: go}\n",
+			"takes no components",
+		},
+		"prod-mono without components": {
+			"standard: prod-mono\nversion: v1\n",
+			"needs at least one component",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte(tc.manifest), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			root := NewRootCmd("test")
+			root.SetOut(&bytes.Buffer{})
+			root.SetErr(&bytes.Buffer{})
+			root.SetArgs([]string{"diff", "--repo-root", dir})
+			err := root.Execute()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("diff error = %v, want one mentioning %q", err, tc.want)
+			}
+		})
 	}
 }

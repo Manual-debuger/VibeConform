@@ -23,8 +23,12 @@ import (
 // --repo-root examples/typescript line in either would leak this
 // repository's layout into the standard. See
 // docs/specs/0014-m2-milestone.md.
+// examples are the committed repositories under examples/, one per
+// standard this repository cannot dogfood.
+var examples = []string{"typescript", "python", "monorepo"}
+
 func TestExamplesAreConformant(t *testing.T) {
-	for _, example := range []string{"typescript", "python"} {
+	for _, example := range examples {
 		t.Run(example, func(t *testing.T) {
 			root := filepath.Join("..", "..", "examples", example)
 
@@ -54,8 +58,8 @@ func TestExamplesAreConformant(t *testing.T) {
 // forgotten when a standard is added: a standard nothing syncs is a standard
 // nothing checks.
 func TestExamplesCoverEveryLanguageStandard(t *testing.T) {
-	wantByExample := map[string]string{"typescript": "prod-ts", "python": "prod-py"}
-	for _, example := range []string{"typescript", "python"} {
+	wantByExample := map[string]string{"typescript": "prod-ts", "python": "prod-py", "monorepo": "prod-mono"}
+	for _, example := range examples {
 		root := filepath.Join("..", "..", "examples", example)
 		p, err := buildPlan(root)
 		if err != nil {
@@ -64,5 +68,17 @@ func TestExamplesCoverEveryLanguageStandard(t *testing.T) {
 		if want := wantByExample[example]; p.Standard.Name != want {
 			t.Errorf("examples/%s declares %s, want %s", example, p.Standard.Name, want)
 		}
+	}
+}
+
+// TestPlanCarriesComponents: modules and the missing-tool check both see
+// vibe.yaml's components through the plan's context.
+func TestPlanCarriesComponents(t *testing.T) {
+	p, err := buildPlan(filepath.Join("..", "..", "examples", "monorepo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(p.Context.Components); n != 3 {
+		t.Fatalf("plan context has %d components, want the example's 3", n)
 	}
 }

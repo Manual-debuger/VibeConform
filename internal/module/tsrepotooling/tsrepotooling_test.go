@@ -69,7 +69,7 @@ func TestRequiredTools(t *testing.T) {
 		t.Fatal("ts-repo-tooling should declare task, lefthook, and pnpm; it does not implement ToolRequirer")
 	}
 
-	tools := requirer.RequiredTools()
+	tools := requirer.RequiredTools(nil)
 	if len(tools) != 3 {
 		t.Fatalf("RequiredTools() = %+v, want 3 entries", tools)
 	}

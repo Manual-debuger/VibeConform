@@ -41,7 +41,7 @@ func (tstoolingModule) Name() string {
 // RequiredTools declares node and nothing else. eslint, prettier, and tsc
 // are project-local, installed into node_modules rather than onto PATH, so
 // warning about them would fire on every correctly configured repository.
-func (tstoolingModule) RequiredTools() []module.Tool {
+func (tstoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 	return []module.Tool{
 		{Name: "node", Why: "running eslint, prettier, and tsc out of node_modules"},
 	}

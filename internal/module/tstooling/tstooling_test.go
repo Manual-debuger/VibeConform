@@ -66,7 +66,7 @@ func TestRequiredTools(t *testing.T) {
 		t.Fatal("ts-tooling should declare node; it does not implement ToolRequirer")
 	}
 
-	tools := requirer.RequiredTools()
+	tools := requirer.RequiredTools(nil)
 	if len(tools) != 1 || tools[0].Name != "node" {
 		t.Fatalf("RequiredTools() = %+v, want node only", tools)
 	}

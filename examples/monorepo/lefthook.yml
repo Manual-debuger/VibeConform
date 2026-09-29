@@ -1,0 +1,45 @@
+# Lefthook: fast checks at commit time, stronger checks at push time.
+# CI (.github/workflows/ci.yml) is the authoritative full verification gate;
+# these hooks are a fast local first line of defense, not a substitute.
+#
+# Pre-commit checks run per component, from the component's directory
+# (root:), and only when a staged file of its language is inside it, so a
+# commit touching one component checks only that one. Each runs the
+# component's own Taskfile.yml tasks. See docs/specs/0025-prod-mono.md.
+
+pre-commit:
+  parallel: true
+  commands:
+    api-fmt:
+      root: "services/api/"
+      glob: "*.go"
+      run: task fmt:check
+      fail_text: "Run 'task api:fmt' to format api."
+    api-lint:
+      root: "services/api/"
+      glob: "*.go"
+      run: task lint
+    web-fmt:
+      root: "apps/web/"
+      glob: "*.{js,jsx,ts,tsx,json,css,md}"
+      run: task fmt:check
+      fail_text: "Run 'task web:fmt' to format web."
+    web-lint:
+      root: "apps/web/"
+      glob: "*.{js,jsx,ts,tsx,json,css,md}"
+      run: task lint
+    worker-fmt:
+      root: "services/worker/"
+      glob: "*.py"
+      run: task fmt:check
+      fail_text: "Run 'task worker:fmt' to format worker."
+    worker-lint:
+      root: "services/worker/"
+      glob: "*.py"
+      run: task lint
+
+pre-push:
+  parallel: false
+  commands:
+    verify-fast:
+      run: task verify:fast

@@ -1,7 +1,8 @@
 name: Examples
 
 # Runs eslint/prettier/tsc and ruff/pyright/pytest against real fixture
-# source in examples/typescript and examples/python, closing the blind
+# source in examples/typescript, examples/python, and examples/monorepo
+# (Go, TypeScript, and Python under prod-mono/v1), closing the blind
 # spot TestExamplesAreConformant (internal/cli/examples_test.go) leaves:
 # that test proves generated config round-trips through vibe sync, not
 # that it catches anything.
@@ -134,17 +135,92 @@ jobs:
         working-directory: examples/python
         run: task audit
 
+  monorepo:
+    name: examples/monorepo (${{ matrix.os }})
+    # Windows as well as Linux: prod-mono's hook:format works around a
+    # Windows-only behavior of Task's built-in xargs (spec 0025).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      GOLANGCI_LINT_VERSION: "v2.13.2"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: examples/monorepo/apps/web/package.json
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: examples/monorepo/apps/web/pnpm-lock.yaml
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install task, goimports, golangci-lint, govulncheck, actionlint
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+          go install golang.org/x/tools/cmd/goimports@latest
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+      - name: Install dependencies
+        run: |
+          (cd examples/monorepo/apps/web && pnpm install --frozen-lockfile)
+          (cd examples/monorepo/services/worker && uv sync)
+      - name: task verify
+        working-directory: examples/monorepo
+        run: task verify
+      - name: task verify:fast
+        working-directory: examples/monorepo
+        run: task verify:fast
+      - name: task hook:context
+        working-directory: examples/monorepo
+        run: task hook:context
+      # An untracked, unformatted file in every component: hook:format must
+      # format each one from its own directory, on both platforms.
+      - name: task hook:format
+        working-directory: examples/monorepo
+        run: |
+          printf 'package api\n\nfunc  X() {}\n' > services/api/x.go
+          printf 'export const   y = 1\n' > apps/web/src/y.ts
+          printf 'x  =  1\n' > services/worker/src/example/x.py
+          task -x hook:format
+          task fmt:check
+          rm services/api/x.go apps/web/src/y.ts services/worker/src/example/x.py
+      - name: Build vibe from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe$(go env GOEXE)" ./cmd/vibe
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: task audit
+        working-directory: examples/monorepo
+        run: task audit
+
   gate:
     name: Examples / gate
     if: always()
-    needs: [typescript, python]
+    needs: [typescript, python, monorepo]
     runs-on: ubuntu-latest
     steps:
       - name: Require all upstream jobs to have succeeded
         run: |
           for result in \
             "${{ needs.typescript.result }}" \
-            "${{ needs.python.result }}"; do
+            "${{ needs.python.result }}"             "${{ needs.monorepo.result }}"; do
             if [ "$result" != "success" ]; then
               echo "A required job did not succeed: $result"
               exit 1

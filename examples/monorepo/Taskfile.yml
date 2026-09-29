@@ -1,0 +1,226 @@
+version: "3"
+
+# The root of a prod-mono/v1 repository. Each component has its own
+# generated Taskfile.yml, included below under the component's id: run one
+# component's task as "task <id>:<task>" (task api:test), or run "task
+# <task>" here to run it for every component in vibe.yaml order. See
+# docs/specs/0025-prod-mono.md.
+#
+# Repository-specific tasks — build, run, deploy, whatever this repository
+# happens to need — belong in a project-owned Taskfile.local.yml, which
+# VibeConform never writes, reads, or audits. The include is optional: with
+# no such file it does nothing. Tasks defined there are available
+# unprefixed, but cannot redefine a task below — Task exits 203 on a name
+# collision rather than silently overriding, so the verification interface
+# stays what the standard says it is. Requires Task v3.39.0 or newer.
+# See docs/decisions/0009-managed-file-local-extension.md.
+includes:
+  local:
+    taskfile: ./Taskfile.local.yml
+    optional: true
+    flatten: true
+  # VibeConform's own tasks (task audit), kept out of this file so that
+  # removing VibeConform is deleting Taskfile.vibe.yml, not editing this
+  # one. Optional for the same reason: with the file gone, this include
+  # does nothing. See docs/specs/0022-conformance-isolation.md.
+  vibe:
+    taskfile: ./Taskfile.vibe.yml
+    optional: true
+    flatten: true
+  api:
+    taskfile: ./services/api/Taskfile.yml
+    dir: ./services/api
+  web:
+    taskfile: ./apps/web/Taskfile.yml
+    dir: ./apps/web
+  worker:
+    taskfile: ./services/worker/Taskfile.yml
+    dir: ./services/worker
+
+# Task's built-in shell (mvdan.cc/sh) interprets POSIX-style syntax
+# identically on Windows/Linux/macOS, so these commands need no per-OS
+# branching.
+
+tasks:
+  fmt:
+    desc: Apply every component's formatter.
+    cmds:
+      - task: api:fmt
+      - task: web:fmt
+      - task: worker:fmt
+
+  fmt:check:
+    desc: Fail if any component's files are not formatted (CI-safe, no writes).
+    cmds:
+      - task: api:fmt:check
+      - task: web:fmt:check
+      - task: worker:fmt:check
+
+  lint:
+    desc: Run every component's linters.
+    cmds:
+      - task: api:lint
+      - task: web:lint
+      - task: worker:lint
+
+  typecheck:
+    desc: Type-check every component.
+    cmds:
+      - task: api:typecheck
+      - task: web:typecheck
+      - task: worker:typecheck
+
+  test:
+    desc: Run every component's test suite.
+    cmds:
+      - task: api:test
+      - task: web:test
+      - task: worker:test
+
+  workflows:lint:
+    desc: Validate GitHub Actions workflow files.
+    cmds:
+      - actionlint
+
+  # Called by Claude Code, not by people: .claude/settings.json runs
+  # "task -x hook:guard" before every shell command and file edit. No desc,
+  # so it stays out of task --list. The -x in that command matters: without
+  # it Task reports the guard's deny (exit 2) as 201, which the agent
+  # treats as allow. The guard runs in the first runtime this repository
+  # has, in the order Go, Node, Python. See
+  # docs/specs/0021-agent-hooks-task-interface.md.
+  #
+  # "|| exit 2" turns any failure inside the task into a deny rather than
+  # an allow: a missing or broken runtime would otherwise let every tool
+  # call through.
+  hook:guard:
+    silent: true
+    cmds:
+      - go run .claude/hooks/guard.go .claude/hooks/policy.json || exit 2
+
+  # The other agent hooks (spec 0023). Like hook:guard, agents call these
+  # through "task -x hook:<name>", and none has a desc. Exit 2 is the one
+  # code agents show the model; the scripts use only Task's built-in shell
+  # and git, so they behave the same on Windows and Linux.
+  # Task runs each cmd with errexit, so every command that can fail on a
+  # healthy machine (a missing runtime, no commit yet) ends in "|| true"
+  # or "|| echo missing"; unguarded, it would end the script early.
+  #
+  # Session start: a few lines of facts for the agent's context. Never
+  # installs, builds, tests, or starts anything; those stay explicit tasks.
+  hook:context:
+    silent: true
+    cmds:
+      - |
+        if ! git rev-parse --git-dir >/dev/null 2>&1; then
+          echo "Repo: {{base .ROOT_DIR}} (not a git repository)"
+          exit 0
+        fi
+        echo "Repo: {{base .ROOT_DIR}}"
+        b="$(git branch --show-current 2>/dev/null || true)"
+        [ -n "$b" ] || b="detached at $(git rev-parse --short HEAD 2>/dev/null || echo "an unborn branch")"
+        echo "Branch: $b"
+        status="$(git status --short 2>/dev/null || true)"
+        state=clean
+        [ -z "$status" ] || state=dirty
+        for p in rebase-merge:rebase rebase-apply:rebase MERGE_HEAD:merge CHERRY_PICK_HEAD:cherry-pick REVERT_HEAD:revert BISECT_LOG:bisect; do
+          if [ -e "$(git rev-parse --git-path "${p%%:*}")" ]; then state="$state, ${p#*:} in progress"; fi
+        done
+        echo "State: $state"
+        echo "Go: $(go env GOVERSION 2>/dev/null || echo missing)"
+        echo "Node: $(node --version 2>/dev/null || echo missing)"
+        echo "pnpm: $(pnpm --version 2>/dev/null || echo missing)"
+        echo "uv: $(uv --version 2>/dev/null || echo missing)"
+        py="$(uv python find 2>/dev/null || true)"
+        echo "Python: $([ -n "$py" ] && "$py" --version 2>/dev/null || echo missing)"
+        echo "Task: {{.TASK_VERSION}}"
+        echo "Components (task <id>:<task>):"
+        echo "  api: services/api (go)"
+        echo "  web: apps/web (ts)"
+        echo "  worker: services/worker (py)"
+        n=0
+        while IFS= read -r line; do
+          [ -n "$line" ] || continue
+          n=$((n+1))
+          [ "$n" -le 20 ] && list="$list$line
+        "
+        done <<EOF
+        $status
+        EOF
+        echo "Dirty files: $n"
+        printf '%s' "$list"
+        [ "$n" -le 20 ] || echo "… and $((n-20)) more"
+        dirstat="$(git diff --dirstat=files,0 HEAD 2>/dev/null || true)"
+        if [ -n "$dirstat" ]; then
+          echo "Affected directories:"
+          echo "$dirstat"
+        fi
+
+  # After each file edit: every component formats its own changed files
+  # (its fmt:changed task), not the whole repository. Each runs as its own
+  # task process started inside the component, not as "task <id>:..."
+  # through the include: Task's built-in xargs, which Windows uses, runs
+  # its command in the process's directory and ignores the include's dir.
+  # Every component is formatted even if an earlier one fails.
+  hook:format:
+    silent: true
+    cmds:
+      - |
+        rc=0
+        (cd services/api && task -s fmt:changed) || rc=2
+        (cd apps/web && task -s fmt:changed) || rc=2
+        (cd services/worker && task -s fmt:changed) || rc=2
+        exit $rc
+
+  # After each file edit, in the background: verify:fast's incremental
+  # checks, except fmt:check. Agents run all of an event's hooks in
+  # parallel, so this starts while hook:format may still be writing the
+  # file; hook:done checks formatting at the end of the turn. The tools'
+  # output goes to stderr, which is what the agent is shown.
+  hook:check:
+    silent: true
+    cmds:
+      - task -s api:typecheck api:lint api:test web:typecheck web:lint web:test worker:typecheck worker:lint worker:test 1>&2 || exit 2
+
+  # When the agent ends its turn: the same checks, as a gate. A failure
+  # blocks the stop once. If the agent stops again with the checks still
+  # failing (stop_hook_active), the stop goes through, with the failure
+  # printed, rather than looping forever on something it can't fix.
+  hook:done:
+    silent: true
+    cmds:
+      - |
+        case "$(cat)" in
+          *'"stop_hook_active":true'*|*'"stop_hook_active": true'*)
+            task -s verify:fast 1>&2 && exit 0
+            echo "hook:done: verify:fast still fails; this stop was already blocked once, so it goes through." >&2
+            exit 0
+            ;;
+        esac
+        task -s verify:fast 1>&2 || exit 2
+
+  verify:
+    desc: Local verification gate for every component, then the workflow
+      files — native language tooling only, never VibeConform itself;
+      "task audit" is VibeConform's check, which CI runs in its own
+      Conformance workflow.
+    cmds:
+      - task: api:verify
+      - task: web:verify
+      - task: worker:verify
+      - task: workflows:lint
+
+  # The agents' Stop hook and background check run this after edits (spec
+  # 0023): every component's own verify:fast.
+  verify:fast:
+    desc: Every component's fast incremental verification; what the agents'
+      Stop hook runs. "task verify" is still the full gate.
+    cmds:
+      - task: api:verify:fast
+      - task: web:verify:fast
+      - task: worker:verify:fast
+
+  verify-ci:
+    desc: Alias used by CI so the workflow and local docs never drift.
+    cmds:
+      - task: verify

@@ -1,0 +1,93 @@
+version: "3"
+
+# A Go component of a prod-mono/v1 repository. The root Taskfile.yml
+# includes this file under the component's id, so "task <id>:test" at the
+# root runs "task test" here; "task verify" works from this directory too.
+# Every command is prod-go/v1's, run from the component instead of the
+# repository root. See docs/specs/0025-prod-mono.md.
+
+tasks:
+  fmt:
+    desc: Apply gofmt/goimports formatting.
+    cmds:
+      - gofmt -l -w .
+      - goimports -l -w .
+
+  fmt:check:
+    desc: Fail if any file is not gofmt/goimports formatted (CI-safe, no writes).
+    cmds:
+      - test -z "$(gofmt -l .)"
+      - test -z "$(goimports -l .)"
+
+  # What the agents' hook:format runs after each edit (spec 0023): only the
+  # files git reports as changed or new in this component. NUL-separated
+  # names keep paths with spaces intact, and the list is checked first
+  # because GNU xargs runs its command even with no input. Run it from
+  # this directory, as the root's hook:format does: through the root's
+  # include ("task <id>:fmt:changed") Task's built-in xargs, which Windows
+  # uses, ignores the include's dir.
+  fmt:changed:
+    desc: Format only this component's changed and untracked Go files.
+    silent: true
+    cmds:
+      - |
+        list() {
+          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.go' 2>/dev/null || true
+          git ls-files -z --others --exclude-standard -- '*.go'
+        }
+        [ -n "$(list)" ] || exit 0
+        list | xargs -0 goimports -w || exit 2
+        list | xargs -0 gofmt -w || exit 2
+
+  lint:
+    desc: Run go vet and golangci-lint.
+    cmds:
+      - go vet ./...
+      - golangci-lint run
+
+  typecheck:
+    desc: Type-check by building all packages (Go has no separate typechecker).
+    cmds:
+      - go build ./...
+
+  test:
+    desc: Run the test suite.
+    cmds:
+      - go test ./...
+
+  test:race:
+    desc: Run the test suite with the race detector.
+    cmds:
+      - go test -race ./...
+
+  mod:verify:
+    desc: Ensure go.mod/go.sum are tidy and modules are verified.
+    cmds:
+      - go mod tidy
+      - go mod verify
+      - git diff --exit-code -- go.mod go.sum
+
+  security:
+    desc: Run vulnerability scanning.
+    cmds:
+      - govulncheck ./...
+
+  verify:
+    desc: Verification gate for this component. Race detection needs a C
+      compiler (CGO); run "task test:race" separately if you have one — CI
+      runs it in this component's job.
+    cmds:
+      - task: fmt:check
+      - task: typecheck
+      - task: lint
+      - task: test
+      - task: mod:verify
+      - task: security
+
+  verify:fast:
+    desc: Fast incremental subset of verify (format, build, lint, test).
+    cmds:
+      - task: fmt:check
+      - task: typecheck
+      - task: lint
+      - task: test

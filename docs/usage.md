@@ -93,7 +93,9 @@ vibe init prod-go v1 --repo-root ./some/other/repo
   `docs/specs/0003-standard-registry.md`). `audit`, `diff` and `sync` do
   check: against an unregistered pair they fail with
   `standard: no such standard <name>/<version>`. The registered standards
-  are `prod-go`, `prod-ts` and `prod-py`, each at `v1`.
+  are `prod-go`, `prod-ts`, `prod-py`, and `prod-mono`, each at `v1`.
+  `prod-mono` also needs a `components:` list, which `init` does not
+  write; see "What `prod-mono/v1` manages" below.
 - `init` **never overwrites** an existing `vibe.yaml`. There is no
   `--force` flag; if you need to change it, edit or delete the file
   yourself. Running `init` again against an existing `vibe.yaml` fails
@@ -659,8 +661,9 @@ Python 3.12, and the rule sets as written.
 
 ### Worked examples
 
-`examples/typescript/` and `examples/python/` in this repository are real
-repositories declaring these standards, holding the exact output of syncing
+`examples/typescript/` and `examples/python/` (and `examples/monorepo/`,
+for `prod-mono/v1`) in this repository are real repositories declaring
+these standards, holding the exact output of syncing
 them, plus real source (`src/`, `tests/`) and pinned dev dependencies
 (`package.json`/`pnpm-lock.yaml`, `pyproject.toml`/`uv.lock`) that
 VibeConform itself does not manage. They are the same worked example that
@@ -679,6 +682,109 @@ adopting repository): it runs `task verify` inside each example with no
 `vibe` on `PATH`, then builds `vibe` from source and runs `task audit` as a
 separate step, so a template change that breaks linting fails CI, not just
 a byte-comparison test.
+
+## What `prod-mono/v1` manages
+
+A standard for a polyglot monorepo: Go, TypeScript, and Python projects
+side by side in one repository (spec 0025). `vibe.yaml` names each
+project, a *component*, with an `id`, a `path`, and a `profile`
+(`go`, `ts`, or `py`):
+
+```yaml
+standard: prod-mono
+version: v1
+components:
+  - id: api
+    path: services/api
+    profile: go
+  - id: web
+    path: apps/web
+    profile: ts
+  - id: worker
+    path: services/worker
+    profile: py
+```
+
+`vibe init prod-mono v1` writes the first two lines; add `components:`
+yourself. Until you do, `diff`/`sync`/`audit` fail with
+`prod-mono/v1 needs at least one component`. The rules
+(`docs/decisions/0012-manifest-components.md`):
+
+- `id` is lowercase letters, digits, and `-`, starting with a letter,
+  and unique. It is the component's Task namespace and CI job name, so
+  names the root files already use are reserved: `audit`, `fmt`, `gate`,
+  `hook`, `lint`, `local`, `test`, `typecheck`, `verify`, `verify-ci`,
+  `vibe`, `workflows`.
+- `path` is relative, slash-separated, and clean (`apps/web`, not
+  `./apps/web/`). It cannot be the root, and no component can be inside
+  another.
+- `vibe.yaml` is decoded strictly in every standard: an unknown key is an
+  error. `components:` on `prod-go`, `prod-ts`, or `prod-py` is an error
+  too.
+
+Each component is a complete single-language project at its path — its
+own `go.mod`; its own `package.json` (with `packageManager`) and
+`pnpm-lock.yaml`; its own `pyproject.toml` and `uv.lock` — laid out
+exactly as the matching single-language standard expects a repository
+root to be. pnpm and uv workspaces are not supported yet, and neither is
+generating `go.work`.
+
+| Module | Resources |
+|---|---|
+| `mono-tooling` | per component, its profile's config at `<path>/`: `.golangci.yml`; `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json`; or `ruff.toml`, `pyrightconfig.json` — byte for byte what `prod-go`/`prod-ts`/`prod-py` write at a root |
+| `github-ci-mono` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
+| `vibe-conformance` | `.github/workflows/conformance.yml`, `Taskfile.vibe.yml`, as in every standard |
+| `mono-repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.*`, and `<path>/Taskfile.yml` per component |
+| `claude-config`, `codex-config` | as in every standard |
+
+**Tasks.** Every component's `Taskfile.yml` has its language's tasks
+with the single-language standard's exact commands (`fmt`, `fmt:check`,
+`lint`, `typecheck`, `test`, `verify`, `verify:fast`, and for Go
+`test:race`, `mod:verify`, `security`), plus `fmt:changed`, which formats
+only the files git reports as changed. Inside a component directory
+`task verify` works as in a single-language repository. The root
+`Taskfile.yml` includes each one under its `id`:
+
+```bash
+task api:test          # go test ./... in services/api
+task web:lint          # eslint in apps/web
+task verify            # every component's verify, then workflows:lint
+task verify:fast       # every component's verify:fast
+task fmt               # every component's formatter
+```
+
+`Taskfile.local.yml` works exactly as in the other standards. Run
+`fmt:changed` from inside the component (`cd apps/web && task
+fmt:changed`), as `hook:format` does: through the root include, Task's
+built-in `xargs`, which Windows uses, ignores the include's directory.
+
+**Git hooks.** Pre-commit runs `task fmt:check` and `task lint` inside
+each component with a staged file of its language, so a commit touching
+only `apps/web` checks only `web`. Pre-push runs `task verify:fast` at
+the root.
+
+**CI.** One job per component, named by its `id`, sets up only its own
+toolchain, installs its dependencies in its directory
+(`pnpm install --frozen-lockfile` or `uv sync`), and runs
+`task <id>:verify`. Go components also run `task <id>:test:race`, and
+build and test on Windows as `prod-go` does. A `workflows` job runs
+actionlint. `CI / gate` requires every job, so branch protection needs
+that one check however many components there are. Dependabot gets one
+entry per component, in its ecosystem and directory, plus
+`github-actions`.
+
+**Agent hooks.** Work as described in "Agent hooks" below, per component:
+`hook:format` runs each component's `fmt:changed` from inside that
+component, `hook:check` runs each component's `typecheck`, `lint`, and
+`test`, and `hook:context` lists the components and only the toolchains
+they use. The guard runs in the first runtime the repository has, in the
+order Go, Node, Python (`guard.go`, `guard.mjs`, or `guard.py`).
+
+`sync`'s missing-tool warnings cover only the profiles declared: a
+repository with no Python component is not warned about `uv`.
+
+`examples/monorepo/` is a worked example with one component of each
+profile, checked the same way as the other examples.
 
 ## Agent hooks
 
