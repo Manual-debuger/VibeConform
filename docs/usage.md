@@ -1175,15 +1175,22 @@ Still hand-maintained here, by the non-goals above:
 
 ## What `vibe.yaml` means today
 
-Right now it's exactly two fields, nothing more:
+In `prod-go`, `prod-ts`, and `prod-py` it's exactly two fields, nothing
+more:
 
 ```yaml
 standard: prod-go
 version: v1
 ```
 
-There is no `.vibe/lock.yaml` and no component graph yet — and no overrides:
-a repository either conforms to `prod-go/v1` as written or it does not.
+`prod-mono` adds a third, `components:`, a list of `id`, `path`, and
+`profile` entries; see "What `prod-mono/v1` manages" above. No other key is
+accepted: `vibe.yaml` is decoded strictly, and `components:` on any other
+standard is an error.
+
+There is no `.vibe/lock.yaml`, no `depends_on` between components (so no
+affected-component graph yet), and no overrides: a repository either
+conforms to its standard as written or it does not.
 Editing `vibe.yaml` by hand is safe and expected — `init` only exists to
 create the first one.
 
