@@ -34,6 +34,8 @@ type resourcePlan struct {
 	// written, it would never be committed (spec 0026). An ignored
 	// resource is an error in every command, whatever its Decision.
 	Ignored bool
+	// Patch is the element-level plan of a structured-patch resource.
+	Patch *patchPlan
 }
 
 // prunePlan is one recorded path that the selection no longer produces
@@ -46,6 +48,10 @@ type prunePlan struct {
 	Integration string
 	// Decision is what sync would do about it.
 	Decision reconcile.Removal
+	// Resource and Patch are set for a structured-patch resource, which is
+	// pruned element by element rather than deleted whole.
+	Resource resource.Resource
+	Patch    *patchPlan
 }
 
 // repoPlan is everything a command needs to report or apply reconciliation
@@ -174,6 +180,17 @@ func planPrunes(repoRoot string, p *repoPlan) error {
 					continue
 				}
 				seen[key] = true
+				if r.Patch != nil {
+					// A structured patch owns elements, not the file: prune
+					// every recorded element by planning the file as if
+					// this resource owned none.
+					pp, err := prunePatch(repoRoot, recorded, r, it.Name)
+					if err != nil {
+						return err
+					}
+					p.Prunes = append(p.Prunes, pp)
+					continue
+				}
 				decision, err := decideRemoval(repoRoot, key, recorded)
 				if err != nil {
 					return err
@@ -183,6 +200,25 @@ func planPrunes(repoRoot string, p *repoPlan) error {
 		}
 	}
 	return nil
+}
+
+func prunePatch(repoRoot string, recorded state.ResourceState, r resource.Resource, integration string) (prunePlan, error) {
+	none := r
+	patch := *r.Patch
+	patch.Elements = nil
+	none.Patch = &patch
+	pp, _, err := planPatch(repoRoot, &recorded, none)
+	if err != nil {
+		return prunePlan{}, err
+	}
+	decision := reconcile.Remove
+	switch {
+	case pp.conflicted():
+		decision = reconcile.RemoveConflict
+	case !pp.Exists:
+		decision = reconcile.Forget
+	}
+	return prunePlan{Path: stateKey(r.Path), Integration: integration, Decision: decision, Resource: none, Patch: pp}, nil
 }
 
 func decideRemoval(repoRoot, key string, recorded state.ResourceState) (reconcile.Removal, error) {
@@ -255,6 +291,20 @@ func profiles(s *standard.Standard, m *manifest.Manifest) []manifest.Profile {
 // planResource decides the outcome for a single resource by comparing the
 // hash recorded in state, the file on disk, and the resolved content.
 func planResource(repoRoot string, previous *state.State, r resource.Resource) (resourcePlan, error) {
+	if (r.Ownership == resource.StructuredPatch) != (r.Patch != nil) {
+		return resourcePlan{}, fmt.Errorf("%s: a structured-patch resource needs a Patch, and only one may have it", r.Path)
+	}
+	if r.Patch != nil {
+		var recorded *state.ResourceState
+		if rs, ok := previous.Resources[stateKey(r.Path)]; ok {
+			recorded = &rs
+		}
+		pp, decision, err := planPatch(repoRoot, recorded, r)
+		if err != nil {
+			return resourcePlan{}, err
+		}
+		return resourcePlan{Resource: r, Decision: decision, Supported: true, Patch: pp}, nil
+	}
 	if r.Ownership != resource.Generated {
 		return resourcePlan{Resource: r}, nil
 	}

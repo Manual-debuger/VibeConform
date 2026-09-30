@@ -261,6 +261,16 @@ func informative(line string) bool {
 // whatever was recorded into next before returning.
 func applyPlan(out io.Writer, repoRoot string, plans []resourcePlan, next *state.State, counts *syncCounts) error {
 	for _, rp := range plans {
+		if rp.Patch != nil && rp.Supported && !rp.Ignored {
+			lines, err := applyPatchResource(repoRoot, rp, next, counts)
+			if err != nil {
+				return fmt.Errorf("%s: %w", rp.Resource.Path, err)
+			}
+			if err := printElementLines(out, rp.Resource.Path, lines, "unchanged"); err != nil {
+				return err
+			}
+			continue
+		}
 		line, err := applyResource(repoRoot, rp, next, counts)
 		if err != nil {
 			return fmt.Errorf("%s: %w", rp.Resource.Path, err)
@@ -272,15 +282,45 @@ func applyPlan(out io.Writer, repoRoot string, plans []resourcePlan, next *state
 	return nil
 }
 
+// applyPatchResource applies one structured-patch resource and returns a
+// line per element it changed.
+func applyPatchResource(repoRoot string, rp resourcePlan, next *state.State, counts *syncCounts) ([]string, error) {
+	pp := rp.Patch
+	lines := elementLines(pp, syncElement)
+	if pp.conflicted() {
+		counts.conflicts++
+		return lines, nil
+	}
+	if err := applyPatch(repoRoot, rp.Resource, pp); err != nil {
+		return nil, err
+	}
+	key := stateKey(rp.Resource.Path)
+	if ns := pp.nextState(); ns != nil {
+		next.Resources[key] = *ns
+	} else {
+		delete(next.Resources, key)
+	}
+	switch {
+	case !pp.Exists && pp.Content != nil:
+		counts.created++
+		return append([]string{"created"}, lines...), nil
+	case rp.Decision == reconcile.NoChange:
+		counts.unchanged++
+	default:
+		counts.updated++
+	}
+	return lines, nil
+}
+
 // applyPrunes applies each removal in order, as applyPlan does for
 // resources.
 func applyPrunes(out io.Writer, repoRoot string, prunes []prunePlan, next *state.State, counts *syncCounts) error {
 	for _, pp := range prunes {
-		line, err := applyPrune(repoRoot, pp, next, counts)
+		lines, err := applyPrune(repoRoot, pp, next, counts)
 		if err != nil {
 			return fmt.Errorf("%s: %w", pp.Path, err)
 		}
-		if _, err := fmt.Fprintf(out, "%s: %s\n", pp.Path, line); err != nil {
+		if err := printElementLines(out, pp.Path, lines, ""); err != nil {
 			return err
 		}
 	}

@@ -15,6 +15,8 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubpy"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubts"
 	"github.com/Manual-debuger/VibeConform/internal/module/conformance"
+	"github.com/Manual-debuger/VibeConform/internal/module/editors/vscode"
+	"github.com/Manual-debuger/VibeConform/internal/module/editors/zed"
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/monorepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/monotooling"
@@ -80,6 +82,8 @@ func Lookup(name, version string) (*Standard, error) {
 // every standard composed before spec 0026.
 func catalog() []Integration {
 	return []Integration{
+		{Name: "vscode", Category: manifest.CategoryEditors, Module: vscode.New()},
+		{Name: "zed", Category: manifest.CategoryEditors, Module: zed.New()},
 		{Name: "claude", Category: manifest.CategoryAgents, Module: claude.New(), Default: true},
 		{Name: "codex", Category: manifest.CategoryAgents, Module: codex.New(), Default: true},
 	}
