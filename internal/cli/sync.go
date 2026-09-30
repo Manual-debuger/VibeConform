@@ -58,7 +58,9 @@ type syncCounts struct {
 	created   int
 	updated   int
 	unchanged int
+	removed   int
 	conflicts int
+	ignored   int
 }
 
 func runSync(cmd *cobra.Command, repoRoot string, allowDowngrade bool) error {
@@ -87,6 +89,7 @@ func runSync(cmd *cobra.Command, repoRoot string, allowDowngrade bool) error {
 
 	// Before anything is written: if this machine cannot run what the
 	// standard configures, say so above the report rather than below it.
+	printWarnings(cmd.ErrOrStderr(), p)
 	warnMissingTools(cmd.ErrOrStderr(), p.Standard, p.Context)
 	warnUnpinnable(cmd.ErrOrStderr(), repoRoot, runningVersion(cmd))
 
@@ -104,6 +107,9 @@ func runSync(cmd *cobra.Command, repoRoot string, allowDowngrade bool) error {
 
 	var counts syncCounts
 	applyErr := applyPlan(out, repoRoot, p.Resources, next, &counts)
+	if applyErr == nil {
+		applyErr = applyPrunes(out, repoRoot, p.Prunes, next, &counts)
+	}
 
 	// Record what actually landed before surfacing any failure: a run that
 	// wrote some resources and then died must not leave them unrecorded, or
@@ -114,9 +120,20 @@ func runSync(cmd *cobra.Command, repoRoot string, allowDowngrade bool) error {
 		return fmt.Errorf("sync: %w", errors.Join(applyErr, saveErr))
 	}
 
-	if _, err := fmt.Fprintf(out, "%d created, %d updated, %d unchanged, %d conflicts\n",
-		counts.created, counts.updated, counts.unchanged, counts.conflicts); err != nil {
+	// The removed count appears only when something was removed, so a
+	// repository with nothing deselected reports exactly as before.
+	summary := fmt.Sprintf("%d created, %d updated, %d unchanged, %d conflicts",
+		counts.created, counts.updated, counts.unchanged, counts.conflicts)
+	if counts.removed > 0 {
+		summary += fmt.Sprintf(", %d removed", counts.removed)
+	}
+	if _, err := fmt.Fprintln(out, summary); err != nil {
 		return fmt.Errorf("sync: %w", err)
+	}
+
+	if counts.ignored > 0 {
+		return fmt.Errorf("sync: %d managed file(s) ignored by git, not written: "+
+			"add them to .gitignore as exceptions, then re-run", counts.ignored)
 	}
 
 	if counts.conflicts > 0 {
@@ -255,11 +272,30 @@ func applyPlan(out io.Writer, repoRoot string, plans []resourcePlan, next *state
 	return nil
 }
 
+// applyPrunes applies each removal in order, as applyPlan does for
+// resources.
+func applyPrunes(out io.Writer, repoRoot string, prunes []prunePlan, next *state.State, counts *syncCounts) error {
+	for _, pp := range prunes {
+		line, err := applyPrune(repoRoot, pp, next, counts)
+		if err != nil {
+			return fmt.Errorf("%s: %w", pp.Path, err)
+		}
+		if _, err := fmt.Fprintf(out, "%s: %s\n", pp.Path, line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // applyResource carries out the decision for one resource and returns the
 // line describing what it did.
 func applyResource(repoRoot string, rp resourcePlan, next *state.State, counts *syncCounts) (string, error) {
 	if !rp.Supported {
 		return "not yet supported by sync", nil
+	}
+	if rp.Ignored {
+		counts.ignored++
+		return ignoredLine(rp.Resource.Path), nil
 	}
 
 	key := stateKey(rp.Resource.Path)

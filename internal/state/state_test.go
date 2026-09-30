@@ -3,6 +3,7 @@ package state
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -66,6 +67,9 @@ func TestSaveThenLoadRoundTrips(t *testing.T) {
 	want := &State{Resources: map[string]ResourceState{
 		".golangci.yml":            {SHA256: "aaa"},
 		".github/workflows/ci.yml": {SHA256: "bbb"},
+		".vscode/tasks.json": {Created: true, Elements: map[string]ElementState{
+			"tasks/task verify": {SHA256: "ccc"},
+		}},
 	}}
 
 	if err := Save(dir, want); err != nil {
@@ -80,7 +84,7 @@ func TestSaveThenLoadRoundTrips(t *testing.T) {
 		t.Fatalf("Load: got %v, want %v", got.Resources, want.Resources)
 	}
 	for path, rs := range want.Resources {
-		if got.Resources[path] != rs {
+		if !reflect.DeepEqual(got.Resources[path], rs) {
 			t.Errorf("Load: %s = %v, want %v", path, got.Resources[path], rs)
 		}
 	}
@@ -224,5 +228,25 @@ func TestSaveRecordsProvenance(t *testing.T) {
 			t.Errorf("state file contains %q; state must stay content-derived "+
 				"and deterministic:\n%s", banned, raw)
 		}
+	}
+}
+
+// TestSchema2GeneratedEntriesUnchanged: a generated resource is recorded
+// in schema 3 exactly as schema 2 recorded it, so the upgrade changes one
+// number and nothing else.
+func TestSchema2GeneratedEntriesUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	if err := Save(dir, &State{Resources: map[string]ResourceState{"Taskfile.yml": {SHA256: "abc"}}}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, ".vibe", "state.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "resources:\n    Taskfile.yml:\n        sha256: abc\n"; !strings.Contains(string(data), want) {
+		t.Errorf("state file\n%s\nwant it to contain\n%s", data, want)
+	}
+	if strings.Contains(string(data), "created") || strings.Contains(string(data), "elements") {
+		t.Errorf("generated entry carries structured-patch fields:\n%s", data)
 	}
 }

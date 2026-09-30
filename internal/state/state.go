@@ -33,11 +33,29 @@ const (
 // 2 adds provenance — which vibe wrote the file, against which standard —
 // so audit can tell a repository that fell behind from a binary that did.
 // See docs/specs/0019-drift-classification.md.
-const SchemaVersion = 2
+//
+// 3 adds, for a structured-patch resource, whether VibeConform created the
+// file and a hash per owned element, so VibeConform can own entries in a
+// file it shares with its users. Generated resources are recorded exactly
+// as in schema 2. See docs/specs/0026-optional-integrations.md.
+const SchemaVersion = 3
 
 // ResourceState is what was last recorded for one resolved resource.
 type ResourceState struct {
 	// SHA256 is the hex-encoded content hash last applied for this path.
+	// Empty for a structured-patch resource, which records Elements.
+	SHA256 string `yaml:"sha256,omitempty"`
+	// Created is true when VibeConform created a structured-patch file, so
+	// it may delete the file once nothing but its skeleton remains.
+	Created bool `yaml:"created,omitempty"`
+	// Elements maps each owned element of a structured-patch resource,
+	// keyed "<array>/<identity>", to its last applied hash.
+	Elements map[string]ElementState `yaml:"elements,omitempty"`
+}
+
+// ElementState is what was last recorded for one owned element.
+type ElementState struct {
+	// SHA256 is the hex-encoded hash of the element's canonical JSON.
 	SHA256 string `yaml:"sha256"`
 }
 

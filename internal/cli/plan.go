@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
@@ -29,6 +30,22 @@ type resourcePlan struct {
 	TargetHash string
 	// Supported is false for ownership modes no command handles yet.
 	Supported bool
+	// Ignored is true when Git ignores this path and does not track it:
+	// written, it would never be committed (spec 0026). An ignored
+	// resource is an error in every command, whatever its Decision.
+	Ignored bool
+}
+
+// prunePlan is one recorded path that the selection no longer produces
+// and that a deselected integration would: a candidate for removal
+// (docs/decisions/0013-optional-integrations.md).
+type prunePlan struct {
+	// Path is the state key, slash-separated.
+	Path string
+	// Integration names the deselected integration that produces it.
+	Integration string
+	// Decision is what sync would do about it.
+	Decision reconcile.Removal
 }
 
 // repoPlan is everything a command needs to report or apply reconciliation
@@ -46,6 +63,11 @@ type repoPlan struct {
 	// Resources is one entry per resource the standard's modules resolve,
 	// in module then resolution order.
 	Resources []resourcePlan
+	// Prunes are the recorded paths of deselected integrations, in catalog
+	// then resolution order.
+	Prunes []prunePlan
+	// Warnings are findings that fail nothing, for stderr.
+	Warnings []string
 }
 
 // buildPlan reads repoRoot's manifest, resolves the standard it declares,
@@ -106,7 +128,94 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 		}
 	}
 
+	if err := planPrunes(repoRoot, p); err != nil {
+		return nil, err
+	}
+	if err := markIgnored(repoRoot, p); err != nil {
+		return nil, err
+	}
+
 	return p, nil
+}
+
+// planPrunes finds every path a deselected integration would produce —
+// through its own module, or through a core module it switches on, like
+// the guard for claude — that the selection does not, and that state
+// records. Each is resolved as if that one integration were added to the
+// selection. Requires and Excludes are not checked: the trial selection
+// is never applied, only asked what it would write.
+//
+// Only recorded paths qualify, so a file VibeConform never wrote is never
+// a candidate, and orphans left by an older standard are not either: no
+// integration of this standard produces them.
+func planPrunes(repoRoot string, p *repoPlan) error {
+	resolved := map[string]bool{}
+	for _, rp := range p.Resources {
+		resolved[stateKey(rp.Resource.Path)] = true
+	}
+
+	seen := map[string]bool{}
+	for _, it := range p.Standard.Integrations {
+		if slices.Contains(p.Context.Integrations, it.Name) {
+			continue
+		}
+		trial := append(slices.Clone(p.Context.Integrations), it.Name)
+		tctx := *p.Context
+		tctx.Integrations = trial
+		for _, mod := range p.Standard.ModulesFor(trial) {
+			resources, err := mod.Resolve(context.Background(), &tctx)
+			if err != nil {
+				return fmt.Errorf("resolve %s with %s selected: %w", mod.Name(), it.Name, err)
+			}
+			for _, r := range resources {
+				key := stateKey(r.Path)
+				recorded, ok := p.Previous.Resources[key]
+				if resolved[key] || seen[key] || !ok {
+					continue
+				}
+				seen[key] = true
+				decision, err := decideRemoval(repoRoot, key, recorded)
+				if err != nil {
+					return err
+				}
+				p.Prunes = append(p.Prunes, prunePlan{Path: key, Integration: it.Name, Decision: decision})
+			}
+		}
+	}
+	return nil
+}
+
+func decideRemoval(repoRoot, key string, recorded state.ResourceState) (reconcile.Removal, error) {
+	data, err := os.ReadFile(resourcePath(repoRoot, key)) // #nosec G304 -- repoRoot is an operator-supplied CLI flag; key is a registered module's resource path
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return reconcile.DecideRemoval(recorded.SHA256, nil), nil
+	case err != nil:
+		return 0, err
+	}
+	h := hashHex(data)
+	return reconcile.DecideRemoval(recorded.SHA256, &h), nil
+}
+
+// markIgnored flags every resolved resource Git would ignore. Outside a
+// work tree, or without git, the check is skipped with one warning.
+func markIgnored(repoRoot string, p *repoPlan) error {
+	paths := make([]string, 0, len(p.Resources))
+	for _, rp := range p.Resources {
+		paths = append(paths, stateKey(rp.Resource.Path))
+	}
+	ignored, err := checkIgnored(context.Background(), repoRoot, paths)
+	switch {
+	case errors.Is(err, errNoGit):
+		p.Warnings = append(p.Warnings, fmt.Sprintf("%v: %s is not a git work tree, or git is not on PATH", err, repoRoot))
+		return nil
+	case err != nil:
+		return fmt.Errorf("git check-ignore: %w", err)
+	}
+	for i := range p.Resources {
+		p.Resources[i].Ignored = ignored[stateKey(p.Resources[i].Resource.Path)]
+	}
+	return nil
 }
 
 // checkComponents refuses a manifest whose components the standard would
