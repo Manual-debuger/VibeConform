@@ -6,6 +6,7 @@ package module
 
 import (
 	"context"
+	"slices"
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
@@ -25,6 +26,39 @@ type Context struct {
 	// Empty for every standard that takes none; see
 	// docs/decisions/0012-manifest-components.md.
 	Components []manifest.Component
+	// Integrations names the optional integrations vibe.yaml selects, in
+	// catalog order. nil means the selection is unknown — a test resolving
+	// a module in isolation — and never "none", which is an empty slice
+	// (docs/decisions/0013-optional-integrations.md).
+	Integrations []string
+	// Profiles lists the languages the repository declares: a
+	// single-language standard's own, or its components', in
+	// manifest.Profiles order.
+	Profiles []manifest.Profile
+}
+
+// AgentHookIntegration is the integration whose settings run the hook:*
+// tasks and the guard that core repo-tooling modules generate.
+const AgentHookIntegration = "claude"
+
+// WantsAgentHooks reports whether a core module should generate the agent
+// hook surface: the hook:* tasks and the guard program. It fails safe: an
+// unknown selection (nil context, or nil Integrations) keeps them, so
+// nothing but an explicit vibe.yaml selection without claude can switch a
+// guard off.
+func WantsAgentHooks(mctx *Context) bool {
+	if mctx == nil || mctx.Integrations == nil {
+		return true
+	}
+	return slices.Contains(mctx.Integrations, AgentHookIntegration)
+}
+
+// ProfilesOf returns mctx's profiles, or none for a nil context.
+func ProfilesOf(mctx *Context) []manifest.Profile {
+	if mctx == nil {
+		return nil
+	}
+	return mctx.Profiles
 }
 
 // ComponentsOf returns mctx's components, or none for a nil context.

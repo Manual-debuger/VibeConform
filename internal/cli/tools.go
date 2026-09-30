@@ -46,7 +46,11 @@ func missingTools(s *standard.Standard, mctx *module.Context) []missingTool {
 	var missing []missingTool
 	checked := make(map[string]bool)
 
-	for _, mod := range s.Modules {
+	selected := s.Defaults()
+	if mctx != nil && mctx.Integrations != nil {
+		selected = mctx.Integrations
+	}
+	for _, mod := range s.ModulesFor(selected) {
 		requirer, ok := mod.(module.ToolRequirer)
 		if !ok {
 			continue

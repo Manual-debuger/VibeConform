@@ -51,7 +51,7 @@ func TestAgentConfigWiring(t *testing.T) {
 		t.Run(k.name+"/"+k.version, func(t *testing.T) {
 			resources := map[string]resource.Resource{}
 			configs := map[string][]string{} // module name -> agent configs it resolves
-			for _, m := range s.Modules {
+			for _, m := range s.ModulesFor(s.Defaults()) {
 				rs, err := m.Resolve(context.Background(), sampleContext(s))
 				if err != nil {
 					t.Fatalf("resolving %s: %v", m.Name(), err)

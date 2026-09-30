@@ -24,12 +24,15 @@ func TestLookupProdGoV1ModulesInOrder(t *testing.T) {
 		t.Fatalf("Lookup returned error: %v", err)
 	}
 
+	// Since spec 0026 the agent modules are default-on integrations; with
+	// defaults the order is exactly what it was before.
+	mods := s.ModulesFor(s.Defaults())
 	want := []string{"go-tooling", "github-ci", "vibe-conformance", "repo-tooling", "claude-config", "codex-config"}
-	if len(s.Modules) != len(want) {
-		t.Fatalf("prod-go/v1 has %d modules, want %d", len(s.Modules), len(want))
+	if len(mods) != len(want) {
+		t.Fatalf("prod-go/v1 has %d modules, want %d", len(mods), len(want))
 	}
 	for i, name := range want {
-		if got := s.Modules[i].Name(); got != name {
+		if got := mods[i].Name(); got != name {
 			t.Errorf("module[%d].Name() = %q, want %q", i, got, name)
 		}
 	}
@@ -62,7 +65,7 @@ func TestLookupProdMonoV1(t *testing.T) {
 	}
 	want := []string{"mono-tooling", "github-ci-mono", "vibe-conformance", "mono-repo-tooling", "claude-config", "codex-config"}
 	var got []string
-	for _, m := range s.Modules {
+	for _, m := range s.ModulesFor(s.Defaults()) {
 		got = append(got, m.Name())
 	}
 	if !slices.Equal(got, want) {

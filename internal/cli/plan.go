@@ -38,6 +38,9 @@ type repoPlan struct {
 	Standard *standard.Standard
 	// Context is what every module resolved against.
 	Context *module.Context
+	// Modules are the core modules followed by the selected integrations'
+	// modules, in the order they resolved.
+	Modules []module.Module
 	// Previous is the state VibeConform last recorded for this repository.
 	Previous *state.State
 	// Resources is one entry per resource the standard's modules resolve,
@@ -77,9 +80,19 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 		return nil, err
 	}
 
-	mctx := &module.Context{RepoRoot: repoRoot, Components: m.Components}
-	p := &repoPlan{Standard: s, Context: mctx, Previous: previous}
-	for _, mod := range s.Modules {
+	selected, err := s.Select(m.Integrations)
+	if err != nil {
+		return nil, err
+	}
+
+	mctx := &module.Context{
+		RepoRoot:     repoRoot,
+		Components:   m.Components,
+		Integrations: selected,
+		Profiles:     profiles(s, m),
+	}
+	p := &repoPlan{Standard: s, Context: mctx, Previous: previous, Modules: s.ModulesFor(selected)}
+	for _, mod := range p.Modules {
 		resources, err := mod.Resolve(context.Background(), mctx)
 		if err != nil {
 			return nil, fmt.Errorf("resolve %s: %w", mod.Name(), err)
@@ -110,6 +123,24 @@ func checkComponents(s *standard.Standard, m *manifest.Manifest) error {
 			"use prod-mono for a repository with components", s.Name, s.Version, manifestFileName, len(m.Components))
 	}
 	return nil
+}
+
+// profiles lists the languages a repository declares: a single-language
+// standard's own, or its components' in manifest.Profiles order.
+func profiles(s *standard.Standard, m *manifest.Manifest) []manifest.Profile {
+	if s.Profile != "" {
+		return []manifest.Profile{s.Profile}
+	}
+	var used []manifest.Profile
+	for _, p := range manifest.Profiles {
+		for _, c := range m.Components {
+			if c.Profile == p {
+				used = append(used, p)
+				break
+			}
+		}
+	}
+	return used
 }
 
 // planResource decides the outcome for a single resource by comparing the
