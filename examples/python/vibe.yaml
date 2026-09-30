@@ -1,2 +1,6 @@
 standard: prod-py
 version: v1
+# Terminal-only: no editor configuration. Agents keep their defaults, since
+# CI runs the agent hooks in this example (hook-guard.yml, examples.yml).
+integrations:
+  editors: []

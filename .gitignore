@@ -21,13 +21,19 @@ __pycache__/
 # Tooling caches
 .task/
 .tokensave/
+.clinerules
 
 # OS
 .DS_Store
 Thumbs.db
 
 # Editors
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
 .idea/
 
 # Claude Code local (never shared) config

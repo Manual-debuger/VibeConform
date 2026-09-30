@@ -55,6 +55,14 @@ type Module interface {
 }
 ```
 
+Since spec 0026 a standard is a **core** — always resolved, in fixed
+order — plus a **catalog of integrations** (editors, agents,
+code-intelligence providers) that `vibe.yaml`'s `integrations:` map
+selects from; selected integrations resolve after the core, in catalog
+order. `module.Context` carries the selection, so a core module can emit
+content an integration needs (the `hook:*` tasks and guard for `claude`)
+only when it is selected. See `docs/decisions/0013-optional-integrations.md`.
+
 See `internal/module` for the current (intentionally minimal) interface and
 `internal/resource` for the `Resource` type it produces. Do not treat this
 signature as frozen — it will grow as the resolver is implemented.
@@ -70,6 +78,13 @@ mechanism. See `docs/decisions/0003-resource-ownership.md` and
 - `managed-section` — VibeConform owns a delimited section of a
   project-owned file.
 - `project-owned` — read-only context; never written.
+
+Since spec 0026 `structured-patch` is implemented for owned elements of one
+JSON(C) array (`internal/jsonarray`, over `github.com/tailscale/hujson`):
+each element, identified by its `label` or string value, is reconciled
+three-way like a whole file, and every byte outside owned elements is
+preserved. `.vibe/state.yaml` schema 3 records a hash per owned element.
+Owned object keys are spec 0027's.
 
 `generated` owning the whole file does not mean a repository has no
 recourse: a generated file may delegate to an unmanaged sibling by a
@@ -102,6 +117,13 @@ reconciliation
 - `current != previous` and `target != previous` → conflict, surfaced to the
   user rather than silently overwritten.
 - `project-owned` → never overwritten.
+
+Removal is decided two-way, since there is no target: a recorded path
+that a deselected integration would produce is removed when the file
+still matches its recorded hash, forgotten when it is already gone, and
+kept as a conflict when it was modified (spec 0026). Nothing unrecorded
+is ever deleted, and orphans left by a standard dropping a resource are
+still not pruned.
 
 The two middle cases both mean "write the target", and spec 0006 therefore
 collapsed them into one decision. Spec 0019 separates them because they
@@ -197,13 +219,16 @@ internal/
     pyrepotooling/          # Taskfile.yml, lefthook.yml, Python guard (prod-py)
     monorepotooling/        # root + per-component Taskfiles, lefthook.yml, guard (prod-mono)
     monotooling/            # each component's language config, re-rooted (prod-mono)
-    agents/claude/          # Claude Code settings + guard policy (policy.json)
-    agents/codex/           # Codex config; hooks suspended (spec 0024)
+    agents/claude/          # Claude Code settings + guard policy (policy.json); the claude integration
+    agents/codex/           # Codex config; hooks suspended (spec 0024); the codex integration
+    editors/vscode/         # owned entries in .vscode/tasks.json, extensions.json (spec 0026)
+    editors/zed/            # owned entries in .zed/tasks.json (spec 0026)
     tstooling/              # eslint, prettier, tsconfig base
     pythontooling/          # ruff, pyright
   resource/                 # resource + ownership + file mode model
   state/                    # .vibe/state.yaml read/write
-  reconcile/                # three-way decision engine
+  reconcile/                # three-way decision engine, plus two-way removal
+  jsonarray/                # byte-preserving edits of owned JSON(C) array elements
   atomicfile/               # temp-file + rename writes
   cli/                      # command tree; audit/diff/sync share one plan walk
 ```

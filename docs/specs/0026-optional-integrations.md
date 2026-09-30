@@ -1,6 +1,6 @@
 # Spec 0026: Optional Integrations
 
-Status: proposed. Tracks issue #38. Per ADR 0013.
+Status: accepted and implemented. Tracks issue #38. Per ADR 0013.
 
 ## Problem
 
@@ -200,7 +200,7 @@ fix (`add !<path> to .gitignore`). Outside a Git repository, or without
 | Repository | `integrations:` | Shows |
 |---|---|---|
 | this repository | absent | defaults, zero diff |
-| `examples/python` | `editors: []`, `agents: []` | terminal-only, no agent config |
+| `examples/python` | `editors: []` | terminal-only, default agents |
 | `examples/typescript` | `editors: [vscode]` | one editor, default agents |
 | `examples/monorepo` | `editors: [vscode, zed]`, `agents: [claude]` | two editors, one agent |
 
@@ -244,7 +244,7 @@ user task in `.vscode/tasks.json`, proving unowned content survives
 
 - A manifest without `integrations:` resolves every resource
   byte-for-byte as before; the only change a sync makes is the state
-  schema number.
+  schema number (plus, as on every sync, the recorded `vibe_version`).
 - Selection is a pure function of `vibe.yaml`: same manifest, same
   resources, same order.
 - `task verify`, `task verify-ci`, lefthook, and every workflow stay

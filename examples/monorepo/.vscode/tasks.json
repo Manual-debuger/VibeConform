@@ -1,0 +1,9 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {"label": "task fmt", "type": "shell", "command": "task", "args": ["fmt"], "problemMatcher": []},
+    {"label": "task lint", "type": "shell", "command": "task", "args": ["lint"], "problemMatcher": []},
+    {"label": "task test", "type": "shell", "command": "task", "args": ["test"], "problemMatcher": []},
+    {"label": "task verify", "type": "shell", "command": "task", "args": ["verify"], "problemMatcher": []}
+  ]
+}
