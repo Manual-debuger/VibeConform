@@ -38,6 +38,12 @@ func runDiff(cmd *cobra.Command, repoRoot string) error {
 	printWarnings(cmd.ErrOrStderr(), p)
 
 	for _, rp := range p.Resources {
+		if rp.Patch != nil && rp.Supported && !rp.Ignored {
+			if err := printElementLines(out, rp.Resource.Path, elementLines(rp.Patch, diffElement), "no change"); err != nil {
+				return fmt.Errorf("diff: %w", err)
+			}
+			continue
+		}
 		line := "not yet supported by diff"
 		switch {
 		case rp.Supported && rp.Ignored:
@@ -50,6 +56,12 @@ func runDiff(cmd *cobra.Command, repoRoot string) error {
 		}
 	}
 	for _, pp := range p.Prunes {
+		if pp.Patch != nil {
+			if err := printElementLines(out, pp.Path, patchPruneLines(pp, diffElement), ""); err != nil {
+				return fmt.Errorf("diff: %w", err)
+			}
+			continue
+		}
 		if _, err := fmt.Fprintf(out, "%s: %s\n", pp.Path, diffPruneLine(pp)); err != nil {
 			return fmt.Errorf("diff: %w", err)
 		}

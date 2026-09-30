@@ -61,6 +61,12 @@ func runAudit(cmd *cobra.Command, repoRoot string) error {
 			case reconcile.NoChange:
 			}
 		}
+		if rp.Patch != nil && rp.Supported && !rp.Ignored {
+			if err := printElementLines(out, rp.Resource.Path, elementLines(rp.Patch, auditElement), "ok"); err != nil {
+				return fmt.Errorf("audit: %w", err)
+			}
+			continue
+		}
 		if _, err := fmt.Fprintf(out, "%s: %s\n", rp.Resource.Path, line); err != nil {
 			return fmt.Errorf("audit: %w", err)
 		}
@@ -73,6 +79,12 @@ func runAudit(cmd *cobra.Command, repoRoot string) error {
 			conflicts++
 		} else {
 			outOfDate++
+		}
+		if pp.Patch != nil {
+			if err := printElementLines(out, pp.Path, patchPruneLines(pp, auditElement), ""); err != nil {
+				return fmt.Errorf("audit: %w", err)
+			}
+			continue
 		}
 		if _, err := fmt.Fprintf(out, "%s: %s\n", pp.Path, auditPruneLine(pp)); err != nil {
 			return fmt.Errorf("audit: %w", err)

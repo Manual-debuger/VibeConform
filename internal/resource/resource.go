@@ -6,7 +6,10 @@
 // reconciliation is allowed to touch it. See docs/decisions/0003-resource-ownership.md.
 package resource
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 // Ownership describes how much authority VibeConform has over a Resource.
 type Ownership int
@@ -44,6 +47,45 @@ type Resource struct {
 	// on write but does not participate in reconciliation — see
 	// docs/decisions/0006-resource-file-mode.md.
 	Mode os.FileMode
+	// Patch describes a StructuredPatch resource: the elements VibeConform
+	// owns in one array of a JSON(C) file it shares with its users
+	// (docs/decisions/0013-optional-integrations.md). Nil for every other
+	// ownership; Content is unused when it is set.
+	Patch *ArrayPatch
+}
+
+// ArrayPatch is a structured patch over one array of a JSON(C) document.
+type ArrayPatch struct {
+	// Array is the array's member name in the root object, or "" when the
+	// root is the array.
+	Array string
+	// Skeleton is the file written when there is none: the array, empty,
+	// in its document. Owned elements are then added to it.
+	Skeleton []byte
+	// Elements are the owned elements, in the order they are added.
+	Elements []Element
+}
+
+// Element is one owned array element.
+type Element struct {
+	// ID is its identity: an object's "label", or a string's value.
+	ID string
+	// Value is its JSON text, exactly as written into the file.
+	Value []byte
+}
+
+// StateKey is how .vibe/state.yaml records an element of p:
+// "<array>/<id>", with "[]" naming a root array.
+func (p *ArrayPatch) StateKey(id string) string {
+	if p.Array == "" {
+		return "[]/" + id
+	}
+	return p.Array + "/" + id
+}
+
+// OwnsKey reports whether a recorded element key belongs to p's array.
+func (p *ArrayPatch) OwnsKey(key string) (id string, ok bool) {
+	return strings.CutPrefix(key, p.StateKey(""))
 }
 
 // DefaultMode is the file mode used for resources that do not declare one.
