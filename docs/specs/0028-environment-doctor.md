@@ -1,7 +1,7 @@
 # Spec 0028: Environment Context and `vibe doctor`
 
-Status: accepted. Tracks issue #44. Builds on spec 0023 (agent lifecycle
-hooks) and spec 0014 (`ToolRequirer`).
+Status: accepted and implemented. Tracks issue #44. Builds on spec 0023
+(agent lifecycle hooks) and spec 0014 (`ToolRequirer`).
 
 ## Problem
 

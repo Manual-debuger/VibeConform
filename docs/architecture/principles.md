@@ -59,6 +59,19 @@ How to apply:
   part of the contract (`internal/cli/exit.go`), so scripts and CI never
   have to parse prose.
 
+The cross-platform contract, stated once (spec 0028):
+
+- Task is the canonical operational interface on every platform.
+- Supported developer platforms are Windows and Linux. CI runs Ubuntu,
+  and Windows where a workflow's matrix says so.
+- Differences are surfaced, not guessed away. `hook:context` reports the
+  platform, the runtime (WSL or a container, from marker files only) and
+  linked worktrees. `vibe doctor` reports the tools, versions, line
+  endings and agent hooks of this machine. Neither infers what it can't
+  observe: the shell is reported as unknown.
+- CI is the independent, clean-environment authority. A local `PASS`
+  never replaces it.
+
 ## 3. Easy to install and easy to remove
 
 What VibeConform writes into a repository must stand on third-party tools
