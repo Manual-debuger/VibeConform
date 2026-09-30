@@ -149,12 +149,12 @@ before each commit.
 ## Checklist
 
 - [x] C2 plan approved and committed
-- [ ] C3 `TestHookContextOutput` asserts `Platform: <goos>/<goarch>`, `Runtime: `, `Shell: unknown (not reported by the harness)`
-- [ ] C3 `TestHookContextOutsideGit` asserts `Platform:`
-- [ ] C3 `TestHookContextLinkedWorktree`: a `git worktree add` checkout prints `Worktree: linked`; the main checkout does not
-- [ ] C3 `TestHookContextRunsNothingHeavy` still passes with an unchanged allowlist
-- [ ] C3 monorepo: the new lines are present for every profile set
-- [ ] C3 root and examples re-synced; `vibe audit` is clean in all four
+- [x] C3 `TestHookContextOutput` asserts `Platform: <goos>/<goarch>`, `Runtime: `, `Shell: unknown (not reported by the harness)`
+- [x] C3 `TestHookContextOutsideGit` asserts `Platform:`
+- [x] C3 `TestHookContextLinkedWorktree`: a `git worktree add` checkout prints `Worktree: linked`; the main checkout does not
+- [x] C3 `TestHookContextRunsNothingHeavy` still passes with an unchanged allowlist
+- [x] C3 monorepo: the new lines are present for every profile set
+- [x] C3 root and examples re-synced; `vibe audit` is clean in all four
 - [ ] C4 `doctor`: one table test per check and status, through `Env` fakes
 - [ ] C4 exit codes: PASS/WARN/UNVERIFIED only exits 0; any FAIL exits 1; no manifest exits 1 and still runs git
 - [ ] C4 `missingTools` behaviour unchanged (existing `tools_test.go` green)

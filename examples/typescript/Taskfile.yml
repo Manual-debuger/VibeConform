@@ -90,16 +90,33 @@ tasks:
   #
   # Session start: a few lines of facts for the agent's context. Never
   # installs, builds, tests, or starts anything; those stay explicit tasks.
+  # Platform comes from Task itself, and Runtime only from marker files, so
+  # neither is a guess. The shell is not reported: the harness doesn't say
+  # which one the agent's command tool uses, and the OS doesn't settle it
+  # (docs/specs/0028-environment-doctor.md).
   # It doesn't repeat AGENTS.md, which both agents load themselves.
   hook:context:
     silent: true
     cmds:
       - |
-        if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        if git rev-parse --git-dir >/dev/null 2>&1; then
+          echo "Repo: {{base .ROOT_DIR}}"
+        else
           echo "Repo: {{base .ROOT_DIR}} (not a git repository)"
-          exit 0
         fi
-        echo "Repo: {{base .ROOT_DIR}}"
+        echo "Platform: {{OS}}/{{ARCH}}"
+        runtime=native
+        if test -e /proc/sys/fs/binfmt_misc/WSLInterop; then
+          runtime=wsl
+        elif test -e /.dockerenv || test -e /run/.containerenv; then
+          runtime=container
+        fi
+        echo "Runtime: $runtime"
+        echo "Shell: unknown (not reported by the harness)"
+        git rev-parse --git-dir >/dev/null 2>&1 || exit 0
+        gitdir="$(git rev-parse --path-format=absolute --git-dir 2>/dev/null || true)"
+        common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+        [ "$gitdir" = "$common" ] || echo "Worktree: linked (main checkout at ${common%/.git})"
         b="$(git branch --show-current 2>/dev/null || true)"
         [ -n "$b" ] || b="detached at $(git rev-parse --short HEAD 2>/dev/null || echo "an unborn branch")"
         echo "Branch: $b"

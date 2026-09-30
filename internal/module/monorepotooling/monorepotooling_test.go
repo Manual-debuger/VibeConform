@@ -306,6 +306,12 @@ func TestHookContextListsOnlyDeclaredRuntimes(t *testing.T) {
 		if !strings.Contains(script, "  "+c.ID+": "+c.Path+" ("+string(c.Profile)+")") {
 			t.Errorf("hook:context does not list component %s", c.ID)
 		}
+		// The environment facts are the same for every profile (spec 0028).
+		for _, w := range []string{`echo "Platform: {{OS}}/{{ARCH}}"`, `echo "Runtime: $runtime"`, `echo "Shell: unknown (not reported by the harness)"`, `echo "Worktree: linked`} {
+			if !strings.Contains(script, w) {
+				t.Errorf("%s component: hook:context lacks %q", c.Profile, w)
+			}
+		}
 	}
 }
 
