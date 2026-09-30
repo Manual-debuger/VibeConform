@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. To be implemented per `docs/specs/0026-optional-integrations.md`.
+Accepted. Implemented per `docs/specs/0026-optional-integrations.md`.
 
 ## Context
 

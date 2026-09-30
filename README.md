@@ -27,6 +27,11 @@
 > and [`docs/specs/0023-agent-lifecycle-hooks.md`](docs/specs/0023-agent-lifecycle-hooks.md)),
 > and `codex-config` (Codex settings, with hooks suspended, see
 > [`docs/specs/0024-claude-first-agent-modules.md`](docs/specs/0024-claude-first-agent-modules.md)).
+> The last two are optional integrations, on by default; `vibe.yaml`'s
+> `integrations:` map deselects them or adds the `vscode` and `zed` editor
+> integrations, and `vibe sync` safely removes what a deselected integration
+> left behind (see
+> [`docs/specs/0026-optional-integrations.md`](docs/specs/0026-optional-integrations.md)).
 > `vibe diff` previews the reconciliation VibeConform would perform for that
 > resource against `.vibe/state.yaml` — see
 > [`docs/specs/0006-reconcile-diff-v1.md`](docs/specs/0006-reconcile-diff-v1.md).

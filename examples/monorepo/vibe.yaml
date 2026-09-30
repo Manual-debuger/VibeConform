@@ -10,3 +10,7 @@ components:
   - id: worker
     path: services/worker
     profile: py
+# Two editors (listing order does not matter) and one agent.
+integrations:
+  editors: [zed, vscode]
+  agents: [claude]

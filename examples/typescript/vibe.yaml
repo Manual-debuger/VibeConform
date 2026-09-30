@@ -1,2 +1,5 @@
 standard: prod-ts
 version: v1
+# One editor; agents keep their defaults (claude, codex).
+integrations:
+  editors: [vscode]

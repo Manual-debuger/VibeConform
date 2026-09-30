@@ -1,0 +1,6 @@
+[
+  {"label": "task fmt", "command": "task", "args": ["fmt"]},
+  {"label": "task lint", "command": "task", "args": ["lint"]},
+  {"label": "task test", "command": "task", "args": ["test"]},
+  {"label": "task verify", "command": "task", "args": ["verify"]}
+]

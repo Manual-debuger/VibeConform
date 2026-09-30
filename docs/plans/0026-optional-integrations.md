@@ -102,32 +102,86 @@ drops the hook tasks with defaults would disable the guard on the next
 
 ## Checklist
 
-- [ ] C1 manifest parsing: absent vs `[]`, unknown key, bad name, duplicate
-- [ ] C1 catalog: unknown name lists valid ones; intelligence message; `Requires`/`Excludes` with fakes; catalog order regardless of manifest order
-- [ ] C1 defaults resolve identically for all four standards and the examples
-- [ ] C2 hook tasks and guard absent with `claude` off, present with it on
-- [ ] C2 `task verify` in a scratch copy with `agents: []`
-- [ ] C3 `Forget`, `Remove`, `RemoveConflict` in diff, sync, audit, with exit codes
-- [ ] C3 unrecorded file never deleted; empty directory removed, non-empty kept
-- [ ] C3 second sync is a no-op; re-select recreates
-- [ ] C3 schema 2 state loads; sync writes schema 3
-- [ ] C3 ignored managed path: sync refuses, audit exits 2; no-git warning
-- [ ] C4 `jsonarray` preserves bytes outside owned elements (comments, trailing commas, CRLF, indentation)
-- [ ] C4 element decisions: create, no change, drift, out of date, label collision conflict, unparseable file
-- [ ] C4 element pruning; created file deleted only when skeleton remains
-- [ ] C4 recommendations follow declared profiles in `prod-mono`
-- [ ] C5 examples: terminal-only, single editor (with a user task), multi-editor
-- [ ] C5 docs synced; `vibe.yaml` examples in `docs/usage.md`
-- [ ] `task verify` and `task audit` green; CI green on Windows and Linux
+- [x] C1 manifest parsing: absent vs `[]`, unknown key, bad name, duplicate (`internal/manifest/integrations_test.go`)
+- [x] C1 catalog: unknown name lists valid ones; intelligence message; `Requires`/`Excludes` with fakes; catalog order regardless of manifest order (`internal/standard/integrations_test.go`)
+- [x] C1 defaults resolve identically for all four standards and the examples (`TestPlanDefaultsKeepAgentsAndHooks`, `TestExamplesAreConformant`, pinned module order)
+- [x] C2 hook tasks and guard absent with `claude` off, present with it on (`TestAgentHooksFollowClaude`, all four standards, byte-identical with `claude` selected)
+- [x] C2 `task verify` in a scratch repository with `agents: []`
+- [x] C3 `Forget`, `Remove`, `RemoveConflict` in diff, sync, audit, with exit codes (`internal/cli/prune_test.go`)
+- [x] C3 unrecorded file never deleted; empty directory removed, non-empty kept
+- [x] C3 second sync is a no-op; re-select recreates
+- [x] C3 schema 2 state loads; sync writes schema 3
+- [x] C3 ignored managed path: sync refuses, audit exits 2; no-git warning; real `git check-ignore` test
+- [x] C4 `jsonarray` preserves bytes outside owned elements (comments, trailing commas, CRLF, indentation)
+- [x] C4 element decisions: create, no change, drift, out of date, label collision conflict, unparseable file (`internal/cli/patch_test.go`)
+- [x] C4 element pruning; created file deleted only when skeleton remains
+- [x] C4 recommendations follow declared profiles in `prod-mono`
+- [x] C5 examples: terminal-only (`python`), single editor with a user task (`typescript`), multi-editor (`monorepo`)
+- [x] C5 docs synced; `vibe.yaml` examples in `docs/usage.md`
+- [x] `task verify` and `task audit` green locally; CI not yet observed (branch not pushed)
+
+## Found during implementation
+
+- **The hook block is removed from the Taskfile templates, not templated
+  in.** Keeping each template byte-identical to today's output was the
+  requirement that mattered (a slip there disables this repository's own
+  guard on the next sync), so `module.StripAgentHooks` cuts the block from
+  its first comment to the end of the last `hook:*` task, and refuses a
+  template where that block is missing, duplicated, or contains any other
+  task. `module.WantsAgentHooks` fails safe: an unknown selection keeps
+  the hooks.
+- **`task audit` answers with the `vibe` on `PATH`.** Once C3 recorded
+  state with a development build, the released v0.3.0-alpha.1 in
+  `~/go/bin` was older than the recorded writer and gave no verdict, as
+  spec 0019 intends. The dev build was installed with
+  `go install ./cmd/vibe` for the rest of the work.
+- **`.vscode/*` in `.gitignore` is anchored at the root.** A pattern with
+  a slash before its end matches relative to the `.gitignore` itself, so
+  the examples' `.vscode/` files were never ignored; the root's own
+  pattern was switched to `.vscode/*` plus exceptions anyway, following
+  the convention `docs/usage.md` now recommends.
+- **No committed example can drop `claude`.** `hook-guard.yml` runs the
+  guard corpus in `examples/python` and `examples/typescript` through
+  `task -x hook:guard`, and `examples.yml` runs `hook:context` and
+  `hook:format` in all three examples. Spec 0026 §9 planned
+  `examples/python` with `agents: []`; that would have passed locally
+  (those tests skip without their environment variables) and failed CI.
+  `examples/python` is terminal-only with default agents instead, and the
+  no-agents case is covered by `TestAgentHooksFollowClaude`,
+  `TestDeselectAllAgents`, and the scratch walk below.
+- **The sync summary gains `, N removed` only when something was
+  removed**, so every existing repository's output is unchanged.
+- **A selection change reports `Taskfile.yml` as "standard moved".** From
+  the file's point of view that is what happened — the target changed and
+  the file did not — so no new wording was added.
 
 ## Verification
 
-To be recorded here: OS, `go`, `task`, `git` versions; `task verify`,
-`task audit`; the manual deselection walk in a scratch copy of
-`examples/typescript` (`agents: []` → `diff` → `sync` → `task verify` →
-`sync` again → edit a file, re-select, deselect → conflict kept); and a
-manual edit of `examples/typescript/.vscode/tasks.json` in VS Code with a
-comment added, synced, and diffed to confirm untouched bytes.
+Observed locally (Windows 11 Pro 10.0.26200, 2026-09-30; go 1.27.0,
+Task 3.53.1, git 2.53.0.windows.1, lefthook 2.1.14):
+
+- `task verify` and `task audit` pass at every commit (C1–C5); `task audit`
+  reports the root conformant with 13 resources.
+- `go test ./...` passes, including every new test named above.
+- `vibe sync` on the root with no `integrations:` key changes no managed
+  file; `.vibe/state.yaml` changes only `schema` and `vibe_version`.
+- Scratch prod-go repository, `agents: []` from the start: synced with no
+  `.claude/` or `.codex/`; `task verify` passes.
+- Same repository, then `editors: [vscode]` with default agents: `diff`
+  previewed every addition; `sync` created `.vscode/tasks.json` and
+  `extensions.json` and the agent files; `audit` conformant. Then
+  `agents: []` with no editors: `diff` listed every removal, including
+  "would remove the file (vscode deselected; nothing else is in it)";
+  `sync` removed 7 resources and the emptied `.vscode/` and `.claude/`;
+  a second `sync` changed nothing; `task verify` passes.
+- `examples/python` synced with `editors: []`, `agents: []` passed
+  `task verify` with no agent configuration; it was then set back to
+  default agents (see "Found during implementation").
+- `examples/typescript/.vscode/tasks.json` keeps its own commented task
+  byte for byte after `sync` added the four owned tasks.
+
+Not observed locally: CI on Linux; editing the files inside VS Code or
+Zed themselves.
 
 ## Explicitly still deferred
 

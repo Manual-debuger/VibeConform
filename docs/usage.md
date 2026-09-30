@@ -393,6 +393,8 @@ build never blocks a sync — see "`.vibe/state.yaml`" below.
 | `updated` | replaced | hash recorded | 0 |
 | `unchanged` | untouched | hash recorded | 0 |
 | `conflict` | **untouched** | prior entry kept | non-zero |
+| `removed` | deleted (a deselected integration's, unmodified) | entry dropped | 0 |
+| `forgotten` | already gone | entry dropped | 0 |
 
 **Behavior to know:**
 
@@ -433,8 +435,16 @@ build never blocks a sync — see "`.vibe/state.yaml`" below.
   When `lefthook` runs and fails, its own output is repeated under the
   warning (up to 10 lines) rather than reduced to an exit status, since the
   exit status alone never says what went wrong.
-- Resources dropped from a standard are not deleted. `sync` only writes what
-  the standard currently resolves; it never removes files.
+- `sync` deletes only what a deselected integration left behind (spec
+  0026; see "Selecting integrations" below), and only files it recorded
+  and nobody changed since. A modified file is kept and reported as a
+  conflict; a file already gone is just dropped from state. Resources an
+  older standard stopped producing are still not deleted.
+- A managed file that Git ignores (and does not track) is an error: `sync`
+  does not write it and exits non-zero, `audit` exits 2, and `diff` names
+  the `.gitignore` exception to add. Written but never committed, it would
+  be missing from every fresh checkout, CI's included. Outside a git work
+  tree, or without `git` on `PATH`, the check is skipped with one warning.
 - Fails (non-zero exit) if `vibe.yaml` is missing/unreadable, the declared
   `(standard, version)` isn't registered, `.vibe/state.yaml` is malformed, a
   write fails, or any resource conflicts. A write failure stops the run but
@@ -467,6 +477,10 @@ its modules compose:
 | `repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.go` |
 | `claude-config` | `.claude/settings.json`, `.claude/hooks/policy.json` |
 | `codex-config` | `.codex/config.toml`, `.codex/hooks.json` (no hooks: suspended, see "Codex: hooks suspended") |
+
+The last two are default-on integrations, and `repo-tooling`'s guard and
+`hook:*` tasks follow `claude`; the `vscode` and `zed` integrations add
+editor files when selected. See "Selecting integrations".
 
 Deliberately **not** managed, and left for you to maintain by hand:
 
@@ -786,10 +800,136 @@ repository with no Python component is not warned about `uv`.
 `examples/monorepo/` is a worked example with one component of each
 profile, checked the same way as the other examples.
 
+## Selecting integrations
+
+A standard is two things: a **core** that every repository gets —
+language tooling, `Taskfile.yml`, lefthook, CI, the conformance check —
+and a catalog of optional **integrations** around it: editors, coding
+agents, and code-intelligence providers. `vibe.yaml`'s `integrations:`
+map picks from the catalog, one list per category (spec 0026,
+`docs/decisions/0013-optional-integrations.md`). The core cannot be
+deselected.
+
+| Category | Name | Default | What it manages |
+|---|---|---|---|
+| `editors` | `vscode` | off | four tasks in `.vscode/tasks.json`; per-language entries in `.vscode/extensions.json` |
+| `editors` | `zed` | off | four tasks in `.zed/tasks.json` |
+| `agents` | `claude` | on | `.claude/settings.json`, `.claude/hooks/policy.json`, the guard program, and the `hook:*` tasks in `Taskfile.yml` |
+| `agents` | `codex` | on | `.codex/config.toml`, `.codex/hooks.json` |
+| `intelligence` | — | — | none yet; LSP and GitNexus providers are separate issues |
+
+A category you leave out takes its defaults; an empty list means none.
+The categories are independent: choosing editors never changes agents.
+
+**1. Defaults.** No `integrations:` key at all — exactly what every
+standard generated before integrations existed:
+
+```yaml
+standard: prod-go
+version: v1
+```
+
+**2. Claude only.** `codex` is deselected; `vibe diff` shows
+`.codex/config.toml: would remove (codex deselected)` and the same for
+`.codex/hooks.json`, and `vibe sync` deletes both if unmodified:
+
+```yaml
+standard: prod-go
+version: v1
+integrations:
+  agents: [claude]
+```
+
+**3. Terminal only, no agent configuration.** No `.claude/`, no
+`.codex/`, and no `hook:*` tasks. `task verify`, lefthook, and CI are the
+same as ever. (`examples/python` is terminal-only too, with `editors: []`,
+but keeps the default agents, since this repository's CI runs the agent
+hooks there.)
+
+```yaml
+standard: prod-py
+version: v1
+integrations:
+  editors: []
+  agents: []
+```
+
+**4. One editor.** Agents stay at their defaults (`examples/typescript`):
+
+```yaml
+standard: prod-ts
+version: v1
+integrations:
+  editors: [vscode]
+```
+
+**5. Two editors in a monorepo.** Listing order does not matter: output
+always follows the catalog (vscode, then zed). Recommendations cover
+every declared language (`examples/monorepo`):
+
+```yaml
+standard: prod-mono
+version: v1
+components:
+  - { id: api, path: services/api, profile: go }
+  - { id: web, path: apps/web, profile: ts }
+integrations:
+  editors: [zed, vscode]
+  agents: [claude]
+```
+
+**6. Invalid.** Each of these is an error before anything resolves, exit
+1:
+
+```yaml
+integrations:
+  editors: [vscode, vscode]   # duplicate within a category
+  agents: [cursor]            # unknown: the error lists claude, codex
+  intelligence: [gitnexus]    # no code-intelligence providers are available yet
+  editor: [zed]               # not a category: vibe.yaml is decoded strictly
+```
+
+### Editor files are shared
+
+`.vscode/tasks.json`, `.vscode/extensions.json`, and `.zed/tasks.json`
+belong to your team as much as to VibeConform, so VibeConform owns only
+its own *entries* in them: the tasks labelled `task fmt`, `task lint`,
+`task test`, and `task verify`, and the recommended extensions for your
+languages. Everything else — your own tasks and recommendations, other
+keys, comments, indentation, trailing commas — is left exactly as you
+wrote it, and adding more of your own is not drift.
+
+- Each owned entry is reconciled like a generated file: a missing one is
+  appended, an edited one is drift that `sync` restores in place, and one
+  the standard changed is updated.
+- A task of yours that already uses one of those labels is a conflict:
+  `sync` leaves the whole file alone until you rename or remove it.
+- Deselecting an editor removes only its unmodified entries. The file is
+  deleted only if VibeConform created it and nothing else is in it.
+- Commit these files. A `.gitignore` that ignores `.vscode/` wholesale
+  makes `sync` refuse them; the common convention is to ignore
+  `.vscode/*` and add exceptions for `tasks.json`, `extensions.json`,
+  `settings.json`, and `launch.json`.
+
+Selecting an editor configures it for people. It does not give a coding
+agent access to that editor's language server; that is the LSP
+integration's job, not yet built.
+
+### Deselecting
+
+Removing a name from `vibe.yaml` is reviewed like any change: `vibe diff`
+lists what would go, and `vibe audit` reports it as out of date (exit 3)
+until `vibe sync` runs. `sync` removes a deselected integration's files
+and entries only when `.vibe/state.yaml` records them and they are
+unchanged; directories they leave empty go too. Anything modified since
+is kept and reported as a conflict (exit non-zero): delete it by hand, or
+select the integration again. Files VibeConform never recorded are never
+touched.
+
 ## Agent hooks
 
-Every standard configures Claude Code (`.claude/settings.json`) to run
-five hooks. Each one is a hidden task in the generated `Taskfile.yml`,
+When the `claude` integration is selected — the default — the standard
+configures Claude Code (`.claude/settings.json`) to run five hooks. Each one is a hidden task in the generated `Taskfile.yml`,
 called as `task -x hook:<name>`, the same command in every standard and on
 every OS. See `docs/specs/0021-agent-hooks-task-interface.md` and
 `docs/specs/0023-agent-lifecycle-hooks.md`. Codex hooks are suspended; see
@@ -963,8 +1103,9 @@ mostly apply to them too:
 
 ### The agent guard
 
-Every standard configures Claude Code to run a guard before each shell
-command and each file edit. It blocks a short list
+With the `claude` integration selected (the default), every standard
+configures Claude Code to run a guard before each shell command and each
+file edit. It blocks a short list
 of destructive commands (`rm -rf`, `git reset --hard`, `git push --force`,
 and a few more) and edits to files that conventionally hold secrets
 (`.env`, `*.pem`, `id_rsa`, …). See
@@ -1143,9 +1284,11 @@ task build                                  # go build -o bin/vibe ./cmd/vibe
 ./bin/vibe sync --repo-root .
 ./bin/vibe sync --repo-root examples/typescript
 ./bin/vibe sync --repo-root examples/python
+./bin/vibe sync --repo-root examples/monorepo
 ./bin/vibe audit --repo-root .              # expect: conformant
 ./bin/vibe audit --repo-root examples/typescript
 ./bin/vibe audit --repo-root examples/python
+./bin/vibe audit --repo-root examples/monorepo
 # 2. commit the template, the regenerated files, and .vibe/state.yaml
 ```
 
@@ -1184,9 +1327,11 @@ version: v1
 ```
 
 `prod-mono` adds a third, `components:`, a list of `id`, `path`, and
-`profile` entries; see "What `prod-mono/v1` manages" above. No other key is
-accepted: `vibe.yaml` is decoded strictly, and `components:` on any other
-standard is an error.
+`profile` entries; see "What `prod-mono/v1` manages" above. Every standard
+also accepts `integrations:`, which selects editors, agents, and
+code-intelligence providers; see "Selecting integrations" above. No other
+key is accepted: `vibe.yaml` is decoded strictly, and `components:` on any
+other standard is an error.
 
 There is no `.vibe/lock.yaml`, no `depends_on` between components (so no
 affected-component graph yet), and no overrides: a repository either
@@ -1200,13 +1345,24 @@ Machine-owned bookkeeping, written only by `vibe sync`. Commit it; don't
 hand-edit it.
 
 ```yaml
-schema: 2
+schema: 3
 vibe_version: v0.3.0
 standard: prod-go/v1
 resources:
     .golangci.yml:
         sha256: 6bb1…
+    .vscode/tasks.json:
+        created: true
+        elements:
+            tasks/task verify:
+                sha256: 0e7d…
 ```
+
+A generated file records one hash. A shared file (see "Editor files are
+shared") records a hash per entry VibeConform owns, keyed
+`<array>/<label>`, and whether VibeConform created the file. Schema 3 adds
+only those two fields; a schema-2 file loads unchanged and the next
+`vibe sync` rewrites it as schema 3, changing nothing else.
 
 The `resources` map is what reconciliation compares against: it records the
 content VibeConform last wrote, so `audit` can tell a file you changed from
@@ -1258,8 +1414,9 @@ nothing, so both can stay. Delete the `vibe` entry whenever you like.
 
 Everything else `vibe sync` wrote — `.golangci.yml`, `eslint`/`prettier`/
 `tsconfig`, `ruff`/`pyright` config, the rest of `Taskfile.yml`, `ci.yml`
-and its `CI / gate` — is ordinary project configuration at that point, no
-different from having written it by hand.
+and its `CI / gate`, and any editor or agent configuration you selected —
+is ordinary project configuration at that point, no different from having
+written it by hand.
 `.github/workflows/examples.yml` in this repository demonstrates the split
 for its own TS/PY fixtures: `task verify` runs first, with no `vibe` on
 `PATH`; building `vibe` and running `task audit` is a separate, later step.
