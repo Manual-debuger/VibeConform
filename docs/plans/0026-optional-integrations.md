@@ -261,7 +261,7 @@ One commit, `fix: keep Prettier off owned editor files in prod-ts (spec
 - [x] Examples re-synced with the rebuilt binary; `vibe audit` conformant in each
 - [x] `task verify` inside `examples/typescript`, `examples/python`, `examples/monorepo`
 - [x] Root `task verify` and `task audit`
-- [ ] CI on PR #43 green, including both `examples/typescript` jobs
+- [x] CI on PR #43 green, including both `examples/typescript` jobs (all 24 checks on `123aaec`)
 
 ### Found during implementation
 
