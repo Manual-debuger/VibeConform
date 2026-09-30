@@ -4,6 +4,7 @@ This file is a routing surface, not a handbook. Durable architecture lives
 in `docs/` (specs, plans, architecture, decisions) — read the relevant doc
 before non-trivial changes rather than relying on this file to explain the
 system.
+Don't include yourself as contributor in commits.
 
 ## Before non-trivial work
 
