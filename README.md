@@ -58,7 +58,9 @@
 > components declared in `vibe.yaml`'s `components:` list, each configured
 > as its single-language standard would configure a repository — see
 > [`docs/specs/0025-prod-mono.md`](docs/specs/0025-prod-mono.md).
-> `check` and `doctor` still return "not implemented yet."
+> `doctor` diagnoses whether a machine can run the workflow — see
+> [`docs/specs/0028-environment-doctor.md`](docs/specs/0028-environment-doctor.md).
+> `check` still returns "not implemented yet."
 > Nothing described below as "eventually" or "will" exists yet. See
 > [`docs/plans/0007-m1-milestone.md`](docs/plans/0007-m1-milestone.md),
 > [`docs/plans/0014-m2-milestone.md`](docs/plans/0014-m2-milestone.md), and
@@ -116,7 +118,7 @@ vibe audit                      # read-only compliance/drift check (non-zero exi
 vibe diff                       # human-readable reconciliation preview
 vibe sync                       # perform reconciliation
 vibe check                      # affected-component validation for the current change set
-vibe doctor                     # diagnose local environment/tooling issues
+vibe doctor                     # can this machine run the workflow? (PASS/WARN/FAIL/UNVERIFIED)
 ```
 
 Later: `vibe new`, `vibe eject`.

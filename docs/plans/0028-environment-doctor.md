@@ -165,7 +165,7 @@ before each commit.
 - [x] C5 runtime markers: Go constants and all four templates agree
 - [x] C5 worktree: the main checkout is PASS; a linked worktree is UNVERIFIED, naming the main checkout and the unchecked collisions
 - [x] C5 no-write: sync, doctor, then the tree and state are byte-identical
-- [ ] C6 docs updated; spec status set to implemented
+- [x] C6 docs updated; spec status set to implemented
 
 ## Found during implementation
 
@@ -191,15 +191,33 @@ before each commit.
 
 ## Verification
 
-(filled in at the end: environment and versions observed, the commands
-run, and anything not observed)
+Observed locally on 2026-09-30, on Windows 11 (windows/amd64) with Go
+1.27.0, Task 3.53.1, Git 2.53.0.windows.1, and `core.autocrlf=true`:
 
-- `task verify` and `task audit` on Windows (this machine).
-- `task hook:context` in the root and in a linked worktree.
-- `vibe doctor` on a healthy checkout (exit 0), and with PATH stripped of
-  one required tool (exit 1, with a `FAIL` line naming the tool).
-- CI on the PR: `ci.yml` (Ubuntu and Windows test matrix), `examples.yml`,
-  `hook-guard.yml`, and `Conformance / audit`.
+- `task verify` passed at C3, C4, C5 and C6. `task audit` was conformant
+  at each (13 resources), and `vibe audit` was conformant in all three
+  examples after the C3 re-sync.
+- `go test -count=1` passed for `internal/cli`, `internal/doctor`, and
+  `internal/module/...`. The hook:context tests ran against the real Task
+  binary, including `TestHookContextLinkedWorktree`.
+- In the root, `task hook:context` printed `Platform: windows/amd64`,
+  `Runtime: native`, `Shell: unknown (not reported by the harness)`, and
+  no `Worktree:` line. In a `git worktree add` checkout it printed
+  `Worktree: linked (main checkout at D:/VibeConform)`.
+- On this machine, `vibe doctor` printed 14 `PASS` lines and exited 0.
+  In the linked worktree it printed 13 `PASS` and 1 `UNVERIFIED`
+  (worktree), and still exited 0.
+- With `~/go/bin` stripped from PATH, `vibe doctor` exited 1. It printed
+  `FAIL` for golangci-lint, goimports, govulncheck and actionlint, each
+  naming the module that needs it, and `Error: doctor: 4 required checks
+  failed`.
+
+Not observed locally: Linux, and the WSL and container runtime markers.
+The Ubuntu leg of CI covers Linux. The markers are covered only by
+unit tests through the `Env` seam.
+
+CI on the PR: `ci.yml` (Ubuntu and Windows test matrix), `examples.yml`,
+`hook-guard.yml`, and `Conformance / audit` (recorded after the run).
 
 ## Explicitly still deferred
 

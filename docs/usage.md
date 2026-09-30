@@ -216,7 +216,7 @@ as correct. `sync` refuses outright for the same reason; see below.
   file. `vibe sync` is the only writer.
 - Checks files, not machines. `audit` does not look at `PATH`, so tool
   availability never affects its verdict or its exit code — that is `sync`'s
-  warning and, eventually, `doctor`'s job.
+  warning and `doctor`'s job.
 - There is no `--fix` and no `--strict`. Strict *is* the behavior; fixing is
   a different command on purpose.
 - `audit`, `diff`, and `sync` share one decision engine, so they never
@@ -335,8 +335,8 @@ Only binaries a correctly configured repository would genuinely have on
 `PATH` are checked. Project-local tools — anything run through
 `node_modules`, a virtualenv, or `uv run` — are deliberately not, because a
 warning that fires on a healthy repository teaches you to ignore the ones
-that matter. Environment-aware checking is what `vibe doctor` is for, and it
-does not exist yet.
+that matter. Environment-aware checking, with versions and a verdict, is
+[`vibe doctor`](#vibe-doctor)'s job.
 
 One more stderr warning, about the binary rather than the machine. A `vibe`
 built locally reports `dev` or a `+dirty` version, and that is what `sync`
@@ -450,18 +450,89 @@ build never blocks a sync — see "`.vibe/state.yaml`" below.
   write fails, or any resource conflicts. A write failure stops the run but
   still records the resources that already landed, so re-running is safe.
 
-### `vibe check`, `vibe doctor`
+### `vibe doctor`
 
-Not implemented. Each returns an explicit error rather than silently doing
+Diagnoses whether this machine can run the repository's workflow. Where
+`audit` asks "are the files right?", `doctor` asks "can I work here?":
+
+```console
+$ vibe doctor
+standard: prod-go/v1
+PASS        git            git version 2.53.0.windows.1; repository readable
+PASS        manifest       vibe.yaml resolves prod-go/v1 (integrations: claude, codex)
+FAIL        golangci-lint  not found on PATH (required by go-tooling: task lint, and CI's lint job)
+PASS        task           3.53.1; Taskfile.yml loads
+PASS        lefthook       2.1.14
+PASS        go             go1.27.0
+PASS        goimports      C:\Users\me\go\bin\goimports.exe
+PASS        govulncheck    C:\Users\me\go\bin\govulncheck.exe
+PASS        actionlint     v1.7.12
+PASS        claude hooks   .claude/settings.json present; task, go on PATH
+PASS        codex hooks    suspended (spec 0024); nothing to check
+WARN        line endings   core.autocrlf=true and Taskfile.yml has no eol attribute: managed files check out as CRLF
+PASS        runtime        windows/amd64, native
+PASS        worktree       main checkout, not a linked worktree
+summary: 12 pass, 1 warn, 1 fail, 0 unverified
+Error: doctor: 1 required check failed
+```
+
+| Status | Meaning |
+|---|---|
+| `PASS` | Checked, and healthy. |
+| `WARN` | The workflow runs, but something diverges from what CI sees, or an optional capability is missing. |
+| `FAIL` | A required local workflow cannot run: `task verify`, the Git hooks, or the selected agent's hooks. |
+| `UNVERIFIED` | `vibe` can't probe this reliably, and says so rather than guessing. |
+
+The checks, in order:
+
+- **git:** it runs, and `--repo-root` is a repository.
+- **manifest:** `vibe.yaml` and its standard resolve.
+- **One line per required tool:** the same list `sync` warns about, with
+  each tool's version where it has a version flag. `task`'s line also
+  says whether `Taskfile.yml` loads. A Taskfile that doesn't load turns
+  off every task, [the agent guard](#the-agent-guard) included.
+- **Agent hooks:** for each selected agent, the file that registers its
+  hooks is present, and the binaries the hooks start are on `PATH`
+  (`task`, and `go`, `node`, or `uv` for the guard).
+- **Line endings:** how git will check out a managed file, from
+  `core.autocrlf` and the `eol` attribute. This is a report only, and
+  doctor never edits `.gitattributes` or git config.
+- **Runtime:** the platform, and `wsl` or `container` when a marker file
+  says so.
+- **Worktree:** a linked worktree is `UNVERIFIED`. It shares Git hooks
+  with the main checkout, and `vibe` doesn't probe for collisions.
+
+When a check can't run because an earlier one failed (no git, no valid
+`vibe.yaml`), it is `UNVERIFIED`, with the reason.
+
+**Exit codes:** `1` if any check is `FAIL`, otherwise `0`, whatever the
+`WARN` and `UNVERIFIED` lines say. Doctor never returns `2` or `3`, which
+stay the conformance verdicts of `audit` and `sync`.
+
+**Behavior to know:**
+
+- Read-only: installs nothing, writes no file, changes no configuration.
+  There is no `--fix`.
+- No network access, no builds or tests. It runs `git`,
+  `task --list-all`, and each tool's version flag, each with a timeout.
+- It doesn't check conformance. A doctor that failed on drift would give
+  a second answer to `audit`'s question.
+- It doesn't report your shell. Neither the OS nor environment variables
+  say reliably which shell an agent's command tool uses.
+- CI is still the authority. A clean `doctor` on Windows says the
+  workflow runs here, not that Linux CI will pass.
+
+### `vibe check`
+
+Not implemented. It returns an explicit error rather than silently doing
 nothing or exiting 0:
 
 ```
 Error: check: not implemented yet (see docs/architecture/overview.md)
 ```
 
-Don't script against these expecting real output — they exist as
-scaffolding for commands that will eventually read/reconcile against
-`vibe.yaml` (see `docs/architecture/overview.md`).
+Don't script against it expecting real output. It is scaffolding for
+affected-component validation (see `docs/architecture/overview.md`).
 
 ## What `prod-go/v1` manages
 
@@ -1000,6 +1071,9 @@ Plain text on stdout, which Claude Code adds to the model's context:
 ```console
 $ task hook:context
 Repo: VibeConform
+Platform: windows/amd64
+Runtime: native
+Shell: unknown (not reported by the harness)
 Branch: feature/agent-lifecycle-hooks
 State: dirty
 Go: go1.27.0
@@ -1010,6 +1084,15 @@ Dirty files: 2
 Affected components:
  100.0% internal/module/agents/claude/
 ```
+
+`Platform` comes from Task itself (`{{OS}}/{{ARCH}}`), so it can't fail,
+and it is printed even outside git. `Runtime` is `wsl` or `container`
+only when a marker file exists (`/proc/sys/fs/binfmt_misc/WSLInterop`,
+`/.dockerenv`, `/run/.containerenv`). Otherwise it is `native`, meaning no
+marker was found. `Shell` is always `unknown`. The harness doesn't report
+which shell the agent's command tool uses, and the OS doesn't settle it,
+so the line tells the agent not to assume. A linked worktree adds
+`Worktree: linked (main checkout at <path>)`.
 
 `State` also names a rebase, merge, cherry-pick, revert, or bisect in
 progress. The runtime lines depend on the standard: `Go` for `prod-go`,

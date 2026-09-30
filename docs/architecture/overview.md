@@ -207,7 +207,7 @@ Present today:
 internal/
   manifest/                 # vibe.yaml parsing, including components (ADR 0012)
   standard/                 # versioned standard definitions
-  module/                   # module composition interface + optional ToolRequirer
+  module/                   # module composition interface + optional ToolRequirer, HookRuntime
     gotooling/              # .golangci.yml
     ci/github/              # GitHub Actions workflow, dependabot, PR template (prod-go)
     ci/githubts/            # the same, for prod-ts
@@ -230,6 +230,7 @@ internal/
   reconcile/                # three-way decision engine, plus two-way removal
   jsonarray/                # byte-preserving edits of owned JSON(C) array elements
   atomicfile/               # temp-file + rename writes
+  doctor/                   # vibe doctor checks; imports nothing from internal/ (spec 0028)
   cli/                      # command tree; audit/diff/sync share one plan walk
 ```
 
@@ -319,7 +320,7 @@ or a graph-resolution error); or a change touches something with unbounded
 blast radius that isn't representable as a single component (`Taskfile.yml`
 itself, lint/tooling configuration, dependency manifests, or the
 `vibe.yaml` standard declaration). This extends two precedents already in
-the codebase: `vibe check`/`vibe doctor`'s existing "not implemented yet"
+the codebase: `vibe check`'s existing "not implemented yet"
 placeholder already fails loudly rather than no-oping (`docs/usage.md`),
 and `vibe sync`'s `ToolRequirer` warning already surfaces a missing tool
 rather than hiding it (spec 0014) — `vibe check`'s fallback is stricter
