@@ -183,6 +183,112 @@ Task 3.53.1, git 2.53.0.windows.1, lefthook 2.1.14):
 Not observed locally: CI on Linux; editing the files inside VS Code or
 Zed themselves.
 
+## C6: formatters and owned editor files (spec 0026 §10)
+
+Found on PR #43: `examples/typescript (ubuntu-latest)` and
+`(windows-latest)` failed `task verify` at `fmt:check`, with Prettier
+reporting `.vscode/extensions.json` and `.vscode/tasks.json`. The root
+`task verify` does not run the examples' own tooling, so the
+verification above missed it. Spec 0026 §10, approved 2026-09-30.
+
+### Resolved design questions
+
+**Where do the owned paths come from?** `editors.OwnedPaths`
+(`map[string][]string`, integration name → owned file paths) in
+`internal/module/editors`. `tsrepotooling` reads it for the selected
+integrations in catalog order; a test checks the map against the paths
+the `vscode` and `zed` modules actually resolve, so the two cannot
+drift. The dependency is `tsrepotooling → editors → module`, with no
+cycle.
+
+**How are the templates changed?** As C2 did: the embedded templates
+stay the default bytes, and a function inserts the exclusions at exact
+anchors, refusing a template where an anchor is missing or appears more
+than once. With no owned paths it returns the template unchanged, which
+keeps the default output byte-identical by construction.
+
+- `fmt` and `fmt:check`: after the quoted glob, `"!<path>"` for each
+  path (Prettier 3 CLI negation patterns).
+- `lefthook.yml` `prettier`: `exclude:` with the paths as a glob list
+  (lefthook 2 syntax; observed 2.1.14 locally).
+- `hook:format`: `':(exclude)<path>'` pathspecs on both `git diff` and
+  `git ls-files`, so an excluded file never reaches Prettier. The
+  anchors sit inside the hook block, so with `claude` off
+  `StripAgentHooks` runs first and those anchors are not required.
+
+### Repository impact
+
+| Area | Change |
+|---|---|
+| `internal/module/editors/editors.go` | `OwnedPaths`; test against both modules' resolved paths |
+| `internal/module/tsrepotooling/` | exclusion insertion for `Taskfile.yml` and `lefthook.yml`; tests |
+| `examples/typescript` | re-synced `Taskfile.yml`, `lefthook.yml`, `.vibe/state.yaml` (it selects `vscode`) |
+| `examples/monorepo`, `examples/python`, root | `.vibe/state.yaml` `vibe_version` only, if the sync writes it |
+| Docs | `docs/usage.md` "Selecting integrations": one paragraph on Prettier and the owned files; this plan |
+
+`prod-go`, `prod-py`, and `prod-mono` modules are not changed.
+
+### Tests
+
+- Regression: `tsrepotooling` with `editors: [vscode]`, `[zed]`, and
+  both. `fmt`, `fmt:check`, lefthook, and `hook:format` each name exactly
+  the owned paths; with `agents: []` the Taskfile has no hook block and
+  still has the `fmt` exclusions.
+- Default (`integrations:` absent, and `editors: []`): the Taskfile and
+  lefthook are byte-identical to the embedded templates. The existing
+  defaults tests already pin this; one explicit case is added.
+- Anchor refusal: a template missing an anchor, or with one duplicated,
+  is an error.
+- The `hook:format` pathspecs, run with real `git` in a temporary
+  repository (as the `check-ignore` test does): an edited
+  `.vscode/tasks.json` is not listed, and an edited
+  `.vscode/settings.json` still is.
+- End to end: `examples/typescript` is the regression that failed.
+  Locally, `task verify` inside it with the rebuilt binary's sync, then CI.
+
+### Order of work
+
+One commit, `fix: keep Prettier off owned editor files in prod-ts (spec
+0026 C6)`: tests first (they fail against the current templates), then
+`OwnedPaths` and the insertion, rebuild (`go install ./cmd/vibe`),
+`vibe sync` in the root and each example, docs.
+
+### Checklist
+
+- [x] Regression tests fail before the change and pass after (`TestPrettierLeavesOwnedEditorFilesAlone`, `TestHookFormatSkipsOwnedFilesWithRealGit`, `TestExcludeFromPrettierRefusesUnknownTemplates`, `TestOwnedPathsMatchResolvedPaths`)
+- [x] Defaults byte-identical (`TestNoEditorKeepsTemplatesByteIdentical`); anchor refusal tested
+- [x] `hook:format` pathspecs checked with real `git`
+- [x] Examples re-synced with the rebuilt binary; `vibe audit` conformant in each
+- [x] `task verify` inside `examples/typescript`, `examples/python`, `examples/monorepo`
+- [x] Root `task verify` and `task audit`
+- [ ] CI on PR #43 green, including both `examples/typescript` jobs
+
+### Found during implementation
+
+- **The anchors are replaced, not inserted after.** Both `git` lines in
+  `hook:format` end in the same extension list, so each edit replaces a
+  string that occurs exactly once (`'*.md' 2>/dev/null` for `git diff`,
+  the whole `git ls-files` tail for the other) rather than inserting after
+  a shared prefix.
+- **lefthook's `exclude:` checked directly.** `examples/typescript` is not
+  a Git repository of its own, so `lefthook run` there picks up the root
+  configuration. A scratch repository with the generated `prettier`
+  command (its `run` replaced by `echo`) and lefthook 2.1.14 matched
+  `.vscode/settings.json` and `package.json`, and neither owned file.
+
+### Verification (C6)
+
+Observed locally (Windows 11 Pro 10.0.26200, 2026-09-30; go 1.27.0,
+Task 3.53.1, lefthook 2.1.14):
+
+- The new tests fail against templates without the exclusions (the
+  real-git test listed `.vscode/tasks.json` and `extensions.json`) and pass
+  with them.
+- `vibe sync` in the root and every example changed only
+  `examples/typescript/Taskfile.yml`, `lefthook.yml`, and the state files.
+- `task verify` passes inside all three examples and at the root;
+  `task audit` and `vibe audit` in each example report conformant.
+
 ## Explicitly still deferred
 
 - Owned object keys and editor `settings.json` (spec 0027).

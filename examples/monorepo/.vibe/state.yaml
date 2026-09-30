@@ -1,5 +1,5 @@
 schema: 3
-vibe_version: v0.3.0-alpha.1.0.20260930034801-a8119ecfbd80+dirty
+vibe_version: v0.3.0-alpha.1.0.20260930054212-a7c95ce75f87+dirty
 standard: prod-mono/v1
 resources:
     .claude/hooks/guard.go:

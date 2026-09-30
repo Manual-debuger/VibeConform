@@ -2,6 +2,7 @@ package editors_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/tailscale/hujson"
@@ -9,6 +10,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/jsonarray"
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/editors"
 	"github.com/Manual-debuger/VibeConform/internal/module/editors/vscode"
 	"github.com/Manual-debuger/VibeConform/internal/module/editors/zed"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
@@ -88,5 +90,44 @@ func TestVSCodeRecommendsOnlyDeclaredProfiles(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestOwnedPathsMatchResolvedPaths: OwnedPaths, which core modules use to
+// keep formatters off editor files, names exactly the files each
+// integration resolves with every profile declared.
+func TestOwnedPathsMatchResolvedPaths(t *testing.T) {
+	mctx := &module.Context{Profiles: manifest.Profiles}
+	for name, m := range map[string]module.Module{"vscode": vscode.New(), "zed": zed.New()} {
+		rs, err := m.Resolve(context.Background(), mctx)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		var got []string
+		for _, r := range rs {
+			got = append(got, r.Path)
+		}
+		if !slices.Equal(got, editors.OwnedPaths[name]) {
+			t.Errorf("%s resolves %v, OwnedPaths says %v", name, got, editors.OwnedPaths[name])
+		}
+	}
+	if len(editors.OwnedPaths) != 2 {
+		t.Errorf("OwnedPaths has %d integrations; add the new one to this test", len(editors.OwnedPaths))
+	}
+}
+
+func TestOwnedPathsOf(t *testing.T) {
+	for _, tc := range []struct {
+		selection []string
+		want      []string
+	}{
+		{nil, nil},
+		{[]string{"claude", "codex"}, nil},
+		{[]string{"vscode", "claude"}, []string{".vscode/tasks.json", ".vscode/extensions.json"}},
+		{[]string{"vscode", "zed"}, []string{".vscode/tasks.json", ".vscode/extensions.json", ".zed/tasks.json"}},
+	} {
+		if got := editors.OwnedPathsOf(tc.selection); !slices.Equal(got, tc.want) {
+			t.Errorf("OwnedPathsOf(%v) = %v, want %v", tc.selection, got, tc.want)
+		}
 	}
 }

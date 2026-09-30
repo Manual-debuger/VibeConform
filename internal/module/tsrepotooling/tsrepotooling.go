@@ -11,6 +11,7 @@ import (
 	_ "embed"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/editors"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
@@ -67,6 +68,18 @@ func (tsrepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]r
 		}
 		taskfile = stripped
 	}
+	// Prettier rewrites the layout of the elements an editor integration
+	// owns, so fmt, fmt:check, lefthook, and hook:format leave those files
+	// alone (spec 0026 §10).
+	owned := editors.OwnedPathsOf(integrationsOf(mctx))
+	taskfile, err := excludeFromPrettierTaskfile(taskfile, owned, hooks)
+	if err != nil {
+		return nil, err
+	}
+	lefthook, err := excludeFromPrettierLefthook(lefthookConfig, owned)
+	if err != nil {
+		return nil, err
+	}
 
 	resources := []resource.Resource{
 		{
@@ -77,7 +90,7 @@ func (tsrepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]r
 		{
 			Path:      "lefthook.yml",
 			Ownership: resource.Generated,
-			Content:   lefthookConfig,
+			Content:   lefthook,
 		},
 	}
 	if !hooks {
@@ -90,4 +103,11 @@ func (tsrepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]r
 		Ownership: resource.Generated,
 		Content:   guard,
 	}), nil
+}
+
+func integrationsOf(mctx *module.Context) []string {
+	if mctx == nil {
+		return nil
+	}
+	return mctx.Integrations
 }

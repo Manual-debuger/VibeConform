@@ -7,6 +7,9 @@ pre-commit:
   commands:
     prettier:
       glob: "*.{js,jsx,ts,tsx,json,css,md}"
+      exclude:
+        - ".vscode/tasks.json"
+        - ".vscode/extensions.json"
       run: pnpm exec prettier --check {staged_files}
       fail_text: "Run 'task fmt' to format staged files."
     eslint:
