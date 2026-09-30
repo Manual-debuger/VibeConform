@@ -216,8 +216,13 @@ Not observed locally: Linux, and the WSL and container runtime markers.
 The Ubuntu leg of CI covers Linux. The markers are covered only by
 unit tests through the `Env` seam.
 
-CI on the PR: `ci.yml` (Ubuntu and Windows test matrix), `examples.yml`,
-`hook-guard.yml`, and `Conformance / audit` (recorded after the run).
+CI on PR #46 (run 36701126813 and siblings) passed every check:
+- `ci.yml`: `test` on Ubuntu and Windows, `race`, `security`, and
+  format/lint/static.
+- `examples.yml`: typescript and monorepo on Ubuntu and Windows, python
+  on Ubuntu.
+- `hook-guard.yml`: prod-go, prod-ts and prod-py on Ubuntu and Windows.
+- `Conformance / audit` and CodeQL.
 
 ## Explicitly still deferred
 
