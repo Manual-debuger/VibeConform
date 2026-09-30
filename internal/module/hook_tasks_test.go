@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -420,6 +421,9 @@ func TestHookContextOutput(t *testing.T) {
 			}
 			want := append([]string{
 				"Repo: " + filepath.Base(dir),
+				"Platform: " + runtime.GOOS + "/",
+				"Runtime: ",
+				"Shell: unknown (not reported by the harness)",
 				"Branch: main",
 				"State: dirty",
 				"Task: ",
@@ -437,9 +441,50 @@ func TestHookContextOutput(t *testing.T) {
 			if len(stdout) >= 10000 {
 				t.Errorf("output is %d characters; Claude Code truncates context at 10,000", len(stdout))
 			}
+			// An ordinary clone is not a linked worktree, and costs no line.
+			if strings.Contains(stdout, "Worktree:") {
+				t.Errorf("an ordinary clone reports a worktree:\n%s", stdout)
+			}
 		})
 	}
 }
+
+// TestHookContextLinkedWorktree checks that a checkout made by git worktree
+// add says so, and names the main checkout (spec 0028 1).
+func TestHookContextLinkedWorktree(t *testing.T) {
+	task := taskOnPath(t)
+	for _, path := range repoToolingTaskfiles {
+		t.Run(path, func(t *testing.T) {
+			parent := t.TempDir()
+			main := filepath.Join(parent, "main")
+			if err := os.Mkdir(main, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			hookTaskfile(t, main, path, "hook:context", nil)
+			gitRepo(t, main)
+			side := filepath.Join(parent, "side")
+			// #nosec G204 -- fixed arguments
+			add := exec.Command("git", "worktree", "add", "-q", "-b", "side", side)
+			add.Dir = main
+			if out, err := add.CombinedOutput(); err != nil {
+				t.Fatalf("git worktree add: %v\n%s", err, out)
+			}
+
+			code, stdout, stderr := runTask(t, task, side, "hook:context", "")
+			if code != 0 {
+				t.Fatalf("exit %d; stderr: %s", code, stderr)
+			}
+			// git reports slash paths on every OS, and the temp directory's
+			// spelling (8.3 names, symlinks) may differ from ours, so only
+			// the last element is compared.
+			if !linkedWorktree.MatchString(stdout) {
+				t.Errorf("output does not report the linked worktree:\n%s", stdout)
+			}
+		})
+	}
+}
+
+var linkedWorktree = regexp.MustCompile(`(?m)^Worktree: linked \(main checkout at .*/main\)\r?$`)
 
 // TestHookContextWithoutRuntimes is the regression test for the first CI
 // run of spec 0023: Task runs every cmd with errexit, so one unguarded
@@ -509,6 +554,9 @@ func TestHookContextOutsideGit(t *testing.T) {
 			}
 			if !strings.Contains(stdout, "not a git repository") {
 				t.Errorf("output does not say it is outside git:\n%s", stdout)
+			}
+			if !strings.Contains(stdout, "Platform: "+runtime.GOOS+"/") {
+				t.Errorf("outside git, the platform is still worth printing:\n%s", stdout)
 			}
 		})
 	}

@@ -1,5 +1,5 @@
 schema: 3
-vibe_version: v0.3.0-alpha.1.0.20260930054212-a7c95ce75f87+dirty
+vibe_version: v0.3.0-alpha.1.0.20260930095502-82a247d3c7ca+dirty
 standard: prod-mono/v1
 resources:
     .claude/hooks/guard.go:
@@ -54,7 +54,7 @@ resources:
     Taskfile.vibe.yml:
         sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     Taskfile.yml:
-        sha256: df199d0f8071dce6b59c58cc9c19f5baf861f412e3f2052b60c2d08dab166252
+        sha256: 04b5189cee59dfd97ec0227aec09f7286384a0b8a8ae93c1b15c72a2dce69ac4
     apps/web/.prettierrc.json:
         sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
     apps/web/Taskfile.yml:
