@@ -15,3 +15,24 @@ var Tasks = []string{"fmt", "lint", "test", "verify"}
 func Label(task string) string {
 	return "task " + task
 }
+
+// OwnedPaths lists, per editor integration, the files it owns elements
+// of. Core modules that run a formatter over the repository leave these
+// out of its reach, since no fixed bytes are stable under every
+// configuration of it (spec 0026 §10). A test checks the map against the
+// paths the integrations resolve.
+var OwnedPaths = map[string][]string{
+	"vscode": {".vscode/tasks.json", ".vscode/extensions.json"},
+	"zed":    {".zed/tasks.json"},
+}
+
+// OwnedPathsOf returns the owned paths of the selected integrations, in
+// the selection's order. Integrations that own no editor file contribute
+// nothing, so a selection without an editor returns none.
+func OwnedPathsOf(integrations []string) []string {
+	var paths []string
+	for _, name := range integrations {
+		paths = append(paths, OwnedPaths[name]...)
+	}
+	return paths
+}

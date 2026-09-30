@@ -39,12 +39,12 @@ tasks:
   fmt:
     desc: Apply Prettier formatting.
     cmds:
-      - pnpm exec prettier --write --cache "**/*.{js,jsx,ts,tsx,json,css,md}"
+      - pnpm exec prettier --write --cache "**/*.{js,jsx,ts,tsx,json,css,md}" "!.vscode/tasks.json" "!.vscode/extensions.json"
 
   fmt:check:
     desc: Fail if any file is not Prettier-formatted (CI-safe, no writes).
     cmds:
-      - pnpm exec prettier --check --cache "**/*.{js,jsx,ts,tsx,json,css,md}"
+      - pnpm exec prettier --check --cache "**/*.{js,jsx,ts,tsx,json,css,md}" "!.vscode/tasks.json" "!.vscode/extensions.json"
 
   # ESLint's cache does not track dependencies between files, so a
   # type-aware rule can report a stale result locally until the file itself
@@ -144,8 +144,8 @@ tasks:
     cmds:
       - |
         list() {
-          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md' 2>/dev/null || true
-          git ls-files -z --others --exclude-standard -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md'
+          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md' ':(exclude).vscode/tasks.json' ':(exclude).vscode/extensions.json' 2>/dev/null || true
+          git ls-files -z --others --exclude-standard -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md' ':(exclude).vscode/tasks.json' ':(exclude).vscode/extensions.json'
         }
         [ -n "$(list)" ] || exit 0
         list | xargs -0 pnpm exec prettier --write --cache --log-level warn || exit 2

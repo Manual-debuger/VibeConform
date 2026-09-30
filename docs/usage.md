@@ -910,6 +910,14 @@ wrote it, and adding more of your own is not drift.
   makes `sync` refuse them; the common convention is to ignore
   `.vscode/*` and add exceptions for `tasks.json`, `extensions.json`,
   `settings.json`, and `launch.json`.
+- In `prod-ts`, Prettier leaves the selected editors' owned files alone:
+  `fmt`, `fmt:check`, the pre-commit hook, and `hook:format` all exclude
+  exactly those paths. Prettier would otherwise re-lay out the owned
+  entries, and no fixed layout suits every Prettier configuration. Only
+  layout goes unchecked: `vibe audit` still compares every owned entry
+  by content, ignoring whitespace, so an editor reformatting the file on
+  save is not drift. Your own `settings.json` and `launch.json` are
+  still formatted.
 
 Selecting an editor configures it for people. It does not give a coding
 agent access to that editor's language server; that is the LSP

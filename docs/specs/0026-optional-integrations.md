@@ -78,7 +78,8 @@ selected:
 
 With `claude` off, `Taskfile.yml`, `lefthook.yml`, and `ci.yml` still
 carry the full verification interface. Selecting an editor changes no
-core file.
+core file, except that `prod-ts` keeps Prettier off the editor's owned
+files (§10).
 
 ### 4. Editor adapters
 
@@ -211,6 +212,40 @@ committed, personal state is not. `examples/typescript` also carries one
 user task in `.vscode/tasks.json`, proving unowned content survives
 `sync`.
 
+### 10. Formatters and owned editor files
+
+Added after implementation: the `examples/typescript` CI jobs on PR #43
+failed `fmt:check`. Prettier rewrites the layout of owned elements
+(`tasks` objects expanded one member per line, `recommendations`
+collapsed onto one line when it fits `printWidth`), so no fixed bytes the
+adapter writes are Prettier-stable for every repository's configuration.
+A `prod-ts` repository that selected `vscode` failed its own
+`task verify` straight after `vibe sync`.
+
+`prod-ts` (`tsrepotooling`) therefore leaves the owned files of each
+selected editor out of Prettier's reach: `.vscode/tasks.json` and
+`.vscode/extensions.json` for `vscode`, `.zed/tasks.json` for `zed`. The
+exclusion is exactly those paths, not the directories, and it applies
+wherever the generated tooling runs Prettier:
+
+- `fmt` and `fmt:check`: a `!<path>` pattern per excluded file after the
+  glob;
+- lefthook's `prettier` pre-commit command: an `exclude` of those paths;
+- `hook:format` (present only with `claude`): those paths are dropped
+  from the changed-file list before Prettier runs.
+
+With no editor selected (the default), the rendered files are
+byte-identical to what they were without this section. `prod-mono` is
+unaffected: Prettier runs per component (`root:` and the component
+Taskfile), and editor files live at the repository root, outside every
+component. `prod-go` and `prod-py` run no JSON formatter.
+
+Correctness of the files is unaffected. Owned elements are compared by
+canonical JSON (§5), so a Prettier-formatted element, for example by an
+editor's format-on-save, is not drift, and `audit`/`sync` still parse the
+whole file and reject invalid JSONC. What is lost is only a layout check
+on those files.
+
 ### Documentation
 
 - `docs/usage.md`: a new "Selecting integrations" section with the
@@ -251,6 +286,8 @@ user task in `.vscode/tasks.json`, proving unowned content survives
   `vibe`-free and independent of any integration (principle 3).
 - Deletion and element edits use slash paths joined to the repo root and
   byte-exact writes; behavior is the same on Windows and Linux.
+- A `prod-ts` repository that selects `vscode` or `zed` passes its own
+  `task verify` straight after `vibe sync` (§10).
 
 ## Explicit non-goals
 
@@ -290,6 +327,16 @@ user task in `.vscode/tasks.json`, proving unowned content survives
   the useful one (principle 1).
 - **Why the hook tasks follow `claude`.** Nothing else calls them (Codex
   hooks are suspended, spec 0024).
+- **Why exclude owned editor files from Prettier rather than write
+  Prettier's layout.** Prettier's output depends on each repository's
+  `printWidth` and options, so no fixed bytes pass for all of them, and
+  running Prettier from `sync` would make it call language tooling
+  (principle 3). The files' content is already checked by `audit`; only
+  layout goes unchecked.
+- **Why the exclusion follows the selection and names files, not
+  directories.** With no editor selected, `prod-ts` output stays
+  byte-identical, and a user's own `.vscode/settings.json` or
+  `launch.json` keeps Prettier.
 
 ## Follow-on work
 
