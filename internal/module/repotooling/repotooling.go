@@ -47,12 +47,12 @@ func (repotoolingModule) Name() string {
 // its dependencies. golangci-lint is go-tooling's, which configures it.
 func (repotoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 	return []module.Tool{
-		{Name: "task", Why: "every verification entry point Taskfile.yml defines"},
-		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers"},
-		{Name: "go", Why: "every build, test, vet, and module task, and task hook:guard"},
+		{Name: "task", Why: "every verification entry point Taskfile.yml defines", Version: []string{"--version"}},
+		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers", Version: []string{"version"}},
+		{Name: "go", Why: "every build, test, vet, and module task, and task hook:guard", Version: []string{"env", "GOVERSION"}},
 		{Name: "goimports", Why: "task fmt, task fmt:check, and the pre-commit format check"},
 		{Name: "govulncheck", Why: "task security"},
-		{Name: "actionlint", Why: "task workflows:lint"},
+		{Name: "actionlint", Why: "task workflows:lint", Version: []string{"-version"}},
 	}
 }
 

@@ -46,9 +46,9 @@ func (tsrepotoolingModule) Name() string {
 // and tsc themselves stay undeclared, as ts-tooling explains.
 func (tsrepotoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 	return []module.Tool{
-		{Name: "task", Why: "every verification entry point Taskfile.yml defines"},
-		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers"},
-		{Name: "pnpm", Why: "every Taskfile and lefthook command, which run through pnpm exec"},
+		{Name: "task", Why: "every verification entry point Taskfile.yml defines", Version: []string{"--version"}},
+		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers", Version: []string{"version"}},
+		{Name: "pnpm", Why: "every Taskfile and lefthook command, which run through pnpm exec", Version: []string{"--version"}},
 	}
 }
 

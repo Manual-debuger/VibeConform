@@ -43,7 +43,7 @@ func (tstoolingModule) Name() string {
 // warning about them would fire on every correctly configured repository.
 func (tstoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 	return []module.Tool{
-		{Name: "node", Why: "running eslint, prettier, and tsc out of node_modules"},
+		{Name: "node", Why: "running eslint, prettier, and tsc out of node_modules", Version: []string{"--version"}},
 	}
 }
 

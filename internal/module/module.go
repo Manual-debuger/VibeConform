@@ -87,6 +87,9 @@ type Tool struct {
 	Name string
 	// Why names what stops working without it, for the warning text.
 	Why string
+	// Version is the arguments that make the binary print its version on
+	// the first line of stdout, for vibe doctor. nil when it has none.
+	Version []string
 }
 
 // ToolRequirer is implemented by modules whose resources are inert without

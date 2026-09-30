@@ -14,7 +14,7 @@ func TestNotImplementedPointsAtExistingDoc(t *testing.T) {
 	if _, err := os.Stat(filepath.Join("..", "..", filepath.FromSlash(notImplementedDoc))); err != nil {
 		t.Fatalf("errNotImplemented points at %s: %v", notImplementedDoc, err)
 	}
-	for _, cmd := range []string{"check", "doctor"} {
+	for _, cmd := range []string{"check"} {
 		if got := errNotImplemented(cmd).Error(); !strings.Contains(got, notImplementedDoc) {
 			t.Errorf("errNotImplemented(%q) = %q, want it to mention %s", cmd, got, notImplementedDoc)
 		}

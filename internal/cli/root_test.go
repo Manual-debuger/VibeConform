@@ -38,7 +38,7 @@ func TestRootCmdVersion(t *testing.T) {
 }
 
 func TestSubcommandsNotYetImplemented(t *testing.T) {
-	for _, name := range []string{"check", "doctor"} {
+	for _, name := range []string{"check"} {
 		root := NewRootCmd("test")
 		root.SetArgs([]string{name})
 		root.SetOut(&bytes.Buffer{})

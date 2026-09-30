@@ -155,10 +155,10 @@ before each commit.
 - [x] C3 `TestHookContextRunsNothingHeavy` still passes with an unchanged allowlist
 - [x] C3 monorepo: the new lines are present for every profile set
 - [x] C3 root and examples re-synced; `vibe audit` is clean in all four
-- [ ] C4 `doctor`: one table test per check and status, through `Env` fakes
-- [ ] C4 exit codes: PASS/WARN/UNVERIFIED only exits 0; any FAIL exits 1; no manifest exits 1 and still runs git
-- [ ] C4 `missingTools` behaviour unchanged (existing `tools_test.go` green)
-- [ ] C4 stub tests cover `check` only
+- [x] C4 `doctor`: one table test per check and status, through `Env` fakes
+- [x] C4 exit codes: PASS/WARN/UNVERIFIED only exits 0; any FAIL exits 1; no manifest exits 1 and still runs git
+- [x] C4 `missingTools` behaviour unchanged (existing `tools_test.go` green)
+- [x] C4 stub tests cover `check` only
 - [ ] C5 agent hooks: config missing is FAIL; `task` missing is FAIL; guard runtime missing is FAIL; codex is PASS (suspended)
 - [ ] C5 every agent in the catalog has a doctor table row
 - [ ] C5 line endings: `eol=lf` is PASS; unset with autocrlf=true is WARN; unset otherwise is PASS "not pinned"; no git is UNVERIFIED
@@ -169,7 +169,15 @@ before each commit.
 
 ## Found during implementation
 
-(filled in as work proceeds)
+- **Two probes changed from the plan (C4).** `govulncheck -version`
+  prints `Go: go1.27.0` on its first line, not its own version, so it
+  gets no probe (like `goimports`) and doctor shows its path.
+  `golangci-lint version` prints a long build line; the probe is
+  `golangci-lint version --short`, which prints `2.13.2`.
+- **`task audit` uses the `vibe` on PATH (C3).** After a template change,
+  `go install ./cmd/vibe` before syncing and auditing. A build elsewhere
+  leaves `task audit` running an older binary, which refuses a verdict
+  (spec 0019).
 
 ## Verification
 
