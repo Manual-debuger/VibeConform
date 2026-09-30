@@ -56,6 +56,12 @@ func (repotoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 	}
 }
 
+// HookBinaries reports task, which every hook command runs through, and
+// the runtime hook:guard starts.
+func (repotoolingModule) HookBinaries(_ *module.Context) []string {
+	return []string{"task", "go"}
+}
+
 // Resolve returns this module's resources in a fixed order; see the
 // github-ci module for why order is part of the contract.
 func (repotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {

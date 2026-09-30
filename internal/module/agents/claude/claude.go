@@ -35,6 +35,10 @@ import (
 // any exit other than 2 as allow.
 const GuardCommand = "task -x hook:guard"
 
+// SettingsPath is the file that registers the hooks with Claude Code;
+// vibe doctor checks it is present when claude is selected.
+const SettingsPath = ".claude/settings.json"
+
 // The other hooks the settings run (spec 0023), each a task the standard's
 // repo-tooling module defines. The -x matters for the same reason as for
 // GuardCommand: a failed check exits 2 only if Task passes the code through.
@@ -76,7 +80,7 @@ func (claudeModule) Resolve(_ context.Context, _ *module.Context) ([]resource.Re
 
 	return []resource.Resource{
 		{
-			Path:      ".claude/settings.json",
+			Path:      SettingsPath,
 			Ownership: resource.Generated,
 			Content:   settings,
 		},

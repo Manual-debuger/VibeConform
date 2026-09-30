@@ -132,6 +132,20 @@ func (monorepotoolingModule) RequiredTools(mctx *module.Context) []module.Tool {
 	return append(tools, module.Tool{Name: "actionlint", Why: "task workflows:lint", Version: []string{"-version"}})
 }
 
+// HookBinaries reports the hook binaries of the single-language module
+// whose guard this repository uses: the first declared profile, in the
+// order Go, TypeScript, Python, as Resolve picks it.
+func (monorepotoolingModule) HookBinaries(mctx *module.Context) []string {
+	used := declared(module.ComponentsOf(mctx))
+	if len(used) == 0 {
+		return []string{"task"}
+	}
+	if hr, ok := profiles[used[0]].guard.(module.HookRuntime); ok {
+		return hr.HookBinaries(mctx)
+	}
+	return []string{"task"}
+}
+
 // Resolve returns the root Taskfile.yml, lefthook.yml, and guard, then
 // each component's Taskfile.yml in vibe.yaml order.
 func (monorepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {

@@ -3,15 +3,25 @@ package cli
 import (
 	"bytes"
 	"context"
+	"io/fs"
+	"maps"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/doctor"
+	"github.com/Manual-debuger/VibeConform/internal/manifest"
+	"github.com/Manual-debuger/VibeConform/internal/standard"
 )
 
 // stubDoctorEnv makes doctor see a machine where every binary is on PATH
-// except those named missing, and every command succeeds and prints v1.
+// except those named missing, and every command succeeds: version probes
+// print v1, and git reports eol=lf for any path. Files are the real ones,
+// since the repository under test is the test's own temp directory.
 func stubDoctorEnv(t *testing.T, missing ...string) {
 	t.Helper()
 	previous := doctorEnv
@@ -25,10 +35,16 @@ func stubDoctorEnv(t *testing.T, missing ...string) {
 				}
 				return "/stub/" + name, nil
 			},
-			Run: func(context.Context, string, string, ...string) (string, string, error) {
+			Run: func(_ context.Context, _, _ string, args ...string) (string, string, error) {
+				if len(args) > 0 && args[0] == "check-attr" {
+					return args[len(args)-1] + ": eol: lf\n", "", nil
+				}
 				return "v1\n", "", nil
 			},
-			Exists: func(string) bool { return false },
+			Exists: func(path string) bool {
+				_, err := os.Stat(path)
+				return err == nil
+			},
 			GOOS:   "linux",
 			GOARCH: "amd64",
 		}
@@ -47,10 +63,21 @@ func runDoctorIn(t *testing.T, dir string) (string, error) {
 	return out.String(), err
 }
 
-func TestDoctorHealthyExitsZero(t *testing.T) {
-	stubDoctorEnv(t)
+// syncedRepo returns a temp directory holding a synced prod-go
+// repository, so the files doctor checks for are there.
+func syncedRepo(t *testing.T) string {
+	t.Helper()
 	dir := t.TempDir()
 	writeManifest(t, dir)
+	if out, err := runSyncIn(t, dir); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+	return dir
+}
+
+func TestDoctorHealthyExitsZero(t *testing.T) {
+	dir := syncedRepo(t)
+	stubDoctorEnv(t)
 
 	out, err := runDoctorIn(t, dir)
 	if err != nil {
@@ -61,7 +88,9 @@ func TestDoctorHealthyExitsZero(t *testing.T) {
 		"PASS        git",
 		"vibe.yaml resolves prod-go/v1 (integrations: claude, codex)",
 		"; Taskfile.yml loads",
-		"summary: ",
+		"PASS        claude hooks",
+		"; .golangci.yml has eol=lf",
+		"summary: 14 pass, 0 warn, 0 fail, 0 unverified",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
@@ -73,9 +102,8 @@ func TestDoctorHealthyExitsZero(t *testing.T) {
 }
 
 func TestDoctorMissingToolExitsOne(t *testing.T) {
+	dir := syncedRepo(t)
 	stubDoctorEnv(t, "golangci-lint")
-	dir := t.TempDir()
-	writeManifest(t, dir)
 
 	out, err := runDoctorIn(t, dir)
 	if err == nil {
@@ -100,12 +128,96 @@ func TestDoctorWithoutManifest(t *testing.T) {
 	if ExitCode(err) != exitError {
 		t.Fatalf("exit %d, want %d:\n%s", ExitCode(err), exitError, out)
 	}
-	for _, want := range []string{"PASS        git", "FAIL        manifest", "UNVERIFIED  tools     needs a valid vibe.yaml"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output lacks %q:\n%s", want, out)
+	for _, want := range []string{
+		`(?m)^PASS +git `,
+		`(?m)^FAIL +manifest `,
+		`(?m)^UNVERIFIED +tools +needs a valid vibe\.yaml$`,
+		`(?m)^UNVERIFIED +agent hooks +needs a valid vibe\.yaml$`,
+		`(?m)^PASS +runtime `,
+		`(?m)^PASS +worktree `,
+	} {
+		if !regexp.MustCompile(want).MatchString(out) {
+			t.Errorf("output does not match %s:\n%s", want, out)
 		}
 	}
 	if strings.Contains(out, "standard:") {
 		t.Errorf("no standard resolved, but the output names one:\n%s", out)
 	}
+}
+
+// TestAgentHookConfigsCoverCatalog: every agent a standard's catalog
+// offers has a doctor row, so a new agent cannot ship without doctor
+// saying whether its hooks can run.
+func TestAgentHookConfigsCoverCatalog(t *testing.T) {
+	for _, name := range []string{"prod-go", "prod-ts", "prod-py", "prod-mono"} {
+		s, err := standard.Lookup(name, "v1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, in := range s.Integrations {
+			if in.Category != manifest.CategoryAgents {
+				continue
+			}
+			if _, ok := agentHookConfigs[in.Name]; !ok {
+				t.Errorf("%s offers agent %q, which has no agentHookConfigs row", name, in.Name)
+			}
+		}
+	}
+}
+
+// TestDoctorHookBinaries: the claude line names task and the runtime the
+// standard's guard starts, taken from each committed repository.
+func TestDoctorHookBinaries(t *testing.T) {
+	for root, want := range map[string][]string{
+		filepath.Join("..", ".."):                           {"task", "go"},
+		filepath.Join("..", "..", "examples", "typescript"): {"task", "node"},
+		filepath.Join("..", "..", "examples", "python"):     {"task", "uv"},
+		// Go, TypeScript and Python components: the guard runs on Go.
+		filepath.Join("..", "..", "examples", "monorepo"): {"task", "go"},
+	} {
+		p, err := buildPlan(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hooks := agentHooks(p)
+		if len(hooks) == 0 || hooks[0].Name != "claude" {
+			t.Fatalf("%s: agent hooks = %+v, want claude first", root, hooks)
+		}
+		if !slices.Equal(hooks[0].Binaries, want) {
+			t.Errorf("%s: claude hook binaries = %v, want %v", root, hooks[0].Binaries, want)
+		}
+	}
+}
+
+// TestDoctorWritesNothing: doctor diagnoses and never mutates. A synced
+// repository is byte-for-byte the same after it runs, state included.
+func TestDoctorWritesNothing(t *testing.T) {
+	dir := syncedRepo(t)
+	before := snapshot(t, dir)
+
+	stubDoctorEnv(t)
+	if out, err := runDoctorIn(t, dir); err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
+	}
+	if after := snapshot(t, dir); !maps.Equal(before, after) {
+		t.Errorf("doctor changed the repository:\nbefore %v\nafter  %v", slices.Sorted(maps.Keys(before)), slices.Sorted(maps.Keys(after)))
+	}
+}
+
+// snapshot maps every file under dir to its content.
+func snapshot(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	files := map[string]string{}
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := os.ReadFile(path) // #nosec G304 -- walking the test's own temp directory
+		files[path] = string(data)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
 }
