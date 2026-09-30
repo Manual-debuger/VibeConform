@@ -6,6 +6,7 @@ package standard
 import (
 	"fmt"
 
+	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/module/agents/claude"
 	"github.com/Manual-debuger/VibeConform/internal/module/agents/codex"
@@ -30,8 +31,16 @@ type Standard struct {
 	Name string
 	// Version pins the standard revision, e.g. "v1".
 	Version string
-	// Modules are the modules this standard composes.
+	// Modules are the core modules this standard always composes, in the
+	// order every report uses.
 	Modules []module.Module
+	// Integrations is the catalog of optional modules vibe.yaml's
+	// integrations: map selects from. Selected ones resolve after Modules,
+	// in this order (docs/decisions/0013-optional-integrations.md).
+	Integrations []Integration
+	// Profile is a single-language standard's language; empty for one
+	// that takes components, whose profiles come from vibe.yaml.
+	Profile manifest.Profile
 	// TakesComponents is true for a standard that resolves from vibe.yaml's
 	// components: list and requires at least one. Every other standard
 	// accepts none (docs/decisions/0012-manifest-components.md).
@@ -65,6 +74,17 @@ func Lookup(name, version string) (*Standard, error) {
 	return &s, nil
 }
 
+// catalog is the integration catalog every standard shares: editors,
+// then agents, then code intelligence. claude and codex are on by
+// default, so a vibe.yaml without integrations: composes exactly what
+// every standard composed before spec 0026.
+func catalog() []Integration {
+	return []Integration{
+		{Name: "claude", Category: manifest.CategoryAgents, Module: claude.New(), Default: true},
+		{Name: "codex", Category: manifest.CategoryAgents, Module: codex.New(), Default: true},
+	}
+}
+
 func init() {
 	// "prod-go" was "production" through M2, kept unnamespaced because
 	// renaming it then would have broken the vibe.yaml and .vibe/state.yaml
@@ -74,8 +94,11 @@ func init() {
 	Register(Standard{
 		Name:    "prod-go",
 		Version: "v1",
-		// Order matters: audit, diff, and sync report in module order.
-		Modules: []module.Module{gotooling.New(), github.New(), conformance.New(), repotooling.New(), claude.New(), codex.New()},
+		Profile: manifest.ProfileGo,
+		// Order matters: audit, diff, and sync report in module order, core
+		// then selected integrations.
+		Modules:      []module.Module{gotooling.New(), github.New(), conformance.New(), repotooling.New()},
+		Integrations: catalog(),
 	})
 
 	// Through M2 these composed only their language-tooling module plus
@@ -87,27 +110,32 @@ func init() {
 	// vibe-conformance to all three, directly after CI: it holds the
 	// conformance workflow and task audit, the only generated files that
 	// run vibe. Spec 0024 splits agent-config into one module per agent
-	// runtime, claude-config then codex-config, in the same position.
+	// runtime, claude-config then codex-config, in the same position; since
+	// spec 0026 they are default-on integrations from catalog().
 	Register(Standard{
-		Name:    "prod-ts",
-		Version: "v1",
-		Modules: []module.Module{tstooling.New(), githubts.New(), conformance.New(), tsrepotooling.New(), claude.New(), codex.New()},
+		Name:         "prod-ts",
+		Version:      "v1",
+		Profile:      manifest.ProfileTS,
+		Modules:      []module.Module{tstooling.New(), githubts.New(), conformance.New(), tsrepotooling.New()},
+		Integrations: catalog(),
 	})
 
 	Register(Standard{
-		Name:    "prod-py",
-		Version: "v1",
-		Modules: []module.Module{pythontooling.New(), githubpy.New(), conformance.New(), pyrepotooling.New(), claude.New(), codex.New()},
+		Name:         "prod-py",
+		Version:      "v1",
+		Profile:      manifest.ProfilePy,
+		Modules:      []module.Module{pythontooling.New(), githubpy.New(), conformance.New(), pyrepotooling.New()},
+		Integrations: catalog(),
 	})
 
-	// A polyglot monorepo: every module but vibe-conformance and the agent
-	// modules resolves from vibe.yaml's components, in the same module
+	// A polyglot monorepo: every core module but vibe-conformance resolves from vibe.yaml's components, in the same module
 	// order as the single-language standards. See
 	// docs/specs/0025-prod-mono.md.
 	Register(Standard{
 		Name:            "prod-mono",
 		Version:         "v1",
-		Modules:         []module.Module{monotooling.New(), githubmono.New(), conformance.New(), monorepotooling.New(), claude.New(), codex.New()},
+		Modules:         []module.Module{monotooling.New(), githubmono.New(), conformance.New(), monorepotooling.New()},
+		Integrations:    catalog(),
 		TakesComponents: true,
 	})
 }

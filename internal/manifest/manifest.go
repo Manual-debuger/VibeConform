@@ -27,6 +27,47 @@ type Manifest struct {
 	// Components lists the single-language projects a monorepo standard
 	// composes, in the order every report and fan-out task uses.
 	Components []Component `yaml:"components,omitempty"`
+	// Integrations selects the optional editor, agent, and
+	// code-intelligence integrations; nil means the standard's defaults
+	// (docs/decisions/0013-optional-integrations.md).
+	Integrations *Integrations `yaml:"integrations,omitempty"`
+}
+
+// Integrations is vibe.yaml's integrations: map. Each category is a
+// pointer so that an absent category (nil: the standard's defaults) is
+// distinguishable from an empty one (none).
+type Integrations struct {
+	Editors      *[]string `yaml:"editors,omitempty"`
+	Agents       *[]string `yaml:"agents,omitempty"`
+	Intelligence *[]string `yaml:"intelligence,omitempty"`
+}
+
+// The integration categories, in the order integrations resolve and
+// report.
+const (
+	CategoryEditors      = "editors"
+	CategoryAgents       = "agents"
+	CategoryIntelligence = "intelligence"
+)
+
+// Categories lists every integration category in resolution order.
+var Categories = []string{CategoryEditors, CategoryAgents, CategoryIntelligence}
+
+// Get returns the names vibe.yaml selects for category, or nil when the
+// category is absent. A nil *Integrations has every category absent.
+func (in *Integrations) Get(category string) *[]string {
+	if in == nil {
+		return nil
+	}
+	switch category {
+	case CategoryEditors:
+		return in.Editors
+	case CategoryAgents:
+		return in.Agents
+	case CategoryIntelligence:
+		return in.Intelligence
+	}
+	return nil
 }
 
 // Profile is the language a component is written in.
@@ -81,6 +122,9 @@ func Parse(data []byte) (*Manifest, error) {
 	if err := validateComponents(m.Components); err != nil {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
+	if err := validateIntegrations(m.Integrations); err != nil {
+		return nil, fmt.Errorf("parse manifest: %w", err)
+	}
 	return &m, nil
 }
 
@@ -110,6 +154,30 @@ func validateComponents(components []Component) error {
 			if within(c.Path, other.Path) || within(other.Path, c.Path) {
 				return fmt.Errorf("%s (%s): path %q overlaps component %s at %q", where, c.ID, c.Path, other.ID, other.Path)
 			}
+		}
+	}
+	return nil
+}
+
+// validateIntegrations checks each selected name's form and uniqueness
+// within its category. Whether a name exists is the standard's to say,
+// since the catalog belongs to it.
+func validateIntegrations(in *Integrations) error {
+	for _, category := range Categories {
+		names := in.Get(category)
+		if names == nil {
+			continue
+		}
+		seen := map[string]bool{}
+		for i, name := range *names {
+			where := fmt.Sprintf("integrations.%s[%d] (%s)", category, i, name)
+			if !idPattern.MatchString(name) {
+				return fmt.Errorf("%s: name must match %s", where, idPattern)
+			}
+			if seen[name] {
+				return fmt.Errorf("%s: duplicate name", where)
+			}
+			seen[name] = true
 		}
 	}
 	return nil
