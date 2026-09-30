@@ -3,6 +3,7 @@ package standard
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -170,4 +171,104 @@ func TestEveryStandardComposesConformance(t *testing.T) {
 			t.Errorf("%s/%s does not compose vibe-conformance", k.name, k.version)
 		}
 	}
+}
+
+// resolveAll resolves every module a selection composes, keyed by path.
+func resolveAll(t *testing.T, s Standard, selected []string) map[string]resource.Resource {
+	t.Helper()
+	mctx := sampleContext(s)
+	if mctx == nil {
+		mctx = &module.Context{}
+	}
+	mctx.Integrations = selected
+	resources := map[string]resource.Resource{}
+	for _, m := range s.ModulesFor(selected) {
+		rs, err := m.Resolve(context.Background(), mctx)
+		if err != nil {
+			t.Fatalf("resolving %s: %v", m.Name(), err)
+		}
+		for _, r := range rs {
+			resources[r.Path] = r
+		}
+	}
+	return resources
+}
+
+func taskfileTasks(t *testing.T, r resource.Resource) map[string]any {
+	t.Helper()
+	var tf struct {
+		Tasks map[string]any `yaml:"tasks"`
+	}
+	if err := yaml.Unmarshal(r.Content, &tf); err != nil {
+		t.Fatalf("parsing Taskfile.yml: %v", err)
+	}
+	return tf.Tasks
+}
+
+// TestAgentHooksFollowClaude pins spec 0026 §3 in both directions. With
+// claude selected — by default or explicitly — every resource is
+// byte-identical to what an unknown selection resolves, which is what
+// every standard resolved before integrations existed: the guard and the
+// hook:* tasks stay. Without claude, exactly the hook:* tasks and the guard
+// go, and every other task is unchanged.
+func TestAgentHooksFollowClaude(t *testing.T) {
+	for k, s := range registry {
+		if len(s.Integrations) == 0 {
+			continue
+		}
+		t.Run(k.name+"/"+k.version, func(t *testing.T) {
+			baseline := resolveAll(t, s, nil)
+			if _, ok := baseline["Taskfile.yml"]; !ok {
+				t.Skip("resolves no Taskfile.yml")
+			}
+			for _, selected := range [][]string{s.Defaults(), {"claude"}} {
+				got := resolveAll(t, s, selected)
+				for path, want := range baseline {
+					if slices.Contains(agentConfigs, path) || strings.HasPrefix(path, ".codex/") {
+						continue // the agent modules' own files; deselecting codex drops them
+					}
+					if r, ok := got[path]; !ok || string(r.Content) != string(want.Content) {
+						t.Errorf("selection %v: %s differs from the unknown-selection baseline", selected, path)
+					}
+				}
+				if !hasHookTasks(taskfileTasks(t, got["Taskfile.yml"])) {
+					t.Errorf("selection %v: Taskfile.yml lost its hook:* tasks", selected)
+				}
+			}
+
+			for _, selected := range [][]string{{}, {"codex"}} {
+				got := resolveAll(t, s, selected)
+				for path := range got {
+					if strings.HasPrefix(path, ".claude/") {
+						t.Errorf("selection %v still resolves %s", selected, path)
+					}
+				}
+				withHooks := taskfileTasks(t, baseline["Taskfile.yml"])
+				without := taskfileTasks(t, got["Taskfile.yml"])
+				if hasHookTasks(without) {
+					t.Errorf("selection %v: Taskfile.yml still defines hook:* tasks", selected)
+				}
+				for name, task := range withHooks {
+					if strings.HasPrefix(name, "hook:") {
+						continue
+					}
+					if !reflect.DeepEqual(without[name], task) {
+						t.Errorf("selection %v: task %s changed or disappeared", selected, name)
+					}
+				}
+				if len(without) == 0 {
+					t.Errorf("selection %v: Taskfile.yml defines no tasks", selected)
+				}
+			}
+		})
+	}
+}
+
+func hasHookTasks(tasks map[string]any) bool {
+	for name := range tasks {
+		if strings.HasPrefix(name, "hook:") {
+			return true
+		}
+	}
+	return false
 }
