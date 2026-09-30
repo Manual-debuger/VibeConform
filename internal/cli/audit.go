@@ -36,10 +36,19 @@ func runAudit(cmd *cobra.Command, repoRoot string) error {
 		return fmt.Errorf("audit: %w", err)
 	}
 
+	printWarnings(cmd.ErrOrStderr(), p)
+
 	var checked, drifted, outOfDate, conflicts int
 	for _, rp := range p.Resources {
 		line := "not yet checked (unsupported ownership)"
-		if rp.Supported {
+		switch {
+		case rp.Supported && rp.Ignored:
+			// Conformant here, missing in every fresh checkout: a conflict,
+			// since only an edit to .gitignore resolves it.
+			checked++
+			conflicts++
+			line = ignoredLine(rp.Resource.Path)
+		case rp.Supported:
 			checked++
 			line = auditLine(rp.Decision)
 			switch rp.Decision {
@@ -53,6 +62,19 @@ func runAudit(cmd *cobra.Command, repoRoot string) error {
 			}
 		}
 		if _, err := fmt.Fprintf(out, "%s: %s\n", rp.Resource.Path, line); err != nil {
+			return fmt.Errorf("audit: %w", err)
+		}
+	}
+	// A deselected integration's leftovers: out of date while sync can
+	// remove them, a conflict when it would refuse to.
+	for _, pp := range p.Prunes {
+		checked++
+		if pp.Decision == reconcile.RemoveConflict {
+			conflicts++
+		} else {
+			outOfDate++
+		}
+		if _, err := fmt.Fprintf(out, "%s: %s\n", pp.Path, auditPruneLine(pp)); err != nil {
 			return fmt.Errorf("audit: %w", err)
 		}
 	}
