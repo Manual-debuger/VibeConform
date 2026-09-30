@@ -26,13 +26,3 @@ func newCheckCmd() *cobra.Command {
 		},
 	}
 }
-
-func newDoctorCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "doctor",
-		Short: "Diagnose local environment and tooling issues",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return errNotImplemented("doctor")
-		},
-	}
-}

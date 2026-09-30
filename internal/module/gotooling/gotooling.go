@@ -30,7 +30,7 @@ func (gotoolingModule) Name() string {
 // on a machine without golangci-lint is a file nothing reads.
 func (gotoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 	return []module.Tool{
-		{Name: "golangci-lint", Why: "task lint, and CI's lint job"},
+		{Name: "golangci-lint", Why: "task lint, and CI's lint job", Version: []string{"version", "--short"}},
 	}
 }
 

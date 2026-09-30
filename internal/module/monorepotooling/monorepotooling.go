@@ -70,7 +70,7 @@ var profiles = map[manifest.Profile]profile{
 		guard:        repotooling.New(),
 		guardCommand: "go run .claude/hooks/guard.go .claude/hooks/policy.json",
 		tools: []module.Tool{
-			{Name: "go", Why: "every Go component's build, test, vet, and module tasks"},
+			{Name: "go", Why: "every Go component's build, test, vet, and module tasks", Version: []string{"env", "GOVERSION"}},
 			{Name: "goimports", Why: "a Go component's task fmt and task fmt:check"},
 			{Name: "govulncheck", Why: "a Go component's task security"},
 		},
@@ -81,7 +81,7 @@ var profiles = map[manifest.Profile]profile{
 		guard:        tsrepotooling.New(),
 		guardCommand: "node .claude/hooks/guard.mjs .claude/hooks/policy.json",
 		tools: []module.Tool{
-			{Name: "pnpm", Why: "every TypeScript component's tasks, which run through pnpm exec"},
+			{Name: "pnpm", Why: "every TypeScript component's tasks, which run through pnpm exec", Version: []string{"--version"}},
 		},
 	},
 	manifest.ProfilePy: {
@@ -90,7 +90,7 @@ var profiles = map[manifest.Profile]profile{
 		guard:        pyrepotooling.New(),
 		guardCommand: "uv run --no-project python .claude/hooks/guard.py .claude/hooks/policy.json",
 		tools: []module.Tool{
-			{Name: "uv", Why: "every Python component's tasks, which run through uv run"},
+			{Name: "uv", Why: "every Python component's tasks, which run through uv run", Version: []string{"--version"}},
 		},
 	},
 }
@@ -123,13 +123,13 @@ func (monorepotoolingModule) Name() string {
 // because task verify runs workflows:lint.
 func (monorepotoolingModule) RequiredTools(mctx *module.Context) []module.Tool {
 	tools := []module.Tool{
-		{Name: "task", Why: "every verification entry point Taskfile.yml defines"},
-		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers"},
+		{Name: "task", Why: "every verification entry point Taskfile.yml defines", Version: []string{"--version"}},
+		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers", Version: []string{"version"}},
 	}
 	for _, p := range declared(module.ComponentsOf(mctx)) {
 		tools = append(tools, profiles[p].tools...)
 	}
-	return append(tools, module.Tool{Name: "actionlint", Why: "task workflows:lint"})
+	return append(tools, module.Tool{Name: "actionlint", Why: "task workflows:lint", Version: []string{"-version"}})
 }
 
 // Resolve returns the root Taskfile.yml, lefthook.yml, and guard, then

@@ -37,14 +37,21 @@ func warnMissingTools(w io.Writer, s *standard.Standard, mctx *module.Context) {
 	}
 }
 
-// missingTools walks the standard in module then declaration order,
-// reporting each required binary that is not on PATH. A binary two modules
-// require is reported once, under the first to ask for it: one missing
-// install is one problem, and output has to be deterministic across runs
-// for the same reason resource ordering does.
-func missingTools(s *standard.Standard, mctx *module.Context) []missingTool {
-	var missing []missingTool
-	checked := make(map[string]bool)
+// requiredTool is one binary a module asked for, with that module's name.
+type requiredTool struct {
+	module string
+	tool   module.Tool
+}
+
+// requiredTools walks the standard in module then declaration order,
+// returning every binary its modules require. A binary two modules require
+// is listed once, under the first to ask for it: one missing install is one
+// problem, and output has to be deterministic across runs for the same
+// reason resource ordering does. warnMissingTools and vibe doctor both read
+// this list, so they cannot disagree about what the standard needs.
+func requiredTools(s *standard.Standard, mctx *module.Context) []requiredTool {
+	var tools []requiredTool
+	listed := make(map[string]bool)
 
 	selected := s.Defaults()
 	if mctx != nil && mctx.Integrations != nil {
@@ -56,16 +63,23 @@ func missingTools(s *standard.Standard, mctx *module.Context) []missingTool {
 			continue
 		}
 		for _, tool := range requirer.RequiredTools(mctx) {
-			if checked[tool.Name] {
+			if listed[tool.Name] {
 				continue
 			}
-			checked[tool.Name] = true
-
-			if _, err := lookPath(tool.Name); err != nil {
-				missing = append(missing, missingTool{module: mod.Name(), name: tool.Name, why: tool.Why})
-			}
+			listed[tool.Name] = true
+			tools = append(tools, requiredTool{module: mod.Name(), tool: tool})
 		}
 	}
+	return tools
+}
 
+// missingTools reports each required binary that is not on PATH.
+func missingTools(s *standard.Standard, mctx *module.Context) []missingTool {
+	var missing []missingTool
+	for _, rt := range requiredTools(s, mctx) {
+		if _, err := lookPath(rt.tool.Name); err != nil {
+			missing = append(missing, missingTool{module: rt.module, name: rt.tool.Name, why: rt.tool.Why})
+		}
+	}
 	return missing
 }

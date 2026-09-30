@@ -44,9 +44,9 @@ func (pyrepotoolingModule) Name() string {
 // themselves stay undeclared, as python-tooling explains.
 func (pyrepotoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 	return []module.Tool{
-		{Name: "task", Why: "every verification entry point Taskfile.yml defines"},
-		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers"},
-		{Name: "uv", Why: "every Taskfile and lefthook command, which run through uv run"},
+		{Name: "task", Why: "every verification entry point Taskfile.yml defines", Version: []string{"--version"}},
+		{Name: "lefthook", Why: "the pre-commit hooks lefthook.yml describes, which vibe sync registers", Version: []string{"version"}},
+		{Name: "uv", Why: "every Taskfile and lefthook command, which run through uv run", Version: []string{"--version"}},
 	}
 }
 
