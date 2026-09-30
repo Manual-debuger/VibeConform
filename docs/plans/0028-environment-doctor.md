@@ -159,12 +159,12 @@ before each commit.
 - [x] C4 exit codes: PASS/WARN/UNVERIFIED only exits 0; any FAIL exits 1; no manifest exits 1 and still runs git
 - [x] C4 `missingTools` behaviour unchanged (existing `tools_test.go` green)
 - [x] C4 stub tests cover `check` only
-- [ ] C5 agent hooks: config missing is FAIL; `task` missing is FAIL; guard runtime missing is FAIL; codex is PASS (suspended)
-- [ ] C5 every agent in the catalog has a doctor table row
-- [ ] C5 line endings: `eol=lf` is PASS; unset with autocrlf=true is WARN; unset otherwise is PASS "not pinned"; no git is UNVERIFIED
-- [ ] C5 runtime markers: Go constants and all four templates agree
-- [ ] C5 worktree: a linked worktree is PASS with the main path; the collision line is UNVERIFIED
-- [ ] C5 no-write: sync, doctor, then the tree and state are byte-identical
+- [x] C5 agent hooks: config missing is FAIL; `task` missing is FAIL; guard runtime missing is FAIL; codex is PASS (suspended)
+- [x] C5 every agent in the catalog has a doctor table row
+- [x] C5 line endings: `eol=lf` is PASS; unset with autocrlf=true is WARN; unset otherwise is PASS "not pinned"; no git is UNVERIFIED
+- [x] C5 runtime markers: Go constants and all four templates agree
+- [x] C5 worktree: the main checkout is PASS; a linked worktree is UNVERIFIED, naming the main checkout and the unchecked collisions
+- [x] C5 no-write: sync, doctor, then the tree and state are byte-identical
 - [ ] C6 docs updated; spec status set to implemented
 
 ## Found during implementation
@@ -174,6 +174,16 @@ before each commit.
   gets no probe (like `goimports`) and doctor shows its path.
   `golangci-lint version` prints a long build line; the probe is
   `golangci-lint version --short`, which prints `2.13.2`.
+- **A worktree is one line, not two (C5).** Spec §2.3.8 describes a PASS
+  line for the fact and an UNVERIFIED line for collisions. Doctor prints
+  one line instead: `PASS` for the main checkout, and `UNVERIFIED` for a
+  linked worktree, whose detail names the main checkout and the collisions
+  that go unchecked. The collision risk exists only in a linked worktree,
+  so an UNVERIFIED line on every ordinary clone would be noise.
+- **The runtime markers are probed on Linux only (C5).** On Windows, Go
+  would resolve `/.dockerenv` against the current drive, and a stray file
+  there proves nothing. `hook:context` still runs `test -e` on every OS;
+  there the paths never exist, so the two agree.
 - **`task audit` uses the `vibe` on PATH (C3).** After a template change,
   `go install ./cmd/vibe` before syncing and auditing. A build elsewhere
   leaves `task audit` running an older binary, which refuses a verdict

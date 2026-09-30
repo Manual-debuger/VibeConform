@@ -107,3 +107,15 @@ type ToolRequirer interface {
 	// so what it needs) may depend on vibe.yaml.
 	RequiredTools(mctx *Context) []Tool
 }
+
+// HookRuntime is implemented by the core modules that generate the agent
+// hook surface (the hook:* tasks and the guard). It names the binaries
+// those hook commands start, so vibe doctor can say whether the selected
+// agent's hooks can run on this machine (docs/specs/0028-environment-doctor.md).
+// Optional, like ToolRequirer, and only asked when an agent that runs the
+// hooks is selected.
+type HookRuntime interface {
+	// HookBinaries lists the binaries every hook command needs: task,
+	// then the guard's runtime.
+	HookBinaries(mctx *Context) []string
+}

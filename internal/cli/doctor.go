@@ -8,6 +8,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Manual-debuger/VibeConform/internal/doctor"
+	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/agents/claude"
+	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
 // doctorEnv is a test seam, like lookPath: the CLI suite must assert on
@@ -43,13 +46,17 @@ func runDoctor(cmd *cobra.Command, repoRoot string) error {
 	env := doctorEnv()
 	var report doctor.Report
 
-	report.Add(doctor.Git(ctx, env, repoRoot))
+	git := doctor.Git(ctx, env, repoRoot)
+	gitOK := git.Status == doctor.Pass
+	report.Add(git)
 
 	p, err := buildPlan(repoRoot)
 	if err != nil {
 		report.Add(
 			doctor.Result{Status: doctor.Fail, Name: "manifest", Detail: err.Error()},
 			doctor.Result{Status: doctor.Unverified, Name: "tools", Detail: "needs a valid vibe.yaml"},
+			doctor.Result{Status: doctor.Unverified, Name: "agent hooks", Detail: "needs a valid vibe.yaml"},
+			doctor.Result{Status: doctor.Unverified, Name: "line endings", Detail: "needs a valid vibe.yaml"},
 		)
 	} else {
 		integrations := "none"
@@ -67,6 +74,20 @@ func runDoctor(cmd *cobra.Command, repoRoot string) error {
 			tools = append(tools, doctor.Tool{Name: rt.tool.Name, Module: rt.module, Why: rt.tool.Why, Version: rt.tool.Version})
 		}
 		report.Add(doctor.Tools(ctx, env, repoRoot, tools)...)
+		report.Add(doctor.AgentHooks(env, repoRoot, agentHooks(p))...)
+
+		if gitOK {
+			report.Add(doctor.LineEndings(ctx, env, repoRoot, firstGenerated(p)))
+		} else {
+			report.Add(doctor.Result{Status: doctor.Unverified, Name: "line endings", Detail: "needs git"})
+		}
+	}
+
+	report.Add(doctor.Runtime(env))
+	if gitOK {
+		report.Add(doctor.Worktree(ctx, env, repoRoot))
+	} else {
+		report.Add(doctor.Result{Status: doctor.Unverified, Name: "worktree", Detail: "needs git"})
 	}
 
 	out := cmd.OutOrStdout()
@@ -86,4 +107,53 @@ func runDoctor(cmd *cobra.Command, repoRoot string) error {
 		return fmt.Errorf("doctor: %d required %s failed", n, noun)
 	}
 	return nil
+}
+
+// agentHookConfig is what doctor knows about one agent integration's
+// hooks. Every agent in a catalog needs a row; a test holds them together.
+type agentHookConfig struct {
+	// config registers the hooks with the agent.
+	config string
+	// suspended, when set, is reported instead of checking anything.
+	suspended string
+}
+
+var agentHookConfigs = map[string]agentHookConfig{
+	module.AgentHookIntegration: {config: claude.SettingsPath},
+	"codex":                     {suspended: "suspended (spec 0024); nothing to check"},
+}
+
+// agentHooks returns the hook check inputs for each selected agent, in
+// catalog order. The binaries come from the core module that generates the
+// hook tasks and the guard.
+func agentHooks(p *repoPlan) []doctor.AgentHook {
+	var binaries []string
+	for _, mod := range p.Modules {
+		if hr, ok := mod.(module.HookRuntime); ok {
+			binaries = hr.HookBinaries(p.Context)
+			break
+		}
+	}
+
+	var hooks []doctor.AgentHook
+	for _, name := range p.Context.Integrations {
+		cfg, ok := agentHookConfigs[name]
+		if !ok {
+			continue
+		}
+		hooks = append(hooks, doctor.AgentHook{Name: name, Config: cfg.config, Suspended: cfg.suspended, Binaries: binaries})
+	}
+	return hooks
+}
+
+// firstGenerated returns the first wholly owned file in plan order: the
+// line-ending check asks git about one file VibeConform writes byte for
+// byte. Empty when the standard owns none.
+func firstGenerated(p *repoPlan) string {
+	for _, rp := range p.Resources {
+		if rp.Resource.Ownership == resource.Generated {
+			return rp.Resource.Path
+		}
+	}
+	return ""
 }
