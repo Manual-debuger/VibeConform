@@ -176,15 +176,20 @@ func (monorepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([
 		return nil, err
 	}
 
-	guard, err := guardResource(guardProfile.guard)
-	if err != nil {
-		return nil, err
-	}
-
 	resources := []resource.Resource{
 		{Path: "Taskfile.yml", Ownership: resource.Generated, Content: taskfile},
 		{Path: "lefthook.yml", Ownership: resource.Generated, Content: hooks},
-		guard,
+	}
+	// The hook:* tasks and the guard follow the claude integration, as in
+	// the single-language repo-tooling modules (spec 0026).
+	if module.WantsAgentHooks(mctx) {
+		guard, err := guardResource(guardProfile.guard)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, guard)
+	} else if resources[0].Content, err = module.StripAgentHooks(taskfile); err != nil {
+		return nil, err
 	}
 	for _, c := range components {
 		resources = append(resources, resource.Resource{

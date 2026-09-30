@@ -58,8 +58,22 @@ func (repotoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 
 // Resolve returns this module's resources in a fixed order; see the
 // github-ci module for why order is part of the contract.
-func (repotoolingModule) Resolve(_ context.Context, _ *module.Context) ([]resource.Resource, error) {
-	return []resource.Resource{
+func (repotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
+	// Without an agent running them, the hook:* tasks and the guard are
+	// integration-specific content in core files; see
+	// docs/specs/0026-optional-integrations.md. An unknown selection keeps
+	// them (module.WantsAgentHooks).
+	hooks := module.WantsAgentHooks(mctx)
+	taskfile := taskfile
+	if !hooks {
+		stripped, err := module.StripAgentHooks(taskfile)
+		if err != nil {
+			return nil, err
+		}
+		taskfile = stripped
+	}
+
+	resources := []resource.Resource{
 		{
 			Path:      "Taskfile.yml",
 			Ownership: resource.Generated,
@@ -70,12 +84,15 @@ func (repotoolingModule) Resolve(_ context.Context, _ *module.Context) ([]resour
 			Ownership: resource.Generated,
 			Content:   lefthookConfig,
 		},
-		{
-			// Default mode: it is run through an interpreter, never executed
-			// directly, so no mode bit can switch it off.
-			Path:      ".claude/hooks/guard.go",
-			Ownership: resource.Generated,
-			Content:   guard,
-		},
-	}, nil
+	}
+	if !hooks {
+		return resources, nil
+	}
+	return append(resources, resource.Resource{
+		// Default mode: it is run through an interpreter, never executed
+		// directly, so no mode bit can switch it off.
+		Path:      ".claude/hooks/guard.go",
+		Ownership: resource.Generated,
+		Content:   guard,
+	}), nil
 }
