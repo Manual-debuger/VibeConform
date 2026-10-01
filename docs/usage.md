@@ -1210,6 +1210,23 @@ only two files, each with one managed section:
 first document there. There are no `active/` or `completed/`
 directories: a spec's Status line says where it stands.
 
+**Optional docs directories.** Two more keys, each set to `on`, add a
+directory to the layout (spec 0033):
+
+```yaml
+development:
+  docs_layout: standard
+  docs_development: on   # docs/development/: build, test, contribute locally
+  docs_operations: on    # docs/operations/: deploy, run, handle incidents
+```
+
+Each adds its directory to `docs/README.md`'s list and to the knowledge
+rule of the `AGENTS.md` section, and creates no file. They are
+independent, so a library can take `docs_development` alone. Each needs
+`docs_layout`; without it, `sync` stops with
+`development.docs_operations: on requires development.docs_layout: standard, which is not selected`.
+Turning one off updates both sections back.
+
 **Deselecting.** Removing `workflow` removes the `AGENTS.md` section,
 `/spec` and the `CLAUDE.md` section. Deselecting `claude` removes the
 last two. Removing `docs_layout` removes its two sections. Your text

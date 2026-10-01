@@ -89,6 +89,8 @@ func catalog() []Option {
 	le := scalarGroup(manifest.ScalarKey{Map: manifest.MapPolicy, Key: manifest.PolicyLineEndings})
 	wf := scalarGroup(manifest.ScalarKey{Map: manifest.MapDevelopment, Key: manifest.DevelopmentWorkflow})
 	docs := scalarGroup(manifest.ScalarKey{Map: manifest.MapDevelopment, Key: manifest.DevelopmentDocsLayout})
+	devDocs := scalarGroup(manifest.ScalarKey{Map: manifest.MapDevelopment, Key: manifest.DevelopmentDocsDevelopment})
+	opsDocs := scalarGroup(manifest.ScalarKey{Map: manifest.MapDevelopment, Key: manifest.DevelopmentDocsOperations})
 	return []Option{
 		{Group: editors, Name: "vscode", Module: vscode.New()},
 		{Group: editors, Name: "zed", Module: zed.New()},
@@ -103,6 +105,13 @@ func catalog() []Option {
 		{Group: wf, Name: workflow.PlanTriggered, Module: workflow.New(workflow.PlanTriggered)},
 		{Group: wf, Name: workflow.AlwaysSDD, Module: workflow.New(workflow.AlwaysSDD)},
 		{Group: docs, Name: workflow.DocsLayoutStandard, Module: workflow.NewDocsLayout()},
+		// The optional docs directories extend the layout, so each needs
+		// it (spec 0033). They resolve nothing themselves: the layout's and
+		// the workflow's sections read them.
+		{Group: devDocs, Name: workflow.On, Module: workflow.NewDocsDir("docs-development"),
+			Requires: []string{workflow.DocsLayoutStandard}},
+		{Group: opsDocs, Name: workflow.On, Module: workflow.NewDocsDir("docs-operations"),
+			Requires: []string{workflow.DocsLayoutStandard}},
 	}
 }
 

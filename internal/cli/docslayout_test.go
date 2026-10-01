@@ -41,6 +41,48 @@ func TestDocsLayoutOnBareRepository(t *testing.T) {
 	mustConform(t, dir)
 }
 
+// TestDocsOptionalDirs: docs_operations: on, written in vibe.yaml as YAML
+// reads it, adds operations/ to the docs index and to AGENTS.md; turning
+// it off again updates both sections back (spec 0033).
+func TestDocsOptionalDirs(t *testing.T) {
+	dir := t.TempDir()
+	base := "standard: prod-go\nversion: v1\ndevelopment:\n  workflow: plan-triggered-sdd\n  docs_layout: standard\n"
+	writeVibeYAML(t, dir, base+"  docs_operations: on\n")
+	mustSync(t, dir)
+	if got := readFile(t, dir, "docs/README.md"); !strings.Contains(got, "- [`operations/`](operations/): deploying, running and handling\n") {
+		t.Errorf("docs/README.md = %q", got)
+	}
+	if got := readFile(t, dir, "AGENTS.md"); !strings.Contains(got, "`docs/operations/`") {
+		t.Errorf("AGENTS.md does not name docs/operations/:\n%s", got)
+	}
+	if exists(t, dir, "docs/operations") {
+		t.Error("sync created docs/operations/")
+	}
+	mustConform(t, dir)
+
+	writeVibeYAML(t, dir, base)
+	out := mustSync(t, dir)
+	for _, want := range []string{"docs/README.md (section docs): updated", "AGENTS.md (section workflow): updated"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sync: missing %q\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "deselected") {
+		t.Errorf("turning operations off removed something:\n%s", out)
+	}
+	if got := readFile(t, dir, "docs/README.md"); strings.Contains(got, "operations/") {
+		t.Errorf("docs/README.md still lists operations/: %q", got)
+	}
+	mustConform(t, dir)
+
+	writeVibeYAML(t, dir, "standard: prod-go\nversion: v1\ndevelopment:\n  docs_operations: on\n")
+	out, err := runSyncIn(t, dir)
+	wantExit(t, err, 1, out)
+	if want := "development.docs_operations: on requires development.docs_layout: standard, which is not selected"; !strings.Contains(err.Error(), want) {
+		t.Errorf("error %v, want it to contain %q", err, want)
+	}
+}
+
 // TestDocsLayoutKeepsProjectIndex: an existing docs/README.md keeps its
 // own text above the section, and keeps it when the layout leaves.
 func TestDocsLayoutKeepsProjectIndex(t *testing.T) {

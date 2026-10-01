@@ -42,12 +42,6 @@ const (
 		"routes; the documents and tasks it names hold the detail.\n" +
 		"\n"
 
-	knowledgeDocsLayout = "Knowledge:\n" +
-		"- Specs (what must be true) live in `docs/specs/`, architecture (how it\n" +
-		"  works now) in `docs/architecture/`, decisions (ADRs) in\n" +
-		"  `docs/decisions/`. Read the relevant ones before a non-trivial change.\n" +
-		conflicts
-
 	knowledgeNoLayout = "Knowledge:\n" +
 		"- Read the specs, architecture docs and ADRs that apply before a\n" +
 		"  non-trivial change.\n" +
@@ -106,18 +100,26 @@ const (
 	directNoSpec = "- A planning context (the harness's plan mode, or a request for a spec) writes a\n" +
 		"  lightweight spec with acceptance criteria when asked. The spec says\n" +
 		"  WHAT must be true; the plan says HOW to change the repository.\n"
-	specdirLayout = "write it to `docs/specs/` first"
-	specdirNone   = "write it where this project keeps specs first"
+	specdirNone = "write it where this project keeps specs first"
 )
 
 // Content returns the AGENTS.md section for mode: with spec when the
 // harness offers /spec (the claude integration), and with docsLayout when
-// development.docs_layout is selected.
+// development.docs_layout is selected, in its default layout.
 func Content(mode string, spec, docsLayout bool) string {
+	if docsLayout {
+		l := DefaultLayout()
+		return LayoutContent(mode, spec, &l)
+	}
+	return LayoutContent(mode, spec, nil)
+}
+
+// LayoutContent is Content for any layout; nil means no docs layout.
+func LayoutContent(mode string, spec bool, layout *Layout) string {
 	var b strings.Builder
 	b.WriteString(header)
-	if docsLayout {
-		b.WriteString(knowledgeDocsLayout)
+	if layout != nil {
+		b.WriteString(layout.knowledge())
 	} else {
 		b.WriteString(knowledgeNoLayout)
 	}
@@ -135,8 +137,8 @@ func Content(mode string, spec, docsLayout bool) string {
 	if spec {
 		planning, directRule = planningSpec, directSpec
 	}
-	if docsLayout {
-		specdir = specdirLayout
+	if layout != nil {
+		specdir = "write it to `" + layout.Specs + "/` first"
 	}
 	return strings.NewReplacer("{planningRule}", planning, "{directRule}", directRule, "{specdir}", specdir).Replace(b.String())
 }
@@ -165,7 +167,7 @@ func (w workflowModule) Resolve(_ context.Context, mctx *module.Context) ([]reso
 		SectionID: SectionID,
 		Markers:   resource.HTMLComment,
 		Placement: resource.Bottom,
-		Content:   []byte(Content(w.mode, hasSpecCommand(mctx), hasDocsLayout(mctx))),
+		Content:   []byte(LayoutContent(w.mode, hasSpecCommand(mctx), layoutOf(mctx))),
 	}}
 	for _, c := range module.ComponentsOf(mctx) {
 		rs = append(rs, resource.Resource{
@@ -208,9 +210,4 @@ func ComponentContent(c manifest.Component) string {
 // selection counts as selected, as it does for the agent hooks.
 func hasSpecCommand(mctx *module.Context) bool {
 	return module.WantsAgentHooks(mctx)
-}
-
-// hasDocsLayout reports whether development.docs_layout is selected.
-func hasDocsLayout(mctx *module.Context) bool {
-	return mctx != nil && mctx.Policies[manifest.DevelopmentDocsLayout] != ""
 }

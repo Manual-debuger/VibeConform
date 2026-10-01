@@ -51,27 +51,23 @@ const SpecTemplate = "# Feature: <name>\n" +
 	"\n" +
 	"- [ ] ...\n"
 
-const docsIndex = "## Layout\n" +
-	"\n" +
-	"- [`specs/`](specs/): what must be true. Problem, constraints, desired\n" +
-	"  behavior and acceptance criteria, one file per feature.\n" +
-	"- [`architecture/`](architecture/): how the system works now.\n" +
-	"- [`decisions/`](decisions/): decision records (ADRs), why a significant\n" +
-	"  choice was made and what it costs.\n"
-
-const specsIndex = "# Specs\n" +
-	"\n" +
-	"A spec says what must be true; it does not say how to change the code.\n" +
-	"Write one file per feature, `docs/specs/<feature>.md` (a numeric prefix\n" +
-	"is fine), starting with a Status line: draft, accepted, implemented or\n" +
-	"superseded. A spec is a living document: update it when the behavior it\n" +
-	"describes changes.\n" +
-	"\n" +
-	"Template:\n" +
-	"\n" +
-	"```markdown\n" +
-	SpecTemplate +
-	"```\n"
+// specsIndex is the specs section of the README in specs, the layout's
+// spec directory.
+func specsIndex(specs string) string {
+	return "# Specs\n" +
+		"\n" +
+		"A spec says what must be true; it does not say how to change the code.\n" +
+		"Write one file per feature, `" + specs + "/<feature>.md` (a numeric prefix\n" +
+		"is fine), starting with a Status line: draft, accepted, implemented or\n" +
+		"superseded. A spec is a living document: update it when the behavior it\n" +
+		"describes changes.\n" +
+		"\n" +
+		"Template:\n" +
+		"\n" +
+		"```markdown\n" +
+		SpecTemplate +
+		"```\n"
+}
 
 type docsLayout struct{}
 
@@ -89,7 +85,11 @@ func (docsLayout) Name() string {
 // the specs README is VibeConform's from the top, and the project may add
 // its own conventions below it. architecture/ and decisions/ get no file:
 // they appear with the project's first document there.
-func (docsLayout) Resolve(_ context.Context, _ *module.Context) ([]resource.Resource, error) {
+func (docsLayout) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
+	l := DefaultLayout()
+	if selected := layoutOf(mctx); selected != nil {
+		l = *selected
+	}
 	return []resource.Resource{
 		{
 			Path:      DocsIndexPath,
@@ -97,15 +97,15 @@ func (docsLayout) Resolve(_ context.Context, _ *module.Context) ([]resource.Reso
 			SectionID: "docs",
 			Markers:   resource.HTMLComment,
 			Placement: resource.Bottom,
-			Content:   []byte(docsIndex),
+			Content:   []byte(l.index()),
 		},
 		{
-			Path:      SpecsIndexPath,
+			Path:      l.Specs + "/README.md",
 			Ownership: resource.ManagedSection,
 			SectionID: "specs",
 			Markers:   resource.HTMLComment,
 			Placement: resource.Top,
-			Content:   []byte(specsIndex),
+			Content:   []byte(specsIndex(l.Specs)),
 		},
 	}, nil
 }

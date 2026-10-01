@@ -52,14 +52,20 @@ const PolicyLineEndings = "line_endings"
 // Development is vibe.yaml's development: map. Each key takes one value,
 // and an absent key selects nothing.
 type Development struct {
-	Workflow   *string `yaml:"workflow,omitempty"`
-	DocsLayout *string `yaml:"docs_layout,omitempty"`
+	Workflow        *string `yaml:"workflow,omitempty"`
+	DocsLayout      *string `yaml:"docs_layout,omitempty"`
+	DocsDevelopment *string `yaml:"docs_development,omitempty"`
+	DocsOperations  *string `yaml:"docs_operations,omitempty"`
 }
 
 // The development: map's keys.
 const (
 	DevelopmentWorkflow   = "workflow"
 	DevelopmentDocsLayout = "docs_layout"
+	// DevelopmentDocsDevelopment and DevelopmentDocsOperations add the
+	// optional docs/development/ and docs/operations/ (spec 0033).
+	DevelopmentDocsDevelopment = "docs_development"
+	DevelopmentDocsOperations  = "docs_operations"
 )
 
 // The top-level maps whose keys each take one value.
@@ -80,6 +86,8 @@ var ScalarKeys = []ScalarKey{
 	{MapPolicy, PolicyLineEndings},
 	{MapDevelopment, DevelopmentWorkflow},
 	{MapDevelopment, DevelopmentDocsLayout},
+	{MapDevelopment, DevelopmentDocsDevelopment},
+	{MapDevelopment, DevelopmentDocsOperations},
 }
 
 // Scalar returns the value vibe.yaml gives k, or nil when it is absent.
@@ -104,6 +112,10 @@ func (d *Development) Get(key string) *string {
 		return d.Workflow
 	case DevelopmentDocsLayout:
 		return d.DocsLayout
+	case DevelopmentDocsDevelopment:
+		return d.DocsDevelopment
+	case DevelopmentDocsOperations:
+		return d.DocsOperations
 	}
 	return nil
 }
