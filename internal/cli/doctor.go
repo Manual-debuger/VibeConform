@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Manual-debuger/VibeConform/internal/doctor"
+	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/module/agents/claude"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
@@ -76,9 +77,16 @@ func runDoctor(cmd *cobra.Command, repoRoot string) error {
 		report.Add(doctor.Tools(ctx, env, repoRoot, tools)...)
 		report.Add(doctor.AgentHooks(env, repoRoot, agentHooks(p))...)
 
-		if gitOK {
-			report.Add(doctor.LineEndings(ctx, env, repoRoot, firstGenerated(p)))
-		} else {
+		switch {
+		case gitOK && p.Context.Policies[manifest.PolicyLineEndings] != "":
+			report.Add(doctor.LineEndingPolicy(ctx, env, repoRoot, firstGenerated(p)))
+		case gitOK:
+			res := doctor.LineEndings(ctx, env, repoRoot, firstGenerated(p))
+			if res.Status != doctor.Unverified {
+				res.Detail += "; policy.line_endings is not selected"
+			}
+			report.Add(res)
+		default:
 			report.Add(doctor.Result{Status: doctor.Unverified, Name: "line endings", Detail: "needs git"})
 		}
 	}

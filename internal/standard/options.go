@@ -108,10 +108,11 @@ func (s *Standard) Defaults() Selection {
 	return sel
 }
 
-// Select resolves vibe.yaml's integrations: map against the catalog. An
-// absent category takes its defaults, an empty one selects none. The
-// result is in catalog order whatever order vibe.yaml lists names in, and
-// never nil.
+// Select resolves vibe.yaml's integrations: and policy: maps against the
+// catalog. An absent category takes its defaults, an empty one selects
+// none; an absent policy key selects its default, which no shipped policy
+// has. Integrations are in catalog order whatever order vibe.yaml lists
+// names in, and never nil.
 func (s *Standard) Select(m *manifest.Manifest) (Selection, error) {
 	chosen := map[string]bool{}
 	in := m.Integrations
@@ -153,6 +154,21 @@ func (s *Standard) Select(m *manifest.Manifest) (Selection, error) {
 			sel.Integrations = append(sel.Integrations, o.Name)
 		}
 	}
+	for _, key := range manifest.PolicyKeys {
+		value := m.Policy.Get(key)
+		if value == nil {
+			continue
+		}
+		where := fmt.Sprintf("policy.%s (%s)", key, *value)
+		valid := s.names(Group{Key: key, Scalar: true})
+		switch {
+		case len(valid) == 0:
+			return Selection{}, fmt.Errorf("%s: %s/%s offers no %s policy", where, s.Name, s.Version, key)
+		case !slices.Contains(valid, *value):
+			return Selection{}, fmt.Errorf("%s: unknown value (valid: %s)", where, strings.Join(valid, ", "))
+		}
+		sel.Policies[key] = *value
+	}
 	if err := s.checkRelations(sel); err != nil {
 		return Selection{}, err
 	}
@@ -169,18 +185,24 @@ func (s *Standard) checkRelations(sel Selection) error {
 		}
 		return false
 	}
+	kind := func(o Option) string {
+		if o.Group.Scalar {
+			return fmt.Sprintf("%s: %s", o.Label(), o.Name)
+		}
+		return "integration " + o.Name
+	}
 	for _, o := range s.Options {
 		if !sel.Has(o) {
 			continue
 		}
 		for _, r := range o.Requires {
 			if !selected(r) {
-				return fmt.Errorf("integration %s requires %s, which is not selected", o.Name, r)
+				return fmt.Errorf("%s requires %s, which is not selected", kind(o), r)
 			}
 		}
 		for _, x := range o.Excludes {
 			if selected(x) {
-				return fmt.Errorf("integration %s cannot be selected together with %s", o.Name, x)
+				return fmt.Errorf("%s cannot be selected together with %s", kind(o), x)
 			}
 		}
 	}

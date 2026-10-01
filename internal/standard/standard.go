@@ -20,6 +20,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/monorepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/monotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/policy/lineendings"
 	"github.com/Manual-debuger/VibeConform/internal/module/pyrepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/pythontooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/repotooling"
@@ -77,8 +78,8 @@ func Lookup(name, version string) (*Standard, error) {
 	return &s, nil
 }
 
-// catalog is the integration catalog every standard shares: editors,
-// then agents, then code intelligence. claude and codex are on by
+// catalog is the option catalog every standard shares: editors, then
+// agents, then code intelligence, then repository policies. claude and codex are on by
 // default, so a vibe.yaml without integrations: composes exactly what
 // every standard composed before spec 0026.
 func catalog() []Option {
@@ -88,6 +89,8 @@ func catalog() []Option {
 		{Group: editors, Name: "zed", Module: zed.New()},
 		{Group: agents, Name: "claude", Module: claude.New(), Default: true},
 		{Group: agents, Name: "codex", Module: codex.New(), Default: true},
+		// Policies are opt-in: none is a default (spec 0029).
+		{Group: Group{Key: manifest.PolicyLineEndings, Scalar: true}, Name: "lf", Module: lineendings.New()},
 	}
 }
 

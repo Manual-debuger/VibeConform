@@ -63,6 +63,40 @@ func TestLineEndings(t *testing.T) {
 	}
 }
 
+// TestLineEndingPolicy is spec 0029 §7's table.
+func TestLineEndingPolicy(t *testing.T) {
+	lf := reply{stdout: "Taskfile.yml: eol: lf\n"}
+	cases := []struct {
+		name   string
+		attr   reply
+		index  reply
+		status Status
+		detail string
+	}{
+		{"healthy", lf, reply{stdout: "i/lf    w/lf    attr/text=auto eol=lf \tTaskfile.yml\n"}, Pass,
+			"policy line_endings: lf; core.autocrlf=true; Taskfile.yml has eol=lf"},
+		{"crlf in the index", lf, reply{stdout: "i/crlf  w/lf    attr/text=auto eol=lf \ta.txt\ni/crlf  w/lf    attr/text=auto eol=lf \tb.txt\ni/lf    w/lf    attr/text=auto eol=lf \tc.txt\n"}, Warn,
+			"policy line_endings: lf, but 2 tracked files are stored with CRLF; run git add --renormalize . and commit"},
+		{"overridden", reply{stdout: "Taskfile.yml: eol: crlf\n"}, reply{}, Fail,
+			"policy.line_endings is lf, but Taskfile.yml has eol=crlf: a rule in a nested .gitattributes, .git/info/attributes, or core.attributesFile overrides it"},
+		{"ls-files fails", lf, reply{stderr: "fatal: boom\n", err: errExit}, Warn,
+			"policy line_endings: lf; could not list how tracked files are stored: fatal: boom"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := fake{commands: map[string]reply{
+				"git config --get core.autocrlf":     {stdout: "true\n"},
+				"git check-attr eol -- Taskfile.yml": tc.attr,
+				"git ls-files --eol":                 tc.index,
+			}}
+			got := LineEndingPolicy(context.Background(), f.env(), ".", "Taskfile.yml")
+			if want := (Result{Status: tc.status, Name: "line endings", Detail: tc.detail}); got != want {
+				t.Errorf("LineEndingPolicy() = %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
 func TestRuntime(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

@@ -31,6 +31,33 @@ type Manifest struct {
 	// code-intelligence integrations; nil means the standard's defaults
 	// (docs/decisions/0013-optional-integrations.md).
 	Integrations *Integrations `yaml:"integrations,omitempty"`
+	// Policy selects repository policies; nil means none, since every
+	// policy is opt-in (docs/decisions/0014-managed-sections.md).
+	Policy *Policy `yaml:"policy,omitempty"`
+}
+
+// Policy is vibe.yaml's policy: map. Each key takes one value, and an
+// absent key selects nothing.
+type Policy struct {
+	LineEndings *string `yaml:"line_endings,omitempty"`
+}
+
+// PolicyLineEndings is the line-ending policy's key.
+const PolicyLineEndings = "line_endings"
+
+// PolicyKeys lists every policy key in resolution order.
+var PolicyKeys = []string{PolicyLineEndings}
+
+// Get returns the value vibe.yaml gives key, or nil when it is absent. A
+// nil *Policy has every key absent.
+func (p *Policy) Get(key string) *string {
+	if p == nil {
+		return nil
+	}
+	if key == PolicyLineEndings {
+		return p.LineEndings
+	}
+	return nil
 }
 
 // Integrations is vibe.yaml's integrations: map. Each category is a

@@ -60,32 +60,13 @@ func AgentHooks(env Env, repoRoot string, hooks []AgentHook) []Result {
 // enforcing line endings belongs to the text policy, not to doctor.
 func LineEndings(ctx context.Context, env Env, repoRoot, path string) Result {
 	res := Result{Name: "line endings"}
-	if path == "" {
-		res.Status, res.Detail = Unverified, "the standard generates no whole file to check"
-		return res
-	}
 	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
-
-	autocrlf := "unset"
-	if out, _, err := env.Run(ctx, repoRoot, "git", "config", "--get", "core.autocrlf"); err == nil {
-		if v := firstLine(out); v != "" {
-			autocrlf = v
-		}
-	}
-	out, stderr, err := env.Run(ctx, repoRoot, "git", "check-attr", "eol", "--", path)
-	if err != nil {
-		res.Status, res.Detail = Unverified, "git check-attr failed: "+why(err, stderr)
+	autocrlf, eol, failed := attributes(ctx, env, repoRoot, path)
+	if failed != "" {
+		res.Status, res.Detail = Unverified, failed
 		return res
 	}
-	// git check-attr prints "<path>: eol: <value>".
-	line := firstLine(out)
-	i := strings.LastIndex(line, ": ")
-	if i < 0 {
-		res.Status, res.Detail = Unverified, fmt.Sprintf("git check-attr printed %q, not an attribute", line)
-		return res
-	}
-	eol := line[i+2:]
 
 	res.Detail = fmt.Sprintf("core.autocrlf=%s; %s has eol=%s", autocrlf, path, eol)
 	switch {
@@ -102,6 +83,81 @@ func LineEndings(ctx context.Context, env Env, repoRoot, path string) Result {
 		res.Detail += " (not pinned)"
 	}
 	return res
+}
+
+// LineEndingPolicy reports the health of a selected policy.line_endings: lf
+// (spec 0029 §7). The effective eol of a managed file must be lf, whatever
+// overrode the policy if it is not; and files committed with CRLF before
+// the policy still need renormalizing. A report only: audit owns the
+// section itself.
+func LineEndingPolicy(ctx context.Context, env Env, repoRoot, path string) Result {
+	res := Result{Name: "line endings"}
+	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
+	defer cancel()
+	autocrlf, eol, failed := attributes(ctx, env, repoRoot, path)
+	if failed != "" {
+		res.Status, res.Detail = Unverified, failed
+		return res
+	}
+	if eol != "lf" {
+		res.Status = Fail
+		res.Detail = fmt.Sprintf("policy.line_endings is lf, but %s has eol=%s: a rule in a nested .gitattributes, .git/info/attributes, or core.attributesFile overrides it", path, eol)
+		return res
+	}
+
+	out, stderr, err := env.Run(ctx, repoRoot, "git", "ls-files", "--eol")
+	if err != nil {
+		res.Status, res.Detail = Warn, "policy line_endings: lf; could not list how tracked files are stored: "+why(err, stderr)
+		return res
+	}
+	crlf := 0
+	for l := range strings.SplitSeq(out, "\n") {
+		// "i/crlf  w/crlf  attr/text=auto eol=lf <TAB>path": the index side
+		// is what the next checkout materializes from.
+		if strings.HasPrefix(l, "i/crlf") {
+			crlf++
+		}
+	}
+	if crlf > 0 {
+		res.Status = Warn
+		res.Detail = fmt.Sprintf("policy line_endings: lf, but %d tracked %s stored with CRLF; run git add --renormalize . and commit", crlf, plural(crlf, "file is", "files are"))
+		return res
+	}
+	res.Status = Pass
+	res.Detail = fmt.Sprintf("policy line_endings: lf; core.autocrlf=%s; %s has eol=lf", autocrlf, path)
+	return res
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+// attributes returns core.autocrlf and the eol attribute git resolves for
+// path, or why it could not tell.
+func attributes(ctx context.Context, env Env, repoRoot, path string) (autocrlf, eol, failed string) {
+	if path == "" {
+		return "", "", "the standard generates no whole file to check"
+	}
+	autocrlf = "unset"
+	if out, _, err := env.Run(ctx, repoRoot, "git", "config", "--get", "core.autocrlf"); err == nil {
+		if v := firstLine(out); v != "" {
+			autocrlf = v
+		}
+	}
+	out, stderr, err := env.Run(ctx, repoRoot, "git", "check-attr", "eol", "--", path)
+	if err != nil {
+		return "", "", "git check-attr failed: " + why(err, stderr)
+	}
+	// git check-attr prints "<path>: eol: <value>".
+	line := firstLine(out)
+	i := strings.LastIndex(line, ": ")
+	if i < 0 {
+		return "", "", fmt.Sprintf("git check-attr printed %q, not an attribute", line)
+	}
+	return autocrlf, line[i+2:], ""
 }
 
 // RuntimeMarker is a file whose existence identifies where the process

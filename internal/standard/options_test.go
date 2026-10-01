@@ -99,13 +99,73 @@ func TestModulesForCoreThenCatalogOrder(t *testing.T) {
 	}
 }
 
+func lineEndings(v string) *manifest.Manifest {
+	return &manifest.Manifest{Policy: &manifest.Policy{LineEndings: &v}}
+}
+
+// TestSelectPolicy: a policy is absent unless vibe.yaml names it, and its
+// value must be one the catalog offers.
+func TestSelectPolicy(t *testing.T) {
+	s := mustLookup(t, "prod-go")
+	sel, err := s.Select(&manifest.Manifest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sel.Policies) != 0 {
+		t.Errorf("default policies %v, want none", sel.Policies)
+	}
+
+	sel, err = s.Select(lineEndings("lf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sel.Policies[manifest.PolicyLineEndings] != "lf" || !slices.Equal(sel.Integrations, []string{"claude", "codex"}) {
+		t.Errorf("selection %+v", sel)
+	}
+	var names []string
+	for _, m := range s.ModulesFor(sel) {
+		names = append(names, m.Name())
+	}
+	if names[len(names)-1] != "line-endings-policy" {
+		t.Errorf("modules %v, want the policy last", names)
+	}
+
+	_, err = s.Select(lineEndings("crlf"))
+	if want := "policy.line_endings (crlf): unknown value (valid: lf)"; err == nil || err.Error() != want {
+		t.Errorf("error %v, want %q", err, want)
+	}
+}
+
+// TestPolicyRelations: a policy's Requires and Excludes are checked like
+// an integration's.
+func TestPolicyRelations(t *testing.T) {
+	s := fakeStandard()
+	le := Group{Key: manifest.PolicyLineEndings, Scalar: true}
+	s.Options = append(s.Options,
+		Option{Group: le, Name: "lf", Module: fakeModule("lf"), Requires: []string{"ed-a"}},
+	)
+	m := lineEndings("lf")
+	if _, err := s.Select(m); err == nil || err.Error() != "policy.line_endings: lf requires ed-a, which is not selected" {
+		t.Errorf("error %v", err)
+	}
+	m.Integrations = &manifest.Integrations{Editors: list("ed-a")}
+	if _, err := s.Select(m); err != nil {
+		t.Errorf("requirement met: %v", err)
+	}
+
+	lf := find(t, s, "lf")
+	if lf.Label() != "policy.line_endings" || !s.With(Selection{}, lf).Has(lf) {
+		t.Errorf("label %q", lf.Label())
+	}
+}
+
 // TestWithKeepsCatalogOrder: pruning resolves a trial selection with one
 // deselected option added, and modules must resolve in catalog order
 // whichever option that is.
 func TestWithKeepsCatalogOrder(t *testing.T) {
 	s := fakeStandard()
 	base := Selection{Integrations: []string{"ag-y"}}
-	ed, _ := find(s, "ed-a")
+	ed := find(t, s, "ed-a")
 	trial := s.With(base, ed)
 	if want := []string{"ed-a", "ag-y"}; !slices.Equal(trial.Integrations, want) {
 		t.Errorf("With = %v, want %v", trial.Integrations, want)
@@ -118,13 +178,15 @@ func TestWithKeepsCatalogOrder(t *testing.T) {
 	}
 }
 
-func find(s *Standard, name string) (Option, bool) {
+func find(t *testing.T, s *Standard, name string) Option {
+	t.Helper()
 	for _, o := range s.Options {
 		if o.Name == name {
-			return o, true
+			return o
 		}
 	}
-	return Option{}, false
+	t.Fatalf("no option %s", name)
+	return Option{}
 }
 
 // TestAgentModulesAreNotCore: an agent module left in a core list could
