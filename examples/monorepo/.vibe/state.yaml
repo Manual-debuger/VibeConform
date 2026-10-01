@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.3.0-alpha.1.0.20261001023823-e2cdd4c76bd8+dirty
+vibe_version: v0.3.0-alpha.1.0.20261001093444-10cdc1c705e4
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go
@@ -11,6 +11,9 @@ resources:
     - path: .claude/settings.json
       ownership: generated
       sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
+    - path: .claude/skills/spec/SKILL.md
+      ownership: generated
+      sha256: 6e73fcab0e36e89b871f8980dd119fb986b6d582d6ae38e33063e6d179256ba9
     - path: .github/dependabot.yml
       ownership: generated
       sha256: 1a3acf0186b1f12f28a1451a81b4a95de36d61c6e2ad42afcd13215ae5f1c512
@@ -61,6 +64,16 @@ resources:
             sha256: 449796c6a5d2379135f89119c738a85e220559b6aadcb2aac0171393599ad90b
         '[]/task verify':
             sha256: 0322a4697a5b430692e164b673d19c5cd86aa4902483f2e8ac54132e83336572
+    - path: AGENTS.md
+      section_id: workflow
+      ownership: managed-section
+      created: true
+      sha256: ab89722fbd5fbd3e335f0e2248084f54f25f90c0c0f3b5c2da60574f93aa40fe
+    - path: CLAUDE.md
+      section_id: agents
+      ownership: managed-section
+      created: true
+      sha256: 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49
     - path: Taskfile.vibe.yml
       ownership: generated
       sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
@@ -70,6 +83,16 @@ resources:
     - path: apps/web/.prettierrc.json
       ownership: generated
       sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
+    - path: apps/web/AGENTS.md
+      section_id: component
+      ownership: managed-section
+      created: true
+      sha256: 0ef7916cfcf984220786a98e8ace00ea9cdeb8a910ce7e9f40318489bd44ba4c
+    - path: apps/web/CLAUDE.md
+      section_id: agents
+      ownership: managed-section
+      created: true
+      sha256: 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49
     - path: apps/web/Taskfile.yml
       ownership: generated
       sha256: 60e3dc68b9394612efc67a961d142684f760f73edefe961d52ce20c2f6d7293b
@@ -85,9 +108,29 @@ resources:
     - path: services/api/.golangci.yml
       ownership: generated
       sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
+    - path: services/api/AGENTS.md
+      section_id: component
+      ownership: managed-section
+      created: true
+      sha256: 79042bf4c526ef70f68dc0121bd639d0b387a53991f499f9fd8280f7bc41e28c
+    - path: services/api/CLAUDE.md
+      section_id: agents
+      ownership: managed-section
+      created: true
+      sha256: 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49
     - path: services/api/Taskfile.yml
       ownership: generated
       sha256: aecde63c51a3ff2af11416ba65d0ab4929f752d90306817453c125639d95770a
+    - path: services/worker/AGENTS.md
+      section_id: component
+      ownership: managed-section
+      created: true
+      sha256: 9cd568c6f535c0202a9f1ff4436188b80d1b4db97ebb96f6ca49c35a0db15906
+    - path: services/worker/CLAUDE.md
+      section_id: agents
+      ownership: managed-section
+      created: true
+      sha256: 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49
     - path: services/worker/Taskfile.yml
       ownership: generated
       sha256: 4554e745ed37a1ecf65c7dc149e8810ae95a324b9eddbe1d6e0b85e3f9b40810
