@@ -14,6 +14,16 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module"
 )
 
+func TestMain(m *testing.M) {
+	// A git hook running the suite, such as pre-push in a linked worktree,
+	// exports GIT_DIR. Every git the tests start would then use this
+	// repository instead of the one in its temp directory.
+	for _, v := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"} {
+		_ = os.Unsetenv(v)
+	}
+	os.Exit(m.Run())
+}
+
 // Regression tests for spec 0026 §10: examples/typescript failed its own
 // fmt:check on PR #43 because Prettier rewrites the layout of the elements
 // the vscode integration owns. Every place the generated tooling runs
