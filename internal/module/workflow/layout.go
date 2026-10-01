@@ -45,9 +45,18 @@ func layoutOf(mctx *module.Context) *Layout {
 	return &l
 }
 
+// MarkdownSection pads a Markdown section's body with a blank line on
+// each side, so the HTML-comment markers stand apart as their own blocks.
+// Prettier, which prod-ts runs over every Markdown file, separates blocks
+// that way, and a section it would rewrite fails fmt:check. Inside a
+// body, a list likewise follows its label after a blank line.
+func MarkdownSection(body string) string {
+	return "\n" + body + "\n"
+}
+
 // knowledge is the AGENTS.md section's knowledge rule for l.
 func (l Layout) knowledge() string {
-	s := "Knowledge:\n" +
+	s := "Knowledge:\n\n" +
 		"- Specs (what must be true) live in `" + l.Specs + "/`, architecture (how it\n" +
 		"  works now) in `" + l.Architecture + "/`, decisions (ADRs) in\n" +
 		"  `" + l.Decisions + "/`. Read the relevant ones before a non-trivial change.\n"
@@ -87,7 +96,7 @@ func (l Layout) index() string {
 		entry(l.Operations, "deploying, running and handling\n"+
 			"  incidents.\n")
 	}
-	return b.String()
+	return MarkdownSection(b.String())
 }
 
 // docsRel is dir relative to docs/, where the docs index lives.

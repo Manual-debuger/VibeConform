@@ -164,7 +164,7 @@ func TestWorkflowClaudeAdapter(t *testing.T) {
 			t.Errorf("sync: missing %q\n%s", want, out)
 		}
 	}
-	if got := readFile(t, dir, "CLAUDE.md"); got != "<!-- vibeconform:begin agents -->\n@AGENTS.md\n<!-- vibeconform:end agents -->\n" {
+	if got := readFile(t, dir, "CLAUDE.md"); got != "<!-- vibeconform:begin agents -->\n\n@AGENTS.md\n\n<!-- vibeconform:end agents -->\n" {
 		t.Errorf("CLAUDE.md = %q", got)
 	}
 	mustConform(t, dir)
@@ -354,7 +354,7 @@ func TestWorkflowDuplicateImport(t *testing.T) {
 	}
 	stubHookInstall(t)
 	out, errOut, err := runSyncCapturing(t, dir)
-	if err != nil || !strings.Contains(errOut, `warning: CLAUDE.md (section agents): line 5: "@AGENTS.md" imports AGENTS.md again`) {
+	if err != nil || !strings.Contains(errOut, `warning: CLAUDE.md (section agents): line 7: "@AGENTS.md" imports AGENTS.md again`) {
 		t.Errorf("sync: %v\n%s\n%s", err, out, errOut)
 	}
 	if got := readFile(t, dir, "CLAUDE.md"); !strings.HasSuffix(got, "<!-- vibeconform:end agents -->\n\n@AGENTS.md\n") {

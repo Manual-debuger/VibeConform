@@ -13,12 +13,14 @@ import (
 // reference is spec 0030 §3's example, byte for byte, with the planning
 // rule spec 0031 §2 revised: plan-triggered-sdd with docs_layout and
 // claude selected.
-const reference = "## Repository workflow\n" +
+const reference = "\n" +
+	"## Repository workflow\n" +
 	"\n" +
 	"Managed by VibeConform from `development:` in `vibe.yaml`. This section\n" +
 	"routes; the documents and tasks it names hold the detail.\n" +
 	"\n" +
 	"Knowledge:\n" +
+	"\n" +
 	"- Specs (what must be true) live in `docs/specs/`, architecture (how it\n" +
 	"  works now) in `docs/architecture/`, decisions (ADRs) in\n" +
 	"  `docs/decisions/`. Read the relevant ones before a non-trivial change.\n" +
@@ -26,6 +28,7 @@ const reference = "## Repository workflow\n" +
 	"  pick one silently.\n" +
 	"\n" +
 	"Workflow: plan-triggered lightweight SDD.\n" +
+	"\n" +
 	"- Normal mode: implement, then verify. Respect any spec that applies.\n" +
 	"- Planning context (the harness's plan mode, or `/spec`): use the\n" +
 	"  `spec` skill. List the constraints that apply and the assumptions\n" +
@@ -38,10 +41,12 @@ const reference = "## Repository workflow\n" +
 	"- Do not implement until the user approves.\n" +
 	"\n" +
 	"Verification:\n" +
+	"\n" +
 	"- `task verify:fast` while working; `task verify` before declaring\n" +
 	"  done. Do not weaken a test, lint or type check to make a change pass.\n" +
 	"- Finish with a ledger, one line per check: PASS, FAIL or UNVERIFIED.\n" +
-	"  Unit tests, CI and a real integration are separate lines.\n"
+	"  Unit tests, CI and a real integration are separate lines.\n" +
+	"\n"
 
 func TestReferenceSection(t *testing.T) {
 	if got := Content(PlanTriggered, true, true); got != reference {
@@ -53,17 +58,20 @@ func TestReferenceSection(t *testing.T) {
 // as literal text in the section.
 func TestVariants(t *testing.T) {
 	noLayout := "Knowledge:\n" +
+		"\n" +
 		"- Read the specs, architecture docs and ADRs that apply before a\n" +
 		"  non-trivial change.\n" +
 		"- If an approved spec"
 	directBlock := "Workflow: direct.\n" +
+		"\n" +
 		"- Implement, then verify. Respect any spec that applies.\n" +
 		"- A planning context (the harness's plan mode, or `/spec`) writes a\n" +
 		"  lightweight spec with acceptance criteria when asked, with the `spec`\n" +
 		"  skill. The spec says WHAT must be true; the plan says HOW to change\n" +
 		"  the repository.\n" +
-		"\nVerification:\n"
+		"\nVerification:\n\n"
 	alwaysBlock := "Workflow: spec-driven.\n" +
+		"\n" +
 		"- A non-trivial behavioural change needs an approved spec with\n" +
 		"  acceptance criteria before it is planned, in any mode. A small fix\n" +
 		"  may go straight to implement and verify.\n" +
@@ -131,7 +139,8 @@ func TestSectionStaysSmall(t *testing.T) {
 // TestComponentContent pins the component section of spec 0032 §1, for a
 // nested path and a shallow one: the link climbs to the root.
 func TestComponentContent(t *testing.T) {
-	nested := "## Component `api`\n" +
+	nested := "\n" +
+		"## Component `api`\n" +
 		"\n" +
 		"Managed by VibeConform from `components:` in `vibe.yaml`. This is the\n" +
 		"`api` component (profile `go`). The root\n" +
@@ -139,7 +148,8 @@ func TestComponentContent(t *testing.T) {
 		"apply here unchanged.\n" +
 		"\n" +
 		"Verification: `task verify:fast` while working and `task verify` before\n" +
-		"declaring done, from this directory; `task api:verify` from the root.\n"
+		"declaring done, from this directory; `task api:verify` from the root.\n" +
+		"\n"
 	if got := ComponentContent(manifest.Component{ID: "api", Path: "services/api", Profile: manifest.ProfileGo}); got != nested {
 		t.Errorf("nested component:\n%s", got)
 	}

@@ -57,7 +57,7 @@ func TestAdapterResources(t *testing.T) {
 		}
 		imp := rs[ClaudeMDPath]
 		if imp.Ownership != resource.ManagedSection || imp.SectionID != "agents" || imp.Markers != resource.HTMLComment ||
-			imp.Placement != resource.Top || string(imp.Content) != "@AGENTS.md\n" {
+			imp.Placement != resource.Top || string(imp.Content) != "\n@AGENTS.md\n\n" {
 			t.Errorf("%s: CLAUDE.md section %+v", mode, imp)
 		}
 	}
@@ -73,7 +73,7 @@ func TestComponentImports(t *testing.T) {
 	rs := resolvePaths(t, &module.Context{Components: comps, Integrations: []string{"claude"}, Policies: map[string]string{"workflow": workflow.AlwaysSDD}})
 	for _, c := range comps {
 		imp, ok := rs[c.Path+"/CLAUDE.md"]
-		if !ok || imp.SectionID != "agents" || imp.Placement != resource.Top || string(imp.Content) != "@AGENTS.md\n" {
+		if !ok || imp.SectionID != "agents" || imp.Placement != resource.Top || string(imp.Content) != "\n@AGENTS.md\n\n" {
 			t.Errorf("%s: CLAUDE.md section %+v", c.ID, imp)
 		}
 	}

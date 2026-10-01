@@ -24,13 +24,14 @@ func TestDocsLayoutResources(t *testing.T) {
 		index.Markers != resource.HTMLComment || index.Placement != resource.Bottom {
 		t.Errorf("index resource %+v", index)
 	}
-	wantIndex := "## Layout\n" +
+	wantIndex := "\n## Layout\n" +
 		"\n" +
 		"- [`specs/`](specs/): what must be true. Problem, constraints, desired\n" +
 		"  behavior and acceptance criteria, one file per feature.\n" +
 		"- [`architecture/`](architecture/): how the system works now.\n" +
 		"- [`decisions/`](decisions/): decision records (ADRs), why a significant\n" +
-		"  choice was made and what it costs.\n"
+		"  choice was made and what it costs.\n" +
+		"\n"
 	if string(index.Content) != wantIndex {
 		t.Errorf("docs/README.md section:\n%s", index.Content)
 	}
@@ -40,7 +41,7 @@ func TestDocsLayoutResources(t *testing.T) {
 		specs.Markers != resource.HTMLComment || specs.Placement != resource.Top {
 		t.Errorf("specs resource %+v", specs)
 	}
-	wantSpecs := "# Specs\n" +
+	wantSpecs := "\n# Specs\n" +
 		"\n" +
 		"A spec says what must be true; it does not say how to change the code.\n" +
 		"Write one file per feature, `docs/specs/<feature>.md` (a numeric prefix\n" +
@@ -52,7 +53,8 @@ func TestDocsLayoutResources(t *testing.T) {
 		"\n" +
 		"```markdown\n" +
 		wantTemplate +
-		"```\n"
+		"```\n" +
+		"\n"
 	if string(specs.Content) != wantSpecs {
 		t.Errorf("docs/specs/README.md section:\n%s", specs.Content)
 	}

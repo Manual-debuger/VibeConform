@@ -42,7 +42,7 @@ const (
 		"routes; the documents and tasks it names hold the detail.\n" +
 		"\n"
 
-	knowledgeNoLayout = "Knowledge:\n" +
+	knowledgeNoLayout = "Knowledge:\n\n" +
 		"- Read the specs, architecture docs and ADRs that apply before a\n" +
 		"  non-trivial change.\n" +
 		conflicts
@@ -51,16 +51,16 @@ const (
 		"  pick one silently.\n" +
 		"\n"
 
-	direct = "Workflow: direct.\n" +
+	direct = "Workflow: direct.\n\n" +
 		"- Implement, then verify. Respect any spec that applies.\n" +
 		"{directRule}" +
 		"\n"
 
-	planTriggered = "Workflow: plan-triggered lightweight SDD.\n" +
+	planTriggered = "Workflow: plan-triggered lightweight SDD.\n\n" +
 		"- Normal mode: implement, then verify. Respect any spec that applies.\n" +
 		sddRules
 
-	alwaysSDD = "Workflow: spec-driven.\n" +
+	alwaysSDD = "Workflow: spec-driven.\n\n" +
 		"- A non-trivial behavioural change needs an approved spec with\n" +
 		"  acceptance criteria before it is planned, in any mode. A small fix\n" +
 		"  may go straight to implement and verify.\n" +
@@ -74,7 +74,7 @@ const (
 		"- Do not implement until the user approves.\n" +
 		"\n"
 
-	verification = "Verification:\n" +
+	verification = "Verification:\n\n" +
 		"- `task verify:fast` while working; `task verify` before declaring\n" +
 		"  done. Do not weaken a test, lint or type check to make a change pass.\n" +
 		"- Finish with a ledger, one line per check: PASS, FAIL or UNVERIFIED.\n" +
@@ -140,7 +140,7 @@ func LayoutContent(mode string, spec bool, layout *Layout) string {
 	if layout != nil {
 		specdir = "write it to `" + layout.Specs + "/` first"
 	}
-	return strings.NewReplacer("{planningRule}", planning, "{directRule}", directRule, "{specdir}", specdir).Replace(b.String())
+	return MarkdownSection(strings.NewReplacer("{planningRule}", planning, "{directRule}", directRule, "{specdir}", specdir).Replace(b.String()))
 }
 
 type workflowModule struct {
@@ -194,7 +194,7 @@ const (
 // that verify it alone. It restates no policy.
 func ComponentContent(c manifest.Component) string {
 	root := strings.Repeat("../", strings.Count(c.Path, "/")+1) + AgentsPath
-	return "## Component `" + c.ID + "`\n" +
+	return MarkdownSection("## Component `" + c.ID + "`\n" +
 		"\n" +
 		"Managed by VibeConform from `components:` in `vibe.yaml`. This is the\n" +
 		"`" + c.ID + "` component (profile `" + string(c.Profile) + "`). The root\n" +
@@ -202,7 +202,7 @@ func ComponentContent(c manifest.Component) string {
 		"apply here unchanged.\n" +
 		"\n" +
 		"Verification: `task verify:fast` while working and `task verify` before\n" +
-		"declaring done, from this directory; `task " + c.ID + ":verify` from the root.\n"
+		"declaring done, from this directory; `task " + c.ID + ":verify` from the root.\n")
 }
 
 // hasSpecCommand reports whether the harness offers /spec: claude-config

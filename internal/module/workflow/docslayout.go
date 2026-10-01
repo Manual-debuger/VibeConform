@@ -54,7 +54,7 @@ const SpecTemplate = "# Feature: <name>\n" +
 // specsIndex is the specs section of the README in specs, the layout's
 // spec directory.
 func specsIndex(specs string) string {
-	return "# Specs\n" +
+	return MarkdownSection("# Specs\n" +
 		"\n" +
 		"A spec says what must be true; it does not say how to change the code.\n" +
 		"Write one file per feature, `" + specs + "/<feature>.md` (a numeric prefix\n" +
@@ -66,7 +66,7 @@ func specsIndex(specs string) string {
 		"\n" +
 		"```markdown\n" +
 		SpecTemplate +
-		"```\n"
+		"```\n")
 }
 
 type docsLayout struct{}

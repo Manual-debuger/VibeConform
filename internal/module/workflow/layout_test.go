@@ -99,7 +99,7 @@ func TestAdoptedLayout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantIndex := "## Layout\n" +
+	wantIndex := "\n## Layout\n" +
 		"\n" +
 		"- [`../rfcs/`](../rfcs/): what must be true. Problem, constraints, desired\n" +
 		"  behavior and acceptance criteria, one file per feature.\n" +
@@ -107,7 +107,8 @@ func TestAdoptedLayout(t *testing.T) {
 		"- [`adr/`](adr/): decision records (ADRs), why a significant\n" +
 		"  choice was made and what it costs.\n" +
 		"- [`../runbooks/`](../runbooks/): deploying, running and handling\n" +
-		"  incidents.\n"
+		"  incidents.\n" +
+		"\n"
 	if got := string(docs[0].Content); got != wantIndex {
 		t.Errorf("docs index:\n%s", got)
 	}
@@ -134,6 +135,46 @@ func TestAdoptedLayout(t *testing.T) {
 	if strings.Contains(section, "docs/specs/") || strings.Contains(section, "docs/decisions/") {
 		t.Errorf("AGENTS.md section still names a default it replaced:\n%s", section)
 	}
+}
+
+// prettierShape fails unless s has the block shape Prettier leaves alone:
+// a blank line after the opening marker and before the closing one, and
+// a blank line between a paragraph line and the list that follows it.
+func prettierShape(t *testing.T, name, s string) {
+	t.Helper()
+	if !strings.HasPrefix(s, "\n") || !strings.HasSuffix(s, "\n\n") || strings.HasSuffix(s, "\n\n\n") {
+		t.Errorf("%s: not padded by exactly one blank line on each side: %q", name, s)
+	}
+	lines := strings.Split(s, "\n")
+	inFence := false
+	for i := 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i-1], "```") {
+			inFence = !inFence
+		}
+		prev, cur := lines[i-1], lines[i]
+		if inFence || !strings.HasPrefix(cur, "- ") || prev == "" || strings.HasPrefix(prev, "- ") || strings.HasPrefix(prev, "  ") {
+			continue
+		}
+		t.Errorf("%s: list at line %d follows %q without a blank line", name, i+1, prev)
+	}
+}
+
+// TestSectionsArePrettierStable is the regression test for prod-ts
+// failing fmt:check on every Markdown section VibeConform writes: Prettier
+// separated the markers and the lists from their neighbours with a blank
+// line, so the sections it owned were rewritten on every format.
+func TestSectionsArePrettierStable(t *testing.T) {
+	for _, mode := range []string{Direct, PlanTriggered, AlwaysSDD} {
+		for _, spec := range []bool{false, true} {
+			prettierShape(t, mode+" without layout", LayoutContent(mode, spec, nil))
+			full := DefaultLayout()
+			full.Development, full.Operations = "docs/development", "docs/operations"
+			prettierShape(t, mode+" with every directory", LayoutContent(mode, spec, &full))
+			prettierShape(t, mode+" docs index", full.index())
+		}
+	}
+	prettierShape(t, "specs README", specsIndex("docs/specs"))
+	prettierShape(t, "component", ComponentContent(manifest.Component{ID: "api", Path: "services/api", Profile: manifest.ProfileGo}))
 }
 
 // TestDocsDirResolvesNothing: the optional directories' own modules write

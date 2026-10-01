@@ -28,8 +28,9 @@ const (
 	ImportSectionID = "agents"
 )
 
-// importLine is the documented CLAUDE.md import of AGENTS.md.
-const importLine = "@AGENTS.md\n"
+// importLine is the documented CLAUDE.md import of AGENTS.md, padded so
+// the section is Prettier-stable (workflow.MarkdownSection).
+var importLine = workflow.MarkdownSection("@AGENTS.md\n")
 
 // The front matter of .claude/skills/spec/SKILL.md. Under the SDD
 // workflows Claude may invoke the skill by itself, in plan mode or when

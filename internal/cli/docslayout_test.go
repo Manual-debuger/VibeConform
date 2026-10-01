@@ -23,7 +23,7 @@ func TestDocsLayoutOnBareRepository(t *testing.T) {
 			t.Errorf("sync: missing %q\n%s", want, out)
 		}
 	}
-	if got := readFile(t, dir, "docs/README.md"); !strings.HasPrefix(got, "<!-- vibeconform:begin docs -->\n## Layout\n") {
+	if got := readFile(t, dir, "docs/README.md"); !strings.HasPrefix(got, "<!-- vibeconform:begin docs -->\n\n## Layout\n") {
 		t.Errorf("docs/README.md = %q", got)
 	}
 	mustConform(t, dir)
