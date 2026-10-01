@@ -2,3 +2,5 @@
 # Managed by VibeConform: policy.line_endings in vibe.yaml.
 * text=auto eol=lf
 # vibeconform:end line-endings
+
+*.png binary

@@ -28,11 +28,11 @@ func printWarnings(w io.Writer, p *repoPlan) {
 func diffPruneLine(pp prunePlan) string {
 	switch pp.Decision {
 	case reconcile.Forget:
-		return fmt.Sprintf("would forget (%s deselected; already removed)", pp.Integration)
+		return fmt.Sprintf("would forget (%s deselected; already removed)", pp.Option)
 	case reconcile.Remove:
-		return fmt.Sprintf("would remove (%s deselected)", pp.Integration)
+		return fmt.Sprintf("would remove (%s deselected)", pp.Option)
 	case reconcile.RemoveConflict:
-		return fmt.Sprintf("conflict: %s deselected but file modified since sync; kept", pp.Integration)
+		return fmt.Sprintf("conflict: %s deselected but file modified since sync; kept", pp.Option)
 	default:
 		return pp.Decision.String()
 	}
@@ -41,11 +41,11 @@ func diffPruneLine(pp prunePlan) string {
 func auditPruneLine(pp prunePlan) string {
 	switch pp.Decision {
 	case reconcile.Forget:
-		return fmt.Sprintf("out of date (%s deselected, already removed; run vibe sync to forget it)", pp.Integration)
+		return fmt.Sprintf("out of date (%s deselected, already removed; run vibe sync to forget it)", pp.Option)
 	case reconcile.Remove:
-		return fmt.Sprintf("out of date (%s deselected; run vibe sync to remove)", pp.Integration)
+		return fmt.Sprintf("out of date (%s deselected; run vibe sync to remove)", pp.Option)
 	case reconcile.RemoveConflict:
-		return fmt.Sprintf("conflict: %s deselected but file modified since sync", pp.Integration)
+		return fmt.Sprintf("conflict: %s deselected but file modified since sync", pp.Option)
 	default:
 		return pp.Decision.String()
 	}
@@ -60,28 +60,28 @@ func applyPrune(repoRoot string, pp prunePlan, next *state.State, counts *syncCo
 	case reconcile.Forget:
 		delete(next.Resources, pp.Path)
 		counts.removed++
-		return []string{fmt.Sprintf("forgotten (%s deselected; already removed)", pp.Integration)}, nil
+		return []string{fmt.Sprintf("forgotten (%s deselected; already removed)", pp.Option)}, nil
 	case reconcile.Remove:
 		if err := removeResource(repoRoot, pp.Path); err != nil {
 			return nil, err
 		}
 		delete(next.Resources, pp.Path)
 		counts.removed++
-		return []string{fmt.Sprintf("removed (%s deselected)", pp.Integration)}, nil
+		return []string{fmt.Sprintf("removed (%s deselected)", pp.Option)}, nil
 	case reconcile.RemoveConflict:
 		counts.conflicts++
 		return []string{fmt.Sprintf("conflict: %s deselected but file modified since sync; kept (delete it by hand, or select %s again)",
-			pp.Integration, pp.Integration)}, nil
+			pp.Option, pp.Option)}, nil
 	default:
 		return nil, fmt.Errorf("unknown removal %v", pp.Decision)
 	}
 }
 
-// applyPatchPrune removes a deselected integration's elements from a
+// applyPatchPrune removes a deselected option's elements from a
 // file it shares, and the file itself only if VibeConform created it and
 // nothing else is left in it.
 func applyPatchPrune(repoRoot string, pp prunePlan, next *state.State, counts *syncCounts) ([]string, error) {
-	lines := deselected(elementLines(pp.Patch, syncElement), pp.Integration)
+	lines := deselected(elementLines(pp.Patch, syncElement), pp.Option)
 	if pp.Decision == reconcile.RemoveConflict {
 		counts.conflicts++
 		return lines, nil
@@ -92,16 +92,16 @@ func applyPatchPrune(repoRoot string, pp prunePlan, next *state.State, counts *s
 	delete(next.Resources, pp.Path)
 	counts.removed++
 	if pp.Patch.Delete {
-		lines = append(lines, fmt.Sprintf("removed (%s deselected; nothing else was in it)", pp.Integration))
+		lines = append(lines, fmt.Sprintf("removed (%s deselected; nothing else was in it)", pp.Option))
 	}
 	return lines, nil
 }
 
-// deselected suffixes each line with the integration that caused it.
-func deselected(lines []string, integration string) []string {
+// deselected suffixes each line with the option that caused it.
+func deselected(lines []string, option string) []string {
 	out := make([]string, len(lines))
 	for i, l := range lines {
-		out[i] = fmt.Sprintf("%s (%s deselected)", l, integration)
+		out[i] = fmt.Sprintf("%s (%s deselected)", l, option)
 	}
 	return out
 }
@@ -109,9 +109,9 @@ func deselected(lines []string, integration string) []string {
 // patchPruneLines are diff's and audit's lines for a structured-patch
 // prune.
 func patchPruneLines(pp prunePlan, verb func(elementPlan) string) []string {
-	lines := deselected(elementLines(pp.Patch, verb), pp.Integration)
+	lines := deselected(elementLines(pp.Patch, verb), pp.Option)
 	if pp.Patch.Delete {
-		lines = append(lines, fmt.Sprintf("would remove the file (%s deselected; nothing else is in it)", pp.Integration))
+		lines = append(lines, fmt.Sprintf("would remove the file (%s deselected; nothing else is in it)", pp.Option))
 	}
 	return lines
 }

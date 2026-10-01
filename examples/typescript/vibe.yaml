@@ -3,3 +3,7 @@ version: v1
 # One editor; agents keep their defaults (claude, codex).
 integrations:
   editors: [vscode]
+# Opt in to the LF policy (spec 0029); *.png binary below is the
+# project's own rule, kept outside the managed section.
+policy:
+  line_endings: lf

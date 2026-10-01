@@ -1,2 +1,4 @@
 standard: prod-go
 version: v1
+policy:
+  line_endings: lf

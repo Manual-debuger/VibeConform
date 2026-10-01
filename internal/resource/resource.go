@@ -38,8 +38,9 @@ type Resource struct {
 	Path string
 	// Ownership governs how reconciliation may modify Path.
 	Ownership Ownership
-	// Content is the desired content for Generated resources, or the
-	// desired fragment for StructuredPatch/ManagedSection resources.
+	// Content is the desired content for Generated resources, or, for a
+	// ManagedSection, the section's content: the lines between its
+	// markers, each ending in a newline.
 	Content []byte
 	// Mode is the file mode to write Path with. The zero value means the
 	// default for this resource's Ownership; a module only sets it when it
@@ -52,7 +53,37 @@ type Resource struct {
 	// (docs/decisions/0013-optional-integrations.md). Nil for every other
 	// ownership; Content is unused when it is set.
 	Patch *ArrayPatch
+	// SectionID identifies a ManagedSection resource within its file, so
+	// one file can hold several sections; (Path, SectionID) is unique. It
+	// matches the same pattern as an option name. Empty for every other
+	// ownership (docs/decisions/0014-managed-sections.md).
+	SectionID string
+	// Markers is the comment syntax of a ManagedSection's markers.
+	Markers MarkerSyntax
+	// Placement is where a new ManagedSection goes in an existing file.
+	// Once written, a section is never moved.
+	Placement Placement
 }
+
+// MarkerSyntax is the comment syntax a managed section's markers use.
+type MarkerSyntax int
+
+const (
+	// HashComment markers: "# vibeconform:begin <id>".
+	HashComment MarkerSyntax = iota
+	// HTMLComment markers: "<!-- vibeconform:begin <id> -->".
+	HTMLComment
+)
+
+// Placement is where a new managed section is inserted.
+type Placement int
+
+const (
+	// Top inserts it before the file's existing content.
+	Top Placement = iota
+	// Bottom appends it after the file's existing content.
+	Bottom
+)
 
 // ArrayPatch is a structured patch over one array of a JSON(C) document.
 type ArrayPatch struct {

@@ -1,36 +1,52 @@
-schema: 3
-vibe_version: v0.3.0-alpha.1.0.20260930095502-82a247d3c7ca+dirty
+schema: 4
+vibe_version: v0.3.0-alpha.1.0.20261001023823-e2cdd4c76bd8+dirty
 standard: prod-py/v1
 resources:
-    .claude/hooks/block-dangerous.sh:
-        sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
-    .claude/hooks/block-secret-files.sh:
-        sha256: a12815be5dd837f16ef67099a647ec207d494f5066329ddcf4a0a495ca52fedb
-    .claude/hooks/guard.py:
-        sha256: d15a801d77f29a4114bf54b70b0376c346d2a77d4318cb7c70c24cd7d75e84d6
-    .claude/hooks/policy.json:
-        sha256: baed785884d9244755d691de7058cccc9a7a7092b385cac53e44837ef62b3bd8
-    .claude/settings.json:
-        sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
-    .codex/config.toml:
-        sha256: 886d348f8109660e2e05069f7caba033d3035cbb25f1db58b4b80ae9f188c931
-    .codex/hooks.json:
-        sha256: 78922a784ee78e9e50587e93628cd3b9d4dfbe49087adc4514e6781cea38cbb9
-    .github/dependabot.yml:
-        sha256: 2c657f7e54cbf32e694120a8474356a225b6b7ad215b72cba0424b0e757bd50c
-    .github/pull_request_template.md:
-        sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
-    .github/workflows/ci.yml:
-        sha256: 4ee29f4fec08fedb9ac5a7ca84455b4d81732d73a714f92e54a879c13def96f5
-    .github/workflows/conformance.yml:
-        sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
-    Taskfile.vibe.yml:
-        sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
-    Taskfile.yml:
-        sha256: 9aa1875bcced5bd31d959c32f5ebe368c37d97267a4829afcf7a8f411225ac2a
-    lefthook.yml:
-        sha256: 9cbde339d40f685b9770ab9eab4c61a871b402649bfae53253ec6a387af796d1
-    pyrightconfig.json:
-        sha256: ca1316bdda3ba3c86490ff023de71f39a48fa04105fd03fd888924c36ce0bb43
-    ruff.toml:
-        sha256: 29180a6715382235e570cd3501ebe73f20254801d4a919d680d8c6f0c8174ede
+    - path: .claude/hooks/block-dangerous.sh
+      ownership: generated
+      sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
+    - path: .claude/hooks/block-secret-files.sh
+      ownership: generated
+      sha256: a12815be5dd837f16ef67099a647ec207d494f5066329ddcf4a0a495ca52fedb
+    - path: .claude/hooks/guard.py
+      ownership: generated
+      sha256: d15a801d77f29a4114bf54b70b0376c346d2a77d4318cb7c70c24cd7d75e84d6
+    - path: .claude/hooks/policy.json
+      ownership: generated
+      sha256: baed785884d9244755d691de7058cccc9a7a7092b385cac53e44837ef62b3bd8
+    - path: .claude/settings.json
+      ownership: generated
+      sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
+    - path: .codex/config.toml
+      ownership: generated
+      sha256: 886d348f8109660e2e05069f7caba033d3035cbb25f1db58b4b80ae9f188c931
+    - path: .codex/hooks.json
+      ownership: generated
+      sha256: 78922a784ee78e9e50587e93628cd3b9d4dfbe49087adc4514e6781cea38cbb9
+    - path: .github/dependabot.yml
+      ownership: generated
+      sha256: 2c657f7e54cbf32e694120a8474356a225b6b7ad215b72cba0424b0e757bd50c
+    - path: .github/pull_request_template.md
+      ownership: generated
+      sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
+    - path: .github/workflows/ci.yml
+      ownership: generated
+      sha256: 4ee29f4fec08fedb9ac5a7ca84455b4d81732d73a714f92e54a879c13def96f5
+    - path: .github/workflows/conformance.yml
+      ownership: generated
+      sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
+    - path: Taskfile.vibe.yml
+      ownership: generated
+      sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
+    - path: Taskfile.yml
+      ownership: generated
+      sha256: 9aa1875bcced5bd31d959c32f5ebe368c37d97267a4829afcf7a8f411225ac2a
+    - path: lefthook.yml
+      ownership: generated
+      sha256: 9cbde339d40f685b9770ab9eab4c61a871b402649bfae53253ec6a387af796d1
+    - path: pyrightconfig.json
+      ownership: generated
+      sha256: ca1316bdda3ba3c86490ff023de71f39a48fa04105fd03fd888924c36ce0bb43
+    - path: ruff.toml
+      ownership: generated
+      sha256: 29180a6715382235e570cd3501ebe73f20254801d4a919d680d8c6f0c8174ede

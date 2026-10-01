@@ -31,6 +31,9 @@ type Context struct {
 	// a module in isolation — and never "none", which is an empty slice
 	// (docs/decisions/0013-optional-integrations.md).
 	Integrations []string
+	// Policies maps each repository policy vibe.yaml selects to its value,
+	// e.g. "line_endings": "lf" (docs/decisions/0014-managed-sections.md).
+	Policies map[string]string
 	// Profiles lists the languages the repository declares: a
 	// single-language standard's own, or its components', in
 	// manifest.Profiles order.
@@ -118,4 +121,15 @@ type HookRuntime interface {
 	// HookBinaries lists the binaries every hook command needs: task,
 	// then the guard's runtime.
 	HookBinaries(mctx *Context) []string
+}
+
+// SectionChecker is implemented by a module whose managed section can be
+// defeated by text around it, such as a later .gitattributes rule that
+// overrides the line-ending policy for every path. The check reads; it
+// never edits (docs/decisions/0014-managed-sections.md §3).
+type SectionChecker interface {
+	// CheckSection sees the file as sync would leave it: the bytes before
+	// and after r's section. Conflicts hold the file unwritten and fail
+	// audit; warnings are reported and fail nothing.
+	CheckSection(r resource.Resource, before, after []byte) (conflicts, warnings []string)
 }

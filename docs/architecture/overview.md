@@ -63,6 +63,18 @@ order. `module.Context` carries the selection, so a core module can emit
 content an integration needs (the `hook:*` tasks and guard for `claude`)
 only when it is selected. See `docs/decisions/0013-optional-integrations.md`.
 
+Since spec 0029 the catalog is an **option catalog**. Each option belongs
+to a group, which is one of two kinds:
+
+- **An integration category**, selected as a list under `integrations:`.
+- **A repository policy key**, selected as one value under `policy:`, for
+  example `policy: {line_endings: lf}`.
+
+Policies are opt-in. Selection, resolution order, `Requires`/`Excludes`
+and pruning share one code path for both kinds. `module.Context.Policies`
+carries the selected values. See
+`docs/decisions/0014-managed-sections.md`.
+
 See `internal/module` for the current (intentionally minimal) interface and
 `internal/resource` for the `Resource` type it produces. Do not treat this
 signature as frozen — it will grow as the resolver is implemented.
@@ -85,6 +97,23 @@ each element, identified by its `label` or string value, is reconciled
 three-way like a whole file, and every byte outside owned elements is
 preserved. `.vibe/state.yaml` schema 3 records a hash per owned element.
 Owned object keys are spec 0027's.
+
+Since spec 0029 `managed-section` is implemented as well. A section is
+identified by its path together with a section ID, so one file can hold
+several sections. The section is the lines between
+`vibeconform:begin <id>` and `vibeconform:end <id>` markers, written as
+`#` comments or as HTML comments.
+
+- **Parsing:** `internal/textregion` parses and splices sections without
+  touching any other byte.
+- **Planning:** the planner groups sections by file. Each file is read
+  once, every section in it is decided three-way, and the file is written
+  once. A conflict in one section holds back the whole file.
+- **Module checks:** a module that implements `module.SectionChecker` can
+  veto its own section because of text around it. The line-ending policy
+  does this when a later `* eol=crlf` would defeat it.
+- **State:** schema 4 turns `resources:` into a sorted list of records,
+  each with `path`, an optional `section_id`, and `ownership`.
 
 `generated` owning the whole file does not mean a repository has no
 recourse: a generated file may delegate to an unmanaged sibling by a
@@ -223,12 +252,14 @@ internal/
     agents/codex/           # Codex config; hooks suspended (spec 0024); the codex integration
     editors/vscode/         # owned entries in .vscode/tasks.json, extensions.json (spec 0026)
     editors/zed/            # owned entries in .zed/tasks.json (spec 0026)
+    policy/lineendings/     # opt-in LF policy: a managed section of .gitattributes (spec 0029)
     tstooling/              # eslint, prettier, tsconfig base
     pythontooling/          # ruff, pyright
   resource/                 # resource + ownership + file mode model
   state/                    # .vibe/state.yaml read/write
   reconcile/                # three-way decision engine, plus two-way removal
   jsonarray/                # byte-preserving edits of owned JSON(C) array elements
+  textregion/               # marker-delimited sections of text files; imports nothing from internal/ (spec 0029)
   atomicfile/               # temp-file + rename writes
   doctor/                   # vibe doctor checks; imports nothing from internal/ (spec 0028)
   cli/                      # command tree; audit/diff/sync share one plan walk

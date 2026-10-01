@@ -37,7 +37,9 @@ it exists to complete the verification surface, not to introduce anything.
   managing it — but it also governs how git materializes every file in the
   repository, including files VibeConform writes. Managing the file that
   determines how your own outputs are hashed is a loop worth entering
-  deliberately, with its own spec, not as a rider here.
+  deliberately, with its own spec, not as a rider here. (That spec is
+  0029: an opt-in line-ending policy that owns one managed section of
+  the file.)
 - No `.gitignore` — genuinely project-specific; a standard cannot know what
   a repository builds.
 - No installation or version management for `task`, `lefthook`,

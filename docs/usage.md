@@ -409,9 +409,10 @@ build never blocks a sync — see "`.vibe/state.yaml`" below.
 - Writes are atomic (temp file + rename), so an interrupted run leaves
   either the old file or the new one, never a half-written one.
 - Content is written exactly as the module resolved it, with no line-ending
-  translation. Pin `* text=auto eol=lf` in `.gitattributes` if you work
-  across Windows and Unix, or checkouts will re-hash differently and report
-  drift forever.
+  translation. If you work across Windows and Unix, select the
+  [line-ending policy](#line-ending-policy) or pin `* text=auto eol=lf` in
+  `.gitattributes` yourself. Otherwise checkouts re-hash differently and
+  report drift forever.
 - There is no `--dry-run`: `vibe diff` is the dry run. Note that `diff`
   previews file changes only — it does not register git hooks, because it
   writes nothing.
@@ -495,8 +496,15 @@ The checks, in order:
   hooks is present, and the binaries the hooks start are on `PATH`
   (`task`, and `go`, `node`, or `uv` for the guard).
 - **Line endings:** how git will check out a managed file, from
-  `core.autocrlf` and the `eol` attribute. This is a report only, and
-  doctor never edits `.gitattributes` or git config.
+  `core.autocrlf` and the `eol` attribute. With the
+  [line-ending policy](#line-ending-policy) selected, the line reports
+  its health instead:
+  - `FAIL` when a rule outside the root `.gitattributes` overrides it;
+  - `WARN` when tracked files are still stored with CRLF;
+  - `PASS` otherwise.
+
+  This is a report only, and doctor never edits `.gitattributes` or git
+  config.
 - **Runtime:** the platform, and `wsl` or `container` when a marker file
   says so.
 - **Worktree:** a linked worktree is `UNVERIFIED`. It shares Git hooks
@@ -564,10 +572,10 @@ Deliberately **not** managed, and left for you to maintain by hand:
 - `.claude/settings.local.json` — gitignored, user-local, possibly
   machine-specific. Never written.
 - `.gitignore` — genuinely project-specific.
-- `.gitattributes` — it governs how git materializes every file, including
-  the ones VibeConform writes and hashes. Managing the file that determines
-  how your own outputs are compared is a loop worth entering deliberately,
-  with its own spec.
+- `.gitattributes` — yours, by default. It governs how git materializes
+  every file, the ones VibeConform writes and hashes included. Opting in
+  to the [line-ending policy](#line-ending-policy) adds one managed
+  section to it, and the rest of the file stays yours.
 - `Taskfile.local.yml` — your own tasks, deliberately outside the managed
   set. See "Adding your own tasks" below.
 
@@ -1005,6 +1013,105 @@ is kept and reported as a conflict (exit non-zero): delete it by hand, or
 select the integration again. Files VibeConform never recorded are never
 touched.
 
+## Line-ending policy
+
+An opt-in repository policy that pins every text file to LF on every
+checkout, so a Windows clone and Linux CI hash managed files the same
+(spec 0029):
+
+```yaml
+standard: prod-go
+version: v1
+policy:
+  line_endings: lf
+```
+
+`lf` is the only value, and leaving the key out selects no policy. It is
+the same for every standard.
+
+**What it writes.** One managed section, at the top of the root
+`.gitattributes`:
+
+```gitattributes
+# vibeconform:begin line-endings
+# Managed by VibeConform: policy.line_endings in vibe.yaml.
+* text=auto eol=lf
+# vibeconform:end line-endings
+
+*.png binary
+*.bat eol=crlf
+```
+
+VibeConform owns only the lines between the markers. Everything below
+them is yours, and `sync` never reads it for a decision or rewrites it:
+
+- If there is no `.gitattributes`, the file is created with the section
+  alone.
+- If the file exists, the section is inserted above your rules, followed
+  by one empty line.
+- Once the section is there, you may move it, and that is not drift.
+- Editing inside the markers is drift, exactly as for a generated file.
+- Deleting one marker, or duplicating a section, is a conflict.
+
+**Your exceptions win.** For each attribute, git applies the last line
+that matches a path, so a rule below the section overrides the policy
+for the paths it names. `*.bat eol=crlf` and `*.png binary` are fine.
+
+What isn't fine is a later rule on **every** path that changes `text`,
+`eol` or `crlf`, such as `* eol=crlf`, `* -text`, `* binary` or `* text`.
+That disables the policy everywhere, so it is reported as a conflict:
+
+```console
+$ vibe audit
+.gitattributes (section line-endings): conflict: line 6: "* eol=crlf" overrides policy.line_endings (eol=crlf) for every path; narrow it to the paths that need it, or deselect the policy
+```
+
+`audit` exits `2`. `sync` writes nothing and exits non-zero, and neither
+one changes your rule. A rule that changes those attributes but sits
+*above* the section is overridden by the policy, and is reported as a
+warning.
+
+The check reads only the root `.gitattributes`. A nested
+`.gitattributes`, `.git/info/attributes` or `core.attributesFile` can
+override the policy too. [`vibe doctor`](#vibe-doctor) reports the
+effective `eol` git resolves, so it catches those, and `audit` does not.
+Macro attributes (`[attr]`) that you apply to `*` are not expanded.
+
+**`core.autocrlf`.** The `eol` attribute takes precedence over
+`core.autocrlf` and `core.eol` for every path it covers. A Windows
+machine with `core.autocrlf=true` still checks these files out as LF, so
+nobody has to change their git configuration, and VibeConform never
+does.
+
+**Existing files.** The policy changes how files are checked out and
+committed from now on. It doesn't convert what is already committed. If
+the repository has CRLF files in its history, run this once after the
+first `vibe sync`, and commit the result:
+
+```console
+git add --renormalize .
+```
+
+`vibe doctor` reports `WARN` until no tracked text file is stored with
+CRLF.
+
+**Formatters and editors.** Nothing else needs a newline setting:
+
+- `prod-ts`'s Prettier already sets `endOfLine: lf`.
+- gofmt writes LF.
+- ruff keeps a file's line endings.
+- An editor that saves CRLF is normalized by git when you commit.
+
+`.editorconfig` stays yours, and so do editor settings. Agents don't
+need an "always write LF" instruction in `AGENTS.md`, because git
+enforces it.
+
+**Deselecting.** Removing `line_endings` from `vibe.yaml` removes the
+section, if it is unchanged, together with the empty line inserted with
+it. Your rules stay. If VibeConform created `.gitattributes` and nothing
+else is in it, the file is deleted. A modified section is kept and
+reported as a conflict, as in "Deselecting" above.
+
 ## Agent hooks
 
 When the `claude` integration is selected — the default — the standard
@@ -1405,7 +1512,9 @@ rather than putting `bin/` on `PATH`.
 
 Still hand-maintained here, by the non-goals above:
 `.github/workflows/release.yml`, `.goreleaser.yaml`, `.gitignore`,
-`.gitattributes`, `AGENTS.md`, `CLAUDE.md`, `Taskfile.local.yml`.
+`AGENTS.md`, `CLAUDE.md`, `Taskfile.local.yml`. This repository selects
+the line-ending policy, so its `.gitattributes` is the managed section
+alone.
 
 ## What `vibe.yaml` means today
 
@@ -1420,8 +1529,9 @@ version: v1
 `prod-mono` adds a third, `components:`, a list of `id`, `path`, and
 `profile` entries; see "What `prod-mono/v1` manages" above. Every standard
 also accepts `integrations:`, which selects editors, agents, and
-code-intelligence providers; see "Selecting integrations" above. No other
-key is accepted: `vibe.yaml` is decoded strictly, and `components:` on any
+code-intelligence providers; see "Selecting integrations" above. Every
+standard also accepts `policy:`, which opts in to repository policies;
+see "Line-ending policy" above. No other key is accepted: `vibe.yaml` is decoded strictly, and `components:` on any
 other standard is an error.
 
 There is no `.vibe/lock.yaml`, no `depends_on` between components (so no
@@ -1436,26 +1546,43 @@ Machine-owned bookkeeping, written only by `vibe sync`. Commit it; don't
 hand-edit it.
 
 ```yaml
-schema: 3
+schema: 4
 vibe_version: v0.3.0
 standard: prod-go/v1
 resources:
-    .golangci.yml:
-        sha256: 6bb1…
-    .vscode/tasks.json:
-        created: true
-        elements:
-            tasks/task verify:
-                sha256: 0e7d…
+    - path: .gitattributes
+      section_id: line-endings
+      ownership: managed-section
+      sha256: eac2…
+    - path: .golangci.yml
+      ownership: generated
+      sha256: 6bb1…
+    - path: .vscode/tasks.json
+      ownership: structured-patch
+      created: true
+      elements:
+        tasks/task verify:
+            sha256: 0e7d…
 ```
 
-A generated file records one hash. A shared file (see "Editor files are
-shared") records a hash per entry VibeConform owns, keyed
-`<array>/<label>`, and whether VibeConform created the file. Schema 3 adds
-only those two fields; a schema-2 file loads unchanged and the next
-`vibe sync` rewrites it as schema 3, changing nothing else.
+Since schema 4 (spec 0029), `resources` is a list of records, sorted by
+`path` and then `section_id`. Each record names its ownership:
 
-The `resources` map is what reconciliation compares against: it records the
+- **`generated`:** a whole file, with one hash.
+- **`structured-patch`:** a shared file (see "Editor files are shared").
+  It has a hash for each entry VibeConform owns, keyed `<array>/<label>`,
+  and records whether VibeConform created the file.
+- **`managed-section`:** one marked section of a file you own, identified
+  by `path` together with `section_id`. Its hash covers only the lines
+  between the markers.
+
+Schema 1, 2 and 3 files, where `resources` is a map keyed by path, still
+load. The next `vibe sync` rewrites them as schema 4, and the hashes stay
+the same. A `vibe` older than spec 0029 can't read schema 4, and it fails
+with `load state` (exit 1) instead of misreading it. `task audit`
+installs the recorded `vibe_version` (spec 0022), so CI is unaffected.
+
+The `resources` list is what reconciliation compares against: it records the
 content VibeConform last wrote, so `audit` can tell a file you changed from
 a file the standard changed.
 
@@ -1469,9 +1596,9 @@ or backward. That is what lets `sync` refuse to run backwards.
   Nothing is inferred from their absence: an unrecorded writer is unknown,
   not old, so no direction is claimed and no sync is blocked. The next
   `vibe sync` fills them in.
-- **Older binaries read schema 2 fine.** The fields are ignored by anything
-  that doesn't know them, so upgrading some machines and not others is not
-  a migration.
+- **Older binaries read the provenance fields fine.** They ignore fields
+  they don't know, so upgrading some machines and not others is not a
+  migration. The exception is schema 4's list layout, described above.
 - **`vibe_version` is only compared when both sides are real versions.**
   An unstamped build reports `dev`, which is not a version and is never
   treated as one. `go install …@latest` and released binaries both report
@@ -1507,7 +1634,9 @@ Everything else `vibe sync` wrote — `.golangci.yml`, `eslint`/`prettier`/
 `tsconfig`, `ruff`/`pyright` config, the rest of `Taskfile.yml`, `ci.yml`
 and its `CI / gate`, and any editor or agent configuration you selected —
 is ordinary project configuration at that point, no different from having
-written it by hand.
+written it by hand. That includes the line-ending policy's section of
+`.gitattributes`. Git reads it with or without VibeConform, and the
+markers are plain comments that you can delete or keep.
 `.github/workflows/examples.yml` in this repository demonstrates the split
 for its own TS/PY fixtures: `task verify` runs first, with no `vibe` on
 `PATH`; building `vibe` and running `task audit` is a separate, later step.

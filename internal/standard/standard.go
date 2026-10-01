@@ -20,6 +20,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/monorepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/monotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/policy/lineendings"
 	"github.com/Manual-debuger/VibeConform/internal/module/pyrepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/pythontooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/repotooling"
@@ -36,10 +37,11 @@ type Standard struct {
 	// Modules are the core modules this standard always composes, in the
 	// order every report uses.
 	Modules []module.Module
-	// Integrations is the catalog of optional modules vibe.yaml's
-	// integrations: map selects from. Selected ones resolve after Modules,
-	// in this order (docs/decisions/0013-optional-integrations.md).
-	Integrations []Integration
+	// Options is the catalog of optional modules vibe.yaml selects from:
+	// integrations, then repository policies. Selected ones resolve after
+	// Modules, in this order (docs/decisions/0013-optional-integrations.md,
+	// docs/decisions/0014-managed-sections.md).
+	Options []Option
 	// Profile is a single-language standard's language; empty for one
 	// that takes components, whose profiles come from vibe.yaml.
 	Profile manifest.Profile
@@ -76,16 +78,19 @@ func Lookup(name, version string) (*Standard, error) {
 	return &s, nil
 }
 
-// catalog is the integration catalog every standard shares: editors,
-// then agents, then code intelligence. claude and codex are on by
+// catalog is the option catalog every standard shares: editors, then
+// agents, then code intelligence, then repository policies. claude and codex are on by
 // default, so a vibe.yaml without integrations: composes exactly what
 // every standard composed before spec 0026.
-func catalog() []Integration {
-	return []Integration{
-		{Name: "vscode", Category: manifest.CategoryEditors, Module: vscode.New()},
-		{Name: "zed", Category: manifest.CategoryEditors, Module: zed.New()},
-		{Name: "claude", Category: manifest.CategoryAgents, Module: claude.New(), Default: true},
-		{Name: "codex", Category: manifest.CategoryAgents, Module: codex.New(), Default: true},
+func catalog() []Option {
+	editors, agents := integrationGroup(manifest.CategoryEditors), integrationGroup(manifest.CategoryAgents)
+	return []Option{
+		{Group: editors, Name: "vscode", Module: vscode.New()},
+		{Group: editors, Name: "zed", Module: zed.New()},
+		{Group: agents, Name: "claude", Module: claude.New(), Default: true},
+		{Group: agents, Name: "codex", Module: codex.New(), Default: true},
+		// Policies are opt-in: none is a default (spec 0029).
+		{Group: Group{Key: manifest.PolicyLineEndings, Scalar: true}, Name: "lf", Module: lineendings.New()},
 	}
 }
 
@@ -101,8 +106,8 @@ func init() {
 		Profile: manifest.ProfileGo,
 		// Order matters: audit, diff, and sync report in module order, core
 		// then selected integrations.
-		Modules:      []module.Module{gotooling.New(), github.New(), conformance.New(), repotooling.New()},
-		Integrations: catalog(),
+		Modules: []module.Module{gotooling.New(), github.New(), conformance.New(), repotooling.New()},
+		Options: catalog(),
 	})
 
 	// Through M2 these composed only their language-tooling module plus
@@ -117,19 +122,19 @@ func init() {
 	// runtime, claude-config then codex-config, in the same position; since
 	// spec 0026 they are default-on integrations from catalog().
 	Register(Standard{
-		Name:         "prod-ts",
-		Version:      "v1",
-		Profile:      manifest.ProfileTS,
-		Modules:      []module.Module{tstooling.New(), githubts.New(), conformance.New(), tsrepotooling.New()},
-		Integrations: catalog(),
+		Name:    "prod-ts",
+		Version: "v1",
+		Profile: manifest.ProfileTS,
+		Modules: []module.Module{tstooling.New(), githubts.New(), conformance.New(), tsrepotooling.New()},
+		Options: catalog(),
 	})
 
 	Register(Standard{
-		Name:         "prod-py",
-		Version:      "v1",
-		Profile:      manifest.ProfilePy,
-		Modules:      []module.Module{pythontooling.New(), githubpy.New(), conformance.New(), pyrepotooling.New()},
-		Integrations: catalog(),
+		Name:    "prod-py",
+		Version: "v1",
+		Profile: manifest.ProfilePy,
+		Modules: []module.Module{pythontooling.New(), githubpy.New(), conformance.New(), pyrepotooling.New()},
+		Options: catalog(),
 	})
 
 	// A polyglot monorepo: every core module but vibe-conformance resolves from vibe.yaml's components, in the same module
@@ -139,7 +144,7 @@ func init() {
 		Name:            "prod-mono",
 		Version:         "v1",
 		Modules:         []module.Module{monotooling.New(), githubmono.New(), conformance.New(), monorepotooling.New()},
-		Integrations:    catalog(),
+		Options:         catalog(),
 		TakesComponents: true,
 	})
 }

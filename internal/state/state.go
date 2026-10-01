@@ -6,10 +6,12 @@
 package state
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 
@@ -38,7 +40,20 @@ const (
 // file and a hash per owned element, so VibeConform can own entries in a
 // file it shares with its users. Generated resources are recorded exactly
 // as in schema 2. See docs/specs/0026-optional-integrations.md.
-const SchemaVersion = 3
+//
+// 4 turns resources: from a map keyed by path into a sorted list of
+// records, each naming its path, its ownership, and for a managed section
+// its section ID, so one file can hold several independently owned
+// sections without encoding two identities into one key. Schemas 1 to 3
+// still load. See docs/specs/0029-text-policy.md.
+const SchemaVersion = 4
+
+// The ownership names schema 4 records.
+const (
+	ownershipGenerated       = "generated"
+	ownershipStructuredPatch = "structured-patch"
+	ownershipManagedSection  = "managed-section"
+)
 
 // ResourceState is what was last recorded for one resolved resource.
 type ResourceState struct {
@@ -53,14 +68,32 @@ type ResourceState struct {
 	Elements map[string]ElementState `yaml:"elements,omitempty"`
 }
 
+// SectionKey identifies one managed section: the file, and the section's
+// ID within it.
+type SectionKey struct {
+	Path string
+	ID   string
+}
+
+// SectionState is what was last recorded for one managed section.
+type SectionState struct {
+	// SHA256 is the hex-encoded hash of the section's content, the bytes
+	// between its markers.
+	SHA256 string
+	// Created is true when VibeConform created the file for this section,
+	// so it may delete the file once removing the section leaves it empty.
+	Created bool
+}
+
 // ElementState is what was last recorded for one owned element.
 type ElementState struct {
 	// SHA256 is the hex-encoded hash of the element's canonical JSON.
 	SHA256 string `yaml:"sha256"`
 }
 
-// State is the parsed form of .vibe/state.yaml, keyed by repository-relative
-// resource path.
+// State is the parsed form of .vibe/state.yaml: what was recorded for each
+// resource, by repository-relative path, and for each managed section, by
+// path and section ID.
 //
 // The provenance fields are absent from every file written before spec
 // 0019. Absent means unknown, never a default worth acting on: an empty
@@ -83,7 +116,123 @@ type State struct {
 	// detecting it is not part of spec 0019. Do not assume a check exists.
 	Standard string `yaml:"standard,omitempty"`
 
-	Resources map[string]ResourceState `yaml:"resources"`
+	// Resources holds the whole-file and structured-patch entries, keyed by
+	// path.
+	Resources map[string]ResourceState `yaml:"-"`
+	// Sections holds the managed-section entries.
+	Sections map[SectionKey]SectionState `yaml:"-"`
+}
+
+// record is one schema 4 entry in resources:.
+type record struct {
+	Path      string                  `yaml:"path"`
+	SectionID string                  `yaml:"section_id,omitempty"`
+	Ownership string                  `yaml:"ownership"`
+	Created   bool                    `yaml:"created,omitempty"`
+	SHA256    string                  `yaml:"sha256,omitempty"`
+	Elements  map[string]ElementState `yaml:"elements,omitempty"`
+}
+
+// file is the on-disk layout. Resources is a node because its shape
+// depends on the schema: a mapping through schema 3, a list from 4.
+type file struct {
+	Schema      int       `yaml:"schema,omitempty"`
+	VibeVersion string    `yaml:"vibe_version,omitempty"`
+	Standard    string    `yaml:"standard,omitempty"`
+	Resources   yaml.Node `yaml:"resources"`
+}
+
+// MarshalYAML writes s in the schema 4 layout, sorted by path then section
+// ID so the file is deterministic.
+func (s State) MarshalYAML() (any, error) {
+	records := make([]record, 0, len(s.Resources)+len(s.Sections))
+	for path, rs := range s.Resources {
+		r := record{Path: path, Ownership: ownershipGenerated, SHA256: rs.SHA256}
+		if rs.Elements != nil {
+			r.Ownership, r.Created, r.Elements = ownershipStructuredPatch, rs.Created, rs.Elements
+		}
+		records = append(records, r)
+	}
+	for key, ss := range s.Sections {
+		records = append(records, record{Path: key.Path, SectionID: key.ID, Ownership: ownershipManagedSection, Created: ss.Created, SHA256: ss.SHA256})
+	}
+	slices.SortFunc(records, func(a, b record) int {
+		return cmp.Or(cmp.Compare(a.Path, b.Path), cmp.Compare(a.SectionID, b.SectionID))
+	})
+
+	var node yaml.Node
+	if err := node.Encode(records); err != nil {
+		return nil, err
+	}
+	return file{Schema: s.Schema, VibeVersion: s.VibeVersion, Standard: s.Standard, Resources: node}, nil
+}
+
+// UnmarshalYAML reads any schema. Through schema 3 resources: is a map
+// keyed by path; from schema 4 it is a list of records. The node's kind
+// tells them apart.
+func (s *State) UnmarshalYAML(n *yaml.Node) error {
+	var f file
+	if err := n.Decode(&f); err != nil {
+		return err
+	}
+	s.Schema, s.VibeVersion, s.Standard = f.Schema, f.VibeVersion, f.Standard
+	s.Resources = map[string]ResourceState{}
+	s.Sections = map[SectionKey]SectionState{}
+
+	switch f.Resources.Kind {
+	case 0:
+		return nil
+	case yaml.ScalarNode:
+		if f.Resources.Tag == "!!null" {
+			return nil
+		}
+	case yaml.MappingNode:
+		return f.Resources.Decode(&s.Resources)
+	case yaml.SequenceNode:
+		var records []record
+		if err := f.Resources.Decode(&records); err != nil {
+			return err
+		}
+		return s.addRecords(records)
+	}
+	return fmt.Errorf("line %d: resources must be a list", f.Resources.Line)
+}
+
+// addRecords files each schema 4 record under its ownership.
+func (s *State) addRecords(records []record) error {
+	seen := map[SectionKey]bool{}
+	for i, r := range records {
+		where := fmt.Sprintf("resources[%d] (%s)", i, r.Path)
+		key := SectionKey{Path: r.Path, ID: r.SectionID}
+		switch {
+		case r.Path == "":
+			return fmt.Errorf("resources[%d]: path is required", i)
+		case seen[key]:
+			return fmt.Errorf("%s: recorded twice", where)
+		case r.SectionID != "" && r.Ownership != ownershipManagedSection:
+			return fmt.Errorf("%s: section_id on a %s entry", where, r.Ownership)
+		}
+		seen[key] = true
+
+		switch r.Ownership {
+		case ownershipGenerated:
+			s.Resources[r.Path] = ResourceState{SHA256: r.SHA256}
+		case ownershipStructuredPatch:
+			elements := r.Elements
+			if elements == nil {
+				elements = map[string]ElementState{}
+			}
+			s.Resources[r.Path] = ResourceState{Created: r.Created, Elements: elements}
+		case ownershipManagedSection:
+			if r.SectionID == "" {
+				return fmt.Errorf("%s: a managed-section entry needs a section_id", where)
+			}
+			s.Sections[key] = SectionState{SHA256: r.SHA256, Created: r.Created}
+		default:
+			return fmt.Errorf("%s: unknown ownership %q", where, r.Ownership)
+		}
+	}
+	return nil
 }
 
 // Load reads .vibe/state.yaml from repoRoot. A missing file is not an
@@ -98,7 +247,7 @@ func Load(repoRoot string) (*State, error) {
 	path := filepath.Join(repoRoot, stateFilePath)
 	data, err := os.ReadFile(path) // #nosec G304 -- repoRoot is an operator-supplied CLI flag, same trust boundary as init.go's WriteFile target
 	if errors.Is(err, os.ErrNotExist) {
-		return &State{Resources: map[string]ResourceState{}}, nil
+		return &State{Resources: map[string]ResourceState{}, Sections: map[SectionKey]SectionState{}}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("load state: %w", err)
@@ -110,6 +259,9 @@ func Load(repoRoot string) (*State, error) {
 	}
 	if s.Resources == nil {
 		s.Resources = map[string]ResourceState{}
+	}
+	if s.Sections == nil {
+		s.Sections = map[SectionKey]SectionState{}
 	}
 	return &s, nil
 }

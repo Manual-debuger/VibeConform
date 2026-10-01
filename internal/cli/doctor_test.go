@@ -89,7 +89,7 @@ func TestDoctorHealthyExitsZero(t *testing.T) {
 		"vibe.yaml resolves prod-go/v1 (integrations: claude, codex)",
 		"; Taskfile.yml loads",
 		"PASS        claude hooks",
-		"; .golangci.yml has eol=lf",
+		"; .golangci.yml has eol=lf; policy.line_endings is not selected",
 		"summary: 14 pass, 0 warn, 0 fail, 0 unverified",
 	} {
 		if !strings.Contains(out, want) {
@@ -98,6 +98,23 @@ func TestDoctorHealthyExitsZero(t *testing.T) {
 	}
 	if strings.Contains(out, "FAIL") {
 		t.Errorf("a healthy machine reports a failure:\n%s", out)
+	}
+}
+
+// TestDoctorReportsLineEndingPolicy: with the policy selected, the line
+// endings row reports its health instead of the bare attribute.
+func TestDoctorReportsLineEndingPolicy(t *testing.T) {
+	dir := t.TempDir()
+	writeVibeYAML(t, dir, goLF)
+	mustSync(t, dir)
+	stubDoctorEnv(t)
+
+	out, err := runDoctorIn(t, dir)
+	if err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
+	}
+	if want := "PASS        line endings   policy line_endings: lf; core.autocrlf="; !strings.Contains(out, want) {
+		t.Errorf("output lacks %q:\n%s", want, out)
 	}
 }
 
@@ -154,8 +171,8 @@ func TestAgentHookConfigsCoverCatalog(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, in := range s.Integrations {
-			if in.Category != manifest.CategoryAgents {
+		for _, in := range s.Options {
+			if in.Group.Key != manifest.CategoryAgents {
 				continue
 			}
 			if _, ok := agentHookConfigs[in.Name]; !ok {

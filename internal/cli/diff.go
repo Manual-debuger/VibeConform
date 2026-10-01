@@ -38,6 +38,12 @@ func runDiff(cmd *cobra.Command, repoRoot string) error {
 	printWarnings(cmd.ErrOrStderr(), p)
 
 	for _, rp := range p.Resources {
+		if rp.Section != nil && !rp.Ignored {
+			if _, err := fmt.Fprintf(out, "%s: %s\n", sectionLabel(rp.Resource.Path, rp.Section.ID), diffSectionLine(rp.SectionFile, rp.Section)); err != nil {
+				return fmt.Errorf("diff: %w", err)
+			}
+			continue
+		}
 		if rp.Patch != nil && rp.Supported && !rp.Ignored {
 			if err := printElementLines(out, rp.Resource.Path, elementLines(rp.Patch, diffElement), "no change"); err != nil {
 				return fmt.Errorf("diff: %w", err)
@@ -56,6 +62,12 @@ func runDiff(cmd *cobra.Command, repoRoot string) error {
 		}
 	}
 	for _, pp := range p.Prunes {
+		if pp.Section != nil {
+			if _, err := fmt.Fprintf(out, "%s: %s\n", sectionLabel(pp.Path, pp.Section.ID), diffSectionPruneLine(pp.SectionFile, pp.Section, pp.Option)); err != nil {
+				return fmt.Errorf("diff: %w", err)
+			}
+			continue
+		}
 		if pp.Patch != nil {
 			if err := printElementLines(out, pp.Path, patchPruneLines(pp, diffElement), ""); err != nil {
 				return fmt.Errorf("diff: %w", err)

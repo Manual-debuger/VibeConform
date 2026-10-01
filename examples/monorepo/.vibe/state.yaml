@@ -1,77 +1,99 @@
-schema: 3
-vibe_version: v0.3.0-alpha.1.0.20260930095502-82a247d3c7ca+dirty
+schema: 4
+vibe_version: v0.3.0-alpha.1.0.20261001023823-e2cdd4c76bd8+dirty
 standard: prod-mono/v1
 resources:
-    .claude/hooks/guard.go:
-        sha256: 4fd4fb6999701d5c186197cdfbf655dec3b2ad315808a48737ffe563ea44b37b
-    .claude/hooks/policy.json:
-        sha256: baed785884d9244755d691de7058cccc9a7a7092b385cac53e44837ef62b3bd8
-    .claude/settings.json:
-        sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
-    .github/dependabot.yml:
-        sha256: 1a3acf0186b1f12f28a1451a81b4a95de36d61c6e2ad42afcd13215ae5f1c512
-    .github/pull_request_template.md:
-        sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
-    .github/workflows/ci.yml:
-        sha256: 68e60a857807de8a8cd84dee244ab64fd7ac9b0fc821f614056f19309851d71b
-    .github/workflows/conformance.yml:
-        sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
-    .vscode/extensions.json:
-        created: true
-        elements:
-            recommendations/charliermarsh.ruff:
-                sha256: 26aa9300e53b8ad76104b957913a31f265ad0d68457f50990eeb418c5b8abcf9
-            recommendations/dbaeumer.vscode-eslint:
-                sha256: dc2ad62ce0d5465435f0a45f5cd0e200fa8a479e3381d84e6ac200bdeb1692ba
-            recommendations/esbenp.prettier-vscode:
-                sha256: a217903a7c1559e838e695fde2214c4626b0e0eaf83f65ad84afbe7f25a2379a
-            recommendations/golang.go:
-                sha256: 604922116089bb404f7c32810b77791e16ca4b25872c8a1d22b3e32f7cf43fb9
-            recommendations/ms-python.python:
-                sha256: 5716cd59c10c4299dba311790d7896a6b73a4692743b39f81e69e4fe803b217d
-    .vscode/tasks.json:
-        created: true
-        elements:
-            tasks/task fmt:
-                sha256: 0a2ff4f5718718864540aec67d4a82578193dc618c03be7b9383910bde5eaf2a
-            tasks/task lint:
-                sha256: 794efa887769b7738020cabcc6cbb8112bbece1c1ca2cefcaab2b6d36c416b04
-            tasks/task test:
-                sha256: 55cbf500038efdfcb042564c5734b95d6fa08c84cb3758528bb2bf9bf7c9e0ac
-            tasks/task verify:
-                sha256: 04705d4640e2e921432a1385047d8d25663a0a34c2f1edc9d91f5369b951c351
-    .zed/tasks.json:
-        created: true
-        elements:
-            '[]/task fmt':
-                sha256: e4c6a972eef08ce010c1e63882ae6d6026fcfa0b51f1f23503efdad9659527a5
-            '[]/task lint':
-                sha256: c71cbe3e8e5ba811ddb062671366e67c39df90f44190d3a233343d9923a304db
-            '[]/task test':
-                sha256: 449796c6a5d2379135f89119c738a85e220559b6aadcb2aac0171393599ad90b
-            '[]/task verify':
-                sha256: 0322a4697a5b430692e164b673d19c5cd86aa4902483f2e8ac54132e83336572
-    Taskfile.vibe.yml:
-        sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
-    Taskfile.yml:
-        sha256: 04b5189cee59dfd97ec0227aec09f7286384a0b8a8ae93c1b15c72a2dce69ac4
-    apps/web/.prettierrc.json:
-        sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
-    apps/web/Taskfile.yml:
-        sha256: 60e3dc68b9394612efc67a961d142684f760f73edefe961d52ce20c2f6d7293b
-    apps/web/eslint.config.js:
-        sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
-    apps/web/tsconfig.base.json:
-        sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217
-    lefthook.yml:
-        sha256: 87d2ca78f308bedf1c8591c88e09c6582a0c365c917879a41a5374cde504beaf
-    services/api/.golangci.yml:
-        sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
-    services/api/Taskfile.yml:
-        sha256: aecde63c51a3ff2af11416ba65d0ab4929f752d90306817453c125639d95770a
-    services/worker/Taskfile.yml:
-        sha256: 4554e745ed37a1ecf65c7dc149e8810ae95a324b9eddbe1d6e0b85e3f9b40810
-    services/worker/pyrightconfig.json:
-        sha256: ca1316bdda3ba3c86490ff023de71f39a48fa04105fd03fd888924c36ce0bb43
-    services/worker/ruff.toml:
-        sha256: 29180a6715382235e570cd3501ebe73f20254801d4a919d680d8c6f0c8174ede
+    - path: .claude/hooks/guard.go
+      ownership: generated
+      sha256: 4fd4fb6999701d5c186197cdfbf655dec3b2ad315808a48737ffe563ea44b37b
+    - path: .claude/hooks/policy.json
+      ownership: generated
+      sha256: baed785884d9244755d691de7058cccc9a7a7092b385cac53e44837ef62b3bd8
+    - path: .claude/settings.json
+      ownership: generated
+      sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
+    - path: .github/dependabot.yml
+      ownership: generated
+      sha256: 1a3acf0186b1f12f28a1451a81b4a95de36d61c6e2ad42afcd13215ae5f1c512
+    - path: .github/pull_request_template.md
+      ownership: generated
+      sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
+    - path: .github/workflows/ci.yml
+      ownership: generated
+      sha256: 68e60a857807de8a8cd84dee244ab64fd7ac9b0fc821f614056f19309851d71b
+    - path: .github/workflows/conformance.yml
+      ownership: generated
+      sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
+    - path: .vscode/extensions.json
+      ownership: structured-patch
+      created: true
+      elements:
+        recommendations/charliermarsh.ruff:
+            sha256: 26aa9300e53b8ad76104b957913a31f265ad0d68457f50990eeb418c5b8abcf9
+        recommendations/dbaeumer.vscode-eslint:
+            sha256: dc2ad62ce0d5465435f0a45f5cd0e200fa8a479e3381d84e6ac200bdeb1692ba
+        recommendations/esbenp.prettier-vscode:
+            sha256: a217903a7c1559e838e695fde2214c4626b0e0eaf83f65ad84afbe7f25a2379a
+        recommendations/golang.go:
+            sha256: 604922116089bb404f7c32810b77791e16ca4b25872c8a1d22b3e32f7cf43fb9
+        recommendations/ms-python.python:
+            sha256: 5716cd59c10c4299dba311790d7896a6b73a4692743b39f81e69e4fe803b217d
+    - path: .vscode/tasks.json
+      ownership: structured-patch
+      created: true
+      elements:
+        tasks/task fmt:
+            sha256: 0a2ff4f5718718864540aec67d4a82578193dc618c03be7b9383910bde5eaf2a
+        tasks/task lint:
+            sha256: 794efa887769b7738020cabcc6cbb8112bbece1c1ca2cefcaab2b6d36c416b04
+        tasks/task test:
+            sha256: 55cbf500038efdfcb042564c5734b95d6fa08c84cb3758528bb2bf9bf7c9e0ac
+        tasks/task verify:
+            sha256: 04705d4640e2e921432a1385047d8d25663a0a34c2f1edc9d91f5369b951c351
+    - path: .zed/tasks.json
+      ownership: structured-patch
+      created: true
+      elements:
+        '[]/task fmt':
+            sha256: e4c6a972eef08ce010c1e63882ae6d6026fcfa0b51f1f23503efdad9659527a5
+        '[]/task lint':
+            sha256: c71cbe3e8e5ba811ddb062671366e67c39df90f44190d3a233343d9923a304db
+        '[]/task test':
+            sha256: 449796c6a5d2379135f89119c738a85e220559b6aadcb2aac0171393599ad90b
+        '[]/task verify':
+            sha256: 0322a4697a5b430692e164b673d19c5cd86aa4902483f2e8ac54132e83336572
+    - path: Taskfile.vibe.yml
+      ownership: generated
+      sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
+    - path: Taskfile.yml
+      ownership: generated
+      sha256: 04b5189cee59dfd97ec0227aec09f7286384a0b8a8ae93c1b15c72a2dce69ac4
+    - path: apps/web/.prettierrc.json
+      ownership: generated
+      sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
+    - path: apps/web/Taskfile.yml
+      ownership: generated
+      sha256: 60e3dc68b9394612efc67a961d142684f760f73edefe961d52ce20c2f6d7293b
+    - path: apps/web/eslint.config.js
+      ownership: generated
+      sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
+    - path: apps/web/tsconfig.base.json
+      ownership: generated
+      sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217
+    - path: lefthook.yml
+      ownership: generated
+      sha256: 87d2ca78f308bedf1c8591c88e09c6582a0c365c917879a41a5374cde504beaf
+    - path: services/api/.golangci.yml
+      ownership: generated
+      sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
+    - path: services/api/Taskfile.yml
+      ownership: generated
+      sha256: aecde63c51a3ff2af11416ba65d0ab4929f752d90306817453c125639d95770a
+    - path: services/worker/Taskfile.yml
+      ownership: generated
+      sha256: 4554e745ed37a1ecf65c7dc149e8810ae95a324b9eddbe1d6e0b85e3f9b40810
+    - path: services/worker/pyrightconfig.json
+      ownership: generated
+      sha256: ca1316bdda3ba3c86490ff023de71f39a48fa04105fd03fd888924c36ce0bb43
+    - path: services/worker/ruff.toml
+      ownership: generated
+      sha256: 29180a6715382235e570cd3501ebe73f20254801d4a919d680d8c6f0c8174ede

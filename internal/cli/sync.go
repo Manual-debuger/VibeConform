@@ -102,8 +102,10 @@ func runSync(cmd *cobra.Command, repoRoot string, allowDowngrade bool) error {
 		VibeVersion: runningVersion(cmd),
 		Standard:    fmt.Sprintf("%s/%s", p.Standard.Name, p.Standard.Version),
 		Resources:   make(map[string]state.ResourceState, len(p.Previous.Resources)),
+		Sections:    make(map[state.SectionKey]state.SectionState, len(p.Previous.Sections)),
 	}
 	maps.Copy(next.Resources, p.Previous.Resources)
+	maps.Copy(next.Sections, p.Previous.Sections)
 
 	var counts syncCounts
 	applyErr := applyPlan(out, repoRoot, p.Resources, next, &counts)
@@ -261,6 +263,16 @@ func informative(line string) bool {
 // whatever was recorded into next before returning.
 func applyPlan(out io.Writer, repoRoot string, plans []resourcePlan, next *state.State, counts *syncCounts) error {
 	for _, rp := range plans {
+		if rp.Section != nil && !rp.Ignored {
+			line, err := applySection(repoRoot, rp, next, counts)
+			if err != nil {
+				return fmt.Errorf("%s: %w", rp.Resource.Path, err)
+			}
+			if _, err := fmt.Fprintf(out, "%s: %s\n", sectionLabel(rp.Resource.Path, rp.Section.ID), line); err != nil {
+				return err
+			}
+			continue
+		}
 		if rp.Patch != nil && rp.Supported && !rp.Ignored {
 			lines, err := applyPatchResource(repoRoot, rp, next, counts)
 			if err != nil {
@@ -316,6 +328,16 @@ func applyPatchResource(repoRoot string, rp resourcePlan, next *state.State, cou
 // resources.
 func applyPrunes(out io.Writer, repoRoot string, prunes []prunePlan, next *state.State, counts *syncCounts) error {
 	for _, pp := range prunes {
+		if pp.Section != nil {
+			line, err := applySectionPrune(repoRoot, pp, next, counts)
+			if err != nil {
+				return fmt.Errorf("%s: %w", pp.Path, err)
+			}
+			if _, err := fmt.Fprintf(out, "%s: %s\n", sectionLabel(pp.Path, pp.Section.ID), line); err != nil {
+				return err
+			}
+			continue
+		}
 		lines, err := applyPrune(repoRoot, pp, next, counts)
 		if err != nil {
 			return fmt.Errorf("%s: %w", pp.Path, err)
