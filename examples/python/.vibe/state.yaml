@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.3.0-alpha.1.0.20261001085753-fcfc0ddd6da4
+vibe_version: v0.3.0-alpha.1.0.20261001094752-6c4608aaeeb4
 standard: prod-py/v1
 resources:
     - path: .claude/hooks/block-dangerous.sh
