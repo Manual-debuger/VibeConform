@@ -1,16 +1,19 @@
 <!-- vibeconform:begin workflow -->
+
 ## Repository workflow
 
 Managed by VibeConform from `development:` in `vibe.yaml`. This section
 routes; the documents and tasks it names hold the detail.
 
 Knowledge:
+
 - Read the specs, architecture docs and ADRs that apply before a
   non-trivial change.
 - If an approved spec, an ADR and the code disagree, say so. Do not
   pick one silently.
 
 Workflow: plan-triggered lightweight SDD.
+
 - Normal mode: implement, then verify. Respect any spec that applies.
 - Planning context (the harness's plan mode, or `/spec`): use the
   `spec` skill. List the constraints that apply and the assumptions
@@ -23,8 +26,10 @@ Workflow: plan-triggered lightweight SDD.
 - Do not implement until the user approves.
 
 Verification:
+
 - `task verify:fast` while working; `task verify` before declaring
   done. Do not weaken a test, lint or type check to make a change pass.
 - Finish with a ledger, one line per check: PASS, FAIL or UNVERIFIED.
   Unit tests, CI and a real integration are separate lines.
+
 <!-- vibeconform:end workflow -->

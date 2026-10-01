@@ -5,6 +5,7 @@ repository also commits each implementation plan, under [`plans/`](plans/),
 next to the spec it implements (see `AGENTS.md`).
 
 <!-- vibeconform:begin docs -->
+
 ## Layout
 
 - [`specs/`](specs/): what must be true. Problem, constraints, desired
@@ -12,4 +13,5 @@ next to the spec it implements (see `AGENTS.md`).
 - [`architecture/`](architecture/): how the system works now.
 - [`decisions/`](decisions/): decision records (ADRs), why a significant
   choice was made and what it costs.
+
 <!-- vibeconform:end docs -->

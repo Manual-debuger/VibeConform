@@ -77,12 +77,14 @@ These are guardrails, not a complete enforcement boundary — apply the same
 judgment regardless of which agent runtime is in use.
 
 <!-- vibeconform:begin workflow -->
+
 ## Repository workflow
 
 Managed by VibeConform from `development:` in `vibe.yaml`. This section
 routes; the documents and tasks it names hold the detail.
 
 Knowledge:
+
 - Specs (what must be true) live in `docs/specs/`, architecture (how it
   works now) in `docs/architecture/`, decisions (ADRs) in
   `docs/decisions/`. Read the relevant ones before a non-trivial change.
@@ -90,6 +92,7 @@ Knowledge:
   pick one silently.
 
 Workflow: spec-driven.
+
 - A non-trivial behavioural change needs an approved spec with
   acceptance criteria before it is planned, in any mode. A small fix
   may go straight to implement and verify.
@@ -104,8 +107,10 @@ Workflow: spec-driven.
 - Do not implement until the user approves.
 
 Verification:
+
 - `task verify:fast` while working; `task verify` before declaring
   done. Do not weaken a test, lint or type check to make a change pass.
 - Finish with a ledger, one line per check: PASS, FAIL or UNVERIFIED.
   Unit tests, CI and a real integration are separate lines.
+
 <!-- vibeconform:end workflow -->

@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.3.0-alpha.1.0.20261001094752-6c4608aaeeb4
+vibe_version: v0.3.0-alpha.1.0.20261001100506-746addbb1129
 standard: prod-go/v1
 resources:
     - path: .claude/hooks/block-dangerous.sh
@@ -48,11 +48,11 @@ resources:
     - path: AGENTS.md
       section_id: workflow
       ownership: managed-section
-      sha256: 1d0be87b8fabc29f6b4db436af0f62dc300333b9d49d055cfbc808286fd4ad94
+      sha256: c85d4731786d6008e68d608712c4d751b99930ba32aea492a67b505123fabb53
     - path: CLAUDE.md
       section_id: agents
       ownership: managed-section
-      sha256: 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49
+      sha256: 7137d2717d93d624268b7666b9229ef1e76c86d0a2592651138fe62c781c3b33
     - path: Taskfile.vibe.yml
       ownership: generated
       sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
@@ -63,12 +63,12 @@ resources:
       section_id: docs
       ownership: managed-section
       created: true
-      sha256: 595ceacceaef84cec9898cc0bd9fa527a40bf5f1167958595bb91749474b44ad
+      sha256: c03fcf6a3f8ca60d8e4bcc83cad073e1e086a5c4ef8cab31d7ab8603900d6253
     - path: docs/specs/README.md
       section_id: specs
       ownership: managed-section
       created: true
-      sha256: e35dc36264158e961c950bce38d6a88303299cc53f316c88d2094690d20788ee
+      sha256: 0b5329e6fb87541d8814d46e506cdd6391a118b1d32030887655d6f06a770134
     - path: lefthook.yml
       ownership: generated
       sha256: 39b86742ce5cf94c5451adbc236b5be86c8cfd2acc717160424c363e6511fcdc

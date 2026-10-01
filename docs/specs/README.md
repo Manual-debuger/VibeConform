@@ -1,4 +1,5 @@
 <!-- vibeconform:begin specs -->
+
 # Specs
 
 A spec says what must be true; it does not say how to change the code.
@@ -40,4 +41,5 @@ Checkable statements; each is verified before the work is called done.
 
 - [ ] ...
 ```
+
 <!-- vibeconform:end specs -->
