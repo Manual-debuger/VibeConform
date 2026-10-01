@@ -287,3 +287,27 @@ func TestScalarKeysAreFlat(t *testing.T) {
 		}
 	}
 }
+
+// TestSelectDocsLayout: docs_layout takes exactly standard, and composes
+// with any workflow or none.
+func TestSelectDocsLayout(t *testing.T) {
+	s := mustLookup(t, "prod-go")
+	layout := func(v string) *manifest.Manifest {
+		return &manifest.Manifest{Development: &manifest.Development{DocsLayout: &v}}
+	}
+	sel, err := s.Select(layout("standard"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sel.Policies[manifest.DevelopmentDocsLayout] != "standard" || sel.Policies[manifest.DevelopmentWorkflow] != "" {
+		t.Errorf("selection %+v", sel)
+	}
+	mods := s.ModulesFor(sel)
+	if mods[len(mods)-1].Name() != "docs-layout" {
+		t.Errorf("last module %s, want docs-layout", mods[len(mods)-1].Name())
+	}
+	_, err = s.Select(layout("full"))
+	if want := "development.docs_layout (full): unknown value (valid: standard)"; err == nil || err.Error() != want {
+		t.Errorf("error %v, want %q", err, want)
+	}
+}

@@ -88,6 +88,7 @@ func catalog() []Option {
 	editors, agents := integrationGroup(manifest.CategoryEditors), integrationGroup(manifest.CategoryAgents)
 	le := scalarGroup(manifest.ScalarKey{Map: manifest.MapPolicy, Key: manifest.PolicyLineEndings})
 	wf := scalarGroup(manifest.ScalarKey{Map: manifest.MapDevelopment, Key: manifest.DevelopmentWorkflow})
+	docs := scalarGroup(manifest.ScalarKey{Map: manifest.MapDevelopment, Key: manifest.DevelopmentDocsLayout})
 	return []Option{
 		{Group: editors, Name: "vscode", Module: vscode.New()},
 		{Group: editors, Name: "zed", Module: zed.New()},
@@ -101,6 +102,7 @@ func catalog() []Option {
 		{Group: wf, Name: workflow.Direct, Module: workflow.New(workflow.Direct)},
 		{Group: wf, Name: workflow.PlanTriggered, Module: workflow.New(workflow.PlanTriggered)},
 		{Group: wf, Name: workflow.AlwaysSDD, Module: workflow.New(workflow.AlwaysSDD)},
+		{Group: docs, Name: workflow.DocsLayoutStandard, Module: workflow.NewDocsLayout()},
 	}
 }
 
