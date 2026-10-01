@@ -204,7 +204,7 @@ record in this plan.
 - [x] C6 docs, `examples/python`, self-hosting
 - [x] `task verify` and `task audit` green locally
 - [x] Scratch-repo verification (below)
-- [ ] PR open, CI green, recorded here
+- [x] PR open, CI green, recorded here
 
 ## Found during implementation
 
@@ -265,7 +265,12 @@ reached AGENTS.md. Two deviations:
   Code, configuration and tests were unchanged (`git status`).
 
 Automated: `task verify` and `task audit` are green locally. CI is
-recorded below once the PR runs.
+green on PR #48 at `9df00c2`:
+- `test` (Ubuntu, Windows), `race`, `security`, lint;
+- `Conformance / audit`, which installed the recorded `6e67e73`;
+- the examples (`examples/python` with the new resources) and the
+  hook-guard matrix;
+- CodeQL.
 
 ## Explicitly still deferred
 
