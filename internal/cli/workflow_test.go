@@ -158,7 +158,7 @@ func TestWorkflowClaudeAdapter(t *testing.T) {
 	dir := t.TempDir()
 	writeVibeYAML(t, dir, goWorkflow(workflow.PlanTriggered))
 	out := mustSync(t, dir)
-	for _, want := range []string{".claude/commands/spec.md: created", "CLAUDE.md (section agents): created"} {
+	for _, want := range []string{".claude/skills/spec/SKILL.md: created", "CLAUDE.md (section agents): created"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("sync: missing %q\n%s", want, out)
 		}
@@ -172,7 +172,7 @@ func TestWorkflowClaudeAdapter(t *testing.T) {
 	writeVibeYAML(t, dir, goWorkflow(workflow.PlanTriggered)+"integrations:\n  agents: [codex]\n")
 	out = mustSync(t, dir)
 	for _, want := range []string{
-		".claude/commands/spec.md: removed (claude deselected)",
+		".claude/skills/spec/SKILL.md: removed (claude deselected)",
 		"CLAUDE.md (section agents): removed, and the file (claude deselected; nothing else was in it)",
 		"AGENTS.md (section workflow): updated",
 	} {
@@ -192,19 +192,99 @@ func TestWorkflowClaudeAdapter(t *testing.T) {
 	out = mustSync(t, dir)
 	for _, want := range []string{
 		"AGENTS.md (section workflow): removed",
-		".claude/commands/spec.md: removed (development.workflow deselected)",
+		".claude/skills/spec/SKILL.md: removed (development.workflow deselected)",
 		"CLAUDE.md (section agents): removed",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("sync: missing %q\n%s", want, out)
 		}
 	}
-	for _, p := range []string{"AGENTS.md", "CLAUDE.md", ".claude/commands/spec.md"} {
+	for _, p := range []string{"AGENTS.md", "CLAUDE.md", ".claude/skills/spec/SKILL.md"} {
 		if exists(t, dir, p) {
 			t.Errorf("%s survived deselection", p)
 		}
 	}
 	mustConform(t, dir)
+}
+
+// TestSpecCommandRetired: the /spec command spec 0030 generated is
+// removed once the skill replaces it, if it is recorded and unchanged
+// (spec 0031 §3). A modified one is kept with a conflict, and an
+// unrecorded one is never touched.
+func TestSpecCommandRetired(t *testing.T) {
+	const command = ".claude/commands/spec.md"
+	old := []byte("---\ndescription: the spec 0030 command\n---\n")
+	writeCommand := func(t *testing.T, dir string, data []byte) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(dir, ".claude", "commands"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".claude", "commands", "spec.md"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setup := func(t *testing.T) string {
+		t.Helper()
+		dir := t.TempDir()
+		writeVibeYAML(t, dir, goWorkflow(workflow.PlanTriggered))
+		mustSync(t, dir)
+		writeCommand(t, dir, old)
+		recordState(t, dir, command, sha256Hex(old))
+		return dir
+	}
+	const why = "replaced by .claude/skills/spec/SKILL.md"
+
+	t.Run("unchanged", func(t *testing.T) {
+		dir := setup(t)
+		if out := runDiffIn(t, dir); !strings.Contains(out, command+": would remove ("+why+")") {
+			t.Errorf("diff:\n%s", out)
+		}
+		out, err := runAuditIn(t, dir)
+		wantExit(t, err, 3, out)
+		if !strings.Contains(out, command+": out of date ("+why+"; run vibe sync to remove)") {
+			t.Errorf("audit:\n%s", out)
+		}
+		if out := mustSync(t, dir); !strings.Contains(out, command+": removed ("+why+")") {
+			t.Errorf("sync:\n%s", out)
+		}
+		if exists(t, dir, command) || exists(t, dir, ".claude/commands") {
+			t.Error("the retired command, or its empty directory, survived sync")
+		}
+		s, err := state.Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := s.Resources[command]; ok {
+			t.Error("state still records the retired command")
+		}
+		mustConform(t, dir)
+	})
+
+	t.Run("modified", func(t *testing.T) {
+		dir := setup(t)
+		edited := []byte("---\ndescription: my own /spec\n---\n")
+		writeCommand(t, dir, edited)
+		out, err := runSyncIn(t, dir)
+		if err == nil || !strings.Contains(out, command+": conflict: "+why+" but file modified since sync; kept (delete it by hand)") {
+			t.Errorf("sync: %v\n%s", err, out)
+		}
+		if got := readFile(t, dir, command); got != string(edited) {
+			t.Errorf("sync rewrote a modified retired command: %q", got)
+		}
+	})
+
+	t.Run("unrecorded", func(t *testing.T) {
+		dir := t.TempDir()
+		writeVibeYAML(t, dir, goWorkflow(workflow.PlanTriggered))
+		writeCommand(t, dir, old)
+		if out := mustSync(t, dir); strings.Contains(out, command) {
+			t.Errorf("sync touched an unrecorded command:\n%s", out)
+		}
+		if got := readFile(t, dir, command); got != string(old) {
+			t.Errorf("command = %q", got)
+		}
+		mustConform(t, dir)
+	})
 }
 
 // TestWorkflowDuplicateImport: a project CLAUDE.md that already imports

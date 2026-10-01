@@ -1170,12 +1170,22 @@ above it for your own rules. As with `.gitattributes`:
   Claude Code's documented import. If your `CLAUDE.md` already imports
   `AGENTS.md` outside the section, `sync` warns and you can delete your
   line.
-- `.claude/commands/spec.md`, a project slash command. `/spec <feature>`
-  reads the relevant docs, lists constraints and unverified assumptions,
-  writes or reuses a spec from the template, proposes a plan in the
-  conversation, and stops before implementing. It never changes code.
+- `.claude/skills/spec/SKILL.md`, a project skill named `spec`, which is
+  also the slash command `/spec <feature>` (spec 0031). It reads the
+  relevant docs, lists constraints and unverified assumptions, writes or
+  reuses a spec from the template, proposes a plan, and stops before
+  implementing. It never changes code. Under the two SDD workflows,
+  Claude may use it by itself in plan mode, and the `AGENTS.md` section
+  tells it to. Under `direct` it is yours alone to invoke
+  (`disable-model-invocation: true`).
 
-Codex reads `AGENTS.md` directly and gets no command.
+Codex reads `AGENTS.md` directly and gets no skill.
+
+Before spec 0031 this was a command, `.claude/commands/spec.md`. Once
+the skill replaces it, `sync` removes a recorded copy that you have not
+changed ("replaced by .claude/skills/spec/SKILL.md"), keeps a changed
+one as a conflict for you to delete, and never touches one it did not
+write.
 
 **What `docs_layout` writes.** It names three canonical directories,
 `docs/specs/`, `docs/architecture/` and `docs/decisions/`, and seeds
@@ -1728,7 +1738,8 @@ written it by hand. That includes the line-ending policy's section of
 `CLAUDE.md`, `docs/README.md` and `docs/specs/README.md`. Git and the
 agents read them with or without VibeConform, and the markers are plain
 comments (HTML comments in Markdown, invisible when rendered) that you
-can delete or keep. `/spec` stays an ordinary Claude Code command.
+can delete or keep. The `spec` skill stays an ordinary Claude Code
+skill.
 `.github/workflows/examples.yml` in this repository demonstrates the split
 for its own TS/PY fixtures: `task verify` runs first, with no `vibe` on
 `PATH`; building `vibe` and running `task audit` is a separate, later step.

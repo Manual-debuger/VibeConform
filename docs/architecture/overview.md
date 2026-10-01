@@ -155,9 +155,11 @@ reconciliation
 Removal is decided two-way, since there is no target: a recorded path
 that a deselected integration would produce is removed when the file
 still matches its recorded hash, forgotten when it is already gone, and
-kept as a conflict when it was modified (spec 0026). Nothing unrecorded
-is ever deleted, and orphans left by a standard dropping a resource are
-still not pruned.
+kept as a conflict when it was modified (spec 0026). A whole file a
+module has retired (`module.Retirer`, spec 0031), such as the `/spec`
+command the spec skill replaced, is removed by the same rules. Nothing
+unrecorded is ever deleted, and orphans left by a standard dropping a
+resource without retiring it are still not pruned.
 
 The two middle cases both mean "write the target", and spec 0006 therefore
 collapsed them into one decision. Spec 0019 separates them because they

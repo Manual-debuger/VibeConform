@@ -28,11 +28,11 @@ func printWarnings(w io.Writer, p *repoPlan) {
 func diffPruneLine(pp prunePlan) string {
 	switch pp.Decision {
 	case reconcile.Forget:
-		return fmt.Sprintf("would forget (%s deselected; already removed)", pp.Option)
+		return fmt.Sprintf("would forget (%s; already removed)", pp.cause())
 	case reconcile.Remove:
-		return fmt.Sprintf("would remove (%s deselected)", pp.Option)
+		return fmt.Sprintf("would remove (%s)", pp.cause())
 	case reconcile.RemoveConflict:
-		return fmt.Sprintf("conflict: %s deselected but file modified since sync; kept", pp.Option)
+		return fmt.Sprintf("conflict: %s but file modified since sync; kept", pp.cause())
 	default:
 		return pp.Decision.String()
 	}
@@ -41,11 +41,11 @@ func diffPruneLine(pp prunePlan) string {
 func auditPruneLine(pp prunePlan) string {
 	switch pp.Decision {
 	case reconcile.Forget:
-		return fmt.Sprintf("out of date (%s deselected, already removed; run vibe sync to forget it)", pp.Option)
+		return fmt.Sprintf("out of date (%s, already removed; run vibe sync to forget it)", pp.cause())
 	case reconcile.Remove:
-		return fmt.Sprintf("out of date (%s deselected; run vibe sync to remove)", pp.Option)
+		return fmt.Sprintf("out of date (%s; run vibe sync to remove)", pp.cause())
 	case reconcile.RemoveConflict:
-		return fmt.Sprintf("conflict: %s deselected but file modified since sync", pp.Option)
+		return fmt.Sprintf("conflict: %s but file modified since sync", pp.cause())
 	default:
 		return pp.Decision.String()
 	}
@@ -60,16 +60,19 @@ func applyPrune(repoRoot string, pp prunePlan, next *state.State, counts *syncCo
 	case reconcile.Forget:
 		delete(next.Resources, pp.Path)
 		counts.removed++
-		return []string{fmt.Sprintf("forgotten (%s deselected; already removed)", pp.Option)}, nil
+		return []string{fmt.Sprintf("forgotten (%s; already removed)", pp.cause())}, nil
 	case reconcile.Remove:
 		if err := removeResource(repoRoot, pp.Path); err != nil {
 			return nil, err
 		}
 		delete(next.Resources, pp.Path)
 		counts.removed++
-		return []string{fmt.Sprintf("removed (%s deselected)", pp.Option)}, nil
+		return []string{fmt.Sprintf("removed (%s)", pp.cause())}, nil
 	case reconcile.RemoveConflict:
 		counts.conflicts++
+		if pp.Retired != "" {
+			return []string{fmt.Sprintf("conflict: %s but file modified since sync; kept (delete it by hand)", pp.Retired)}, nil
+		}
 		return []string{fmt.Sprintf("conflict: %s deselected but file modified since sync; kept (delete it by hand, or select %s again)",
 			pp.Option, pp.Option)}, nil
 	default:

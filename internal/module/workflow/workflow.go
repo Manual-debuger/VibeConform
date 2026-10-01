@@ -33,7 +33,8 @@ const (
 
 // The section is composed from constants rather than embedded templates,
 // so a CRLF working copy of a template file cannot change the bytes a
-// build ships. {planning} and {specdir} are filled in by Content.
+// build ships. {planningRule}, {directRule} and {specdir} are filled in
+// by Content.
 const (
 	header = "## Repository workflow\n" +
 		"\n" +
@@ -58,9 +59,7 @@ const (
 
 	direct = "Workflow: direct.\n" +
 		"- Implement, then verify. Respect any spec that applies.\n" +
-		"- A planning context ({planning}) writes a\n" +
-		"  lightweight spec with acceptance criteria when asked. The spec says\n" +
-		"  WHAT must be true; the plan says HOW to change the repository.\n" +
+		"{directRule}" +
 		"\n"
 
 	planTriggered = "Workflow: plan-triggered lightweight SDD.\n" +
@@ -73,10 +72,7 @@ const (
 		"  may go straight to implement and verify.\n" +
 		sddRules
 
-	sddRules = "- Planning context ({planning}): list the\n" +
-		"  constraints that apply and the assumptions you have not verified,\n" +
-		"  then write a lightweight spec with acceptance criteria. Plan only\n" +
-		"  after that.\n" +
+	sddRules = "{planningRule}" +
 		"- The spec says WHAT must be true; the plan says HOW to change the\n" +
 		"  repository. Keep them apart. Reuse an approved spec when one exists.\n" +
 		"- In a read-only plan mode, put the spec in the plan. Once it is\n" +
@@ -91,13 +87,27 @@ const (
 		"  Unit tests, CI and a real integration are separate lines.\n"
 )
 
-// The phrasings Content fills in, by whether /spec exists and whether the
-// docs layout names a spec directory.
+// The phrasings Content fills in, by whether the spec skill (/spec)
+// exists and whether the docs layout names a spec directory. With the
+// skill, the planning rules name it (spec 0031 §2).
 const (
-	planningSpec   = "the harness's plan mode, or `/spec`"
-	planningNoSpec = "the harness's plan mode, or a request for a spec"
-	specdirLayout  = "write it to `docs/specs/` first"
-	specdirNone    = "write it where this project keeps specs first"
+	planningSpec = "- Planning context (the harness's plan mode, or `/spec`): use the\n" +
+		"  `spec` skill. List the constraints that apply and the assumptions\n" +
+		"  you have not verified, then write a lightweight spec with acceptance\n" +
+		"  criteria. Plan only after that.\n"
+	planningNoSpec = "- Planning context (the harness's plan mode, or a request for a spec): list the\n" +
+		"  constraints that apply and the assumptions you have not verified,\n" +
+		"  then write a lightweight spec with acceptance criteria. Plan only\n" +
+		"  after that.\n"
+	directSpec = "- A planning context (the harness's plan mode, or `/spec`) writes a\n" +
+		"  lightweight spec with acceptance criteria when asked, with the `spec`\n" +
+		"  skill. The spec says WHAT must be true; the plan says HOW to change\n" +
+		"  the repository.\n"
+	directNoSpec = "- A planning context (the harness's plan mode, or a request for a spec) writes a\n" +
+		"  lightweight spec with acceptance criteria when asked. The spec says\n" +
+		"  WHAT must be true; the plan says HOW to change the repository.\n"
+	specdirLayout = "write it to `docs/specs/` first"
+	specdirNone   = "write it where this project keeps specs first"
 )
 
 // Content returns the AGENTS.md section for mode: with spec when the
@@ -121,14 +131,14 @@ func Content(mode string, spec, docsLayout bool) string {
 	}
 	b.WriteString(verification)
 
-	planning, specdir := planningNoSpec, specdirNone
+	planning, directRule, specdir := planningNoSpec, directNoSpec, specdirNone
 	if spec {
-		planning = planningSpec
+		planning, directRule = planningSpec, directSpec
 	}
 	if docsLayout {
 		specdir = specdirLayout
 	}
-	return strings.NewReplacer("{planning}", planning, "{specdir}", specdir).Replace(b.String())
+	return strings.NewReplacer("{planningRule}", planning, "{directRule}", directRule, "{specdir}", specdir).Replace(b.String())
 }
 
 type workflowModule struct {

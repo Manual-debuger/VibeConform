@@ -9,8 +9,9 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
-// reference is spec 0030 §3's example, byte for byte: plan-triggered-sdd
-// with docs_layout and claude selected.
+// reference is spec 0030 §3's example, byte for byte, with the planning
+// rule spec 0031 §2 revised: plan-triggered-sdd with docs_layout and
+// claude selected.
 const reference = "## Repository workflow\n" +
 	"\n" +
 	"Managed by VibeConform from `development:` in `vibe.yaml`. This section\n" +
@@ -25,10 +26,10 @@ const reference = "## Repository workflow\n" +
 	"\n" +
 	"Workflow: plan-triggered lightweight SDD.\n" +
 	"- Normal mode: implement, then verify. Respect any spec that applies.\n" +
-	"- Planning context (the harness's plan mode, or `/spec`): list the\n" +
-	"  constraints that apply and the assumptions you have not verified,\n" +
-	"  then write a lightweight spec with acceptance criteria. Plan only\n" +
-	"  after that.\n" +
+	"- Planning context (the harness's plan mode, or `/spec`): use the\n" +
+	"  `spec` skill. List the constraints that apply and the assumptions\n" +
+	"  you have not verified, then write a lightweight spec with acceptance\n" +
+	"  criteria. Plan only after that.\n" +
 	"- The spec says WHAT must be true; the plan says HOW to change the\n" +
 	"  repository. Keep them apart. Reuse an approved spec when one exists.\n" +
 	"- In a read-only plan mode, put the spec in the plan. Once it is\n" +
@@ -43,7 +44,7 @@ const reference = "## Repository workflow\n" +
 
 func TestReferenceSection(t *testing.T) {
 	if got := Content(PlanTriggered, true, true); got != reference {
-		t.Errorf("section differs from spec 0030 §3:\n%s", got)
+		t.Errorf("section differs from spec 0030 §3 as revised by spec 0031 §2:\n%s", got)
 	}
 }
 
@@ -57,14 +58,15 @@ func TestVariants(t *testing.T) {
 	directBlock := "Workflow: direct.\n" +
 		"- Implement, then verify. Respect any spec that applies.\n" +
 		"- A planning context (the harness's plan mode, or `/spec`) writes a\n" +
-		"  lightweight spec with acceptance criteria when asked. The spec says\n" +
-		"  WHAT must be true; the plan says HOW to change the repository.\n" +
+		"  lightweight spec with acceptance criteria when asked, with the `spec`\n" +
+		"  skill. The spec says WHAT must be true; the plan says HOW to change\n" +
+		"  the repository.\n" +
 		"\nVerification:\n"
 	alwaysBlock := "Workflow: spec-driven.\n" +
 		"- A non-trivial behavioural change needs an approved spec with\n" +
 		"  acceptance criteria before it is planned, in any mode. A small fix\n" +
 		"  may go straight to implement and verify.\n" +
-		"- Planning context (the harness's plan mode, or `/spec`): list the\n"
+		"- Planning context (the harness's plan mode, or `/spec`): use the\n"
 
 	for name, tc := range map[string]struct {
 		got        string
@@ -78,7 +80,7 @@ func TestVariants(t *testing.T) {
 		"no claude": {
 			got:  Content(PlanTriggered, false, true),
 			want: []string{"- Planning context (the harness's plan mode, or a request for a spec): list the\n"},
-			gone: []string{"`/spec`"},
+			gone: []string{"`/spec`", "`spec` skill"},
 		},
 		"direct": {
 			got:  Content(Direct, true, true),

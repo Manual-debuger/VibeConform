@@ -123,6 +123,17 @@ type HookRuntime interface {
 	HookBinaries(mctx *Context) []string
 }
 
+// Retirer is implemented by a module that once generated a whole file it
+// no longer does, such as the /spec command the spec skill replaced. Sync
+// treats a recorded retired path as it treats a deselected option's file:
+// removed if unchanged since sync, kept as a conflict if modified, never
+// touched if unrecorded (docs/specs/0031-spec-skill.md §3).
+type Retirer interface {
+	// Retired maps each retired path, slash-separated, to the reason
+	// messages give for removing it.
+	Retired() map[string]string
+}
+
 // SectionChecker is implemented by a module whose managed section can be
 // defeated by text around it, such as a later .gitattributes rule that
 // overrides the line-ending policy for every path. The check reads; it

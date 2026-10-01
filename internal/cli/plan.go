@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
@@ -50,6 +52,9 @@ type prunePlan struct {
 	// Option names the deselected option that produces it, as messages
 	// show it: an integration's name, or a policy's key.
 	Option string
+	// Retired is set instead of Option for a path a module retired
+	// (module.Retirer): the reason messages give, e.g. "replaced by …".
+	Retired string
 	// Decision is what sync would do about it.
 	Decision reconcile.Removal
 	// Resource and Patch are set for a structured-patch resource, which is
@@ -228,7 +233,45 @@ func planPrunes(repoRoot string, p *repoPlan) error {
 			}
 		}
 	}
+	return planRetired(repoRoot, p, resolved, seen)
+}
+
+// planRetired adds a prune for every recorded path that a module of the
+// standard, selected or not, has retired and nothing still resolves.
+func planRetired(repoRoot string, p *repoPlan, resolved, seen map[string]bool) error {
+	mods := slices.Clone(p.Standard.Modules)
+	for _, o := range p.Standard.Options {
+		mods = append(mods, o.Module)
+	}
+	for _, mod := range mods {
+		r, ok := mod.(module.Retirer)
+		if !ok {
+			continue
+		}
+		retired := r.Retired()
+		for _, path := range slices.Sorted(maps.Keys(retired)) {
+			key := stateKey(path)
+			recorded, ok := p.Previous.Resources[key]
+			if resolved[key] || seen[key] || !ok {
+				continue
+			}
+			seen[key] = true
+			decision, err := decideRemoval(repoRoot, key, recorded)
+			if err != nil {
+				return err
+			}
+			p.Prunes = append(p.Prunes, prunePlan{Path: key, Retired: retired[path], Decision: decision})
+		}
+	}
 	return nil
+}
+
+// cause is why pp's path goes, as messages show it.
+func (pp prunePlan) cause() string {
+	if pp.Retired != "" {
+		return pp.Retired
+	}
+	return pp.Option + " deselected"
 }
 
 func prunePatch(repoRoot string, recorded state.ResourceState, r resource.Resource, option string) (prunePlan, error) {
