@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
@@ -123,6 +124,59 @@ func TestSectionStaysSmall(t *testing.T) {
 					t.Errorf("%s spec=%v docs=%v: unfilled placeholder or no final newline", mode, spec, docs)
 				}
 			}
+		}
+	}
+}
+
+// TestComponentContent pins the component section of spec 0032 §1, for a
+// nested path and a shallow one: the link climbs to the root.
+func TestComponentContent(t *testing.T) {
+	nested := "## Component `api`\n" +
+		"\n" +
+		"Managed by VibeConform from `components:` in `vibe.yaml`. This is the\n" +
+		"`api` component (profile `go`). The root\n" +
+		"[`AGENTS.md`](../../AGENTS.md) holds the workflow and the rules, and they\n" +
+		"apply here unchanged.\n" +
+		"\n" +
+		"Verification: `task verify:fast` while working and `task verify` before\n" +
+		"declaring done, from this directory; `task api:verify` from the root.\n"
+	if got := ComponentContent(manifest.Component{ID: "api", Path: "services/api", Profile: manifest.ProfileGo}); got != nested {
+		t.Errorf("nested component:\n%s", got)
+	}
+	shallow := ComponentContent(manifest.Component{ID: "web", Path: "web", Profile: manifest.ProfileTS})
+	if !strings.Contains(shallow, "[`AGENTS.md`](../AGENTS.md)") || !strings.Contains(shallow, "`task web:verify`") ||
+		!strings.Contains(shallow, "(profile `ts`)") {
+		t.Errorf("shallow component:\n%s", shallow)
+	}
+	for _, p := range manifest.Profiles {
+		c := ComponentContent(manifest.Component{ID: "a-long-component-name", Path: "a/b/c/d", Profile: p})
+		if words := len(strings.Fields(c)); words > MaxComponentWords {
+			t.Errorf("%s: %d words, more than %d", p, words, MaxComponentWords)
+		}
+	}
+}
+
+// TestResolveComponents: one component section per component, after the
+// root's workflow section.
+func TestResolveComponents(t *testing.T) {
+	comps := []manifest.Component{
+		{ID: "api", Path: "services/api", Profile: manifest.ProfileGo},
+		{ID: "web", Path: "apps/web", Profile: manifest.ProfileTS},
+	}
+	rs, err := New(PlanTriggered).Resolve(context.Background(), &module.Context{
+		Components: comps, Integrations: []string{"claude"}, Policies: map[string]string{"workflow": PlanTriggered},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rs) != 3 || rs[0].Path != "AGENTS.md" {
+		t.Fatalf("resources %+v", rs)
+	}
+	for i, c := range comps {
+		r := rs[i+1]
+		if r.Path != c.Path+"/AGENTS.md" || r.SectionID != "component" || r.Ownership != resource.ManagedSection ||
+			r.Markers != resource.HTMLComment || r.Placement != resource.Bottom || string(r.Content) != ComponentContent(c) {
+			t.Errorf("component %s: %+v", c.ID, r)
 		}
 	}
 }

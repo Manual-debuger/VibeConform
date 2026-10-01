@@ -156,16 +156,51 @@ func (workflowModule) Name() string {
 }
 
 // Resolve returns the workflow section of AGENTS.md, placed at the bottom
-// so the project's own title and introduction come first.
+// so the project's own title and introduction come first, then each
+// component's section of its own AGENTS.md (spec 0032).
 func (w workflowModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
-	return []resource.Resource{{
+	rs := []resource.Resource{{
 		Path:      AgentsPath,
 		Ownership: resource.ManagedSection,
 		SectionID: SectionID,
 		Markers:   resource.HTMLComment,
 		Placement: resource.Bottom,
 		Content:   []byte(Content(w.mode, hasSpecCommand(mctx), hasDocsLayout(mctx))),
-	}}, nil
+	}}
+	for _, c := range module.ComponentsOf(mctx) {
+		rs = append(rs, resource.Resource{
+			Path:      c.Path + "/" + AgentsPath,
+			Ownership: resource.ManagedSection,
+			SectionID: ComponentSectionID,
+			Markers:   resource.HTMLComment,
+			Placement: resource.Bottom,
+			Content:   []byte(ComponentContent(c)),
+		})
+	}
+	return rs, nil
+}
+
+const (
+	// ComponentSectionID names the section of a component's AGENTS.md.
+	ComponentSectionID = "component"
+	// MaxComponentWords bounds that section (spec 0032 §1).
+	MaxComponentWords = 80
+)
+
+// ComponentContent returns the section of c's AGENTS.md: which component
+// this is, a link to the root AGENTS.md that governs it, and the tasks
+// that verify it alone. It restates no policy.
+func ComponentContent(c manifest.Component) string {
+	root := strings.Repeat("../", strings.Count(c.Path, "/")+1) + AgentsPath
+	return "## Component `" + c.ID + "`\n" +
+		"\n" +
+		"Managed by VibeConform from `components:` in `vibe.yaml`. This is the\n" +
+		"`" + c.ID + "` component (profile `" + string(c.Profile) + "`). The root\n" +
+		"[`AGENTS.md`](" + root + ") holds the workflow and the rules, and they\n" +
+		"apply here unchanged.\n" +
+		"\n" +
+		"Verification: `task verify:fast` while working and `task verify` before\n" +
+		"declaring done, from this directory; `task " + c.ID + ":verify` from the root.\n"
 }
 
 // hasSpecCommand reports whether the harness offers /spec: claude-config

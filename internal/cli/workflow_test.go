@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module/workflow"
 	"github.com/Manual-debuger/VibeConform/internal/state"
 )
@@ -200,6 +201,62 @@ func TestWorkflowClaudeAdapter(t *testing.T) {
 		}
 	}
 	for _, p := range []string{"AGENTS.md", "CLAUDE.md", ".claude/skills/spec/SKILL.md"} {
+		if exists(t, dir, p) {
+			t.Errorf("%s survived deselection", p)
+		}
+	}
+	mustConform(t, dir)
+}
+
+// TestWorkflowComponents: in prod-mono, a workflow gives each component's
+// AGENTS.md its section below the project's prose, and each component's
+// CLAUDE.md the import; deselecting the workflow takes them all away
+// again (spec 0032).
+func TestWorkflowComponents(t *testing.T) {
+	dir := t.TempDir()
+	base := "standard: prod-mono\nversion: v1\ncomponents:\n" +
+		"  - {id: api, path: services/api, profile: go}\n  - {id: web, path: web, profile: ts}\n"
+	writeVibeYAML(t, dir, base+"development:\n  workflow: always-sdd\n")
+	prose := "# API\n\nKeep handlers thin.\n"
+	if err := os.MkdirAll(filepath.Join(dir, "services", "api"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "services", "api", "AGENTS.md"), []byte(prose), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := mustSync(t, dir)
+	for _, want := range []string{
+		"services/api/AGENTS.md (section component): added",
+		"web/AGENTS.md (section component): created",
+		"services/api/CLAUDE.md (section agents): created",
+		"web/CLAUDE.md (section agents): created",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sync: missing %q\n%s", want, out)
+		}
+	}
+	api := manifest.Component{ID: "api", Path: "services/api", Profile: manifest.ProfileGo}
+	want := prose + "\n<!-- vibeconform:begin component -->\n" + workflow.ComponentContent(api) + "<!-- vibeconform:end component -->\n"
+	if got := readFile(t, dir, "services/api/AGENTS.md"); got != want {
+		t.Errorf("services/api/AGENTS.md = %q", got)
+	}
+	mustConform(t, dir)
+
+	writeVibeYAML(t, dir, base)
+	out = mustSync(t, dir)
+	for _, want := range []string{
+		"services/api/AGENTS.md (section component): removed (development.workflow deselected)",
+		"web/AGENTS.md (section component): removed, and the file (development.workflow deselected; nothing else was in it)",
+		"web/CLAUDE.md (section agents): removed, and the file",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sync: missing %q\n%s", want, out)
+		}
+	}
+	if got := readFile(t, dir, "services/api/AGENTS.md"); got != prose {
+		t.Errorf("services/api/AGENTS.md = %q, want the project's prose alone", got)
+	}
+	for _, p := range []string{"web/AGENTS.md", "web/CLAUDE.md", "services/api/CLAUDE.md"} {
 		if exists(t, dir, p) {
 			t.Errorf("%s survived deselection", p)
 		}

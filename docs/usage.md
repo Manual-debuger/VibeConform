@@ -875,6 +875,16 @@ component, `hook:check` runs each component's `typecheck`, `lint`, and
 they use. The guard runs in the first runtime the repository has, in the
 order Go, Node, Python (`guard.go`, `guard.mjs`, or `guard.py`).
 
+**Agent instructions.** With a development workflow selected (see
+"Development workflow" below), each component's `AGENTS.md` gets a short
+`component` section at the bottom (spec 0032). It names the component
+and its profile, links to the root `AGENTS.md` (whose workflow and rules
+apply unchanged), and names the component's verification tasks. With
+`claude` selected, each component's `CLAUDE.md` also gets the `@AGENTS.md`
+import, so Claude Code reads that section when it works there. The rest
+of both files is yours. Deselecting the workflow removes the sections.
+Removing a component leaves them, like its other generated files.
+
 `sync`'s missing-tool warnings cover only the profiles declared: a
 repository with no Python component is not warned about `uv`.
 

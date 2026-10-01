@@ -14,3 +14,7 @@ components:
 integrations:
   editors: [zed, vscode]
   agents: [claude]
+# A workflow gives each component an AGENTS.md section that points to the
+# root's (spec 0032).
+development:
+  workflow: plan-triggered-sdd

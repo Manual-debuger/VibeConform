@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/module/workflow"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
@@ -59,6 +60,29 @@ func TestAdapterResources(t *testing.T) {
 			imp.Placement != resource.Top || string(imp.Content) != "@AGENTS.md\n" {
 			t.Errorf("%s: CLAUDE.md section %+v", mode, imp)
 		}
+	}
+}
+
+// TestComponentImports: each component's CLAUDE.md imports its own
+// AGENTS.md (spec 0032 §2), and a duplicate import there warns too.
+func TestComponentImports(t *testing.T) {
+	comps := []manifest.Component{
+		{ID: "api", Path: "services/api", Profile: manifest.ProfileGo},
+		{ID: "web", Path: "apps/web", Profile: manifest.ProfileTS},
+	}
+	rs := resolvePaths(t, &module.Context{Components: comps, Integrations: []string{"claude"}, Policies: map[string]string{"workflow": workflow.AlwaysSDD}})
+	for _, c := range comps {
+		imp, ok := rs[c.Path+"/CLAUDE.md"]
+		if !ok || imp.SectionID != "agents" || imp.Placement != resource.Top || string(imp.Content) != "@AGENTS.md\n" {
+			t.Errorf("%s: CLAUDE.md section %+v", c.ID, imp)
+		}
+	}
+	if none := resolvePaths(t, &module.Context{Components: comps, Integrations: []string{"claude"}, Policies: map[string]string{}}); len(none) != 2 {
+		t.Errorf("without a workflow: %v", none)
+	}
+	r := resource.Resource{Path: "services/api/CLAUDE.md", Content: []byte("@AGENTS.md\n")}
+	if _, w := (claudeModule{}).CheckSection(r, nil, []byte("@AGENTS.md\n")); len(w) != 1 {
+		t.Errorf("component duplicate import: warnings %v", w)
 	}
 }
 

@@ -3,6 +3,7 @@ package claude
 import (
 	"bytes"
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
@@ -92,20 +93,31 @@ func workflowResources(mctx *module.Context) []resource.Resource {
 	if mctx == nil || mctx.Policies[manifest.DevelopmentWorkflow] == "" {
 		return nil
 	}
-	return []resource.Resource{
+	rs := []resource.Resource{
 		{
 			Path:      SpecSkillPath,
 			Ownership: resource.Generated,
 			Content:   []byte(SpecSkill(mctx.Policies[manifest.DevelopmentWorkflow])),
 		},
-		{
-			Path:      ClaudeMDPath,
-			Ownership: resource.ManagedSection,
-			SectionID: ImportSectionID,
-			Markers:   resource.HTMLComment,
-			Placement: resource.Top,
-			Content:   []byte(importLine),
-		},
+		importSection(ClaudeMDPath),
+	}
+	// Each component's CLAUDE.md imports its own AGENTS.md, whose section
+	// links to the root (spec 0032 §2).
+	for _, c := range module.ComponentsOf(mctx) {
+		rs = append(rs, importSection(c.Path+"/"+ClaudeMDPath))
+	}
+	return rs
+}
+
+// importSection is the agents section of the CLAUDE.md at p.
+func importSection(p string) resource.Resource {
+	return resource.Resource{
+		Path:      p,
+		Ownership: resource.ManagedSection,
+		SectionID: ImportSectionID,
+		Markers:   resource.HTMLComment,
+		Placement: resource.Top,
+		Content:   []byte(importLine),
 	}
 }
 
@@ -117,9 +129,10 @@ func (claudeModule) Retired() map[string]string {
 
 // CheckSection warns about a second import of AGENTS.md outside
 // CLAUDE.md's section: harmless, but the project's line is now redundant.
-// It never reports a conflict, and checks no other file.
+// It never reports a conflict, and checks no file but a CLAUDE.md, the
+// root's or a component's.
 func (claudeModule) CheckSection(r resource.Resource, before, after []byte) (conflicts, warnings []string) {
-	if r.Path != ClaudeMDPath {
+	if path.Base(r.Path) != ClaudeMDPath {
 		return nil, nil
 	}
 	line := 0
