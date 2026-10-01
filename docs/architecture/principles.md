@@ -24,7 +24,10 @@ How to apply:
 
 - Before writing a rule into `AGENTS.md`, ask whether a task, lint rule,
   hook, test, or audit could enforce it. If so, add that, and let the prose
-  name it.
+  name it. The section of `AGENTS.md` a development workflow generates
+  (spec 0030) is held to the same test: it routes to documents and names
+  tasks, it restates nothing a tool enforces, and a test caps it at 300
+  words.
 - A guardrail that can be disabled without anything noticing is a gap, not
   a guardrail. Where one exists, document it next to the mechanism (as
   `docs/decisions/0006-resource-file-mode.md` does for unaudited file modes)

@@ -567,8 +567,10 @@ Deliberately **not** managed, and left for you to maintain by hand:
   binaries is a repository policy choice, not a baseline guardrail, and a
   `v1` standard is all-or-nothing (no optional resources yet).
 - `AGENTS.md` and `CLAUDE.md` — prose written by a human for a specific
-  repository. Generating them would produce exactly the fabricated,
-  ignored-by-everyone instruction file this project argues against.
+  repository. Generating them whole would produce exactly the fabricated,
+  ignored-by-everyone instruction file this project argues against. Both
+  stay yours, except for the one short section each that a selected
+  [development workflow](#development-workflow) adds (ADR 0015).
 - `.claude/settings.local.json` — gitignored, user-local, possibly
   machine-specific. Never written.
 - `.gitignore` — genuinely project-specific.
@@ -1112,6 +1114,88 @@ it. Your rules stay. If VibeConform created `.gitattributes` and nothing
 else is in it, the file is deleted. A modified section is kept and
 reported as a conflict, as in "Deselecting" above.
 
+## Development workflow
+
+Two opt-in settings, the same for every standard, that give people and
+agents one agreed way to work here (spec 0030, ADR 0015):
+
+```yaml
+standard: prod-go
+version: v1
+development:
+  workflow: plan-triggered-sdd   # direct | plan-triggered-sdd | always-sdd
+  docs_layout: standard
+```
+
+Leaving `development:` out selects neither. `workflow` takes one value,
+so the three modes can't be combined:
+
+| `workflow` | Normal work | In a planning context |
+|---|---|---|
+| `direct` | implement, then verify | write a spec when asked |
+| `plan-triggered-sdd` | implement, then verify | constraints and assumptions, a lightweight spec with acceptance criteria, then a plan; nothing is implemented before you approve |
+| `always-sdd` | a non-trivial behavioural change needs an approved spec first, in any mode | as for `plan-triggered-sdd` |
+
+A *planning context* is the harness's own plan mode (Claude Code's plan
+mode, for example), or an explicit request for a spec, such as `/spec`
+below. Nothing detects plan mode with a hook: the agent knows when it is
+in it.
+
+**What `workflow` writes.** One managed section at the end of
+`AGENTS.md`, the `workflow` section between HTML-comment markers. It
+routes rather than explains:
+
+- where specs, architecture docs and ADRs live;
+- the workflow for each context, and that the spec (WHAT) stays apart
+  from the plan (HOW);
+- `task verify:fast` while working and `task verify` before declaring
+  done;
+- a closing ledger, one line per check (PASS, FAIL or UNVERIFIED), so
+  "unit-tested", "CI passed" and "checked against a real integration"
+  stay separate claims.
+
+Every line follows from what `vibe.yaml` selects. It names the docs
+directories only with `docs_layout`, and `/spec` only with the `claude`
+integration. The section is held to at most 300 words, so there is room
+above it for your own rules. As with `.gitattributes`:
+
+- Everything outside the markers is yours and is never rewritten.
+- If there is no `AGENTS.md`, it is created with the section alone.
+- Editing inside the markers is drift.
+
+**Claude Code.** Claude Code reads `CLAUDE.md`, not `AGENTS.md`. With
+`claude` selected, a workflow also adds:
+
+- the `agents` section at the top of `CLAUDE.md`, holding `@AGENTS.md`,
+  Claude Code's documented import. If your `CLAUDE.md` already imports
+  `AGENTS.md` outside the section, `sync` warns and you can delete your
+  line.
+- `.claude/commands/spec.md`, a project slash command. `/spec <feature>`
+  reads the relevant docs, lists constraints and unverified assumptions,
+  writes or reuses a spec from the template, proposes a plan in the
+  conversation, and stops before implementing. It never changes code.
+
+Codex reads `AGENTS.md` directly and gets no command.
+
+**What `docs_layout` writes.** It names three canonical directories,
+`docs/specs/`, `docs/architecture/` and `docs/decisions/`, and seeds
+only two files, each with one managed section:
+
+- `docs/README.md`: a short "Layout" list, below your own introduction.
+- `docs/specs/README.md`: how to name a spec, its Status line (draft,
+  accepted, implemented, superseded), and the spec template. It is at
+  the top, and your own conventions can follow it.
+
+`architecture/` and `decisions/` get no file; they appear with your
+first document there. There are no `active/` or `completed/`
+directories: a spec's Status line says where it stands.
+
+**Deselecting.** Removing `workflow` removes the `AGENTS.md` section,
+`/spec` and the `CLAUDE.md` section. Deselecting `claude` removes the
+last two. Removing `docs_layout` removes its two sections. Your text
+stays. A file VibeConform created is deleted once nothing else is in it,
+and a modified section is kept and reported as a conflict.
+
 ## Agent hooks
 
 When the `claude` integration is selected — the default — the standard
@@ -1512,9 +1596,11 @@ rather than putting `bin/` on `PATH`.
 
 Still hand-maintained here, by the non-goals above:
 `.github/workflows/release.yml`, `.goreleaser.yaml`, `.gitignore`,
-`AGENTS.md`, `CLAUDE.md`, `Taskfile.local.yml`. This repository selects
-the line-ending policy, so its `.gitattributes` is the managed section
-alone.
+`Taskfile.local.yml`. This repository selects the line-ending policy, so
+its `.gitattributes` is the managed section alone. It also selects
+`workflow: always-sdd` and the docs layout: `AGENTS.md` and
+`docs/README.md` are its own prose plus one managed section each, and
+`CLAUDE.md` is the managed import alone.
 
 ## What `vibe.yaml` means today
 
@@ -1531,8 +1617,11 @@ version: v1
 also accepts `integrations:`, which selects editors, agents, and
 code-intelligence providers; see "Selecting integrations" above. Every
 standard also accepts `policy:`, which opts in to repository policies;
-see "Line-ending policy" above. No other key is accepted: `vibe.yaml` is decoded strictly, and `components:` on any
-other standard is an error.
+see "Line-ending policy" above. And every standard accepts
+`development:`, which opts in to a development workflow and the docs
+layout; see "Development workflow" above. No other key is accepted:
+`vibe.yaml` is decoded strictly, and `components:` on any other standard
+is an error.
 
 There is no `.vibe/lock.yaml`, no `depends_on` between components (so no
 affected-component graph yet), and no overrides: a repository either
@@ -1635,8 +1724,11 @@ Everything else `vibe sync` wrote — `.golangci.yml`, `eslint`/`prettier`/
 and its `CI / gate`, and any editor or agent configuration you selected —
 is ordinary project configuration at that point, no different from having
 written it by hand. That includes the line-ending policy's section of
-`.gitattributes`. Git reads it with or without VibeConform, and the
-markers are plain comments that you can delete or keep.
+`.gitattributes`, and the development workflow's sections of `AGENTS.md`,
+`CLAUDE.md`, `docs/README.md` and `docs/specs/README.md`. Git and the
+agents read them with or without VibeConform, and the markers are plain
+comments (HTML comments in Markdown, invisible when rendered) that you
+can delete or keep. `/spec` stays an ordinary Claude Code command.
 `.github/workflows/examples.yml` in this repository demonstrates the split
 for its own TS/PY fixtures: `task verify` runs first, with no `vibe` on
 `PATH`; building `vibe` and running `task audit` is a separate, later step.

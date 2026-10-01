@@ -36,6 +36,11 @@
 > It does this through one managed section of `.gitattributes`, and the
 > project's own rules in that file stay untouched (see
 > [`docs/specs/0029-text-policy.md`](docs/specs/0029-text-policy.md)).
+> Its opt-in `development:` map selects a workflow (`direct`,
+> `plan-triggered-sdd` or `always-sdd`) that owns one short routing
+> section of `AGENTS.md`, plus a Claude Code `/spec` command, and a
+> standard docs layout (see
+> [`docs/specs/0030-plan-triggered-sdd.md`](docs/specs/0030-plan-triggered-sdd.md)).
 > `vibe diff` previews the reconciliation VibeConform would perform for that
 > resource against `.vibe/state.yaml` — see
 > [`docs/specs/0006-reconcile-diff-v1.md`](docs/specs/0006-reconcile-diff-v1.md).
@@ -159,7 +164,7 @@ cmd/vibe/          CLI entrypoint
 internal/cli/      Command tree (root + init/audit/diff/sync/check/doctor)
 internal/manifest/ vibe.yaml parsing
 internal/standard/ Named, versioned standard registry
-internal/module/   Module composition interface + the eleven modules the three standards compose
+internal/module/   Module composition interface + the modules the four standards compose
 internal/resource/ Resource + ownership + file mode model
 internal/reconcile/ Three-way decision engine
 internal/state/    .vibe/state.yaml read/write

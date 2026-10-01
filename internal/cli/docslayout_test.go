@@ -1,0 +1,87 @@
+package cli
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+const goDocsLayout = "standard: prod-go\nversion: v1\ndevelopment:\n  docs_layout: standard\n"
+
+// TestDocsLayoutOnBareRepository: both seed files are created, and both
+// leave again when the layout is deselected.
+func TestDocsLayoutOnBareRepository(t *testing.T) {
+	dir := t.TempDir()
+	writeVibeYAML(t, dir, goDocsLayout)
+	out := mustSync(t, dir)
+	for _, want := range []string{
+		"docs/README.md (section docs): created",
+		"docs/specs/README.md (section specs): created",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sync: missing %q\n%s", want, out)
+		}
+	}
+	if got := readFile(t, dir, "docs/README.md"); !strings.HasPrefix(got, "<!-- vibeconform:begin docs -->\n## Layout\n") {
+		t.Errorf("docs/README.md = %q", got)
+	}
+	mustConform(t, dir)
+
+	writeVibeYAML(t, dir, goDefaults)
+	out = mustSync(t, dir)
+	if !strings.Contains(out, "docs/specs/README.md (section specs): removed, and the file (development.docs_layout deselected; nothing else was in it)") {
+		t.Errorf("sync:\n%s", out)
+	}
+	for _, p := range []string{"docs/README.md", "docs/specs/README.md"} {
+		if exists(t, dir, p) {
+			t.Errorf("%s survived, though VibeConform created it and nothing else is in it", p)
+		}
+	}
+	mustConform(t, dir)
+}
+
+// TestDocsLayoutKeepsProjectIndex: an existing docs/README.md keeps its
+// own text above the section, and keeps it when the layout leaves.
+func TestDocsLayoutKeepsProjectIndex(t *testing.T) {
+	dir := t.TempDir()
+	writeVibeYAML(t, dir, goDocsLayout)
+	prose := "# Documentation\n\nPlans live in plans/.\n"
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "README.md"), []byte(prose), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustSync(t, dir)
+	if got := readFile(t, dir, "docs/README.md"); !strings.HasPrefix(got, prose+"\n<!-- vibeconform:begin docs -->\n") {
+		t.Errorf("docs/README.md = %q", got)
+	}
+	mustConform(t, dir)
+
+	writeVibeYAML(t, dir, goDefaults)
+	mustSync(t, dir)
+	if got := readFile(t, dir, "docs/README.md"); got != prose {
+		t.Errorf("docs/README.md = %q, want the project's text alone", got)
+	}
+}
+
+// TestDocsLayoutRoutesAgents: the AGENTS.md section names the layout's
+// directories only while the layout is selected.
+func TestDocsLayoutRoutesAgents(t *testing.T) {
+	dir := t.TempDir()
+	writeVibeYAML(t, dir, goWorkflow("plan-triggered-sdd"))
+	mustSync(t, dir)
+	if got := readFile(t, dir, "AGENTS.md"); strings.Contains(got, "docs/specs/") {
+		t.Errorf("AGENTS.md names docs/specs/ without the layout:\n%s", got)
+	}
+
+	writeVibeYAML(t, dir, goWorkflow("plan-triggered-sdd")+"  docs_layout: standard\n")
+	if out := mustSync(t, dir); !strings.Contains(out, "AGENTS.md (section workflow): updated") {
+		t.Errorf("sync:\n%s", out)
+	}
+	if got := readFile(t, dir, "AGENTS.md"); !strings.Contains(got, "live in `docs/specs/`") {
+		t.Errorf("AGENTS.md does not route to the layout:\n%s", got)
+	}
+	mustConform(t, dir)
+}

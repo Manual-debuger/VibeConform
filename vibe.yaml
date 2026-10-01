@@ -2,3 +2,6 @@ standard: prod-go
 version: v1
 policy:
   line_endings: lf
+development:
+  workflow: always-sdd
+  docs_layout: standard

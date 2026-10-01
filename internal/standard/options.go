@@ -18,6 +18,10 @@ type Group struct {
 	// Scalar is true for a group vibe.yaml gives one value, so at most one
 	// of its options is selected.
 	Scalar bool
+	// Map is the top-level vibe.yaml map a scalar group's key is under:
+	// manifest.MapPolicy or manifest.MapDevelopment. Empty for an
+	// integration category.
+	Map string
 }
 
 // Option is one optional module in a standard's catalog: an integration,
@@ -39,13 +43,27 @@ type Option struct {
 	Excludes []string
 }
 
-// Label is how messages name o: an integration by its name, a policy by
-// its key in vibe.yaml.
+// Label is how messages name o: an integration by its name, a scalar
+// option by its key in vibe.yaml, e.g. policy.line_endings.
 func (o Option) Label() string {
 	if o.Group.Scalar {
-		return "policy." + o.Group.Key
+		return o.Group.Map + "." + o.Group.Key
 	}
 	return o.Name
+}
+
+// scalarGroup returns the group for one single-valued vibe.yaml key.
+func scalarGroup(k manifest.ScalarKey) Group {
+	return Group{Key: k.Key, Scalar: true, Map: k.Map}
+}
+
+// noun is what an error calls a missing scalar key's options: a policy
+// under policy:, a setting under development:.
+func noun(k manifest.ScalarKey) string {
+	if k.Map == manifest.MapPolicy {
+		return "policy"
+	}
+	return "setting"
 }
 
 // integrationGroup returns the list group for an integration category.
@@ -108,8 +126,8 @@ func (s *Standard) Defaults() Selection {
 	return sel
 }
 
-// Select resolves vibe.yaml's integrations: and policy: maps against the
-// catalog. An absent category takes its defaults, an empty one selects
+// Select resolves vibe.yaml's integrations:, policy: and development:
+// maps against the catalog. An absent category takes its defaults, an empty one selects
 // none; an absent policy key selects its default, which no shipped policy
 // has. Integrations are in catalog order whatever order vibe.yaml lists
 // names in, and never nil.
@@ -154,20 +172,20 @@ func (s *Standard) Select(m *manifest.Manifest) (Selection, error) {
 			sel.Integrations = append(sel.Integrations, o.Name)
 		}
 	}
-	for _, key := range manifest.PolicyKeys {
-		value := m.Policy.Get(key)
+	for _, k := range manifest.ScalarKeys {
+		value := m.Scalar(k)
 		if value == nil {
 			continue
 		}
-		where := fmt.Sprintf("policy.%s (%s)", key, *value)
-		valid := s.names(Group{Key: key, Scalar: true})
+		where := fmt.Sprintf("%s.%s (%s)", k.Map, k.Key, *value)
+		valid := s.names(scalarGroup(k))
 		switch {
 		case len(valid) == 0:
-			return Selection{}, fmt.Errorf("%s: %s/%s offers no %s policy", where, s.Name, s.Version, key)
+			return Selection{}, fmt.Errorf("%s: %s/%s offers no %s %s", where, s.Name, s.Version, k.Key, noun(k))
 		case !slices.Contains(valid, *value):
 			return Selection{}, fmt.Errorf("%s: unknown value (valid: %s)", where, strings.Join(valid, ", "))
 		}
-		sel.Policies[key] = *value
+		sel.Policies[k.Key] = *value
 	}
 	if err := s.checkRelations(sel); err != nil {
 		return Selection{}, err
