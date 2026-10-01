@@ -13,10 +13,10 @@ Knowledge:
 
 Workflow: plan-triggered lightweight SDD.
 - Normal mode: implement, then verify. Respect any spec that applies.
-- Planning context (the harness's plan mode, or `/spec`): list the
-  constraints that apply and the assumptions you have not verified,
-  then write a lightweight spec with acceptance criteria. Plan only
-  after that.
+- Planning context (the harness's plan mode, or `/spec`): use the
+  `spec` skill. List the constraints that apply and the assumptions
+  you have not verified, then write a lightweight spec with acceptance
+  criteria. Plan only after that.
 - The spec says WHAT must be true; the plan says HOW to change the
   repository. Keep them apart. Reuse an approved spec when one exists.
 - In a read-only plan mode, put the spec in the plan. Once it is
