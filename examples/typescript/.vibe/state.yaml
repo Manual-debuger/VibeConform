@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.3.0-alpha.1.0.20261001023823-e2cdd4c76bd8+dirty
+vibe_version: v0.3.0-alpha.1.0.20261001024915-df911da5a954+dirty
 standard: prod-ts/v1
 resources:
     - path: .claude/hooks/block-dangerous.sh
@@ -23,6 +23,10 @@ resources:
     - path: .codex/hooks.json
       ownership: generated
       sha256: 78922a784ee78e9e50587e93628cd3b9d4dfbe49087adc4514e6781cea38cbb9
+    - path: .gitattributes
+      section_id: line-endings
+      ownership: managed-section
+      sha256: eac2d782a61f1a91384f56fe144d1fdc5798ea6a6ebe261e5db48b3f924ff838
     - path: .github/dependabot.yml
       ownership: generated
       sha256: f8535549e33ea260cf307d5d96e74a0af625211e90b524a56856bd00a516a6dc

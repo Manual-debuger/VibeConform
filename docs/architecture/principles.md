@@ -51,6 +51,8 @@ How to apply:
   only at the I/O boundary.
 - Content is written exactly as resolved, with no line-ending translation;
   `* text=auto eol=lf` in `.gitattributes` keeps checkouts hashing the same.
+  It is an opt-in policy since spec 0029, so it is something git enforces,
+  not an instruction for an agent to remember.
 - Anything Unix-only (file mode bits, extensionless binaries) is called
   out in `docs/usage.md` together with what a Windows user sees instead.
   Agent hooks are the worked example: they were bash scripts until spec

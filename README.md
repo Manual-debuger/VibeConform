@@ -32,6 +32,10 @@
 > integrations, and `vibe sync` safely removes what a deselected integration
 > left behind (see
 > [`docs/specs/0026-optional-integrations.md`](docs/specs/0026-optional-integrations.md)).
+> `vibe.yaml`'s opt-in `policy: {line_endings: lf}` pins LF checkouts.
+> It does this through one managed section of `.gitattributes`, and the
+> project's own rules in that file stay untouched (see
+> [`docs/specs/0029-text-policy.md`](docs/specs/0029-text-policy.md)).
 > `vibe diff` previews the reconciliation VibeConform would perform for that
 > resource against `.vibe/state.yaml` — see
 > [`docs/specs/0006-reconcile-diff-v1.md`](docs/specs/0006-reconcile-diff-v1.md).
@@ -159,6 +163,7 @@ internal/module/   Module composition interface + the eleven modules the three s
 internal/resource/ Resource + ownership + file mode model
 internal/reconcile/ Three-way decision engine
 internal/state/    .vibe/state.yaml read/write
+internal/textregion/ Marker-delimited managed sections of text files
 internal/atomicfile/ Temp-file + rename writes
 docs/              Specs, plans, architecture, and decision records (source of truth)
 ```

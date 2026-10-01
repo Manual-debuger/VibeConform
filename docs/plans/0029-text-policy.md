@@ -1,7 +1,7 @@
 # Plan 0029: Line-ending policy and managed sections
 
 Implements `docs/specs/0029-text-policy.md` and ADR 0014. Tracks issue
-#45. Spec accepted at review (2026-10-01, `c114e1c`).
+#45. Spec accepted at review (2026-10-01, `c114e1c`); plan accepted (`cb14b4c`).
 
 Branch: `feat/text-policy`, off `main` after PR #46. It is one pull
 request, merged with a merge commit, and the second of three: #44 (spec
@@ -252,37 +252,87 @@ docs move to C6 and C7.
 
 ## Checklist
 
-- [ ] C2 plan approved and committed
-- [ ] C3 every existing standard, manifest and example resolves the same resources in the same order; error texts unchanged
-- [ ] C4 schema 1, 2 and 3 fixtures load; the next save writes schema 4, sorted
-- [ ] C4 a schema 4 file round-trips byte for byte; duplicate (`path`, `section_id`) and unknown `ownership` are load errors
-- [ ] C4 root and examples re-synced; only the state layout and `vibe_version` change
-- [ ] C5 `textregion`: every malformed-marker case is reported, never repaired
-- [ ] C5 bytes outside a section are unchanged after insert, replace and remove, CRLF included
-- [ ] C5 every row of the decision table, for diff, audit (exit codes) and sync
-- [ ] C5 two sections in one file are planned and written together; a conflict in one holds both
-- [ ] C5 prune: remove, forget, conflict; a `created` file left empty is deleted, and one with user lines is kept
-- [ ] C6 `policy:` strict decoding; `policy.line_endings (crlf): unknown value (valid: lf)`; a scalar group's `Requires`/`Excludes` checked like an integration's (fake catalog)
-- [ ] C6 a narrow rule below the section is not reported; a global contradiction below it is a conflict (exit 2 in audit, non-zero in sync, nothing written); a rule above it is a warning
-- [ ] C6 deselecting the policy removes the section and keeps `*.png binary`
-- [ ] C6 the golden-hash test passes on Ubuntu and Windows CI
-- [ ] C6 doctor: PASS, WARN (`i/crlf` count), FAIL (overridden `eol`), and the hint when the policy is off
-- [ ] C7 root and `examples/typescript` self-host the policy; `vibe audit` is conformant in all four repositories
-- [ ] C7 docs updated; spec status set to implemented
+- [x] C2 plan approved and committed
+- [x] C3 every existing standard, manifest and example resolves the same resources in the same order; error texts unchanged
+- [x] C4 schema 1, 2 and 3 fixtures load; the next save writes schema 4, sorted
+- [x] C4 a schema 4 file round-trips byte for byte; duplicate (`path`, `section_id`) and unknown `ownership` are load errors
+- [x] C4 root and examples re-synced; only the state layout and `vibe_version` change
+- [x] C5 `textregion`: every malformed-marker case is reported, never repaired
+- [x] C5 bytes outside a section are unchanged after insert, replace and remove, CRLF included
+- [x] C5 every row of the decision table, for diff, audit (exit codes) and sync
+- [x] C5 two sections in one file are planned and written together; a conflict in one holds both
+- [x] C5 prune: remove, forget, conflict; a `created` file left empty is deleted, and one with user lines is kept
+- [x] C6 `policy:` strict decoding; `policy.line_endings (crlf): unknown value (valid: lf)`; a scalar group's `Requires`/`Excludes` checked like an integration's (fake catalog)
+- [x] C6 a narrow rule below the section is not reported; a global contradiction below it is a conflict (exit 2 in audit, non-zero in sync, nothing written); a rule above it is a warning
+- [x] C6 deselecting the policy removes the section and keeps `*.png binary`
+- [x] C6 the golden-hash test passes on Ubuntu and Windows CI
+- [x] C6 doctor: PASS, WARN (`i/crlf` count), FAIL (overridden `eol`), and the hint when the policy is off
+- [x] C7 root and `examples/typescript` self-host the policy; `vibe audit` is conformant in all four repositories
+- [x] C7 docs updated; spec status set to implemented
 
-## Verification (to fill in)
+## Found during implementation
 
-- `task verify` and `task audit` at each commit.
-- In a scratch repository, with an existing `.gitattributes` holding
-  user rules:
-  - `diff`, then `sync`, then `audit`;
-  - add `* eol=crlf` after the section and see the conflict;
-  - change it to `*.bat eol=crlf` and see none;
-  - deselect the policy and see the section removed and the user lines
-    kept.
-- `vibe doctor` in the root, with the policy on.
-- PR CI: Ubuntu and Windows matrices, `examples.yml`, `hook-guard.yml`,
-  `Conformance / audit`.
+- **Doctor got a second function, not a flag (C6).** The plan gave
+  `doctor.LineEndings` a `policy bool` argument. Instead, a separate
+  `doctor.LineEndingPolicy` shares an `attributes` helper with it, so the
+  spec 0028 rows and their tests are unchanged. The CLI appends
+  `; policy.line_endings is not selected` to the old row.
+- **`Selection.Has` and `Standard.With` (C3).** Pruning needs a trial
+  selection that adds one option of either kind. `With` builds it in
+  catalog order, and `Has` replaces `slices.Contains` over names, which
+  could not tell a policy value from an integration name.
+- **Held sections are reported, not counted (C5).** When one section of
+  a file conflicts, the file's other sections are reported as follows:
+  - `diff` adds `(held: another section of this file conflicts)`;
+  - `sync` prints `not written: …`.
+
+  They are not counted as conflicts themselves. The conflicting section
+  already makes `sync` exit non-zero.
+- **A policy names itself in relation errors (C6).** A policy's
+  `Requires` or `Excludes` error reads
+  `policy.line_endings: lf requires …`. An integration's text is
+  unchanged.
+
+## Verification
+
+Observed locally on 2026-10-01, on Windows 11 (windows/amd64) with Go
+1.27.0, Task 3.53.1, Git 2.53.0.windows.1, and `core.autocrlf=true`:
+
+- `task verify` passed at C3, C4, C5, C6 and C7. `task audit` was
+  conformant at each. `vibe audit` was conformant in all three examples.
+- **C3:** `vibe diff` in the root and the three examples reported
+  nothing.
+- **C4:** re-syncing the root and the three examples changed only the
+  state layout and `vibe_version`. The sorted set of `sha256` values in
+  each state file was identical before and after.
+- **Scratch repository** (`git init`, prod-go, policy on, an existing
+  `.gitattributes` with `*.png binary` and `*.sh text eol=lf`):
+  - `diff` showed `would add`.
+  - `sync` inserted the section above the user's rules, and `audit` was
+    conformant.
+  - `git check-attr` resolved `eol: lf`, `text: auto` for `Taskfile.yml`,
+    and `text: unset` for `a.png`.
+  - Appending `* eol=crlf` made `audit` exit 2, naming line 8. `sync`
+    exited 1 and left the line in place.
+  - Narrowing the rule to `*.bat eol=crlf` made `audit` conformant again.
+  - `vibe doctor` printed
+    `PASS line endings policy line_endings: lf; core.autocrlf=true; …`.
+  - Deselecting the policy removed the section and kept all three user
+    rules. Doctor then fell back to the spec 0028 `WARN`, plus the
+    not-selected hint.
+- **Second scratch repository** (`core.autocrlf=false`, one file
+  committed with CRLF): after syncing the policy, doctor printed
+  `WARN … 1 tracked file is stored with CRLF; run git add --renormalize .`.
+  After `git add --renormalize .` it printed `PASS`.
+- **Self-hosting:**
+  - The root's `.gitattributes` is now the managed section alone; the
+    hand-written duplicate line was removed.
+  - `examples/typescript` has `*.png binary` below the section.
+  - `git add --renormalize .` staged no file beyond those edited.
+  - `vibe doctor` in the root printed `PASS` for line endings.
+
+Pending: CI on the PR, where the golden-hash test runs on both Ubuntu and
+Windows.
 
 ## Explicitly still deferred
 

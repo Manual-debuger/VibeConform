@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Specified in `docs/specs/0029-text-policy.md`.
+Accepted. Implemented per `docs/specs/0029-text-policy.md`.
 
 ## Context
 
