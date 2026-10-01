@@ -70,15 +70,18 @@ func (claudeModule) Name() string {
 // Resolve returns this module's resources in a fixed order; see the
 // github-ci module for why order is part of the contract.
 //
+// With a development workflow selected, the /spec command and CLAUDE.md's
+// import of AGENTS.md follow (spec 0030 §5).
+//
 // policy.json's content is computed rather than embedded. It is still
 // deterministic, because renderPolicy is.
-func (claudeModule) Resolve(_ context.Context, _ *module.Context) ([]resource.Resource, error) {
+func (claudeModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
 	policyJSON, err := renderPolicy(policy)
 	if err != nil {
 		return nil, err
 	}
 
-	return []resource.Resource{
+	resources := []resource.Resource{
 		{
 			Path:      SettingsPath,
 			Ownership: resource.Generated,
@@ -89,5 +92,6 @@ func (claudeModule) Resolve(_ context.Context, _ *module.Context) ([]resource.Re
 			Ownership: resource.Generated,
 			Content:   policyJSON,
 		},
-	}, nil
+	}
+	return append(resources, workflowResources(mctx)...), nil
 }

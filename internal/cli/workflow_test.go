@@ -151,3 +151,77 @@ func TestWorkflowUnknownValue(t *testing.T) {
 		t.Errorf("error %v, want it to contain %q", err, want)
 	}
 }
+
+// TestWorkflowClaudeAdapter: with claude selected, a workflow brings /spec
+// and CLAUDE.md's import, and each leaves with whichever option goes.
+func TestWorkflowClaudeAdapter(t *testing.T) {
+	dir := t.TempDir()
+	writeVibeYAML(t, dir, goWorkflow(workflow.PlanTriggered))
+	out := mustSync(t, dir)
+	for _, want := range []string{".claude/commands/spec.md: created", "CLAUDE.md (section agents): created"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sync: missing %q\n%s", want, out)
+		}
+	}
+	if got := readFile(t, dir, "CLAUDE.md"); got != "<!-- vibeconform:begin agents -->\n@AGENTS.md\n<!-- vibeconform:end agents -->\n" {
+		t.Errorf("CLAUDE.md = %q", got)
+	}
+	mustConform(t, dir)
+
+	// Deselecting claude removes the adapter, and AGENTS.md stops naming /spec.
+	writeVibeYAML(t, dir, goWorkflow(workflow.PlanTriggered)+"integrations:\n  agents: [codex]\n")
+	out = mustSync(t, dir)
+	for _, want := range []string{
+		".claude/commands/spec.md: removed (claude deselected)",
+		"CLAUDE.md (section agents): removed, and the file (claude deselected; nothing else was in it)",
+		"AGENTS.md (section workflow): updated",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sync: missing %q\n%s", want, out)
+		}
+	}
+	if got := readFile(t, dir, "AGENTS.md"); strings.Contains(got, "`/spec`") {
+		t.Errorf("AGENTS.md still names /spec:\n%s", got)
+	}
+	mustConform(t, dir)
+
+	// Selecting claude again, then dropping the workflow, removes all three.
+	writeVibeYAML(t, dir, goWorkflow(workflow.PlanTriggered))
+	mustSync(t, dir)
+	writeVibeYAML(t, dir, goDefaults)
+	out = mustSync(t, dir)
+	for _, want := range []string{
+		"AGENTS.md (section workflow): removed",
+		".claude/commands/spec.md: removed (development.workflow deselected)",
+		"CLAUDE.md (section agents): removed",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sync: missing %q\n%s", want, out)
+		}
+	}
+	for _, p := range []string{"AGENTS.md", "CLAUDE.md", ".claude/commands/spec.md"} {
+		if exists(t, dir, p) {
+			t.Errorf("%s survived deselection", p)
+		}
+	}
+	mustConform(t, dir)
+}
+
+// TestWorkflowDuplicateImport: a project CLAUDE.md that already imports
+// AGENTS.md syncs, with a warning, and keeps its own line.
+func TestWorkflowDuplicateImport(t *testing.T) {
+	dir := t.TempDir()
+	writeVibeYAML(t, dir, goWorkflow(workflow.Direct))
+	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte("@AGENTS.md\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stubHookInstall(t)
+	out, errOut, err := runSyncCapturing(t, dir)
+	if err != nil || !strings.Contains(errOut, `warning: CLAUDE.md (section agents): line 5: "@AGENTS.md" imports AGENTS.md again`) {
+		t.Errorf("sync: %v\n%s\n%s", err, out, errOut)
+	}
+	if got := readFile(t, dir, "CLAUDE.md"); !strings.HasSuffix(got, "<!-- vibeconform:end agents -->\n\n@AGENTS.md\n") {
+		t.Errorf("CLAUDE.md = %q", got)
+	}
+	mustConform(t, dir)
+}
