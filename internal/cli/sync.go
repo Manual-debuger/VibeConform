@@ -102,8 +102,10 @@ func runSync(cmd *cobra.Command, repoRoot string, allowDowngrade bool) error {
 		VibeVersion: runningVersion(cmd),
 		Standard:    fmt.Sprintf("%s/%s", p.Standard.Name, p.Standard.Version),
 		Resources:   make(map[string]state.ResourceState, len(p.Previous.Resources)),
+		Sections:    make(map[state.SectionKey]state.SectionState, len(p.Previous.Sections)),
 	}
 	maps.Copy(next.Resources, p.Previous.Resources)
+	maps.Copy(next.Sections, p.Previous.Sections)
 
 	var counts syncCounts
 	applyErr := applyPlan(out, repoRoot, p.Resources, next, &counts)
