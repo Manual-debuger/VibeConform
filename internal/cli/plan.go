@@ -35,6 +35,10 @@ type resourcePlan struct {
 	Ignored bool
 	// Patch is the element-level plan of a structured-patch resource.
 	Patch *patchPlan
+	// Section is the plan of a managed section, and SectionFile the plan
+	// of the file it shares with the file's other sections.
+	Section     *sectionPlan
+	SectionFile *sectionFile
 }
 
 // prunePlan is one recorded path that the selection no longer produces
@@ -52,6 +56,10 @@ type prunePlan struct {
 	// pruned element by element rather than deleted whole.
 	Resource resource.Resource
 	Patch    *patchPlan
+	// Section and SectionFile are set for a managed section, which is
+	// removed from its file rather than deleted with it.
+	Section     *sectionPlan
+	SectionFile *sectionFile
 }
 
 // repoPlan is everything a command needs to report or apply reconciliation
@@ -129,7 +137,7 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 			return nil, fmt.Errorf("resolve %s: %w", mod.Name(), err)
 		}
 		for _, r := range resources {
-			rp, err := planResource(repoRoot, previous, r)
+			rp, err := planResource(repoRoot, previous, mod, r)
 			if err != nil {
 				return nil, err
 			}
@@ -138,6 +146,9 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 	}
 
 	if err := planPrunes(repoRoot, p); err != nil {
+		return nil, err
+	}
+	if err := planSections(repoRoot, p); err != nil {
 		return nil, err
 	}
 	if err := markIgnored(repoRoot, p); err != nil {
@@ -159,8 +170,12 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 // option of this standard produces them.
 func planPrunes(repoRoot string, p *repoPlan) error {
 	resolved := map[string]bool{}
+	sections := map[state.SectionKey]bool{}
 	for _, rp := range p.Resources {
 		resolved[stateKey(rp.Resource.Path)] = true
+		if rp.Section != nil {
+			sections[state.SectionKey{Path: stateKey(rp.Resource.Path), ID: rp.Section.ID}] = true
+		}
 	}
 
 	seen := map[string]bool{}
@@ -178,6 +193,17 @@ func planPrunes(repoRoot string, p *repoPlan) error {
 			}
 			for _, r := range resources {
 				key := stateKey(r.Path)
+				if r.Ownership == resource.ManagedSection {
+					// A section is owned apart from its file: prune it if
+					// state records it, whatever else the file holds.
+					skey := state.SectionKey{Path: key, ID: r.SectionID}
+					if _, ok := p.Previous.Sections[skey]; ok && !sections[skey] {
+						sections[skey] = true
+						p.Prunes = append(p.Prunes, prunePlan{Path: key, Option: o.Label(), Resource: r,
+							Section: &sectionPlan{ID: r.SectionID, Pruned: true, resource: r}})
+					}
+					continue
+				}
 				recorded, ok := p.Previous.Resources[key]
 				if resolved[key] || seen[key] || !ok {
 					continue
@@ -293,9 +319,17 @@ func profiles(s *standard.Standard, m *manifest.Manifest) []manifest.Profile {
 
 // planResource decides the outcome for a single resource by comparing the
 // hash recorded in state, the file on disk, and the resolved content.
-func planResource(repoRoot string, previous *state.State, r resource.Resource) (resourcePlan, error) {
+func planResource(repoRoot string, previous *state.State, mod module.Module, r resource.Resource) (resourcePlan, error) {
 	if (r.Ownership == resource.StructuredPatch) != (r.Patch != nil) {
 		return resourcePlan{}, fmt.Errorf("%s: a structured-patch resource needs a Patch, and only one may have it", r.Path)
+	}
+	if err := checkSection(r); err != nil {
+		return resourcePlan{}, err
+	}
+	if r.Ownership == resource.ManagedSection {
+		// Decided in planSections, with the file's other sections.
+		checker, _ := mod.(module.SectionChecker)
+		return resourcePlan{Resource: r, Supported: true, Section: &sectionPlan{ID: r.SectionID, checker: checker, resource: r}}, nil
 	}
 	if r.Patch != nil {
 		var recorded *state.ResourceState

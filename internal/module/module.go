@@ -122,3 +122,14 @@ type HookRuntime interface {
 	// then the guard's runtime.
 	HookBinaries(mctx *Context) []string
 }
+
+// SectionChecker is implemented by a module whose managed section can be
+// defeated by text around it, such as a later .gitattributes rule that
+// overrides the line-ending policy for every path. The check reads; it
+// never edits (docs/decisions/0014-managed-sections.md §3).
+type SectionChecker interface {
+	// CheckSection sees the file as sync would leave it: the bytes before
+	// and after r's section. Conflicts hold the file unwritten and fail
+	// audit; warnings are reported and fail nothing.
+	CheckSection(r resource.Resource, before, after []byte) (conflicts, warnings []string)
+}
