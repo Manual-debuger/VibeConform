@@ -87,7 +87,7 @@ func runAudit(cmd *cobra.Command, repoRoot string) error {
 			outOfDate++
 		}
 		if pp.Section != nil {
-			if _, err := fmt.Fprintf(out, "%s: %s\n", sectionLabel(pp.Path, pp.Section.ID), auditSectionPruneLine(pp.Section, pp.Option)); err != nil {
+			if _, err := fmt.Fprintf(out, "%s: %s\n", sectionLabel(pp.Path, pp.Section.ID), auditSectionPruneLine(pp.Section, pp.cause())); err != nil {
 				return fmt.Errorf("audit: %w", err)
 			}
 			continue

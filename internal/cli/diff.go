@@ -63,7 +63,7 @@ func runDiff(cmd *cobra.Command, repoRoot string) error {
 	}
 	for _, pp := range p.Prunes {
 		if pp.Section != nil {
-			if _, err := fmt.Fprintf(out, "%s: %s\n", sectionLabel(pp.Path, pp.Section.ID), diffSectionPruneLine(pp.SectionFile, pp.Section, pp.Option)); err != nil {
+			if _, err := fmt.Fprintf(out, "%s: %s\n", sectionLabel(pp.Path, pp.Section.ID), diffSectionPruneLine(pp.SectionFile, pp.Section, pp.cause())); err != nil {
 				return fmt.Errorf("diff: %w", err)
 			}
 			continue

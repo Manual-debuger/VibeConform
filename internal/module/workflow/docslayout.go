@@ -80,6 +80,12 @@ func (docsLayout) Name() string {
 	return "docs-layout"
 }
 
+// MovableSections: the specs section follows development.specs_dir, so a
+// recorded copy elsewhere leaves when the directory moves (spec 0034 §3).
+func (docsLayout) MovableSections() []string {
+	return []string{"specs"}
+}
+
 // Resolve returns the two sections that make the layout's directories
 // canonical. The docs index goes below the project's own introduction;
 // the specs README is VibeConform's from the top, and the project may add

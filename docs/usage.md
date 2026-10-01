@@ -1227,6 +1227,30 @@ independent, so a library can take `docs_development` alone. Each needs
 `development.docs_operations: on requires development.docs_layout: standard, which is not selected`.
 Turning one off updates both sections back.
 
+**Adopting an existing layout.** If your documents already live
+somewhere else, name that directory instead of moving them (spec 0034):
+
+```yaml
+development:
+  docs_layout: standard
+  decisions_dir: docs/adr   # instead of docs/decisions
+  specs_dir: rfcs           # instead of docs/specs
+```
+
+The keys are `specs_dir`, `architecture_dir`, `decisions_dir`,
+`development_dir` and `operations_dir`. The last two need their
+`docs_development` or `docs_operations` key. Nothing is detected or
+moved:
+- each path must be a clean path relative to the repository root, and
+  no two directories may overlap;
+- an adopted directory must exist, and `diff`, `audit` and `sync` stop
+  with an error naming the key until it does.
+
+The `AGENTS.md` section and `docs/README.md` then name your directories,
+and the specs section goes in `<specs_dir>/README.md`. Changing
+`specs_dir` later moves that section: the copy at the old path is
+removed if you have not changed it, and kept as a conflict if you have.
+
 **Deselecting.** Removing `workflow` removes the `AGENTS.md` section,
 `/spec` and the `CLAUDE.md` section. Deselecting `claude` removes the
 last two. Removing `docs_layout` removes its two sections. Your text

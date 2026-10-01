@@ -56,6 +56,13 @@ type Development struct {
 	DocsLayout      *string `yaml:"docs_layout,omitempty"`
 	DocsDevelopment *string `yaml:"docs_development,omitempty"`
 	DocsOperations  *string `yaml:"docs_operations,omitempty"`
+	// The paths an existing layout is adopted from (spec 0034). They are
+	// not ScalarKeys: their values are free-form, not option names.
+	SpecsDir        *string `yaml:"specs_dir,omitempty"`
+	ArchitectureDir *string `yaml:"architecture_dir,omitempty"`
+	DecisionsDir    *string `yaml:"decisions_dir,omitempty"`
+	DevelopmentDir  *string `yaml:"development_dir,omitempty"`
+	OperationsDir   *string `yaml:"operations_dir,omitempty"`
 }
 
 // The development: map's keys.
@@ -222,6 +229,9 @@ func Parse(data []byte) (*Manifest, error) {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
 	if err := validateIntegrations(m.Integrations); err != nil {
+		return nil, fmt.Errorf("parse manifest: %w", err)
+	}
+	if err := validateDevelopment(m.Development); err != nil {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
 	return &m, nil

@@ -157,7 +157,9 @@ that a deselected integration would produce is removed when the file
 still matches its recorded hash, forgotten when it is already gone, and
 kept as a conflict when it was modified (spec 0026). A whole file a
 module has retired (`module.Retirer`, spec 0031), such as the `/spec`
-command the spec skill replaced, is removed by the same rules. Nothing
+command the spec skill replaced, is removed by the same rules. So is a
+section whose file moved with `vibe.yaml` (`module.SectionMover`, spec
+0034): the specs section, which follows `development.specs_dir`. Nothing
 unrecorded is ever deleted, and orphans left by a standard dropping a
 resource without retiring it are still not pruned.
 

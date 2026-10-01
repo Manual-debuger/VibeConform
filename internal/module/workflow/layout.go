@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"cmp"
 	"context"
 	"strings"
 
@@ -16,28 +17,30 @@ const On = "on"
 // Layout is the docs layout development: selects: where each kind of
 // document lives, as slash-separated paths from the repository root.
 // Development and Operations are empty unless selected (spec 0033).
-type Layout struct {
-	Specs, Architecture, Decisions string
-	Development, Operations        string
-}
+type Layout manifest.DocsDirs
 
 // DefaultLayout is spec 0030 §4's layout, with neither optional directory.
 func DefaultLayout() Layout {
-	return Layout{Specs: "docs/specs", Architecture: "docs/architecture", Decisions: "docs/decisions"}
+	return Layout((*manifest.Development)(nil).DocsDirs())
 }
 
 // layoutOf returns the layout mctx selects, or nil when
-// development.docs_layout is not selected.
+// development.docs_layout is not selected: the context's directories,
+// which include any vibe.yaml adopts (spec 0034), or the defaults.
 func layoutOf(mctx *module.Context) *Layout {
 	if mctx == nil || mctx.Policies[manifest.DevelopmentDocsLayout] == "" {
 		return nil
 	}
 	l := DefaultLayout()
+	dirs := mctx.DocsDirs
+	if dirs.Specs != "" {
+		l.Specs, l.Architecture, l.Decisions = dirs.Specs, dirs.Architecture, dirs.Decisions
+	}
 	if mctx.Policies[manifest.DevelopmentDocsDevelopment] == On {
-		l.Development = "docs/development"
+		l.Development = cmp.Or(dirs.Development, "docs/development")
 	}
 	if mctx.Policies[manifest.DevelopmentDocsOperations] == On {
-		l.Operations = "docs/operations"
+		l.Operations = cmp.Or(dirs.Operations, "docs/operations")
 	}
 	return &l
 }
