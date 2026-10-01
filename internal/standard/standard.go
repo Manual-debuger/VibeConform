@@ -26,6 +26,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/repotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/tsrepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/tstooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/workflow"
 )
 
 // Standard is a named, versioned bundle of modules.
@@ -79,18 +80,27 @@ func Lookup(name, version string) (*Standard, error) {
 }
 
 // catalog is the option catalog every standard shares: editors, then
-// agents, then code intelligence, then repository policies. claude and codex are on by
-// default, so a vibe.yaml without integrations: composes exactly what
-// every standard composed before spec 0026.
+// agents, then code intelligence, then repository policies, then
+// development settings. claude and codex are on by default, so a vibe.yaml
+// without integrations: composes exactly what every standard composed
+// before spec 0026.
 func catalog() []Option {
 	editors, agents := integrationGroup(manifest.CategoryEditors), integrationGroup(manifest.CategoryAgents)
+	le := scalarGroup(manifest.ScalarKey{Map: manifest.MapPolicy, Key: manifest.PolicyLineEndings})
+	wf := scalarGroup(manifest.ScalarKey{Map: manifest.MapDevelopment, Key: manifest.DevelopmentWorkflow})
 	return []Option{
 		{Group: editors, Name: "vscode", Module: vscode.New()},
 		{Group: editors, Name: "zed", Module: zed.New()},
 		{Group: agents, Name: "claude", Module: claude.New(), Default: true},
 		{Group: agents, Name: "codex", Module: codex.New(), Default: true},
 		// Policies are opt-in: none is a default (spec 0029).
-		{Group: Group{Key: manifest.PolicyLineEndings, Scalar: true}, Name: "lf", Module: lineendings.New()},
+		{Group: le, Name: "lf", Module: lineendings.New()},
+		// Development settings are opt-in too (spec 0030). The three
+		// workflows own the same section, so changing one for another is
+		// an update, not a removal.
+		{Group: wf, Name: workflow.Direct, Module: workflow.New(workflow.Direct)},
+		{Group: wf, Name: workflow.PlanTriggered, Module: workflow.New(workflow.PlanTriggered)},
+		{Group: wf, Name: workflow.AlwaysSDD, Module: workflow.New(workflow.AlwaysSDD)},
 	}
 }
 

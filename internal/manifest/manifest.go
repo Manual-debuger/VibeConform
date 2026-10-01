@@ -34,6 +34,10 @@ type Manifest struct {
 	// Policy selects repository policies; nil means none, since every
 	// policy is opt-in (docs/decisions/0014-managed-sections.md).
 	Policy *Policy `yaml:"policy,omitempty"`
+	// Development selects how people and agents work in the repository;
+	// nil means nothing, since every setting is opt-in
+	// (docs/decisions/0015-agents-md-workflow-section.md).
+	Development *Development `yaml:"development,omitempty"`
 }
 
 // Policy is vibe.yaml's policy: map. Each key takes one value, and an
@@ -45,8 +49,64 @@ type Policy struct {
 // PolicyLineEndings is the line-ending policy's key.
 const PolicyLineEndings = "line_endings"
 
-// PolicyKeys lists every policy key in resolution order.
-var PolicyKeys = []string{PolicyLineEndings}
+// Development is vibe.yaml's development: map. Each key takes one value,
+// and an absent key selects nothing.
+type Development struct {
+	Workflow   *string `yaml:"workflow,omitempty"`
+	DocsLayout *string `yaml:"docs_layout,omitempty"`
+}
+
+// The development: map's keys.
+const (
+	DevelopmentWorkflow   = "workflow"
+	DevelopmentDocsLayout = "docs_layout"
+)
+
+// The top-level maps whose keys each take one value.
+const (
+	MapPolicy      = "policy"
+	MapDevelopment = "development"
+)
+
+// ScalarKey names one single-valued key: the map it is under and its key
+// within it, e.g. development.workflow.
+type ScalarKey struct {
+	Map string
+	Key string
+}
+
+// ScalarKeys lists every single-valued key in resolution order.
+var ScalarKeys = []ScalarKey{
+	{MapPolicy, PolicyLineEndings},
+	{MapDevelopment, DevelopmentWorkflow},
+	{MapDevelopment, DevelopmentDocsLayout},
+}
+
+// Scalar returns the value vibe.yaml gives k, or nil when it is absent.
+func (m *Manifest) Scalar(k ScalarKey) *string {
+	switch k.Map {
+	case MapPolicy:
+		return m.Policy.Get(k.Key)
+	case MapDevelopment:
+		return m.Development.Get(k.Key)
+	}
+	return nil
+}
+
+// Get returns the value vibe.yaml gives key, or nil when it is absent. A
+// nil *Development has every key absent.
+func (d *Development) Get(key string) *string {
+	if d == nil {
+		return nil
+	}
+	switch key {
+	case DevelopmentWorkflow:
+		return d.Workflow
+	case DevelopmentDocsLayout:
+		return d.DocsLayout
+	}
+	return nil
+}
 
 // Get returns the value vibe.yaml gives key, or nil when it is absent. A
 // nil *Policy has every key absent.

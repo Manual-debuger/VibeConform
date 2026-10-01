@@ -291,7 +291,8 @@ fallback. Other harnesses get the AGENTS.md section and no adapter.
 | No `development:` | Resources and output byte for byte as before |
 | `workflow: plan-triggered-sdd`, no AGENTS.md | AGENTS.md is created, holding the section; recorded `created: true` |
 | AGENTS.md with project prose | Section appended after it; prose untouched |
-| Section edited by hand | `audit` reports modified (exit 2); `sync` refuses (conflict) |
+| Section edited by hand | `audit` reports drifted (exit 2); `sync` restores it, as for any managed resource |
+| Section edited by hand, and the standard's text changed too | `audit` reports a conflict (exit 2); `sync` refuses (exit 1) and keeps the edit |
 | `workflow` changed from `direct` to `always-sdd` | Section updated in place |
 | `development:` removed | Section, `/spec` and the CLAUDE.md section pruned; created files that are now empty are deleted |
 | `claude` deselected, `workflow` kept | `/spec` and the CLAUDE.md section are pruned; the AGENTS.md section drops its `/spec` mention |

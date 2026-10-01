@@ -140,7 +140,7 @@ func TestSelectPolicy(t *testing.T) {
 // an integration's.
 func TestPolicyRelations(t *testing.T) {
 	s := fakeStandard()
-	le := Group{Key: manifest.PolicyLineEndings, Scalar: true}
+	le := scalarGroup(manifest.ScalarKey{Map: manifest.MapPolicy, Key: manifest.PolicyLineEndings})
 	s.Options = append(s.Options,
 		Option{Group: le, Name: "lf", Module: fakeModule("lf"), Requires: []string{"ed-a"}},
 	)
@@ -213,4 +213,77 @@ func mustLookup(t *testing.T, name string) *Standard {
 		t.Fatal(err)
 	}
 	return s
+}
+
+func workflowManifest(v string) *manifest.Manifest {
+	return &manifest.Manifest{Development: &manifest.Development{Workflow: &v}}
+}
+
+// TestSelectWorkflow: development.workflow is off unless named, takes one
+// of three values, and is reported under its own map's name (spec 0030 §1).
+func TestSelectWorkflow(t *testing.T) {
+	for _, name := range []string{"prod-go", "prod-ts", "prod-py", "prod-mono"} {
+		s := mustLookup(t, name)
+		for _, v := range []string{"direct", "plan-triggered-sdd", "always-sdd"} {
+			sel, err := s.Select(workflowManifest(v))
+			if err != nil {
+				t.Fatalf("%s %s: %v", name, v, err)
+			}
+			if sel.Policies[manifest.DevelopmentWorkflow] != v {
+				t.Errorf("%s %s: selection %+v", name, v, sel)
+			}
+			var mods []string
+			for _, m := range s.ModulesFor(sel) {
+				mods = append(mods, m.Name())
+			}
+			if mods[len(mods)-1] != "development-workflow" || slices.Index(mods, "development-workflow") != len(mods)-1 {
+				t.Errorf("%s %s: modules %v, want one workflow module, last", name, v, mods)
+			}
+		}
+		_, err := s.Select(workflowManifest("sdd"))
+		if want := "development.workflow (sdd): unknown value (valid: direct, plan-triggered-sdd, always-sdd)"; err == nil || err.Error() != want {
+			t.Errorf("%s: error %v, want %q", name, err, want)
+		}
+	}
+	o := find(t, mustLookup(t, "prod-go"), "always-sdd")
+	if o.Label() != "development.workflow" {
+		t.Errorf("label %q", o.Label())
+	}
+}
+
+// TestMissingScalarNamesItsMap: a standard without a key's options says
+// so with the map's own noun.
+func TestMissingScalarNamesItsMap(t *testing.T) {
+	s := fakeStandard()
+	_, err := s.Select(workflowManifest("direct"))
+	if want := "development.workflow (direct): fake/v1 offers no workflow setting"; err == nil || err.Error() != want {
+		t.Errorf("error %v, want %q", err, want)
+	}
+	_, err = s.Select(lineEndings("lf"))
+	if want := "policy.line_endings (lf): fake/v1 offers no line_endings policy"; err == nil || err.Error() != want {
+		t.Errorf("error %v, want %q", err, want)
+	}
+}
+
+// TestScalarKeysAreFlat: Selection.Policies and module.Context.Policies
+// are keyed by key alone, so every scalar group must name a known map and
+// no key may repeat across maps.
+func TestScalarKeysAreFlat(t *testing.T) {
+	seen := map[string]string{}
+	for _, k := range manifest.ScalarKeys {
+		if prev, ok := seen[k.Key]; ok {
+			t.Errorf("key %s is under both %s and %s", k.Key, prev, k.Map)
+		}
+		seen[k.Key] = k.Map
+	}
+	for _, name := range []string{"prod-go", "prod-ts", "prod-py", "prod-mono"} {
+		for _, o := range mustLookup(t, name).Options {
+			if !o.Group.Scalar {
+				continue
+			}
+			if seen[o.Group.Key] != o.Group.Map {
+				t.Errorf("%s: option %s has group %+v, not a manifest scalar key", name, o.Name, o.Group)
+			}
+		}
+	}
 }
