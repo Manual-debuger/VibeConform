@@ -331,8 +331,14 @@ Observed locally on 2026-10-01, on Windows 11 (windows/amd64) with Go
   - `git add --renormalize .` staged no file beyond those edited.
   - `vibe doctor` in the root printed `PASS` for line endings.
 
-Pending: CI on the PR, where the golden-hash test runs on both Ubuntu and
-Windows.
+CI on PR #47 passed every check, so the golden-hash test passed on both
+Ubuntu and Windows:
+- `ci.yml`: `test` on Ubuntu and Windows, `race`, `security`, and
+  format/lint/static.
+- `examples.yml`: typescript and monorepo on Ubuntu and Windows, python
+  on Ubuntu.
+- `hook-guard.yml`: prod-go, prod-ts and prod-py on Ubuntu and Windows.
+- `Conformance / audit` and CodeQL.
 
 ## Explicitly still deferred
 
