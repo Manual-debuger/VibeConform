@@ -154,8 +154,8 @@ func TestAgentHookConfigsCoverCatalog(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, in := range s.Integrations {
-			if in.Category != manifest.CategoryAgents {
+		for _, in := range s.Options {
+			if in.Group.Key != manifest.CategoryAgents {
 				continue
 			}
 			if _, ok := agentHookConfigs[in.Name]; !ok {

@@ -55,7 +55,7 @@ func requiredTools(s *standard.Standard, mctx *module.Context) []requiredTool {
 
 	selected := s.Defaults()
 	if mctx != nil && mctx.Integrations != nil {
-		selected = mctx.Integrations
+		selected = standard.Selection{Integrations: mctx.Integrations, Policies: mctx.Policies}
 	}
 	for _, mod := range s.ModulesFor(selected) {
 		requirer, ok := mod.(module.ToolRequirer)

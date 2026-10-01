@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
@@ -44,8 +43,9 @@ type resourcePlan struct {
 type prunePlan struct {
 	// Path is the state key, slash-separated.
 	Path string
-	// Integration names the deselected integration that produces it.
-	Integration string
+	// Option names the deselected option that produces it, as messages
+	// show it: an integration's name, or a policy's key.
+	Option string
 	// Decision is what sync would do about it.
 	Decision reconcile.Removal
 	// Resource and Patch are set for a structured-patch resource, which is
@@ -61,7 +61,9 @@ type repoPlan struct {
 	Standard *standard.Standard
 	// Context is what every module resolved against.
 	Context *module.Context
-	// Modules are the core modules followed by the selected integrations'
+	// Selection is what vibe.yaml selects from the standard's catalog.
+	Selection standard.Selection
+	// Modules are the core modules followed by the selected options'
 	// modules, in the order they resolved.
 	Modules []module.Module
 	// Previous is the state VibeConform last recorded for this repository.
@@ -108,7 +110,7 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 		return nil, err
 	}
 
-	selected, err := s.Select(m.Integrations)
+	selected, err := s.Select(m)
 	if err != nil {
 		return nil, err
 	}
@@ -116,10 +118,11 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 	mctx := &module.Context{
 		RepoRoot:     repoRoot,
 		Components:   m.Components,
-		Integrations: selected,
+		Integrations: selected.Integrations,
+		Policies:     selected.Policies,
 		Profiles:     profiles(s, m),
 	}
-	p := &repoPlan{Standard: s, Context: mctx, Previous: previous, Modules: s.ModulesFor(selected)}
+	p := &repoPlan{Standard: s, Context: mctx, Selection: selected, Previous: previous, Modules: s.ModulesFor(selected)}
 	for _, mod := range p.Modules {
 		resources, err := mod.Resolve(context.Background(), mctx)
 		if err != nil {
@@ -144,16 +147,16 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 	return p, nil
 }
 
-// planPrunes finds every path a deselected integration would produce —
+// planPrunes finds every path a deselected option would produce —
 // through its own module, or through a core module it switches on, like
 // the guard for claude — that the selection does not, and that state
-// records. Each is resolved as if that one integration were added to the
+// records. Each is resolved as if that one option were added to the
 // selection. Requires and Excludes are not checked: the trial selection
 // is never applied, only asked what it would write.
 //
 // Only recorded paths qualify, so a file VibeConform never wrote is never
 // a candidate, and orphans left by an older standard are not either: no
-// integration of this standard produces them.
+// option of this standard produces them.
 func planPrunes(repoRoot string, p *repoPlan) error {
 	resolved := map[string]bool{}
 	for _, rp := range p.Resources {
@@ -161,17 +164,17 @@ func planPrunes(repoRoot string, p *repoPlan) error {
 	}
 
 	seen := map[string]bool{}
-	for _, it := range p.Standard.Integrations {
-		if slices.Contains(p.Context.Integrations, it.Name) {
+	for _, o := range p.Standard.Options {
+		if p.Selection.Has(o) {
 			continue
 		}
-		trial := append(slices.Clone(p.Context.Integrations), it.Name)
+		trial := p.Standard.With(p.Selection, o)
 		tctx := *p.Context
-		tctx.Integrations = trial
+		tctx.Integrations, tctx.Policies = trial.Integrations, trial.Policies
 		for _, mod := range p.Standard.ModulesFor(trial) {
 			resources, err := mod.Resolve(context.Background(), &tctx)
 			if err != nil {
-				return fmt.Errorf("resolve %s with %s selected: %w", mod.Name(), it.Name, err)
+				return fmt.Errorf("resolve %s with %s selected: %w", mod.Name(), o.Label(), err)
 			}
 			for _, r := range resources {
 				key := stateKey(r.Path)
@@ -184,7 +187,7 @@ func planPrunes(repoRoot string, p *repoPlan) error {
 					// A structured patch owns elements, not the file: prune
 					// every recorded element by planning the file as if
 					// this resource owned none.
-					pp, err := prunePatch(repoRoot, recorded, r, it.Name)
+					pp, err := prunePatch(repoRoot, recorded, r, o.Label())
 					if err != nil {
 						return err
 					}
@@ -195,14 +198,14 @@ func planPrunes(repoRoot string, p *repoPlan) error {
 				if err != nil {
 					return err
 				}
-				p.Prunes = append(p.Prunes, prunePlan{Path: key, Integration: it.Name, Decision: decision})
+				p.Prunes = append(p.Prunes, prunePlan{Path: key, Option: o.Label(), Decision: decision})
 			}
 		}
 	}
 	return nil
 }
 
-func prunePatch(repoRoot string, recorded state.ResourceState, r resource.Resource, integration string) (prunePlan, error) {
+func prunePatch(repoRoot string, recorded state.ResourceState, r resource.Resource, option string) (prunePlan, error) {
 	none := r
 	patch := *r.Patch
 	patch.Elements = nil
@@ -218,7 +221,7 @@ func prunePatch(repoRoot string, recorded state.ResourceState, r resource.Resour
 	case !pp.Exists:
 		decision = reconcile.Forget
 	}
-	return prunePlan{Path: stateKey(r.Path), Integration: integration, Decision: decision, Resource: none, Patch: pp}, nil
+	return prunePlan{Path: stateKey(r.Path), Option: option, Decision: decision, Resource: none, Patch: pp}, nil
 }
 
 func decideRemoval(repoRoot, key string, recorded state.ResourceState) (reconcile.Removal, error) {

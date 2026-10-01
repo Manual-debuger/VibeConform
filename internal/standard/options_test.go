@@ -26,12 +26,12 @@ func fakeStandard() *Standard {
 		Name:    "fake",
 		Version: "v1",
 		Modules: []module.Module{fakeModule("core")},
-		Integrations: []Integration{
-			{Name: "ed-a", Category: manifest.CategoryEditors, Module: fakeModule("ed-a")},
-			{Name: "ed-b", Category: manifest.CategoryEditors, Module: fakeModule("ed-b"), Excludes: []string{"ag-y"}},
-			{Name: "ag-x", Category: manifest.CategoryAgents, Module: fakeModule("ag-x"), Default: true},
-			{Name: "ag-y", Category: manifest.CategoryAgents, Module: fakeModule("ag-y"), Default: true},
-			{Name: "in-z", Category: manifest.CategoryIntelligence, Module: fakeModule("in-z"), Requires: []string{"ag-x"}},
+		Options: []Option{
+			{Group: integrationGroup(manifest.CategoryEditors), Name: "ed-a", Module: fakeModule("ed-a")},
+			{Group: integrationGroup(manifest.CategoryEditors), Name: "ed-b", Module: fakeModule("ed-b"), Excludes: []string{"ag-y"}},
+			{Group: integrationGroup(manifest.CategoryAgents), Name: "ag-x", Module: fakeModule("ag-x"), Default: true},
+			{Group: integrationGroup(manifest.CategoryAgents), Name: "ag-y", Module: fakeModule("ag-y"), Default: true},
+			{Group: integrationGroup(manifest.CategoryIntelligence), Name: "in-z", Module: fakeModule("in-z"), Requires: []string{"ag-x"}},
 		},
 	}
 }
@@ -53,11 +53,11 @@ func TestSelect(t *testing.T) {
 		"everything reversed": {&manifest.Integrations{Editors: list("ed-a"), Agents: list("ag-x"), Intelligence: list("in-z")}, []string{"ed-a", "ag-x", "in-z"}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			got, err := fakeStandard().Select(tc.in)
+			sel, err := fakeStandard().Select(&manifest.Manifest{Integrations: tc.in})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got == nil || !slices.Equal(got, tc.want) {
+			if got := sel.Integrations; got == nil || !slices.Equal(got, tc.want) {
 				t.Errorf("Select = %#v, want %#v", got, tc.want)
 			}
 		})
@@ -81,7 +81,7 @@ func TestSelectRejects(t *testing.T) {
 				s = mustLookup(t, "prod-go")
 				tc.want = "integrations.intelligence[0] (gitnexus): no code-intelligence providers are available yet"
 			}
-			_, err := s.Select(tc.in)
+			_, err := s.Select(&manifest.Manifest{Integrations: tc.in})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error %v, want it to contain %q", err, tc.want)
 			}
@@ -91,7 +91,7 @@ func TestSelectRejects(t *testing.T) {
 
 func TestModulesForCoreThenCatalogOrder(t *testing.T) {
 	var got []string
-	for _, m := range fakeStandard().ModulesFor([]string{"ag-y", "ed-a"}) {
+	for _, m := range fakeStandard().ModulesFor(Selection{Integrations: []string{"ed-a", "ag-y"}}) {
 		got = append(got, m.Name())
 	}
 	if want := []string{"core", "ed-a", "ag-y"}; !slices.Equal(got, want) {
@@ -99,18 +99,46 @@ func TestModulesForCoreThenCatalogOrder(t *testing.T) {
 	}
 }
 
+// TestWithKeepsCatalogOrder: pruning resolves a trial selection with one
+// deselected option added, and modules must resolve in catalog order
+// whichever option that is.
+func TestWithKeepsCatalogOrder(t *testing.T) {
+	s := fakeStandard()
+	base := Selection{Integrations: []string{"ag-y"}}
+	ed, _ := find(s, "ed-a")
+	trial := s.With(base, ed)
+	if want := []string{"ed-a", "ag-y"}; !slices.Equal(trial.Integrations, want) {
+		t.Errorf("With = %v, want %v", trial.Integrations, want)
+	}
+	if !trial.Has(ed) || base.Has(ed) {
+		t.Errorf("Has: trial %v, base %v; want true, false", trial.Has(ed), base.Has(ed))
+	}
+	if len(base.Integrations) != 1 {
+		t.Errorf("With modified its argument: %v", base.Integrations)
+	}
+}
+
+func find(s *Standard, name string) (Option, bool) {
+	for _, o := range s.Options {
+		if o.Name == name {
+			return o, true
+		}
+	}
+	return Option{}, false
+}
+
 // TestAgentModulesAreNotCore: an agent module left in a core list could
 // never be deselected, and would resolve twice with the defaults.
 func TestAgentModulesAreNotCore(t *testing.T) {
 	for k, s := range registry {
 		for _, m := range s.Modules {
-			for _, it := range s.Integrations {
+			for _, it := range s.Options {
 				if it.Module.Name() == m.Name() {
 					t.Errorf("%s/%s: %s is both core and the %s integration", k.name, k.version, m.Name(), it.Name)
 				}
 			}
 		}
-		if got := s.Defaults(); !slices.Equal(got, []string{"claude", "codex"}) {
+		if got := s.Defaults().Integrations; !slices.Equal(got, []string{"claude", "codex"}) {
 			t.Errorf("%s/%s defaults %v, want [claude codex]", k.name, k.version, got)
 		}
 	}

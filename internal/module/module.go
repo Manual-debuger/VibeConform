@@ -31,6 +31,9 @@ type Context struct {
 	// a module in isolation — and never "none", which is an empty slice
 	// (docs/decisions/0013-optional-integrations.md).
 	Integrations []string
+	// Policies maps each repository policy vibe.yaml selects to its value,
+	// e.g. "line_endings": "lf" (docs/decisions/0014-managed-sections.md).
+	Policies map[string]string
 	// Profiles lists the languages the repository declares: a
 	// single-language standard's own, or its components', in
 	// manifest.Profiles order.

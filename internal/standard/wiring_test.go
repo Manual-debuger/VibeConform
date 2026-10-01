@@ -182,7 +182,7 @@ func resolveAll(t *testing.T, s Standard, selected []string) map[string]resource
 	}
 	mctx.Integrations = selected
 	resources := map[string]resource.Resource{}
-	for _, m := range s.ModulesFor(selected) {
+	for _, m := range s.ModulesFor(Selection{Integrations: selected}) {
 		rs, err := m.Resolve(context.Background(), mctx)
 		if err != nil {
 			t.Fatalf("resolving %s: %v", m.Name(), err)
@@ -213,7 +213,7 @@ func taskfileTasks(t *testing.T, r resource.Resource) map[string]any {
 // go, and every other task is unchanged.
 func TestAgentHooksFollowClaude(t *testing.T) {
 	for k, s := range registry {
-		if len(s.Integrations) == 0 {
+		if len(s.Options) == 0 {
 			continue
 		}
 		t.Run(k.name+"/"+k.version, func(t *testing.T) {
@@ -221,7 +221,7 @@ func TestAgentHooksFollowClaude(t *testing.T) {
 			if _, ok := baseline["Taskfile.yml"]; !ok {
 				t.Skip("resolves no Taskfile.yml")
 			}
-			for _, selected := range [][]string{s.Defaults(), {"claude"}} {
+			for _, selected := range [][]string{s.Defaults().Integrations, {"claude"}} {
 				got := resolveAll(t, s, selected)
 				for path, want := range baseline {
 					if slices.Contains(agentConfigs, path) || strings.HasPrefix(path, ".codex/") {
