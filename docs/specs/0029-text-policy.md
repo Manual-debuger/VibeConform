@@ -327,7 +327,7 @@ resources:
   observes the effective attributes.
 - **No section adoption.** An existing hand-written `* text=auto eol=lf`
   is left as user content next to the new section. The user removes the
-  duplicate, as C6 does here.
+  duplicate, as plan 0029 does for this repository.
 - **No AGENTS.md section.** That is spec 0030 (#42), on this primitive.
 
 ## Design notes
