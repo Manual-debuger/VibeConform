@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. To be implemented per `docs/specs/0030-plan-triggered-sdd.md`.
+Accepted. Implemented per `docs/specs/0030-plan-triggered-sdd.md`.
 Revises the AGENTS.md/CLAUDE.md non-goal in `docs/usage.md`. Uses ADR
 0014's managed sections and option catalog.
 

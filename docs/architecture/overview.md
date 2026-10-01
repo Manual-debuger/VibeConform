@@ -67,13 +67,18 @@ Since spec 0029 the catalog is an **option catalog**. Each option belongs
 to a group, which is one of two kinds:
 
 - **An integration category**, selected as a list under `integrations:`.
-- **A repository policy key**, selected as one value under `policy:`, for
-  example `policy: {line_endings: lf}`.
+- **A single-valued key**, selected as one value under its own map:
+  `policy:` for a repository policy (`policy: {line_endings: lf}`), or,
+  since spec 0030, `development:` for how the repository is worked on
+  (`development: {workflow: always-sdd, docs_layout: standard}`).
 
-Policies are opt-in. Selection, resolution order, `Requires`/`Excludes`
+Both are opt-in. Keys are unique across maps, so the selection stays
+one flat map. Selection, resolution order, `Requires`/`Excludes`
 and pruning share one code path for both kinds. `module.Context.Policies`
 carries the selected values. See
-`docs/decisions/0014-managed-sections.md`.
+`docs/decisions/0014-managed-sections.md`, and
+`docs/decisions/0015-agents-md-workflow-section.md` for why a workflow
+may own one section of `AGENTS.md`.
 
 See `internal/module` for the current (intentionally minimal) interface and
 `internal/resource` for the `Resource` type it produces. Do not treat this
@@ -248,11 +253,12 @@ internal/
     pyrepotooling/          # Taskfile.yml, lefthook.yml, Python guard (prod-py)
     monorepotooling/        # root + per-component Taskfiles, lefthook.yml, guard (prod-mono)
     monotooling/            # each component's language config, re-rooted (prod-mono)
-    agents/claude/          # Claude Code settings + guard policy (policy.json); the claude integration
+    agents/claude/          # Claude Code settings + guard policy (policy.json), /spec with a workflow; the claude integration
     agents/codex/           # Codex config; hooks suspended (spec 0024); the codex integration
     editors/vscode/         # owned entries in .vscode/tasks.json, extensions.json (spec 0026)
     editors/zed/            # owned entries in .zed/tasks.json (spec 0026)
     policy/lineendings/     # opt-in LF policy: a managed section of .gitattributes (spec 0029)
+    workflow/               # opt-in development workflow (AGENTS.md section) and docs layout (spec 0030)
     tstooling/              # eslint, prettier, tsconfig base
     pythontooling/          # ruff, pyright
   resource/                 # resource + ownership + file mode model

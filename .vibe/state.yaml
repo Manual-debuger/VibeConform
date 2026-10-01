@@ -1,7 +1,10 @@
 schema: 4
-vibe_version: v0.3.0-alpha.1.0.20261001024915-df911da5a954+dirty
+vibe_version: v0.3.0-alpha.1.0.20261001055029-6e67e73ca4bf
 standard: prod-go/v1
 resources:
+    - path: .claude/commands/spec.md
+      ownership: generated
+      sha256: 4cc1ea82afc4b45bcd428132703d2697436bb92e1c44ce3caef1114e8a6f9f9d
     - path: .claude/hooks/block-dangerous.sh
       ownership: generated
       sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
@@ -42,12 +45,30 @@ resources:
     - path: .golangci.yml
       ownership: generated
       sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
+    - path: AGENTS.md
+      section_id: workflow
+      ownership: managed-section
+      sha256: 27968facf91cb05688e83d18c74da2382849adabbe847c25b187cfe5f630c765
+    - path: CLAUDE.md
+      section_id: agents
+      ownership: managed-section
+      sha256: 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49
     - path: Taskfile.vibe.yml
       ownership: generated
       sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     - path: Taskfile.yml
       ownership: generated
       sha256: 47db460f7b0b807c60a23426cc1909eede20b915a375847745c17a4643413f58
+    - path: docs/README.md
+      section_id: docs
+      ownership: managed-section
+      created: true
+      sha256: 595ceacceaef84cec9898cc0bd9fa527a40bf5f1167958595bb91749474b44ad
+    - path: docs/specs/README.md
+      section_id: specs
+      ownership: managed-section
+      created: true
+      sha256: e35dc36264158e961c950bce38d6a88303299cc53f316c88d2094690d20788ee
     - path: lefthook.yml
       ownership: generated
       sha256: 39b86742ce5cf94c5451adbc236b5be86c8cfd2acc717160424c363e6511fcdc

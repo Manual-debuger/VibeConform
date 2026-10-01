@@ -1,6 +1,6 @@
 # Spec 0030: Development Workflow, AGENTS.md Section and Docs Layout
 
-Status: accepted. Tracks issue #42. Per ADR 0015. Builds on spec 0029 and
+Status: accepted and implemented. Tracks issue #42. Per ADR 0015. Builds on spec 0029 and
 ADR 0014: the option catalog, managed sections and state schema 4.
 Revises the `AGENTS.md`/`CLAUDE.md` non-goal in `docs/usage.md`.
 

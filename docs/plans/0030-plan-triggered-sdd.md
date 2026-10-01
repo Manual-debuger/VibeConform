@@ -198,34 +198,74 @@ record in this plan.
 
 ## Checklist
 
-- [ ] C3 workflow option, AGENTS.md section, tests
-- [ ] C4 docs layout, tests
-- [ ] C5 Claude `/spec` and CLAUDE.md import, tests
-- [ ] C6 docs, `examples/python`, self-hosting
-- [ ] `task verify` and `task audit` green locally
-- [ ] Scratch-repo verification (below)
+- [x] C3 workflow option, AGENTS.md section, tests
+- [x] C4 docs layout, tests
+- [x] C5 Claude `/spec` and CLAUDE.md import, tests
+- [x] C6 docs, `examples/python`, self-hosting
+- [x] `task verify` and `task audit` green locally
+- [x] Scratch-repo verification (below)
 - [ ] PR open, CI green, recorded here
+
+## Found during implementation
+
+- **A hand edit is drift before it is a conflict.** The spec's behaviour
+  table first said a hand edit inside the section makes `sync` refuse.
+  Spec 0029's decision table applies unchanged:
+  - with the standard's text unchanged, the edit is drift, which `sync`
+    restores;
+  - only an edit while the standard's text also changed is a conflict.
+
+  The table was corrected in C3, and `TestWorkflowHandEdit` covers both
+  cases.
+- **The workflow block also reads `docs_layout`.** Besides the `/spec`
+  phrasing, the plan-mode bullet names `docs/specs/` only with the
+  layout. Otherwise it says "where this project keeps specs". Without
+  `claude`, the planning-context line is 81 characters wide, which is
+  fine for Markdown.
+- **Sizes.** Across the twelve combinations, the section is 22–31 lines
+  and 148–240 words. `direct` without the layout and with `/spec` is the
+  smallest, at 148 words, two under the design target's floor. The 300
+  word bound has wide margin.
+- **Checker warnings go to stderr.** This is what spec 0029 already did.
+  The CLI test reads them with `runSyncCapturing`.
+- **This repository's CLAUDE.md** got the duplicate-import warning on its
+  first sync, as designed. Its hand-written `@AGENTS.md` line was then
+  deleted, so the file is the managed section alone.
+- **The state records a clean build.** Both state files record
+  `vibe_version` from `6e67e73` without `+dirty`, so CI's `task audit`
+  installs exactly that commit.
 
 ## Verification
 
-Beyond the automated tests, these are checked in a scratch git
-repository with a locally installed `vibe`:
+Scratch git repository, `vibe` installed from `6e67e73`:
 
-1. An AGENTS.md with a title and a project paragraph. After selecting
-   `plan-triggered-sdd`, `sync` appends the section. `audit` passes, and
-   the project text is unchanged byte for byte.
-2. An edit inside the section is reported by `audit` (exit 2) and
-   refused by `sync` (exit 1).
-3. Switching to `always-sdd` gives an update. Removing `development:`
-   gives the section, `/spec` and the CLAUDE.md section removed, and the
-   project text kept.
-4. The section's line and word counts for every combination are
-   reported, from the C3 test log.
-5. `/spec` in a real Claude Code session, in the scratch repository.
-   Interactively if possible; otherwise `claude -p "/spec add a --json flag"`.
-   It writes only a spec under `docs/specs/`, proposes a plan, and stops
-   without editing code. Whatever cannot be observed is recorded as
-   UNVERIFIED, not assumed.
+| Check | Result |
+|---|---|
+| 1. AGENTS.md with a title and a paragraph; `plan-triggered-sdd`; `sync` | PASS: section appended, `audit` exit 0, project prefix byte-identical (`cmp`), 34 lines / 227 words in total |
+| 2. Edit inside the section | PASS: `audit` exit 2, "drifted". With the workflow also switched: `sync` exit 1, "conflict … resolve by hand", edit kept |
+| 3. Switch to `always-sdd`; then remove `development:` | PASS: "updated", no prune; then `/spec`, the CLAUDE.md section (and the file it created) and the AGENTS.md section removed, AGENTS.md byte-identical to the original, `audit` exit 0 |
+| 4. Line and word counts | PASS: see "Sizes" above (`go test -v ./internal/module/workflow`) |
+| 5. `/spec` via `claude -p` (Claude Code 2.1.286, `acceptEdits`) | PASS, with notes below |
+| 5. `/spec` in an interactive session, and from inside plan mode | UNVERIFIED |
+
+Notes on check 5. The run:
+- listed constraints and unverified assumptions, and asked about them;
+- produced a spec from the template with acceptance criteria;
+- proposed a separate, uncommitted plan, whose steps end with the
+  verification ledger;
+- stopped: "I haven't changed any code, config or tests."
+
+It referred to `task verify:fast` and the ledger, so CLAUDE.md's import
+reached AGENTS.md. Two deviations:
+- It kept the spec in the conversation and made "save the approved spec
+  to `docs/specs/`" step 1 of the plan, rather than writing it during
+  the command. That is the read-only-plan-mode behaviour the section
+  describes, and it is acceptable.
+- It left a `hello.exe` from a build, an artifact rather than an edit.
+  Code, configuration and tests were unchanged (`git status`).
+
+Automated: `task verify` and `task audit` are green locally. CI is
+recorded below once the PR runs.
 
 ## Explicitly still deferred
 

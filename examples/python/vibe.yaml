@@ -4,3 +4,9 @@ version: v1
 # CI runs the agent hooks in this example (hook-guard.yml, examples.yml).
 integrations:
   editors: []
+# Opt in to the development workflow and the docs layout (spec 0030):
+# AGENTS.md, CLAUDE.md, docs/README.md and docs/specs/README.md each get
+# one managed section, and Claude Code gets /spec.
+development:
+  workflow: plan-triggered-sdd
+  docs_layout: standard

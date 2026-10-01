@@ -1,9 +1,7 @@
 # Agent Instructions
 
-This file is a routing surface, not a handbook. Durable architecture lives
-in `docs/` (specs, plans, architecture, decisions) — read the relevant doc
-before non-trivial changes rather than relying on this file to explain the
-system.
+This repository's own rules. The "Repository workflow" section at the end
+is generated from `vibe.yaml` (spec 0030) and routes to `docs/`.
 Don't include yourself as contributor in commits.
 
 ## Before non-trivial work
@@ -12,10 +10,10 @@ Don't include yourself as contributor in commits.
    before changing package boundaries or the module/resource model, and
    `docs/architecture/principles.md` before changing what a module
    generates.
-2. For anything beyond a small fix, produce or update a plan under
-   `docs/plans/` following: requirement → spec → implementation plan →
-   repository impact analysis → implementation → tests → verification →
-   documentation sync.
+2. Here the plan is committed too, under `docs/plans/`, following:
+   requirement → spec → implementation plan → repository impact analysis
+   → implementation → tests → verification → documentation sync. The
+   user approves the spec and the plan as separate steps.
 3. Preserve the dependency direction documented in
    `docs/architecture/overview.md` (e.g. `internal/module` depends on
    `internal/resource`, not the reverse).
@@ -30,17 +28,16 @@ Don't include yourself as contributor in commits.
   (or `task audit`) to see the current list. `go:embed` resolves at build
   time, so a stale binary syncs stale templates — rebuild after every
   template change.
-- Bug fixes require a regression test. Do not weaken or delete a test to
-  make an implementation pass.
+- Bug fixes require a regression test.
 - Do not introduce a production dependency without recording why (an ADR
   under `docs/decisions/` for anything non-trivial).
-- Run `task verify` **and** `task audit` before declaring work done. Since
-  spec 0017, `verify` covers native language tooling only and no longer
-  depends on `audit`, so a hand-edited managed file passes `verify` locally
-  and fails only later, in CI's `Conformance / audit` check. Do not claim
-  success with failing checks. The `Stop` hook runs `task verify:fast` at
-  the end of every turn (spec 0023). That is the fast subset, not
-  `verify`, and `task audit` is still yours to run.
+- Run `task audit` as well as `task verify` before declaring work done.
+  Since spec 0017, `verify` covers native language tooling only and no
+  longer depends on `audit`, so a hand-edited managed file passes `verify`
+  locally and fails only later, in CI's `Conformance / audit` check. The
+  `Stop` hook runs `task verify:fast` at the end of every turn (spec
+  0023). That is the fast subset, not `verify`, and `task audit` is still
+  yours to run.
 - Use repository intelligence (GitNexus, if configured) when a change has
   cross-file impact — it augments the compiler/linter/tests, it does not
   replace them.
@@ -78,3 +75,37 @@ Don't include yourself as contributor in commits.
 
 These are guardrails, not a complete enforcement boundary — apply the same
 judgment regardless of which agent runtime is in use.
+
+<!-- vibeconform:begin workflow -->
+## Repository workflow
+
+Managed by VibeConform from `development:` in `vibe.yaml`. This section
+routes; the documents and tasks it names hold the detail.
+
+Knowledge:
+- Specs (what must be true) live in `docs/specs/`, architecture (how it
+  works now) in `docs/architecture/`, decisions (ADRs) in
+  `docs/decisions/`. Read the relevant ones before a non-trivial change.
+- If an approved spec, an ADR and the code disagree, say so. Do not
+  pick one silently.
+
+Workflow: spec-driven.
+- A non-trivial behavioural change needs an approved spec with
+  acceptance criteria before it is planned, in any mode. A small fix
+  may go straight to implement and verify.
+- Planning context (the harness's plan mode, or `/spec`): list the
+  constraints that apply and the assumptions you have not verified,
+  then write a lightweight spec with acceptance criteria. Plan only
+  after that.
+- The spec says WHAT must be true; the plan says HOW to change the
+  repository. Keep them apart. Reuse an approved spec when one exists.
+- In a read-only plan mode, put the spec in the plan. Once it is
+  approved, write it to `docs/specs/` first.
+- Do not implement until the user approves.
+
+Verification:
+- `task verify:fast` while working; `task verify` before declaring
+  done. Do not weaken a test, lint or type check to make a change pass.
+- Finish with a ledger, one line per check: PASS, FAIL or UNVERIFIED.
+  Unit tests, CI and a real integration are separate lines.
+<!-- vibeconform:end workflow -->

@@ -1,7 +1,10 @@
 schema: 4
-vibe_version: v0.3.0-alpha.1.0.20261001023823-e2cdd4c76bd8+dirty
+vibe_version: v0.3.0-alpha.1.0.20261001055029-6e67e73ca4bf
 standard: prod-py/v1
 resources:
+    - path: .claude/commands/spec.md
+      ownership: generated
+      sha256: 4cc1ea82afc4b45bcd428132703d2697436bb92e1c44ce3caef1114e8a6f9f9d
     - path: .claude/hooks/block-dangerous.sh
       ownership: generated
       sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
@@ -35,12 +38,32 @@ resources:
     - path: .github/workflows/conformance.yml
       ownership: generated
       sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
+    - path: AGENTS.md
+      section_id: workflow
+      ownership: managed-section
+      created: true
+      sha256: ab6dadc8ff3743f32972d6dbf3495c151a0d7e2583364da331df5cedac9ee8fe
+    - path: CLAUDE.md
+      section_id: agents
+      ownership: managed-section
+      created: true
+      sha256: 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49
     - path: Taskfile.vibe.yml
       ownership: generated
       sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     - path: Taskfile.yml
       ownership: generated
       sha256: 9aa1875bcced5bd31d959c32f5ebe368c37d97267a4829afcf7a8f411225ac2a
+    - path: docs/README.md
+      section_id: docs
+      ownership: managed-section
+      created: true
+      sha256: 595ceacceaef84cec9898cc0bd9fa527a40bf5f1167958595bb91749474b44ad
+    - path: docs/specs/README.md
+      section_id: specs
+      ownership: managed-section
+      created: true
+      sha256: e35dc36264158e961c950bce38d6a88303299cc53f316c88d2094690d20788ee
     - path: lefthook.yml
       ownership: generated
       sha256: 9cbde339d40f685b9770ab9eab4c61a871b402649bfae53253ec6a387af796d1
