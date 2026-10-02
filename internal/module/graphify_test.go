@@ -91,14 +91,7 @@ func TestAddGraphifyShape(t *testing.T) {
 					}
 				}
 
-				var hooksDoc map[string]struct {
-					Commands map[string]struct {
-						Run string `yaml:"run"`
-					} `yaml:"commands"`
-				}
-				if err := yaml.Unmarshal(lh, &hooksDoc); err != nil {
-					t.Fatalf("parsing lefthook.yml: %v\n%s", err, lh)
-				}
+				hooksDoc := parseLefthookHooks(t, lh)
 				for _, hook := range []string{"post-commit", "post-checkout"} {
 					if got := hooksDoc[hook].Commands["graphify-update"].Run; got != "task graph:update" {
 						t.Errorf("%s graphify-update runs %q, want task graph:update", hook, got)
