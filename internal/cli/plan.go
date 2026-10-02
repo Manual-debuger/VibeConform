@@ -1,13 +1,16 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
@@ -50,6 +53,9 @@ type prunePlan struct {
 	// Option names the deselected option that produces it, as messages
 	// show it: an integration's name, or a policy's key.
 	Option string
+	// Retired is set instead of Option for a path a module retired
+	// (module.Retirer): the reason messages give, e.g. "replaced by …".
+	Retired string
 	// Decision is what sync would do about it.
 	Decision reconcile.Removal
 	// Resource and Patch are set for a structured-patch resource, which is
@@ -112,6 +118,9 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 	if err := checkComponents(s, m); err != nil {
 		return nil, err
 	}
+	if err := checkDocsDirs(repoRoot, m); err != nil {
+		return nil, err
+	}
 
 	previous, err := state.Load(repoRoot)
 	if err != nil {
@@ -128,6 +137,7 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 		Components:   m.Components,
 		Integrations: selected.Integrations,
 		Policies:     selected.Policies,
+		DocsDirs:     m.Development.DocsDirs(),
 		Profiles:     profiles(s, m),
 	}
 	p := &repoPlan{Standard: s, Context: mctx, Selection: selected, Previous: previous, Modules: s.ModulesFor(selected)}
@@ -228,7 +238,86 @@ func planPrunes(repoRoot string, p *repoPlan) error {
 			}
 		}
 	}
+	if err := planRetired(repoRoot, p, resolved, seen); err != nil {
+		return err
+	}
+	planMoved(p, sections)
 	return nil
+}
+
+// planMoved adds a prune for every recorded section that a selected
+// module's section has moved away from: same ID, another file.
+func planMoved(p *repoPlan, sections map[state.SectionKey]bool) {
+	for _, mod := range p.Modules {
+		mover, ok := mod.(module.SectionMover)
+		if !ok {
+			continue
+		}
+		for _, id := range mover.MovableSections() {
+			var to *resource.Resource
+			for _, rp := range p.Resources {
+				if rp.Section != nil && rp.Section.ID == id {
+					to = &rp.Resource
+					break
+				}
+			}
+			if to == nil {
+				continue
+			}
+			for _, key := range slices.SortedFunc(maps.Keys(p.Previous.Sections), compareSectionKeys) {
+				if key.ID != id || sections[key] {
+					continue
+				}
+				sections[key] = true
+				old := resource.Resource{Path: key.Path, Ownership: resource.ManagedSection, SectionID: id,
+					Markers: to.Markers, Placement: to.Placement}
+				p.Prunes = append(p.Prunes, prunePlan{Path: key.Path, Retired: "moved to " + stateKey(to.Path), Resource: old,
+					Section: &sectionPlan{ID: id, Pruned: true, resource: old}})
+			}
+		}
+	}
+}
+
+func compareSectionKeys(a, b state.SectionKey) int {
+	return cmp.Or(cmp.Compare(a.Path, b.Path), cmp.Compare(a.ID, b.ID))
+}
+
+// planRetired adds a prune for every recorded path that a module of the
+// standard, selected or not, has retired and nothing still resolves.
+func planRetired(repoRoot string, p *repoPlan, resolved, seen map[string]bool) error {
+	mods := slices.Clone(p.Standard.Modules)
+	for _, o := range p.Standard.Options {
+		mods = append(mods, o.Module)
+	}
+	for _, mod := range mods {
+		r, ok := mod.(module.Retirer)
+		if !ok {
+			continue
+		}
+		retired := r.Retired()
+		for _, path := range slices.Sorted(maps.Keys(retired)) {
+			key := stateKey(path)
+			recorded, ok := p.Previous.Resources[key]
+			if resolved[key] || seen[key] || !ok {
+				continue
+			}
+			seen[key] = true
+			decision, err := decideRemoval(repoRoot, key, recorded)
+			if err != nil {
+				return err
+			}
+			p.Prunes = append(p.Prunes, prunePlan{Path: key, Retired: retired[path], Decision: decision})
+		}
+	}
+	return nil
+}
+
+// cause is why pp's path goes, as messages show it.
+func (pp prunePlan) cause() string {
+	if pp.Retired != "" {
+		return pp.Retired
+	}
+	return pp.Option + " deselected"
 }
 
 func prunePatch(repoRoot string, recorded state.ResourceState, r resource.Resource, option string) (prunePlan, error) {
@@ -295,6 +384,20 @@ func checkComponents(s *standard.Standard, m *manifest.Manifest) error {
 	case !s.TakesComponents && len(m.Components) > 0:
 		return fmt.Errorf("%s/%s takes no components, but %s declares %d; "+
 			"use prod-mono for a repository with components", s.Name, s.Version, manifestFileName, len(m.Components))
+	}
+	return nil
+}
+
+// checkDocsDirs fails unless every docs directory vibe.yaml adopts is a
+// directory in the repository: adopting means using what is there, and
+// nothing is created or guessed (spec 0034 §1).
+func checkDocsDirs(repoRoot string, m *manifest.Manifest) error {
+	for _, k := range m.Development.AdoptedDirs() {
+		p := m.Development.DocsDir(k.Key)
+		info, err := os.Stat(filepath.Join(repoRoot, filepath.FromSlash(p))) // #nosec G304 G703 -- manifest.Parse admits only clean relative paths inside the repository
+		if err != nil || !info.IsDir() {
+			return fmt.Errorf("%s.%s (%s): not a directory in this repository; an adopted directory must exist", k.Map, k.Key, p)
+		}
 	}
 	return nil
 }

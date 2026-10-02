@@ -18,6 +18,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestMain(m *testing.M) {
+	// A git hook running the suite, such as pre-push in a linked worktree,
+	// exports GIT_DIR. Every git the tests start would then use this
+	// repository instead of the one in its temp directory.
+	for _, v := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"} {
+		_ = os.Unsetenv(v)
+	}
+	os.Exit(m.Run())
+}
+
 // hookTasks are the tasks spec 0023 adds for the agents to call. Like
 // hook:guard, none has a desc (agents call them, people don't) and each is
 // silent (Task would otherwise echo the script into the agent's context).

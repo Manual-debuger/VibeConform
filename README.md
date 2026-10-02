@@ -38,7 +38,7 @@
 > [`docs/specs/0029-text-policy.md`](docs/specs/0029-text-policy.md)).
 > Its opt-in `development:` map selects a workflow (`direct`,
 > `plan-triggered-sdd` or `always-sdd`) that owns one short routing
-> section of `AGENTS.md`, plus a Claude Code `/spec` command, and a
+> section of `AGENTS.md`, plus a Claude Code `spec` skill (`/spec`), and a
 > standard docs layout (see
 > [`docs/specs/0030-plan-triggered-sdd.md`](docs/specs/0030-plan-triggered-sdd.md)).
 > `vibe diff` previews the reconciliation VibeConform would perform for that

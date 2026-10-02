@@ -328,32 +328,35 @@ func auditSectionLine(sp *sectionPlan) string {
 	return auditLine(sp.Decision)
 }
 
-func diffSectionPruneLine(f *sectionFile, sp *sectionPlan, option string) string {
+// diffSectionPruneLine and auditSectionPruneLine take the prune's cause,
+// as prunePlan.cause gives it: "<option> deselected", or why a moved
+// section leaves its old file.
+func diffSectionPruneLine(f *sectionFile, sp *sectionPlan, cause string) string {
 	switch sp.Removal {
 	case reconcile.Forget:
-		return fmt.Sprintf("would forget (%s deselected; already removed)", option)
+		return fmt.Sprintf("would forget (%s; already removed)", cause)
 	case reconcile.Remove:
-		line := fmt.Sprintf("would remove (%s deselected)", option)
+		line := fmt.Sprintf("would remove (%s)", cause)
 		if f.Delete {
-			line = fmt.Sprintf("would remove, and the file (%s deselected; nothing else is in it)", option)
+			line = fmt.Sprintf("would remove, and the file (%s; nothing else is in it)", cause)
 		}
 		if held(f, sp) {
 			line += heldNote
 		}
 		return line
 	default:
-		return fmt.Sprintf("conflict: %s deselected but %s; kept", option, conflictWhy(sp, "section modified since sync"))
+		return fmt.Sprintf("conflict: %s but %s; kept", cause, conflictWhy(sp, "section modified since sync"))
 	}
 }
 
-func auditSectionPruneLine(sp *sectionPlan, option string) string {
+func auditSectionPruneLine(sp *sectionPlan, cause string) string {
 	switch sp.Removal {
 	case reconcile.Forget:
-		return fmt.Sprintf("out of date (%s deselected, already removed; run vibe sync to forget it)", option)
+		return fmt.Sprintf("out of date (%s, already removed; run vibe sync to forget it)", cause)
 	case reconcile.Remove:
-		return fmt.Sprintf("out of date (%s deselected; run vibe sync to remove)", option)
+		return fmt.Sprintf("out of date (%s; run vibe sync to remove)", cause)
 	default:
-		return fmt.Sprintf("conflict: %s deselected but %s", option, conflictWhy(sp, "section modified since sync"))
+		return fmt.Sprintf("conflict: %s but %s", cause, conflictWhy(sp, "section modified since sync"))
 	}
 }
 
@@ -411,6 +414,10 @@ func applySectionPrune(repoRoot string, pp prunePlan, next *state.State, counts 
 	switch {
 	case sp.conflicted():
 		counts.conflicts++
+		if pp.Retired != "" {
+			return fmt.Sprintf("conflict: %s but %s; kept (remove it by hand)",
+				pp.Retired, conflictWhy(sp, "section modified since sync")), nil
+		}
 		return fmt.Sprintf("conflict: %s deselected but %s; kept (remove it by hand, or select %s again)",
 			pp.Option, conflictWhy(sp, "section modified since sync"), pp.Option), nil
 	case f.conflicted():
@@ -423,10 +430,10 @@ func applySectionPrune(repoRoot string, pp prunePlan, next *state.State, counts 
 	counts.removed++
 	switch {
 	case sp.Removal == reconcile.Forget:
-		return fmt.Sprintf("forgotten (%s deselected; already removed)", pp.Option), nil
+		return fmt.Sprintf("forgotten (%s; already removed)", pp.cause()), nil
 	case f.Delete:
-		return fmt.Sprintf("removed, and the file (%s deselected; nothing else was in it)", pp.Option), nil
+		return fmt.Sprintf("removed, and the file (%s; nothing else was in it)", pp.cause()), nil
 	default:
-		return fmt.Sprintf("removed (%s deselected)", pp.Option), nil
+		return fmt.Sprintf("removed (%s)", pp.cause()), nil
 	}
 }

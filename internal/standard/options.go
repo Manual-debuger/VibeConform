@@ -209,13 +209,23 @@ func (s *Standard) checkRelations(sel Selection) error {
 		}
 		return "integration " + o.Name
 	}
+	// required names a required option as vibe.yaml would select it: a
+	// setting by its key and value, anything else by its name.
+	required := func(name string) string {
+		for _, o := range s.Options {
+			if o.Name == name && o.Group.Scalar {
+				return kind(o)
+			}
+		}
+		return name
+	}
 	for _, o := range s.Options {
 		if !sel.Has(o) {
 			continue
 		}
 		for _, r := range o.Requires {
 			if !selected(r) {
-				return fmt.Errorf("%s requires %s, which is not selected", kind(o), r)
+				return fmt.Errorf("%s requires %s, which is not selected", kind(o), required(r))
 			}
 		}
 		for _, x := range o.Excludes {

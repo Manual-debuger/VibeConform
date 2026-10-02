@@ -18,6 +18,12 @@ func TestMain(m *testing.M) {
 	// tree, so the real check would only ever warn. Tests of the check
 	// itself call gitCheckIgnored directly or install their own stub.
 	checkIgnored = func(context.Context, string, []string) (map[string]bool, error) { return nil, nil }
+	// A git hook running the suite, such as pre-push in a linked worktree,
+	// exports GIT_DIR. Every git the tests start would then use this
+	// repository instead of the one in its temp directory.
+	for _, v := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"} {
+		_ = os.Unsetenv(v)
+	}
 	os.Exit(m.Run())
 }
 

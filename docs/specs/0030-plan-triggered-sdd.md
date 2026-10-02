@@ -3,6 +3,9 @@
 Status: accepted and implemented. Tracks issue #42. Per ADR 0015. Builds on spec 0029 and
 ADR 0014: the option catalog, managed sections and state schema 4.
 Revises the `AGENTS.md`/`CLAUDE.md` non-goal in `docs/usage.md`.
+§5's `/spec` command is replaced by a skill in spec 0031. The sections'
+bytes gained blank lines, which make them stable under Prettier (plan
+0032); the examples below show the text without them.
 
 ## Problem
 

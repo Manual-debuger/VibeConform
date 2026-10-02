@@ -52,14 +52,27 @@ const PolicyLineEndings = "line_endings"
 // Development is vibe.yaml's development: map. Each key takes one value,
 // and an absent key selects nothing.
 type Development struct {
-	Workflow   *string `yaml:"workflow,omitempty"`
-	DocsLayout *string `yaml:"docs_layout,omitempty"`
+	Workflow        *string `yaml:"workflow,omitempty"`
+	DocsLayout      *string `yaml:"docs_layout,omitempty"`
+	DocsDevelopment *string `yaml:"docs_development,omitempty"`
+	DocsOperations  *string `yaml:"docs_operations,omitempty"`
+	// The paths an existing layout is adopted from (spec 0034). They are
+	// not ScalarKeys: their values are free-form, not option names.
+	SpecsDir        *string `yaml:"specs_dir,omitempty"`
+	ArchitectureDir *string `yaml:"architecture_dir,omitempty"`
+	DecisionsDir    *string `yaml:"decisions_dir,omitempty"`
+	DevelopmentDir  *string `yaml:"development_dir,omitempty"`
+	OperationsDir   *string `yaml:"operations_dir,omitempty"`
 }
 
 // The development: map's keys.
 const (
 	DevelopmentWorkflow   = "workflow"
 	DevelopmentDocsLayout = "docs_layout"
+	// DevelopmentDocsDevelopment and DevelopmentDocsOperations add the
+	// optional docs/development/ and docs/operations/ (spec 0033).
+	DevelopmentDocsDevelopment = "docs_development"
+	DevelopmentDocsOperations  = "docs_operations"
 )
 
 // The top-level maps whose keys each take one value.
@@ -80,6 +93,8 @@ var ScalarKeys = []ScalarKey{
 	{MapPolicy, PolicyLineEndings},
 	{MapDevelopment, DevelopmentWorkflow},
 	{MapDevelopment, DevelopmentDocsLayout},
+	{MapDevelopment, DevelopmentDocsDevelopment},
+	{MapDevelopment, DevelopmentDocsOperations},
 }
 
 // Scalar returns the value vibe.yaml gives k, or nil when it is absent.
@@ -104,6 +119,10 @@ func (d *Development) Get(key string) *string {
 		return d.Workflow
 	case DevelopmentDocsLayout:
 		return d.DocsLayout
+	case DevelopmentDocsDevelopment:
+		return d.DocsDevelopment
+	case DevelopmentDocsOperations:
+		return d.DocsOperations
 	}
 	return nil
 }
@@ -210,6 +229,9 @@ func Parse(data []byte) (*Manifest, error) {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
 	if err := validateIntegrations(m.Integrations); err != nil {
+		return nil, fmt.Errorf("parse manifest: %w", err)
+	}
+	if err := validateDevelopment(m.Development); err != nil {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
 	return &m, nil

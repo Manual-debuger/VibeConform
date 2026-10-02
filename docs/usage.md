@@ -875,6 +875,16 @@ component, `hook:check` runs each component's `typecheck`, `lint`, and
 they use. The guard runs in the first runtime the repository has, in the
 order Go, Node, Python (`guard.go`, `guard.mjs`, or `guard.py`).
 
+**Agent instructions.** With a development workflow selected (see
+"Development workflow" below), each component's `AGENTS.md` gets a short
+`component` section at the bottom (spec 0032). It names the component
+and its profile, links to the root `AGENTS.md` (whose workflow and rules
+apply unchanged), and names the component's verification tasks. With
+`claude` selected, each component's `CLAUDE.md` also gets the `@AGENTS.md`
+import, so Claude Code reads that section when it works there. The rest
+of both files is yours. Deselecting the workflow removes the sections.
+Removing a component leaves them, like its other generated files.
+
 `sync`'s missing-tool warnings cover only the profiles declared: a
 repository with no Python component is not warned about `uv`.
 
@@ -1170,12 +1180,22 @@ above it for your own rules. As with `.gitattributes`:
   Claude Code's documented import. If your `CLAUDE.md` already imports
   `AGENTS.md` outside the section, `sync` warns and you can delete your
   line.
-- `.claude/commands/spec.md`, a project slash command. `/spec <feature>`
-  reads the relevant docs, lists constraints and unverified assumptions,
-  writes or reuses a spec from the template, proposes a plan in the
-  conversation, and stops before implementing. It never changes code.
+- `.claude/skills/spec/SKILL.md`, a project skill named `spec`, which is
+  also the slash command `/spec <feature>` (spec 0031). It reads the
+  relevant docs, lists constraints and unverified assumptions, writes or
+  reuses a spec from the template, proposes a plan, and stops before
+  implementing. It never changes code. Under the two SDD workflows,
+  Claude may use it by itself in plan mode, and the `AGENTS.md` section
+  tells it to. Under `direct` it is yours alone to invoke
+  (`disable-model-invocation: true`).
 
-Codex reads `AGENTS.md` directly and gets no command.
+Codex reads `AGENTS.md` directly and gets no skill.
+
+Before spec 0031 this was a command, `.claude/commands/spec.md`. Once
+the skill replaces it, `sync` removes a recorded copy that you have not
+changed ("replaced by .claude/skills/spec/SKILL.md"), keeps a changed
+one as a conflict for you to delete, and never touches one it did not
+write.
 
 **What `docs_layout` writes.** It names three canonical directories,
 `docs/specs/`, `docs/architecture/` and `docs/decisions/`, and seeds
@@ -1189,6 +1209,47 @@ only two files, each with one managed section:
 `architecture/` and `decisions/` get no file; they appear with your
 first document there. There are no `active/` or `completed/`
 directories: a spec's Status line says where it stands.
+
+**Optional docs directories.** Two more keys, each set to `on`, add a
+directory to the layout (spec 0033):
+
+```yaml
+development:
+  docs_layout: standard
+  docs_development: on   # docs/development/: build, test, contribute locally
+  docs_operations: on    # docs/operations/: deploy, run, handle incidents
+```
+
+Each adds its directory to `docs/README.md`'s list and to the knowledge
+rule of the `AGENTS.md` section, and creates no file. They are
+independent, so a library can take `docs_development` alone. Each needs
+`docs_layout`; without it, `sync` stops with
+`development.docs_operations: on requires development.docs_layout: standard, which is not selected`.
+Turning one off updates both sections back.
+
+**Adopting an existing layout.** If your documents already live
+somewhere else, name that directory instead of moving them (spec 0034):
+
+```yaml
+development:
+  docs_layout: standard
+  decisions_dir: docs/adr   # instead of docs/decisions
+  specs_dir: rfcs           # instead of docs/specs
+```
+
+The keys are `specs_dir`, `architecture_dir`, `decisions_dir`,
+`development_dir` and `operations_dir`. The last two need their
+`docs_development` or `docs_operations` key. Nothing is detected or
+moved:
+- each path must be a clean path relative to the repository root, and
+  no two directories may overlap;
+- an adopted directory must exist, and `diff`, `audit` and `sync` stop
+  with an error naming the key until it does.
+
+The `AGENTS.md` section and `docs/README.md` then name your directories,
+and the specs section goes in `<specs_dir>/README.md`. Changing
+`specs_dir` later moves that section: the copy at the old path is
+removed if you have not changed it, and kept as a conflict if you have.
 
 **Deselecting.** Removing `workflow` removes the `AGENTS.md` section,
 `/spec` and the `CLAUDE.md` section. Deselecting `claude` removes the
@@ -1728,7 +1789,8 @@ written it by hand. That includes the line-ending policy's section of
 `CLAUDE.md`, `docs/README.md` and `docs/specs/README.md`. Git and the
 agents read them with or without VibeConform, and the markers are plain
 comments (HTML comments in Markdown, invisible when rendered) that you
-can delete or keep. `/spec` stays an ordinary Claude Code command.
+can delete or keep. The `spec` skill stays an ordinary Claude Code
+skill.
 `.github/workflows/examples.yml` in this repository demonstrates the split
 for its own TS/PY fixtures: `task verify` runs first, with no `vibe` on
 `PATH`; building `vibe` and running `task audit` is a separate, later step.

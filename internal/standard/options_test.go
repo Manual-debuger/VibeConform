@@ -311,3 +311,34 @@ func TestSelectDocsLayout(t *testing.T) {
 		t.Errorf("error %v, want %q", err, want)
 	}
 }
+
+// TestSelectOptionalDocsDirs: docs_development and docs_operations take
+// exactly on, independently, and each needs docs_layout (spec 0033).
+func TestSelectOptionalDocsDirs(t *testing.T) {
+	s := mustLookup(t, "prod-go")
+	str := func(v string) *string { return &v }
+	sel, err := s.Select(&manifest.Manifest{Development: &manifest.Development{
+		DocsLayout: str("standard"), DocsOperations: str("on"),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sel.Policies[manifest.DevelopmentDocsOperations] != "on" || sel.Policies[manifest.DevelopmentDocsDevelopment] != "" {
+		t.Errorf("selection %+v", sel)
+	}
+
+	for key, d := range map[string]*manifest.Development{
+		"docs_development": {DocsDevelopment: str("on")},
+		"docs_operations":  {DocsOperations: str("on")},
+	} {
+		_, err := s.Select(&manifest.Manifest{Development: d})
+		want := "development." + key + ": on requires development.docs_layout: standard, which is not selected"
+		if err == nil || err.Error() != want {
+			t.Errorf("%s without docs_layout: error %v, want %q", key, err, want)
+		}
+	}
+	_, err = s.Select(&manifest.Manifest{Development: &manifest.Development{DocsLayout: str("standard"), DocsDevelopment: str("yes")}})
+	if want := "development.docs_development (yes): unknown value (valid: on)"; err == nil || err.Error() != want {
+		t.Errorf("error %v, want %q", err, want)
+	}
+}

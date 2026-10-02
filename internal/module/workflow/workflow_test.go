@@ -5,18 +5,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
-// reference is spec 0030 §3's example, byte for byte: plan-triggered-sdd
-// with docs_layout and claude selected.
-const reference = "## Repository workflow\n" +
+// reference is spec 0030 §3's example, byte for byte, with the planning
+// rule spec 0031 §2 revised: plan-triggered-sdd with docs_layout and
+// claude selected.
+const reference = "\n" +
+	"## Repository workflow\n" +
 	"\n" +
 	"Managed by VibeConform from `development:` in `vibe.yaml`. This section\n" +
 	"routes; the documents and tasks it names hold the detail.\n" +
 	"\n" +
 	"Knowledge:\n" +
+	"\n" +
 	"- Specs (what must be true) live in `docs/specs/`, architecture (how it\n" +
 	"  works now) in `docs/architecture/`, decisions (ADRs) in\n" +
 	"  `docs/decisions/`. Read the relevant ones before a non-trivial change.\n" +
@@ -24,11 +28,12 @@ const reference = "## Repository workflow\n" +
 	"  pick one silently.\n" +
 	"\n" +
 	"Workflow: plan-triggered lightweight SDD.\n" +
+	"\n" +
 	"- Normal mode: implement, then verify. Respect any spec that applies.\n" +
-	"- Planning context (the harness's plan mode, or `/spec`): list the\n" +
-	"  constraints that apply and the assumptions you have not verified,\n" +
-	"  then write a lightweight spec with acceptance criteria. Plan only\n" +
-	"  after that.\n" +
+	"- Planning context (the harness's plan mode, or `/spec`): use the\n" +
+	"  `spec` skill. List the constraints that apply and the assumptions\n" +
+	"  you have not verified, then write a lightweight spec with acceptance\n" +
+	"  criteria. Plan only after that.\n" +
 	"- The spec says WHAT must be true; the plan says HOW to change the\n" +
 	"  repository. Keep them apart. Reuse an approved spec when one exists.\n" +
 	"- In a read-only plan mode, put the spec in the plan. Once it is\n" +
@@ -36,14 +41,16 @@ const reference = "## Repository workflow\n" +
 	"- Do not implement until the user approves.\n" +
 	"\n" +
 	"Verification:\n" +
+	"\n" +
 	"- `task verify:fast` while working; `task verify` before declaring\n" +
 	"  done. Do not weaken a test, lint or type check to make a change pass.\n" +
 	"- Finish with a ledger, one line per check: PASS, FAIL or UNVERIFIED.\n" +
-	"  Unit tests, CI and a real integration are separate lines.\n"
+	"  Unit tests, CI and a real integration are separate lines.\n" +
+	"\n"
 
 func TestReferenceSection(t *testing.T) {
 	if got := Content(PlanTriggered, true, true); got != reference {
-		t.Errorf("section differs from spec 0030 §3:\n%s", got)
+		t.Errorf("section differs from spec 0030 §3 as revised by spec 0031 §2:\n%s", got)
 	}
 }
 
@@ -51,20 +58,24 @@ func TestReferenceSection(t *testing.T) {
 // as literal text in the section.
 func TestVariants(t *testing.T) {
 	noLayout := "Knowledge:\n" +
+		"\n" +
 		"- Read the specs, architecture docs and ADRs that apply before a\n" +
 		"  non-trivial change.\n" +
 		"- If an approved spec"
 	directBlock := "Workflow: direct.\n" +
+		"\n" +
 		"- Implement, then verify. Respect any spec that applies.\n" +
 		"- A planning context (the harness's plan mode, or `/spec`) writes a\n" +
-		"  lightweight spec with acceptance criteria when asked. The spec says\n" +
-		"  WHAT must be true; the plan says HOW to change the repository.\n" +
-		"\nVerification:\n"
+		"  lightweight spec with acceptance criteria when asked, with the `spec`\n" +
+		"  skill. The spec says WHAT must be true; the plan says HOW to change\n" +
+		"  the repository.\n" +
+		"\nVerification:\n\n"
 	alwaysBlock := "Workflow: spec-driven.\n" +
+		"\n" +
 		"- A non-trivial behavioural change needs an approved spec with\n" +
 		"  acceptance criteria before it is planned, in any mode. A small fix\n" +
 		"  may go straight to implement and verify.\n" +
-		"- Planning context (the harness's plan mode, or `/spec`): list the\n"
+		"- Planning context (the harness's plan mode, or `/spec`): use the\n"
 
 	for name, tc := range map[string]struct {
 		got        string
@@ -78,7 +89,7 @@ func TestVariants(t *testing.T) {
 		"no claude": {
 			got:  Content(PlanTriggered, false, true),
 			want: []string{"- Planning context (the harness's plan mode, or a request for a spec): list the\n"},
-			gone: []string{"`/spec`"},
+			gone: []string{"`/spec`", "`spec` skill"},
 		},
 		"direct": {
 			got:  Content(Direct, true, true),
@@ -121,6 +132,61 @@ func TestSectionStaysSmall(t *testing.T) {
 					t.Errorf("%s spec=%v docs=%v: unfilled placeholder or no final newline", mode, spec, docs)
 				}
 			}
+		}
+	}
+}
+
+// TestComponentContent pins the component section of spec 0032 §1, for a
+// nested path and a shallow one: the link climbs to the root.
+func TestComponentContent(t *testing.T) {
+	nested := "\n" +
+		"## Component `api`\n" +
+		"\n" +
+		"Managed by VibeConform from `components:` in `vibe.yaml`. This is the\n" +
+		"`api` component (profile `go`). The root\n" +
+		"[`AGENTS.md`](../../AGENTS.md) holds the workflow and the rules, and they\n" +
+		"apply here unchanged.\n" +
+		"\n" +
+		"Verification: `task verify:fast` while working and `task verify` before\n" +
+		"declaring done, from this directory; `task api:verify` from the root.\n" +
+		"\n"
+	if got := ComponentContent(manifest.Component{ID: "api", Path: "services/api", Profile: manifest.ProfileGo}); got != nested {
+		t.Errorf("nested component:\n%s", got)
+	}
+	shallow := ComponentContent(manifest.Component{ID: "web", Path: "web", Profile: manifest.ProfileTS})
+	if !strings.Contains(shallow, "[`AGENTS.md`](../AGENTS.md)") || !strings.Contains(shallow, "`task web:verify`") ||
+		!strings.Contains(shallow, "(profile `ts`)") {
+		t.Errorf("shallow component:\n%s", shallow)
+	}
+	for _, p := range manifest.Profiles {
+		c := ComponentContent(manifest.Component{ID: "a-long-component-name", Path: "a/b/c/d", Profile: p})
+		if words := len(strings.Fields(c)); words > MaxComponentWords {
+			t.Errorf("%s: %d words, more than %d", p, words, MaxComponentWords)
+		}
+	}
+}
+
+// TestResolveComponents: one component section per component, after the
+// root's workflow section.
+func TestResolveComponents(t *testing.T) {
+	comps := []manifest.Component{
+		{ID: "api", Path: "services/api", Profile: manifest.ProfileGo},
+		{ID: "web", Path: "apps/web", Profile: manifest.ProfileTS},
+	}
+	rs, err := New(PlanTriggered).Resolve(context.Background(), &module.Context{
+		Components: comps, Integrations: []string{"claude"}, Policies: map[string]string{"workflow": PlanTriggered},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rs) != 3 || rs[0].Path != "AGENTS.md" {
+		t.Fatalf("resources %+v", rs)
+	}
+	for i, c := range comps {
+		r := rs[i+1]
+		if r.Path != c.Path+"/AGENTS.md" || r.SectionID != "component" || r.Ownership != resource.ManagedSection ||
+			r.Markers != resource.HTMLComment || r.Placement != resource.Bottom || string(r.Content) != ComponentContent(c) {
+			t.Errorf("component %s: %+v", c.ID, r)
 		}
 	}
 }

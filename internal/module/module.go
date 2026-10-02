@@ -34,6 +34,9 @@ type Context struct {
 	// Policies maps each repository policy vibe.yaml selects to its value,
 	// e.g. "line_endings": "lf" (docs/decisions/0014-managed-sections.md).
 	Policies map[string]string
+	// DocsDirs is where the docs layout puts each kind of document, with
+	// any directory vibe.yaml adopts (spec 0034). Zero means the defaults.
+	DocsDirs manifest.DocsDirs
 	// Profiles lists the languages the repository declares: a
 	// single-language standard's own, or its components', in
 	// manifest.Profiles order.
@@ -121,6 +124,27 @@ type HookRuntime interface {
 	// HookBinaries lists the binaries every hook command needs: task,
 	// then the guard's runtime.
 	HookBinaries(mctx *Context) []string
+}
+
+// Retirer is implemented by a module that once generated a whole file it
+// no longer does, such as the /spec command the spec skill replaced. Sync
+// treats a recorded retired path as it treats a deselected option's file:
+// removed if unchanged since sync, kept as a conflict if modified, never
+// touched if unrecorded (docs/specs/0031-spec-skill.md §3).
+type Retirer interface {
+	// Retired maps each retired path, slash-separated, to the reason
+	// messages give for removing it.
+	Retired() map[string]string
+}
+
+// SectionMover is implemented by a module whose section can move to
+// another file when vibe.yaml changes, like the specs section, which
+// follows development.specs_dir. A recorded section with one of these IDs,
+// at a path the module no longer resolves it at, is removed from its old
+// file under the rules for a deselected option's section
+// (docs/specs/0034-adopt-docs-layout.md §3).
+type SectionMover interface {
+	MovableSections() []string
 }
 
 // SectionChecker is implemented by a module whose managed section can be
