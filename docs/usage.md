@@ -4,6 +4,9 @@ Status: living document, tracks `vibe`'s actual implemented behavior. If
 something below and the CLI's own `--help` output disagree, trust
 `--help` and file that as a doc bug.
 
+New to VibeConform? [`adopting.md`](adopting.md) walks through adopting it
+in a new repository, start to finish. This manual is the reference.
+
 ## Installing
 
 ### `go install` or `go run`, by module path (no clone needed)

@@ -136,6 +136,9 @@ Later: `vibe new`, `vibe eject`.
 
 ## Using `vibe`
 
+To adopt VibeConform in a repository, follow
+[`docs/adopting.md`](docs/adopting.md), a start-to-finish walkthrough.
+
 See [`docs/usage.md`](docs/usage.md) for the user manual: install/build
 instructions, the `vibe init` command reference, exact error text for
 each failure case, and how to remove VibeConform from a repository that
