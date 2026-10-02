@@ -234,6 +234,17 @@ systems through provider abstractions:
 - **GitNexus** (repository intelligence): index/search/dependency/
   caller/impact/trace. It must never replace the compiler, LSP, linter,
   tests, or CI — it augments them.
+
+The first code-intelligence provider is not GitNexus but **Graphify**
+(spec 0035), an opt-in integration in the `intelligence` category. It
+follows the same rule. VibeConform configures it and never runs it:
+`sync` writes a `.gitignore` section, a skill, a `graph:update` task,
+and `post-commit`/`post-checkout` lefthook jobs. The graph is rebuilt by
+those Git hooks, and is never consulted by `verify` or CI. `vibe
+doctor` reports whether the graph is current, using its
+`built_at_commit`. Core repo-tooling modules read the selection through
+`module.Selected`, which fails closed; `WantsAgentHooks` fails open,
+because a guard must not vanish on an unknown selection.
 - **Skills Manager**: canonical skill storage, deployment, and per-project
   activation. It must never become a CI dependency.
 
@@ -261,6 +272,7 @@ internal/
     agents/codex/           # Codex config; hooks suspended (spec 0024); the codex integration
     editors/vscode/         # owned entries in .vscode/tasks.json, extensions.json (spec 0026)
     editors/zed/            # owned entries in .zed/tasks.json (spec 0026)
+    intelligence/graphify/  # opt-in Graphify: a .gitignore section and a Claude skill; the graph:update task and hook jobs come from repo-tooling (spec 0035)
     policy/lineendings/     # opt-in LF policy: a managed section of .gitattributes (spec 0029)
     workflow/               # opt-in development workflow (AGENTS.md section) and docs layout (spec 0030)
     tstooling/              # eslint, prettier, tsconfig base
@@ -292,7 +304,7 @@ internal/
   affected/       # changed-files -> affected-components graph
   validation/     # task execution for affected components
   skills/         # Skills Manager provider
-  intelligence/   # GitNexus provider
+  intelligence/   # GitNexus provider (Graphify is a module, module/intelligence/graphify)
 ```
 
 `.vibe/lock.yaml` does not exist either: state alone closes the
