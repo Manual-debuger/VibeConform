@@ -1,11 +1,16 @@
 # Lefthook: fast checks at commit time, stronger checks at push time.
-# CI (.github/workflows/ci.yml) is the authoritative full verification gate;
+# CI is the authoritative full verification gate;
 # these hooks are a fast local first line of defense, not a substitute.
 #
 # Pre-commit checks run per component, from the component's directory
 # (root:), and only when a staged file of its language is inside it, so a
 # commit touching one component checks only that one. Each runs the
 # component's own Taskfile.yml tasks. See docs/specs/0025-prod-mono.md.
+
+# Repository-specific hooks go in lefthook.local.yml (optional, yours;
+# see VibeConform's docs/usage.md). Lefthook merges it over this file.
+extends:
+  - lefthook.local.yml
 
 pre-commit:
   parallel: true

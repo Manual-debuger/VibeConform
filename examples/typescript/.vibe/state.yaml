@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.3.0-alpha.1.0.20261001100506-746addbb1129
+vibe_version: v0.5.0-alpha.1.0.20261002094238-d986d9e2ae85
 standard: prod-ts/v1
 resources:
     - path: .claude/hooks/block-dangerous.sh
@@ -72,7 +72,7 @@ resources:
       sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
     - path: lefthook.yml
       ownership: generated
-      sha256: 3528016b1e4a519ace6799fa7bd0c06cf9f98ee314ab92be86ad42419703d328
+      sha256: 39b94a660f43bd2e546c4b19a56d8611b4e6b87248d6481335909bca1f227038
     - path: tsconfig.base.json
       ownership: generated
       sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217
