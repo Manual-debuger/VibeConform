@@ -587,6 +587,8 @@ Deliberately **not** managed, and left for you to maintain by hand:
   section to it, and the rest of the file stays yours.
 - `Taskfile.local.yml` — your own tasks, deliberately outside the managed
   set. See "Adding your own tasks" below.
+- `lefthook.local.yml` — your own Git hooks, outside the managed set in
+  the same way. See "Adding your own Git hooks" below.
 
 **`task audit`, with or without `vibe`.** All three standards get the same
 `audit` task, in `Taskfile.vibe.yml`, which `Taskfile.yml` includes
@@ -1724,6 +1726,64 @@ above that floor; only a local install can be too old.
 See `docs/decisions/0009-managed-file-local-extension.md` for why the
 standard stops at the verification interface.
 
+## Adding your own Git hooks: `lefthook.local.yml`
+
+`lefthook.yml` is fully generated too. Put repository-specific Git hooks
+(a `post-merge` dependency install, a `commit-msg` linter, an extra
+`pre-commit` check) in a committed `lefthook.local.yml` beside it:
+
+```yaml
+post-merge:
+  commands:
+    deps:
+      run: task deps   # a task from your Taskfile.local.yml
+
+pre-commit:
+  commands:
+    migrations-named:
+      glob: "migrations/*.sql"
+      run: task migrations:check-names
+```
+
+The generated `lefthook.yml` names it under lefthook's own `extends:`
+key, so `lefthook install` (which `vibe sync` runs) registers its hooks
+and every hook run merges it in. Things to know:
+
+- **It is optional.** A missing `extends` file is skipped silently. With
+  no `lefthook.local.yml`, the hooks are exactly the managed ones.
+- **It is yours.** `vibe` never creates, writes, reads, validates, or
+  audits it, as with `Taskfile.local.yml`.
+- **It is merged, per hook, then per command, then per field.** A new
+  hook (`post-merge`) is added. A new command in a managed hook
+  (`pre-commit.commands.migrations-named`) runs beside the managed ones.
+  A command with a managed command's name is merged into it field by
+  field, so `run:` can be replaced, and `skip: true` disables it.
+- **That override is allowed on purpose.** Unlike Task, lefthook has no
+  name-collision error. Git hooks are a fast local first line of
+  defence, not the gate: CI runs the full verification, and any
+  developer can already skip hooks with `LEFTHOOK=0` or `--no-verify`.
+  So a skipped managed command costs speed of feedback, not conformance.
+- **Per-developer overrides go in `lefthook-local.yml`** (with a hyphen).
+  That is lefthook's own per-machine file. It is loaded last, over
+  everything else, and upstream recommends gitignoring it. VibeConform
+  does not add it to `.gitignore`: whether to commit it is your call.
+
+Merge order is `lefthook.yml` → `lefthook.local.yml` → `lefthook-local.yml`.
+This was verified with lefthook 1.13.6 (loader source), 2.1.14 on
+Windows and 2.1.16 on Linux.
+
+**Already edited `lefthook.yml` by hand?** `vibe audit` reports it as
+`conflict` once your `vibe` carries the `extends` entry. Move your
+additions into `lefthook.local.yml`, restore the managed file with
+`git checkout lefthook.yml`, then run `vibe sync`.
+
+**Graphify's hook jobs are not yours to copy.** When the
+[Graphify](#graphify) integration is selected, the `post-commit` and
+`post-checkout` `graph:update` jobs are generated into `lefthook.yml`.
+Don't repeat them in `lefthook.local.yml`.
+
+See `docs/decisions/0017-lefthook-local-extension.md`.
+
 ## VibeConform manages itself
 
 This repository is the worked example: it has a `vibe.yaml` declaring
@@ -1897,6 +1957,8 @@ deleting four things and editing none:
 don't have to exist: `Taskfile.local.yml` (yours, never `vibe`'s) and the
 deleted `Taskfile.vibe.yml`. An optional include of a missing file does
 nothing, so both can stay. Delete the `vibe` entry whenever you like.
+`lefthook.yml`'s `extends: [lefthook.local.yml]` can stay for the same
+reason: lefthook skips a missing `extends` file.
 
 Everything else `vibe sync` wrote — `.golangci.yml`, `eslint`/`prettier`/
 `tsconfig`, `ruff`/`pyright` config, the rest of `Taskfile.yml`, `ci.yml`

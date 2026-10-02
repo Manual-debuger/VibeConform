@@ -1,8 +1,9 @@
 # Plan 0036: A project-owned extension point for `lefthook.yml`
 
-Implements `docs/specs/0036-lefthook-local-extension.md`. Status: proposed,
-awaiting approval. It is written to be approved separately from the spec,
-and nothing is implemented until both are approved.
+Implements `docs/specs/0036-lefthook-local-extension.md`. Status:
+approved and implemented. The header line of every template was also made
+provider-neutral (spec open question 3). The golden test keeps its
+goldens.
 
 Branch: `feat/lefthook-local`, off `main`. One pull request.
 

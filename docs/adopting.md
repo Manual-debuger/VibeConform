@@ -167,8 +167,10 @@ manages](usage.md#what-prod-gov1-manages). In short:
 
 Files that stay yours, never generated: `go.mod`, your code, `.gitignore`
 (apart from an integration's managed section), `AGENTS.md`/`CLAUDE.md`
-(apart from one short managed section each), and `Taskfile.local.yml` for
-[your own tasks](usage.md#adding-your-own-tasks-taskfilelocalyml).
+(apart from one short managed section each), `Taskfile.local.yml` for
+[your own tasks](usage.md#adding-your-own-tasks-taskfilelocalyml), and
+`lefthook.local.yml` for
+[your own Git hooks](usage.md#adding-your-own-git-hooks-lefthooklocalyml).
 
 ## 6. Check the machine
 
@@ -221,8 +223,8 @@ Without the second one, a hand-edited managed file merges unnoticed.
 
 - **Never hand-edit a managed file.** `vibe audit` lists them. A direct
   edit is drift: `audit` exits 2, and the next `sync` puts the file back.
-  Put your own tasks in `Taskfile.local.yml`, and change behavior through
-  `vibe.yaml`.
+  Put your own tasks in `Taskfile.local.yml`, your own Git hooks in
+  `lefthook.local.yml`, and change behavior through `vibe.yaml`.
 - **Changing what you opted into** is one edit to `vibe.yaml`, then
   `vibe diff`, then `vibe sync`, then a commit. Deselecting removes only
   what `sync` wrote and you left unmodified
@@ -241,8 +243,8 @@ The steps are the same. The difference is that files you already have,
 such as `Taskfile.yml` or `.github/workflows/ci.yml`, are not yet
 recorded in state. When their content differs from the standard's,
 `sync` reports them as **conflicts** and does not overwrite them. Move
-anything you want to keep into `Taskfile.local.yml` or your own workflow
-file, delete the conflicting file, and sync again. An existing docs tree
+anything you want to keep into `Taskfile.local.yml`, `lefthook.local.yml`
+or your own workflow file, delete the conflicting file, and sync again. An existing docs tree
 can be adopted in place with the `development.*_dir` keys (spec 0034,
 [Development workflow](usage.md#development-workflow)).
 
