@@ -35,6 +35,31 @@ go install github.com/Manual-debuger/VibeConform/cmd/vibe@v0.5.0-alpha.1
 vibe --version    # vibe version v0.5.0-alpha.1
 ```
 
+`go install` prints nothing when it succeeds. It puts the binary in
+`$(go env GOBIN)`, or in `$(go env GOPATH)/bin` (usually `~/go/bin`)
+when `GOBIN` is unset. If the shell then says `vibe: command not found`,
+the install worked but that directory is not on `PATH`:
+
+- **Linux and WSL** (bash; use `~/.zshrc` for zsh):
+
+  ```sh
+  echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc
+  source ~/.bashrc
+  ```
+
+- **Windows** (PowerShell). The Go installer usually adds
+  `%USERPROFILE%\go\bin` already. If it did not:
+
+  ```powershell
+  $user = [Environment]::GetEnvironmentVariable('Path', 'User')
+  [Environment]::SetEnvironmentVariable('Path', "$user;$(go env GOPATH)\bin", 'User')
+  ```
+
+  Then open a new terminal.
+
+WSL and Windows are separate machines here. Each needs its own install,
+and each has its own `PATH`.
+
 If `vibe --version` shows something else, an older `vibe` comes first
 on `PATH`. Fix that before going on: `task audit` uses whichever `vibe`
 is on `PATH`, and an older one may not know options the newer one wrote.
