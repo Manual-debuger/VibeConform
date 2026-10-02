@@ -149,9 +149,6 @@ func (s *Standard) Select(m *manifest.Manifest) (Selection, error) {
 			if !slices.Contains(valid, name) {
 				where := fmt.Sprintf("integrations.%s[%d] (%s)", category, i, name)
 				if len(valid) == 0 {
-					if category == manifest.CategoryIntelligence {
-						return Selection{}, fmt.Errorf("%s: no code-intelligence providers are available yet", where)
-					}
 					return Selection{}, fmt.Errorf("%s: %s/%s offers no %s integrations", where, s.Name, s.Version, category)
 				}
 				return Selection{}, fmt.Errorf("%s: unknown %s integration (valid: %s)", where, category, strings.Join(valid, ", "))

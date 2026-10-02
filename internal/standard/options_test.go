@@ -69,17 +69,17 @@ func TestSelectRejects(t *testing.T) {
 		in   *manifest.Integrations
 		want string
 	}{
-		"unknown":       {&manifest.Integrations{Agents: list("cursor")}, "integrations.agents[0] (cursor): unknown agents integration (valid: ag-x, ag-y)"},
-		"wrong bucket":  {&manifest.Integrations{Editors: list("ag-x")}, "unknown editors integration (valid: ed-a, ed-b)"},
-		"requires":      {&manifest.Integrations{Agents: list("ag-y"), Intelligence: list("in-z")}, "in-z requires ag-x"},
-		"excludes":      {&manifest.Integrations{Editors: list("ed-b")}, "ed-b cannot be selected together with ag-y"},
-		"no intel real": {&manifest.Integrations{Intelligence: list("gitnexus")}, ""},
+		"unknown":            {&manifest.Integrations{Agents: list("cursor")}, "integrations.agents[0] (cursor): unknown agents integration (valid: ag-x, ag-y)"},
+		"wrong bucket":       {&manifest.Integrations{Editors: list("ag-x")}, "unknown editors integration (valid: ed-a, ed-b)"},
+		"requires":           {&manifest.Integrations{Agents: list("ag-y"), Intelligence: list("in-z")}, "in-z requires ag-x"},
+		"excludes":           {&manifest.Integrations{Editors: list("ed-b")}, "ed-b cannot be selected together with ag-y"},
+		"unknown intel real": {&manifest.Integrations{Intelligence: list("gitnexus")}, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := fakeStandard()
-			if name == "no intel real" {
+			if name == "unknown intel real" {
 				s = mustLookup(t, "prod-go")
-				tc.want = "integrations.intelligence[0] (gitnexus): no code-intelligence providers are available yet"
+				tc.want = "integrations.intelligence[0] (gitnexus): unknown intelligence integration (valid: graphify)"
 			}
 			_, err := s.Select(&manifest.Manifest{Integrations: tc.in})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {

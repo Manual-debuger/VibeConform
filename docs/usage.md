@@ -495,6 +495,10 @@ The checks, in order:
 - **Agent hooks:** for each selected agent, the file that registers its
   hooks is present, and the binaries the hooks start are on `PATH`
   (`task`, and `go`, `node`, or `uv` for the guard).
+- **Graphify**, only when selected: whether the graph exists and was
+  built from HEAD, and whether git ignores it (see [Graphify](#graphify)).
+  These lines, like the `graphify` tool line, are at most `WARN`: the
+  graph is optional.
 - **Line endings:** how git will check out a managed file, from
   `core.autocrlf` and the `eol` attribute. With the
   [line-ending policy](#line-ending-policy) selected, the line reports
@@ -907,7 +911,7 @@ deselected.
 | `editors` | `zed` | off | four tasks in `.zed/tasks.json` |
 | `agents` | `claude` | on | `.claude/settings.json`, `.claude/hooks/policy.json`, the guard program, and the `hook:*` tasks in `Taskfile.yml` |
 | `agents` | `codex` | on | `.codex/config.toml`, `.codex/hooks.json` |
-| `intelligence` | — | — | none yet; LSP and GitNexus providers are separate issues |
+| `intelligence` | `graphify` | off | a `graphify` section in `.gitignore`; `graph:update` in `Taskfile.yml` and the `post-commit`/`post-checkout` jobs in `lefthook.yml`; with `claude`, `.claude/skills/graphify/SKILL.md` and a `hook:context` line; with a workflow, a paragraph in AGENTS.md (see [Graphify](#graphify)) |
 
 A category you leave out takes its defaults; an empty list means none.
 The categories are independent: choosing editors never changes agents.
@@ -976,7 +980,7 @@ integrations:
 integrations:
   editors: [vscode, vscode]   # duplicate within a category
   agents: [cursor]            # unknown: the error lists claude, codex
-  intelligence: [gitnexus]    # no code-intelligence providers are available yet
+  intelligence: [gitnexus]    # unknown: the error lists graphify
   editor: [zed]               # not a category: vibe.yaml is decoded strictly
 ```
 
@@ -1013,6 +1017,117 @@ wrote it, and adding more of your own is not drift.
 Selecting an editor configures it for people. It does not give a coding
 agent access to that editor's language server; that is the LSP
 integration's job, not yet built.
+
+### Graphify
+
+[Graphify](https://pypi.org/project/graphifyy/) (PyPI package
+`graphifyy`, MIT license) builds a knowledge graph of the repository in
+`graphify-out/`: communities, central nodes, and cross-file relationships
+that an agent can query with `graphify query`, `graphify path`, and
+`graphify explain`. It is off by default (spec 0035):
+
+```yaml
+integrations:
+  intelligence: [graphify]
+```
+
+**Install it**, on Windows or Linux, with either of:
+
+```sh
+uv tool install graphifyy
+pip install graphifyy        # or: pip install --user graphifyy
+graphify --version
+```
+
+VibeConform was verified with graphify 0.8.18. It relies only on
+`graphify update <path>` and on the top-level `built_at_commit` key of
+`graphify-out/graph.json`. `vibe sync` never installs graphify, never
+runs it, and never runs upstream's `graphify install`. That installer
+merges hooks into `.claude/settings.json` and `.codex/hooks.json`, which
+VibeConform owns, so `vibe audit` would report them as drift.
+
+**What selecting it generates:**
+
+- A `graphify` section at the bottom of `.gitignore` that ignores all
+  of `graphify-out/` (graph, report, cache, manifest). The graph is
+  derived and machine-local, and a committed copy would go stale while
+  looking current. The rest of `.gitignore` stays yours. If the file
+  does not exist, sync creates it.
+- A `graph:update` task that runs `graphify update .`. That is the
+  code-only rebuild: no LLM, no network.
+- `post-commit` and `post-checkout` jobs in `lefthook.yml` that run
+  `task graph:update`, so the graph follows every commit and branch
+  switch. The logic is in the task, not in `lefthook.yml`, because
+  lefthook on Windows does not keep shell quoting in a `run:` line.
+  - Without graphify on PATH, the task prints
+    `graphify: not on PATH; graph not updated …` and exits 0.
+  - If the update fails, it prints `graphify: update failed;
+    graphify-out/ may be stale` and exits 0.
+  - Neither job is in `pre-commit` or `pre-push`. `task verify`,
+    `verify:fast`, `verify-ci`, and CI never touch graphify.
+- With `claude`:
+  - `.claude/skills/graphify/SKILL.md` tells the agent to check
+    freshness first (`built_at_commit` against `git rev-parse HEAD`), to
+    fall back to search, the compiler, and the tests when the graph is
+    missing or stale, and never to treat an empty result as proof of
+    absence;
+  - `hook:context` prints `Graphify: graph present …` or
+    `Graphify: no graph yet …` at session start.
+- With a development workflow, the AGENTS.md section gains a "Repository
+  intelligence" paragraph that every agent, Codex included, reads.
+
+**Diagnostics.**
+
+- `vibe sync` warns when `graphify` is not on PATH, and still succeeds.
+- `vibe doctor` adds three lines, all at most `WARN`, so graphify never
+  makes doctor exit 1:
+  - `graphify`: the tool and its version;
+  - `graphify graph`: absent, unreadable, stale (`built at <commit>,
+    HEAD <commit>`), or current (with a note when the working tree has
+    uncommitted changes, which no graph includes);
+  - `graphify ignore`: whether git ignores `graphify-out/graph.json`.
+
+**Troubleshooting.**
+
+- *The graph is not updating.*
+  - Run `lefthook install`; `vibe sync` does this when lefthook is on
+    PATH.
+  - Check that `graphify --version` works in the shell Git hooks use.
+  - On Windows, `pip install --user` puts `graphify.exe` in
+    `%APPDATA%\Python\Python3XX\Scripts`, which is often not on PATH.
+    `uv tool install` puts it in `~/.local/bin`.
+- *Doctor says stale.*
+  - A commit was made with hooks skipped (`LEFTHOOK=0`, `--no-verify`),
+    or graphify refused to overwrite a graph that would shrink. That
+    happens after a large deletion, or when a graph was built with LLM
+    extraction.
+  - Run `task graph:update`. To accept a smaller graph, run
+    `graphify update . --force`, or set `GRAPHIFY_FORCE=1`.
+- *Doctor says not ignored.* A user rule below the section, such as
+  `!graphify-out/…`, re-includes it, or the graph was committed before.
+  Run `git rm -r --cached graphify-out`.
+
+**Limitations.**
+
+- `graphify update` re-extracts code only. Documents, papers, and images
+  need graphify's own LLM pipeline (`/graphify` in an agent), which
+  VibeConform does not run.
+- `post-checkout` adds the rebuild's time to every branch switch.
+- The graph is static analysis. It never replaces the compiler, a
+  language server, the linter, the tests, or CI.
+
+**Removal.**
+
+- Delete `graphify` from `intelligence:` and run `vibe sync`. That
+  removes the `.gitignore` section (and `.gitignore` itself, if
+  VibeConform created it and nothing else is in it) and the skill, and
+  takes `graph:update`, the Git hook jobs, and the context lines out of
+  their files. A skill you edited is kept and reported as a conflict.
+- `graphify-out/` is never deleted, because VibeConform never recorded
+  it. Delete it yourself, or run `graphify uninstall --purge`, which also
+  removes graphify's skill from every platform it was installed for.
+- Anything graphify's own installer put in your home directory is not
+  VibeConform's to touch.
 
 ### Deselecting
 
@@ -1790,7 +1905,9 @@ written it by hand. That includes the line-ending policy's section of
 agents read them with or without VibeConform, and the markers are plain
 comments (HTML comments in Markdown, invisible when rendered) that you
 can delete or keep. The `spec` skill stays an ordinary Claude Code
-skill.
+skill. With [Graphify](#graphify) selected, its `.gitignore` section,
+skill, `graph:update` task, and Git hook jobs keep working the same
+way: they call `graphify` and `task`, never `vibe`.
 `.github/workflows/examples.yml` in this repository demonstrates the split
 for its own TS/PY fixtures: `task verify` runs first, with no `vibe` on
 `PATH`; building `vibe` and running `task audit` is a separate, later step.

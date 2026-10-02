@@ -4,6 +4,9 @@ version: v1
 # CI runs the agent hooks in this example (hook-guard.yml, examples.yml).
 integrations:
   editors: []
+  # Graphify (spec 0035): .gitignore ignores graphify-out/, the Git hooks
+  # rebuild the graph, and nothing in verify or CI needs graphify.
+  intelligence: [graphify]
 # Opt in to the development workflow and the docs layout (spec 0030):
 # AGENTS.md, CLAUDE.md, docs/README.md and docs/specs/README.md each get
 # one managed section, and Claude Code gets /spec.

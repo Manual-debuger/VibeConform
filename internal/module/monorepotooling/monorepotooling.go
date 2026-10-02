@@ -189,6 +189,14 @@ func (monorepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([
 	if err != nil {
 		return nil, err
 	}
+	// The root runs graph:update, and graphify-out/ is the root's (spec
+	// 0035); the hook:context anchor is the same as a single-language
+	// Taskfile's.
+	if module.Selected(mctx, module.GraphifyIntegration) {
+		if taskfile, hooks, err = module.AddGraphify(taskfile, hooks, module.WantsAgentHooks(mctx)); err != nil {
+			return nil, err
+		}
+	}
 
 	resources := []resource.Resource{
 		{Path: "Taskfile.yml", Ownership: resource.Generated, Content: taskfile},

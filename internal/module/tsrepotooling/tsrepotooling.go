@@ -86,6 +86,11 @@ func (tsrepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]r
 	if err != nil {
 		return nil, err
 	}
+	if module.Selected(mctx, module.GraphifyIntegration) {
+		if taskfile, lefthook, err = module.AddGraphify(taskfile, lefthook, hooks); err != nil {
+			return nil, err
+		}
+	}
 
 	resources := []resource.Resource{
 		{

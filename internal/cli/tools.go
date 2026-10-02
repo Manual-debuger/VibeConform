@@ -17,9 +17,11 @@ var lookPath = exec.LookPath
 // missingTool is one required binary that is not installed, together with
 // the module that asked for it.
 type missingTool struct {
-	module string
-	name   string
-	why    string
+	module   string
+	name     string
+	why      string
+	optional bool
+	install  string
 }
 
 // warnMissingTools reports on w every external binary the standard's modules
@@ -33,6 +35,10 @@ func warnMissingTools(w io.Writer, s *standard.Standard, mctx *module.Context) {
 	for _, t := range missingTools(s, mctx) {
 		// Dropped write errors: a warning that could not be printed must
 		// not fail the command it was only advising.
+		if t.optional {
+			_, _ = fmt.Fprintf(w, "warning: %s not found on PATH (optional, for %s: %s; install: %s)\n", t.name, t.module, t.why, t.install)
+			continue
+		}
 		_, _ = fmt.Fprintf(w, "warning: %s not found on PATH (required by %s: %s)\n", t.name, t.module, t.why)
 	}
 }
@@ -78,7 +84,8 @@ func missingTools(s *standard.Standard, mctx *module.Context) []missingTool {
 	var missing []missingTool
 	for _, rt := range requiredTools(s, mctx) {
 		if _, err := lookPath(rt.tool.Name); err != nil {
-			missing = append(missing, missingTool{module: rt.module, name: rt.tool.Name, why: rt.tool.Why})
+			missing = append(missing, missingTool{module: rt.module, name: rt.tool.Name, why: rt.tool.Why,
+				optional: rt.tool.Optional, install: rt.tool.Install})
 		}
 	}
 	return missing

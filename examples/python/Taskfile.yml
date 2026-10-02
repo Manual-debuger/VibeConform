@@ -121,6 +121,7 @@ tasks:
         py="$(uv python find 2>/dev/null || true)"
         echo "Python: $([ -n "$py" ] && "$py" --version 2>/dev/null || echo missing)"
         echo "Task: {{.TASK_VERSION}}"
+        if test -f graphify-out/graph.json; then echo "Graphify: graph present (check freshness: built_at_commit vs HEAD)"; else echo "Graphify: no graph yet (graphify-out/graph.json absent)"; fi
         n=0
         while IFS= read -r line; do
           [ -n "$line" ] || continue
@@ -212,3 +213,17 @@ tasks:
     desc: Alias used by CI so the workflow and local docs never drift.
     cmds:
       - task: verify
+
+  # Rebuilds the Graphify knowledge graph in graphify-out/ from the code
+  # (no LLM, no network). The post-commit and post-checkout Git hooks run
+  # it; nothing in verify or CI does. See docs/specs/0035-graphify.md.
+  graph:update:
+    desc: Rebuild the Graphify graph in graphify-out/ (run by the post-commit hook)
+    silent: true
+    cmds:
+      - |
+        if ! command -v graphify >/dev/null 2>&1; then
+          echo "graphify: not on PATH; graph not updated, graphify-out/ may be stale (install: uv tool install graphifyy)" >&2
+          exit 0
+        fi
+        graphify update . || echo "graphify: update failed; graphify-out/ may be stale" >&2

@@ -74,6 +74,16 @@ const (
 		"- Do not implement until the user approves.\n" +
 		"\n"
 
+	// graphify is the repository-intelligence paragraph, present when
+	// vibe.yaml selects the Graphify integration (spec 0035 §2). Every agent
+	// reads it here; Claude Code also has the graphify skill.
+	graphify = "Repository intelligence:\n\n" +
+		"- Graphify keeps a knowledge graph in `graphify-out/`. Use it only when\n" +
+		"  `built_at_commit` in `graph.json` matches HEAD (`task graph:update`\n" +
+		"  rebuilds it); otherwise, or when it is absent, use search, the\n" +
+		"  compiler and tests. It never replaces verification.\n" +
+		"\n"
+
 	verification = "Verification:\n\n" +
 		"- `task verify:fast` while working; `task verify` before declaring\n" +
 		"  done. Do not weaken a test, lint or type check to make a change pass.\n" +
@@ -116,6 +126,18 @@ func Content(mode string, spec, docsLayout bool) string {
 
 // LayoutContent is Content for any layout; nil means no docs layout.
 func LayoutContent(mode string, spec bool, layout *Layout) string {
+	return LayoutContentWith(mode, spec, layout, Extras{})
+}
+
+// Extras are the integrations the section mentions besides the spec
+// skill. The zero value mentions none.
+type Extras struct {
+	// Graphify adds the repository-intelligence paragraph.
+	Graphify bool
+}
+
+// LayoutContentWith is LayoutContent with extras.
+func LayoutContentWith(mode string, spec bool, layout *Layout, extras Extras) string {
 	var b strings.Builder
 	b.WriteString(header)
 	if layout != nil {
@@ -130,6 +152,9 @@ func LayoutContent(mode string, spec bool, layout *Layout) string {
 		b.WriteString(planTriggered)
 	case AlwaysSDD:
 		b.WriteString(alwaysSDD)
+	}
+	if extras.Graphify {
+		b.WriteString(graphify)
 	}
 	b.WriteString(verification)
 
@@ -167,7 +192,8 @@ func (w workflowModule) Resolve(_ context.Context, mctx *module.Context) ([]reso
 		SectionID: SectionID,
 		Markers:   resource.HTMLComment,
 		Placement: resource.Bottom,
-		Content:   []byte(LayoutContent(w.mode, hasSpecCommand(mctx), layoutOf(mctx))),
+		Content: []byte(LayoutContentWith(w.mode, hasSpecCommand(mctx), layoutOf(mctx),
+			Extras{Graphify: module.Selected(mctx, module.GraphifyIntegration)})),
 	}}
 	for _, c := range module.ComponentsOf(mctx) {
 		rs = append(rs, resource.Resource{

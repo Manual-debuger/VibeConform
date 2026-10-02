@@ -26,6 +26,13 @@ Workflow: plan-triggered lightweight SDD.
   approved, write it to `docs/specs/` first.
 - Do not implement until the user approves.
 
+Repository intelligence:
+
+- Graphify keeps a knowledge graph in `graphify-out/`. Use it only when
+  `built_at_commit` in `graph.json` matches HEAD (`task graph:update`
+  rebuilds it); otherwise, or when it is absent, use search, the
+  compiler and tests. It never replaces verification.
+
 Verification:
 
 - `task verify:fast` while working; `task verify` before declaring

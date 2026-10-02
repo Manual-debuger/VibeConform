@@ -29,7 +29,9 @@
 > [`docs/specs/0024-claude-first-agent-modules.md`](docs/specs/0024-claude-first-agent-modules.md)).
 > The last two are optional integrations, on by default; `vibe.yaml`'s
 > `integrations:` map deselects them or adds the `vscode` and `zed` editor
-> integrations, and `vibe sync` safely removes what a deselected integration
+> integrations or the `graphify` code-intelligence integration (off by
+> default, see [`docs/specs/0035-graphify.md`](docs/specs/0035-graphify.md)),
+> and `vibe sync` safely removes what a deselected integration
 > left behind (see
 > [`docs/specs/0026-optional-integrations.md`](docs/specs/0026-optional-integrations.md)).
 > `vibe.yaml`'s opt-in `policy: {line_endings: lf}` pins LF checkouts.

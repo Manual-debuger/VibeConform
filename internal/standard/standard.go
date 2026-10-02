@@ -18,6 +18,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/editors/vscode"
 	"github.com/Manual-debuger/VibeConform/internal/module/editors/zed"
 	"github.com/Manual-debuger/VibeConform/internal/module/gotooling"
+	"github.com/Manual-debuger/VibeConform/internal/module/intelligence/graphify"
 	"github.com/Manual-debuger/VibeConform/internal/module/monorepotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/monotooling"
 	"github.com/Manual-debuger/VibeConform/internal/module/policy/lineendings"
@@ -96,6 +97,8 @@ func catalog() []Option {
 		{Group: editors, Name: "zed", Module: zed.New()},
 		{Group: agents, Name: "claude", Module: claude.New(), Default: true},
 		{Group: agents, Name: "codex", Module: codex.New(), Default: true},
+		// Code intelligence is opt-in (spec 0035).
+		{Group: integrationGroup(manifest.CategoryIntelligence), Name: module.GraphifyIntegration, Module: graphify.New()},
 		// Policies are opt-in: none is a default (spec 0029).
 		{Group: le, Name: "lf", Module: lineendings.New()},
 		// Development settings are opt-in too (spec 0030). The three

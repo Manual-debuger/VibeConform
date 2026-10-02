@@ -43,6 +43,8 @@ integrations:
   resolves. An unknown name is an error listing the valid ones for that
   category. The `intelligence` catalog is empty in this spec, so any
   entry fails with "no code-intelligence providers are available yet".
+  (Since spec 0035 the catalog holds `graphify`, and an unknown name
+  lists it, like any other category.)
 - `vibe init` is unchanged and writes no `integrations:`.
 
 ### 2. The catalog
@@ -302,6 +304,8 @@ on those files.
 - **No core deselection.** Verification, hooks, CI, and conformance are
   not integrations.
 - **No `vibe init` flags** for integrations, and no `.gitignore` editing.
+  (Narrowed by ADR 0016: since spec 0035 an integration may own a
+  managed section of `.gitignore` for its own output.)
 
 ## Design notes
 

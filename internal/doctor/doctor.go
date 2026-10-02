@@ -114,6 +114,8 @@ type Env struct {
 	Run func(ctx context.Context, dir, name string, args ...string) (stdout, stderr string, err error)
 	// Exists reports whether a path exists.
 	Exists func(path string) bool
+	// Open opens a file for reading, so a large file can be streamed.
+	Open func(path string) (io.ReadCloser, error)
 	// GOOS and GOARCH describe this machine, as Go names them.
 	GOOS, GOARCH string
 }
@@ -126,6 +128,9 @@ func System() Env {
 		Exists: func(path string) bool {
 			_, err := os.Stat(path)
 			return err == nil
+		},
+		Open: func(path string) (io.ReadCloser, error) {
+			return os.Open(path) // #nosec G304 -- a path fixed by the check, under the repository root
 		},
 		GOOS:   runtime.GOOS,
 		GOARCH: runtime.GOARCH,
@@ -207,6 +212,10 @@ type Tool struct {
 	// Version is the arguments that make it print its version; nil when
 	// it has none.
 	Version []string
+	// Optional tools only degrade an optional capability: missing is a
+	// warning, with Install saying how to get one.
+	Optional bool
+	Install  string
 }
 
 // Tools checks each required binary: on PATH, and reporting a version
@@ -225,6 +234,11 @@ func tool(ctx context.Context, env Env, repoRoot string, t Tool) Result {
 	res := Result{Name: t.Name}
 	path, err := env.LookPath(t.Name)
 	if err != nil {
+		if t.Optional {
+			res.Status = Warn
+			res.Detail = fmt.Sprintf("not found on PATH (optional, for %s: %s); install: %s", t.Module, t.Why, t.Install)
+			return res
+		}
 		res.Status = Fail
 		res.Detail = fmt.Sprintf("not found on PATH (required by %s: %s)", t.Module, t.Why)
 		return res

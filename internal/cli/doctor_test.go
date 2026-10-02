@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -44,6 +45,9 @@ func stubDoctorEnv(t *testing.T, missing ...string) {
 			Exists: func(path string) bool {
 				_, err := os.Stat(path)
 				return err == nil
+			},
+			Open: func(path string) (io.ReadCloser, error) {
+				return os.Open(path) // #nosec G304 -- the test's own temp directory
 			},
 			GOOS:   "linux",
 			GOARCH: "amd64",
