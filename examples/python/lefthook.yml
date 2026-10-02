@@ -20,3 +20,13 @@ pre-push:
       run: uv run pyright
     test:
       run: uv run pytest
+
+post-commit:
+  commands:
+    graphify-update:
+      run: task graph:update
+
+post-checkout:
+  commands:
+    graphify-update:
+      run: task graph:update

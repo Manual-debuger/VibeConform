@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.3.0-alpha.1.0.20261001100506-746addbb1129
+vibe_version: v0.4.0-alpha.1.0.20261002024512-8fbc1bcda686
 standard: prod-py/v1
 resources:
     - path: .claude/hooks/block-dangerous.sh
@@ -17,6 +17,9 @@ resources:
     - path: .claude/settings.json
       ownership: generated
       sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
+    - path: .claude/skills/graphify/SKILL.md
+      ownership: generated
+      sha256: 2dbed3fca2a9ef209260c582d575faa11a225178b11ad56b2e8941b10d2d8cac
     - path: .claude/skills/spec/SKILL.md
       ownership: generated
       sha256: 6e73fcab0e36e89b871f8980dd119fb986b6d582d6ae38e33063e6d179256ba9
@@ -38,11 +41,16 @@ resources:
     - path: .github/workflows/conformance.yml
       ownership: generated
       sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
+    - path: .gitignore
+      section_id: graphify
+      ownership: managed-section
+      created: true
+      sha256: 6452cf8f4946f427655646518393d70a331a9dafa55ddfc19d1479ae8acd236d
     - path: AGENTS.md
       section_id: workflow
       ownership: managed-section
       created: true
-      sha256: 803738cd02d076813cf8a469bf0f00890efb24679995d93726ffd817c6a6c21d
+      sha256: 42acd3b576cffebe397623b16698be434c929970ccd66adb1fa0464c57f37234
     - path: CLAUDE.md
       section_id: agents
       ownership: managed-section
@@ -53,7 +61,7 @@ resources:
       sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     - path: Taskfile.yml
       ownership: generated
-      sha256: 9aa1875bcced5bd31d959c32f5ebe368c37d97267a4829afcf7a8f411225ac2a
+      sha256: 58d450b8429266ee6dca900f56264f6d7dc59202e95f2bc3e9b0d365a98dc931
     - path: docs/README.md
       section_id: docs
       ownership: managed-section
@@ -66,7 +74,7 @@ resources:
       sha256: 0b5329e6fb87541d8814d46e506cdd6391a118b1d32030887655d6f06a770134
     - path: lefthook.yml
       ownership: generated
-      sha256: 9cbde339d40f685b9770ab9eab4c61a871b402649bfae53253ec6a387af796d1
+      sha256: 2929cc60318dfc60ebf3077669035c25be161e3e22f235cedd42fc7497a94194
     - path: pyrightconfig.json
       ownership: generated
       sha256: ca1316bdda3ba3c86490ff023de71f39a48fa04105fd03fd888924c36ce0bb43
