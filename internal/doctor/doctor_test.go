@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
+	"io/fs"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -15,7 +18,9 @@ type fake struct {
 	onPath   map[string]bool
 	commands map[string]reply
 	exists   map[string]bool
-	ran      []string
+	// files maps a slash path to what Open reads from it.
+	files map[string]string
+	ran   []string
 }
 
 type reply struct {
@@ -41,6 +46,13 @@ func (f *fake) env() Env {
 			return r.stdout, r.stderr, r.err
 		},
 		Exists: func(path string) bool { return f.exists[path] },
+		Open: func(path string) (io.ReadCloser, error) {
+			content, ok := f.files[filepath.ToSlash(path)]
+			if !ok {
+				return nil, fs.ErrNotExist
+			}
+			return io.NopCloser(strings.NewReader(content)), nil
+		},
 		GOOS:   "linux",
 		GOARCH: "amd64",
 	}

@@ -59,6 +59,20 @@ func WantsAgentHooks(mctx *Context) bool {
 	return slices.Contains(mctx.Integrations, AgentHookIntegration)
 }
 
+// GraphifyIntegration is the code-intelligence integration whose graph
+// update task, Git hook jobs, and context line core repo-tooling modules
+// generate (docs/specs/0035-graphify.md).
+const GraphifyIntegration = "graphify"
+
+// Selected reports whether vibe.yaml explicitly selects the named
+// integration. Unlike WantsAgentHooks it fails closed: an unknown
+// selection (nil context, or nil Integrations) selects nothing, so a
+// default-off integration never appears in a module resolved in
+// isolation.
+func Selected(mctx *Context, name string) bool {
+	return mctx != nil && slices.Contains(mctx.Integrations, name)
+}
+
 // ProfilesOf returns mctx's profiles, or none for a nil context.
 func ProfilesOf(mctx *Context) []manifest.Profile {
 	if mctx == nil {
@@ -96,6 +110,12 @@ type Tool struct {
 	// Version is the arguments that make the binary print its version on
 	// the first line of stdout, for vibe doctor. nil when it has none.
 	Version []string
+	// Optional marks a tool whose absence degrades an optional capability
+	// rather than stopping a required workflow: vibe doctor reports it as a
+	// warning, not a failure, and Install says how to get it.
+	Optional bool
+	// Install is a one-line hint for obtaining an optional tool.
+	Install string
 }
 
 // ToolRequirer is implemented by modules whose resources are inert without

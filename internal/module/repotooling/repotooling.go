@@ -78,6 +78,13 @@ func (repotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]res
 		}
 		taskfile = stripped
 	}
+	lefthook := lefthookConfig
+	if module.Selected(mctx, module.GraphifyIntegration) {
+		var err error
+		if taskfile, lefthook, err = module.AddGraphify(taskfile, lefthook, hooks); err != nil {
+			return nil, err
+		}
+	}
 
 	resources := []resource.Resource{
 		{
@@ -88,7 +95,7 @@ func (repotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]res
 		{
 			Path:      "lefthook.yml",
 			Ownership: resource.Generated,
-			Content:   lefthookConfig,
+			Content:   lefthook,
 		},
 	}
 	if !hooks {

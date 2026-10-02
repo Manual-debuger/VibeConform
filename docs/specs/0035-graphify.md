@@ -74,8 +74,8 @@ integrations:
   - an empty graph result is never evidence of absence;
   - graph output never replaces or skips required verification.
 - **The `hook:context` line** reads `Graphify: graph present (check
-  freshness: built_at_commit vs HEAD)` or `Graphify: no graph
-  (graphify-out/graph.json absent; run graphify update .)`. It uses only
+  freshness: built_at_commit vs HEAD)` or `Graphify: no graph yet
+  (graphify-out/graph.json absent)`. It uses only
   the shell's built-in `test -f`, so the allowlist doesn't grow, and the
   task still exits 0.
 - **The lefthook jobs** run `task graph:update`, and that task runs

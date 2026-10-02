@@ -122,14 +122,24 @@ func TestSectionStaysSmall(t *testing.T) {
 	for _, mode := range []string{Direct, PlanTriggered, AlwaysSDD} {
 		for _, spec := range []bool{false, true} {
 			for _, docs := range []bool{false, true} {
-				c := Content(mode, spec, docs)
-				words, lines := len(strings.Fields(c)), strings.Count(c, "\n")
-				t.Logf("%s spec=%v docs=%v: %d lines, %d words", mode, spec, docs, lines, words)
-				if words > MaxWords {
-					t.Errorf("%s spec=%v docs=%v: %d words, more than %d", mode, spec, docs, words, MaxWords)
-				}
-				if strings.Contains(c, "{") || !strings.HasSuffix(c, "\n") {
-					t.Errorf("%s spec=%v docs=%v: unfilled placeholder or no final newline", mode, spec, docs)
+				for _, graph := range []bool{false, true} {
+					var layout *Layout
+					if docs {
+						l := DefaultLayout()
+						layout = &l
+					}
+					c := LayoutContentWith(mode, spec, layout, Extras{Graphify: graph})
+					words, lines := len(strings.Fields(c)), strings.Count(c, "\n")
+					t.Logf("%s spec=%v docs=%v graphify=%v: %d lines, %d words", mode, spec, docs, graph, lines, words)
+					if words > MaxWords {
+						t.Errorf("%s spec=%v docs=%v graphify=%v: %d words, more than %d", mode, spec, docs, graph, words, MaxWords)
+					}
+					if strings.Contains(c, "{") || !strings.HasSuffix(c, "\n") {
+						t.Errorf("%s spec=%v docs=%v graphify=%v: unfilled placeholder or no final newline", mode, spec, docs, graph)
+					}
+					if got := strings.Contains(c, "Repository intelligence:"); got != graph {
+						t.Errorf("%s spec=%v docs=%v graphify=%v: intelligence paragraph present = %v", mode, spec, docs, graph, got)
+					}
 				}
 			}
 		}

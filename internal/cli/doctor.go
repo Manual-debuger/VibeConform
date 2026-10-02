@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -11,6 +12,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/module/agents/claude"
+	"github.com/Manual-debuger/VibeConform/internal/module/intelligence/graphify"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
@@ -72,10 +74,14 @@ func runDoctor(cmd *cobra.Command, repoRoot string) error {
 
 		var tools []doctor.Tool
 		for _, rt := range requiredTools(p.Standard, p.Context) {
-			tools = append(tools, doctor.Tool{Name: rt.tool.Name, Module: rt.module, Why: rt.tool.Why, Version: rt.tool.Version})
+			tools = append(tools, doctor.Tool{Name: rt.tool.Name, Module: rt.module, Why: rt.tool.Why, Version: rt.tool.Version,
+				Optional: rt.tool.Optional, Install: rt.tool.Install})
 		}
 		report.Add(doctor.Tools(ctx, env, repoRoot, tools)...)
 		report.Add(doctor.AgentHooks(env, repoRoot, agentHooks(p))...)
+		if slices.Contains(p.Context.Integrations, module.GraphifyIntegration) {
+			report.Add(doctor.GraphChecks(ctx, env, repoRoot, gitOK, graphifyGraph)...)
+		}
 
 		switch {
 		case gitOK && p.Context.Policies[manifest.PolicyLineEndings] != "":
@@ -115,6 +121,15 @@ func runDoctor(cmd *cobra.Command, repoRoot string) error {
 		return fmt.Errorf("doctor: %d required %s failed", n, noun)
 	}
 	return nil
+}
+
+// graphifyGraph is what doctor checks when the graphify integration is
+// selected (docs/specs/0035-graphify.md §3).
+var graphifyGraph = doctor.Graph{
+	Name:    module.GraphifyIntegration,
+	File:    graphify.GraphPath,
+	Commit:  "built_at_commit",
+	Rebuild: "task graph:update",
 }
 
 // agentHookConfig is what doctor knows about one agent integration's
