@@ -462,16 +462,16 @@ Diagnoses whether this machine can run the repository's workflow. Where
 ```console
 $ vibe doctor
 standard: prod-go/v1
-PASS        git            git version 2.53.0.windows.1; repository readable
+PASS        git            git version 2.53.0.windows.1 (C:\Program Files\Git\mingw64\bin\git.exe); repository readable
 PASS        manifest       vibe.yaml resolves prod-go/v1 (integrations: claude, codex)
 FAIL        golangci-lint  not found on PATH (required by go-tooling: task lint, and CI's lint job)
-PASS        task           3.53.1; Taskfile.yml loads
-PASS        lefthook       2.1.14
-PASS        go             go1.27.0
+PASS        task           3.53.1 (C:\Users\me\AppData\Local\Microsoft\WinGet\Links\task.exe); Taskfile.yml loads
+PASS        lefthook       2.1.14 (C:\Users\me\AppData\Local\Microsoft\WinGet\Links\lefthook.exe)
+PASS        go             go1.27.0 (C:\Program Files\Go\bin\go.exe)
 PASS        goimports      C:\Users\me\go\bin\goimports.exe
 PASS        govulncheck    C:\Users\me\go\bin\govulncheck.exe
-PASS        actionlint     v1.7.12
-PASS        claude hooks   .claude/settings.json present; task, go on PATH
+PASS        actionlint     v1.7.12 (C:\Users\me\go\bin\actionlint.exe)
+PASS        claude hooks   .claude/settings.json present; on PATH: task (C:\Users\me\AppData\Local\Microsoft\WinGet\Links\task.exe), go (C:\Program Files\Go\bin\go.exe)
 PASS        codex hooks    suspended (spec 0024); nothing to check
 WARN        line endings   core.autocrlf=true and Taskfile.yml has no eol attribute: managed files check out as CRLF
 PASS        runtime        windows/amd64, native
@@ -492,12 +492,15 @@ The checks, in order:
 - **git:** it runs, and `--repo-root` is a repository.
 - **manifest:** `vibe.yaml` and its standard resolve.
 - **One line per required tool:** the same list `sync` warns about, with
-  each tool's version where it has a version flag. `task`'s line also
+  each tool's version where it has a version flag, and the path it was
+  found at. In WSL the path tells a Linux binary (`/usr/bin/task`) from a
+  Windows one reached through interop (`/mnt/c/...`). `task`'s line also
   says whether `Taskfile.yml` loads. A Taskfile that doesn't load turns
   off every task, [the agent guard](#the-agent-guard) included.
 - **Agent hooks:** for each selected agent, the file that registers its
   hooks is present, and the binaries the hooks start are on `PATH`
-  (`task`, and `go`, `node`, or `uv` for the guard).
+  (`task`, and `go`, `node`, or `uv` for the guard), with where each was
+  found.
 - **Graphify**, only when selected: whether the graph exists and was
   built from HEAD, and whether git ignores it (see [Graphify](#graphify)).
   These lines, like the `graphify` tool line, are at most `WARN`: the
@@ -578,8 +581,9 @@ Deliberately **not** managed, and left for you to maintain by hand:
   ignored-by-everyone instruction file this project argues against. Both
   stay yours, except for the one short section each that a selected
   [development workflow](#development-workflow) adds (ADR 0015).
-- `.claude/settings.local.json` — gitignored, user-local, possibly
-  machine-specific. Never written.
+- `.claude/settings.local.json` — user-local, possibly
+  machine-specific. Never written. With `claude` selected, a managed
+  `claude` section of `.gitignore` ignores it (spec 0039).
 - `.gitignore` — genuinely project-specific.
 - `.gitattributes` — yours, by default. It governs how git materializes
   every file, the ones VibeConform writes and hashes included. Opting in
@@ -1320,6 +1324,38 @@ VibeConform owns, so `vibe audit` would report them as drift.
 - *Doctor says not ignored.* A user rule below the section, such as
   `!graphify-out/…`, re-includes it, or the graph was committed before.
   Run `git rm -r --cached graphify-out`.
+
+**Using graphify's own skill beside VibeConform's** (spec 0039, issue
+#56). VibeConform's skill and graphify's do different jobs. VibeConform's
+`graphify` skill is a query skill: it checks that the graph is present
+and current, and says never to let the graph replace verification.
+graphify's own skill builds graphs: LLM extraction of documents and
+media, exports, merges. To have both, use this layout instead of
+`graphify install` (verified with graphify 0.9.73 in a `prod-mono`
+repository):
+
+| What | Where | Owner |
+|---|---|---|
+| VibeConform's query skill | `.claude/skills/graphify/SKILL.md` | VibeConform (managed) |
+| graphify's builder skill, with its `references/` | `.claude/skills/graphify-builder/`, with `name: graphify-builder` in its frontmatter | you |
+| Routing `/graphify` to the builder | a line in `.claude/CLAUDE.md`, e.g. "`/graphify` means the graphify-builder skill" | you |
+| graphify's `PreToolUse` hook-guard hooks (`graphify hook-guard search` / `read`) | `.claude/settings.local.json`, which Claude Code merges over the managed `settings.json` | each developer |
+| Git hooks | lefthook → `task graph:update` (generated) | VibeConform |
+
+- With `claude` selected, `.gitignore` gets a managed `claude` section
+  that ignores `.claude/settings.local.json`, since that file is
+  per-developer.
+- Don't run `graphify hook install`: it writes into `.git/hooks/`, which
+  lefthook owns.
+- **Don't re-run `graphify install`.** If you did, `vibe audit` reports
+  `.claude/skills/graphify/SKILL.md` and `.claude/settings.json` as
+  drifted. To recover:
+  1. Move graphify's new skill into `.claude/skills/graphify-builder/`
+     and rename it in its frontmatter.
+  2. Move the hooks it added to `settings.json` into
+     `.claude/settings.local.json`.
+  3. Run `vibe sync` to restore the two managed files, then
+     `vibe audit`.
 
 **Limitations.**
 

@@ -191,7 +191,8 @@ repository does not self-host it.
 ## Explicit non-goals
 
 - Running `graphify` from `vibe sync`, or wrapping upstream's
-  `graphify install`.
+  `graphify install`. (Spec 0039 documents how graphify's own builder
+  skill and hook-guard hooks live beside the managed files instead.)
 - A Graphify MCP server config (`.mcp.json` isn't managed yet).
 - A PreToolUse hook. Session context and the skill cover discovery
   without a per-call cost.
