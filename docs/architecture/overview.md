@@ -122,10 +122,12 @@ several sections. The section is the lines between
 
 `generated` owning the whole file does not mean a repository has no
 recourse: a generated file may delegate to an unmanaged sibling by a
-documented extension point, as `Taskfile.yml` does to `Taskfile.local.yml`.
-That is a seam beside a wholly-generated file, not a weaker ownership mode
-— the ownership of `Taskfile.yml` itself is unchanged. See
-`docs/decisions/0009-managed-file-local-extension.md`.
+documented extension point, as `Taskfile.yml` does to `Taskfile.local.yml`
+and `lefthook.yml` does to `lefthook.local.yml` (through lefthook's
+`extends:`). That is a seam beside a wholly-generated file, not a weaker
+ownership mode — the ownership of `Taskfile.yml` and `lefthook.yml` is
+unchanged. See `docs/decisions/0009-managed-file-local-extension.md` and
+`docs/decisions/0017-lefthook-local-extension.md`.
 
 ## Three-way reconciliation
 
@@ -356,7 +358,10 @@ repository's own tasks go in a project-owned `Taskfile.local.yml`, which
 the generated `Taskfile.yml` includes optionally; Task treats a name
 collision as a hard error, so the verification interface stays what the
 standard says it is. See
-`docs/decisions/0009-managed-file-local-extension.md`.
+`docs/decisions/0009-managed-file-local-extension.md`. A repository's own
+Git hooks go in a project-owned `lefthook.local.yml`, which the generated
+`lefthook.yml` extends; lefthook lets it override a managed command, which
+is acceptable because hooks are not the gate (ADR 0017).
 
 ### `vibe check`'s safe-fallback contract
 

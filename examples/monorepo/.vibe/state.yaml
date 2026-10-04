@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.3.0-alpha.1.0.20261001100506-746addbb1129
+vibe_version: v0.5.0-alpha.1.0.20261002094238-d986d9e2ae85
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go
@@ -104,7 +104,7 @@ resources:
       sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217
     - path: lefthook.yml
       ownership: generated
-      sha256: 87d2ca78f308bedf1c8591c88e09c6582a0c365c917879a41a5374cde504beaf
+      sha256: 1579ae0b387213615dc3883c6555c4b599fff3df5d85618d1ff868d8ef6cda6f
     - path: services/api/.golangci.yml
       ownership: generated
       sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9

@@ -1,11 +1,6 @@
 # Lefthook: fast checks at commit time, stronger checks at push time.
-# CI is the authoritative full verification gate;
+# CI (.github/workflows/ci.yml) is the authoritative full verification gate;
 # these hooks are a fast local first line of defense, not a substitute.
-
-# Repository-specific hooks go in lefthook.local.yml (optional, yours;
-# see VibeConform's docs/usage.md). Lefthook merges it over this file.
-extends:
-  - lefthook.local.yml
 
 pre-commit:
   parallel: true
@@ -29,3 +24,13 @@ pre-push:
       run: golangci-lint run
     test:
       run: go test ./...
+
+post-commit:
+  commands:
+    graphify-update:
+      run: task graph:update
+
+post-checkout:
+  commands:
+    graphify-update:
+      run: task graph:update

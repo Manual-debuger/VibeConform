@@ -123,6 +123,6 @@ How to apply:
 | 1 | The `Stop` hook runs `task verify:fast` before an agent may end its turn, instead of `AGENTS.md` asking it to (spec 0023). Its known soft spot: a second stop with the checks still failing goes through, so a failure the agent can't fix doesn't loop forever; CI remains the gate |
 | 1 | `TestExamplesAreConformant` and the `examples.yml` workflow keep templates this repository cannot dogfood honest |
 | 2 | Task's portable shell, slash-separated resource paths, byte-exact writes, and CI's `ubuntu-latest`/`windows-latest` test matrix |
-| 3 | `task verify` has no `vibe` dependency (spec 0017); `Taskfile.local.yml` is plain Task `includes`, not a VibeConform mechanism |
+| 3 | `task verify` has no `vibe` dependency (spec 0017); `Taskfile.local.yml` is plain Task `includes` and `lefthook.local.yml` plain lefthook `extends`, not VibeConform mechanisms |
 | 3 | `sync` warns about missing tools but never installs them (spec 0014) |
 | 3 | `vibe` is confined to `conformance.yml` and `Taskfile.vibe.yml`, so removal is deleting files; `task audit` installs the recorded `vibe_version` when `vibe` is absent and fails loudly otherwise (spec 0022) |

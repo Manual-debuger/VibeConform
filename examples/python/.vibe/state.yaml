@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.4.0-alpha.1.0.20261002024512-8fbc1bcda686
+vibe_version: v0.5.0-alpha.1.0.20261002094238-d986d9e2ae85
 standard: prod-py/v1
 resources:
     - path: .claude/hooks/block-dangerous.sh
@@ -74,7 +74,7 @@ resources:
       sha256: 0b5329e6fb87541d8814d46e506cdd6391a118b1d32030887655d6f06a770134
     - path: lefthook.yml
       ownership: generated
-      sha256: 2929cc60318dfc60ebf3077669035c25be161e3e22f235cedd42fc7497a94194
+      sha256: c357ad84a8cc3db57f05e2c96364e778038468e3100951f57a8e6a70d491389c
     - path: pyrightconfig.json
       ownership: generated
       sha256: ca1316bdda3ba3c86490ff023de71f39a48fa04105fd03fd888924c36ce0bb43

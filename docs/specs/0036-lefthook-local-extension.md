@@ -1,6 +1,6 @@
 # Spec 0036: A Project-Owned Extension Point for `lefthook.yml`
 
-Status: proposed. Not yet approved. Implementation plan:
+Status: accepted and implemented (ADR 0017). Implementation plan:
 `docs/plans/0036-lefthook-local-extension.md`. Builds on ADR 0009
 (`Taskfile.local.yml`), spec 0019 (drift classification) and spec 0035
 (Graphify).
@@ -180,7 +180,6 @@ call. The docs recommend ignoring it.
 - `remotes:` support. It was not verified that `remotes:` inside an
   extended file is honoured. The loader reads `remotes` from the main
   config only.
-- Fixing the CI-provider-specific header comment (see "Open questions").
 - A minimum lefthook version check in `vibe doctor`.
 
 ## Acceptance criteria
@@ -191,9 +190,10 @@ call. The docs recommend ignoring it.
 2. No Go source under `internal/` other than the template files and
    tests contains the string `lefthook.local.yml`. The managed resource
    set of every standard is unchanged (no new path).
-3. Apart from the added `extends` lines, every resolved `lefthook.yml` is
+3. Apart from the added `extends` lines and the provider-neutral header
+   line (open question 3), every resolved `lefthook.yml` is
    byte-identical to before. A test compares against the previous
-   resolution with the `extends` block stripped.
+   resolution with both changes undone.
 4. A repository without `lefthook.local.yml` behaves exactly as today.
    Verified with a real `lefthook` binary when one is on PATH (skipped
    otherwise): `lefthook dump` exits 0 and shows only the managed hooks.
@@ -212,6 +212,11 @@ call. The docs recommend ignoring it.
    semantics and the lefthook versions they were verified on.
 
 ## Open questions for approval
+
+Resolved 2026-10-02: (1) the name stays `lefthook.local.yml`; (2) the
+one-time `out of date` is accepted; (3) the header is reworded
+provider-neutrally in this change ("CI is the authoritative full
+verification gate"), sharing the same one-time `out of date`.
 
 1. **Name.** The proposal is `lefthook.local.yml`, which parallels
    `Taskfile.local.yml`. It differs from upstream's per-developer
