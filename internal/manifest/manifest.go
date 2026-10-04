@@ -38,6 +38,9 @@ type Manifest struct {
 	// nil means nothing, since every setting is opt-in
 	// (docs/decisions/0015-agents-md-workflow-section.md).
 	Development *Development `yaml:"development,omitempty"`
+	// CI selects the CI system that carries the standard's checks; nil
+	// means the standard's default (docs/specs/0038-ci-provider.md).
+	CI *CI `yaml:"ci,omitempty"`
 	// Generated lists the files a generator owns, relative to the
 	// repository root, for a single-language standard. A monorepo
 	// declares them per component instead (spec 0037).
@@ -48,6 +51,24 @@ type Manifest struct {
 // absent key selects nothing.
 type Policy struct {
 	LineEndings *string `yaml:"line_endings,omitempty"`
+}
+
+// CI is vibe.yaml's ci: map. Each key takes one value, and an absent key
+// selects the standard's default.
+type CI struct {
+	Provider *string `yaml:"provider,omitempty"`
+}
+
+// CIProvider is the CI provider's key.
+const CIProvider = "provider"
+
+// Get returns the value vibe.yaml gives key, or nil when it is absent. A
+// nil *CI has every key absent.
+func (c *CI) Get(key string) *string {
+	if c == nil || key != CIProvider {
+		return nil
+	}
+	return c.Provider
 }
 
 // PolicyLineEndings is the line-ending policy's key.
@@ -83,6 +104,7 @@ const (
 const (
 	MapPolicy      = "policy"
 	MapDevelopment = "development"
+	MapCI          = "ci"
 )
 
 // ScalarKey names one single-valued key: the map it is under and its key
@@ -99,6 +121,7 @@ var ScalarKeys = []ScalarKey{
 	{MapDevelopment, DevelopmentDocsLayout},
 	{MapDevelopment, DevelopmentDocsDevelopment},
 	{MapDevelopment, DevelopmentDocsOperations},
+	{MapCI, CIProvider},
 }
 
 // Scalar returns the value vibe.yaml gives k, or nil when it is absent.
@@ -108,6 +131,8 @@ func (m *Manifest) Scalar(k ScalarKey) *string {
 		return m.Policy.Get(k.Key)
 	case MapDevelopment:
 		return m.Development.Get(k.Key)
+	case MapCI:
+		return m.CI.Get(k.Key)
 	}
 	return nil
 }

@@ -19,7 +19,7 @@ type Group struct {
 	// of its options is selected.
 	Scalar bool
 	// Map is the top-level vibe.yaml map a scalar group's key is under:
-	// manifest.MapPolicy or manifest.MapDevelopment. Empty for an
+	// manifest.MapPolicy, manifest.MapDevelopment or manifest.MapCI. Empty for an
 	// integration category.
 	Map string
 }
@@ -128,8 +128,8 @@ func (s *Standard) Defaults() Selection {
 
 // Select resolves vibe.yaml's integrations:, policy: and development:
 // maps against the catalog. An absent category takes its defaults, an empty one selects
-// none; an absent policy key selects its default, which no shipped policy
-// has. Integrations are in catalog order whatever order vibe.yaml lists
+// none; an absent single-valued key selects its default, which only
+// ci.provider has (github, spec 0038). Integrations are in catalog order whatever order vibe.yaml lists
 // names in, and never nil.
 func (s *Standard) Select(m *manifest.Manifest) (Selection, error) {
 	chosen := map[string]bool{}
