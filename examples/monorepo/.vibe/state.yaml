@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.5.0-alpha.1.0.20261002094238-d986d9e2ae85
+vibe_version: v0.5.0-alpha.1.0.20261004054157-89975dd0701b
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go
@@ -80,6 +80,11 @@ resources:
     - path: Taskfile.yml
       ownership: generated
       sha256: 04b5189cee59dfd97ec0227aec09f7286384a0b8a8ae93c1b15c72a2dce69ac4
+    - path: apps/web/.prettierignore
+      section_id: generated
+      ownership: managed-section
+      created: true
+      sha256: e94556f2c74f6e6990837540a134d08205152ed39211e65ce4d3c9bde1f09a1d
     - path: apps/web/.prettierrc.json
       ownership: generated
       sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a
@@ -98,7 +103,7 @@ resources:
       sha256: 60e3dc68b9394612efc67a961d142684f760f73edefe961d52ce20c2f6d7293b
     - path: apps/web/eslint.config.js
       ownership: generated
-      sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
+      sha256: 9c82dec547614800f8fe6d6b798d9c940559ffa748637ab5258c8e024588f274
     - path: apps/web/tsconfig.base.json
       ownership: generated
       sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217
@@ -139,4 +144,4 @@ resources:
       sha256: ca1316bdda3ba3c86490ff023de71f39a48fa04105fd03fd888924c36ce0bb43
     - path: services/worker/ruff.toml
       ownership: generated
-      sha256: 29180a6715382235e570cd3501ebe73f20254801d4a919d680d8c6f0c8174ede
+      sha256: f6a6b37bdd5b48e26ef1039667777e9c544b8d9df32bfcea0ab905612997a6bb
