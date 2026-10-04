@@ -107,6 +107,10 @@ func TestGeneratedRendering(t *testing.T) {
 						t.Errorf("%s: force-exclude is not a top-level key", path)
 					}
 				case strings.HasSuffix(path, "eslint.config.js"):
+					line := "    ignores: ['**/dist/**', '**/coverage/**', 'src/contracts/**', 'src/api.gen.ts'],\n"
+					if !strings.Contains(content, line) {
+						t.Errorf("%s lacks %q", path, line)
+					}
 					if strings.Replace(content, ", 'src/contracts/**', 'src/api.gen.ts'", "", 1) != base[path] {
 						t.Errorf("%s differs by more than the appended ignores:\n%s", path, content)
 					}

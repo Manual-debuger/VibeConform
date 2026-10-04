@@ -129,9 +129,10 @@ func ignoreInESLint(config []byte, generated []string) ([]byte, error) {
 		return config, nil
 	}
 	var b strings.Builder
-	b.WriteString(eslintIgnores)
+	b.WriteString(strings.TrimSuffix(eslintIgnores, "]"))
 	for _, g := range generated {
 		fmt.Fprintf(&b, ", '%s'", g)
 	}
+	b.WriteString("]")
 	return module.ReplaceOnce(config, "eslint.config.js", "ignore generated paths", eslintIgnores, b.String())
 }
