@@ -68,11 +68,19 @@ to a group, which is one of two kinds:
 
 - **An integration category**, selected as a list under `integrations:`.
 - **A single-valued key**, selected as one value under its own map:
-  `policy:` for a repository policy (`policy: {line_endings: lf}`), or,
-  since spec 0030, `development:` for how the repository is worked on
-  (`development: {workflow: always-sdd, docs_layout: standard}`).
+  `policy:` for a repository policy (`policy: {line_endings: lf}`),
+  since spec 0030 `development:` for how the repository is worked on
+  (`development: {workflow: always-sdd, docs_layout: standard}`), and
+  since spec 0038 `ci:` for the CI system (`ci: {provider: gitlab}`).
 
-Both are opt-in. Keys are unique across maps, so the selection stays
+Both are opt-in, with one exception: `ci.provider` defaults to `github`,
+so an absent `ci:` generates what `prod-mono` always generated. Only
+`prod-mono` offers it (`catalog(extra...)`). Its options resolve nothing
+themselves; the CI, conformance and repo-tooling modules read
+`module.CIProvider`, so pruning's trial selection finds the old
+provider's files. `.gitlab-ci.yml` delegates project jobs to a child
+pipeline from the project-owned `.gitlab-ci.local.yml`, a seam beside a
+generated file like `Taskfile.local.yml` (ADR 0019). Keys are unique across maps, so the selection stays
 one flat map. Selection, resolution order, `Requires`/`Excludes`
 and pruning share one code path for both kinds. `module.Context.Policies`
 carries the selected values. See
@@ -270,6 +278,7 @@ internal/
     ci/githubts/            # the same, for prod-ts
     ci/githubpy/            # the same, for prod-py
     ci/githubmono/          # the same, one job per component, for prod-mono
+    ci/gitlabmono/          # GitLab CI and MR template for prod-mono (ci.provider gitlab)
     conformance/            # conformance.yml + Taskfile.vibe.yml: the only files that run vibe
     repotooling/            # Taskfile.yml, lefthook.yml, Go guard (prod-go)
     tsrepotooling/          # Taskfile.yml, lefthook.yml, Node guard (prod-ts)

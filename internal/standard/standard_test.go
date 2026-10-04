@@ -63,7 +63,10 @@ func TestLookupProdMonoV1(t *testing.T) {
 	if !s.TakesComponents {
 		t.Error("prod-mono/v1 does not take components")
 	}
-	want := []string{"mono-tooling", "github-ci-mono", "vibe-conformance", "mono-repo-tooling", "claude-config", "codex-config"}
+	// gitlab-ci-mono resolves nothing under the default ci.provider, and
+	// ci-github, the default provider option, resolves nothing at all
+	// (spec 0038), so the default report is unchanged.
+	want := []string{"mono-tooling", "github-ci-mono", "gitlab-ci-mono", "vibe-conformance", "mono-repo-tooling", "claude-config", "codex-config", "ci-github"}
 	var got []string
 	for _, m := range s.ModulesFor(s.Defaults()) {
 		got = append(got, m.Name())

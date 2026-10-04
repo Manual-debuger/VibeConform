@@ -68,7 +68,8 @@
 > `prod-mono`/`v1` manages a polyglot monorepo: Go, TypeScript, and Python
 > components declared in `vibe.yaml`'s `components:` list, each configured
 > as its single-language standard would configure a repository — see
-> [`docs/specs/0025-prod-mono.md`](docs/specs/0025-prod-mono.md).
+> [`docs/specs/0025-prod-mono.md`](docs/specs/0025-prod-mono.md). Its CI is
+> GitHub Actions by default, or GitLab CI, or none (`ci.provider`, spec 0038).
 > `doctor` diagnoses whether a machine can run the workflow — see
 > [`docs/specs/0028-environment-doctor.md`](docs/specs/0028-environment-doctor.md).
 > `check` still returns "not implemented yet."

@@ -120,7 +120,8 @@ func (monorepotoolingModule) Name() string {
 // repository runs, plus the binaries of each profile vibe.yaml declares:
 // warning about uv in a repository with no Python would be a false alarm
 // (docs/decisions/0012-manifest-components.md). actionlint is required
-// because task verify runs workflows:lint.
+// under ci.provider github only, because only there does task verify run
+// workflows:lint (spec 0038).
 func (monorepotoolingModule) RequiredTools(mctx *module.Context) []module.Tool {
 	tools := []module.Tool{
 		{Name: "task", Why: "every verification entry point Taskfile.yml defines", Version: []string{"--version"}},
@@ -128,6 +129,9 @@ func (monorepotoolingModule) RequiredTools(mctx *module.Context) []module.Tool {
 	}
 	for _, p := range declared(module.ComponentsOf(mctx)) {
 		tools = append(tools, profiles[p].tools...)
+	}
+	if module.CIProvider(mctx) != module.CIGitHub {
+		return tools
 	}
 	return append(tools, module.Tool{Name: "actionlint", Why: "task workflows:lint", Version: []string{"-version"}})
 }
@@ -167,6 +171,7 @@ func (monorepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([
 		HasGo        bool
 		HasTS        bool
 		HasPy        bool
+		GitHub       bool
 	}{
 		Components:   components,
 		FanOut:       fanOut,
@@ -174,6 +179,7 @@ func (monorepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([
 		HasGo:        slices.Contains(used, manifest.ProfileGo),
 		HasTS:        slices.Contains(used, manifest.ProfileTS),
 		HasPy:        slices.Contains(used, manifest.ProfilePy),
+		GitHub:       module.CIProvider(mctx) == module.CIGitHub,
 	}
 
 	taskfile, err := render(rootTaskfile, data)

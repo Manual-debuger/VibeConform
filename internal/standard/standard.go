@@ -14,6 +14,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubmono"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubpy"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubts"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/gitlabmono"
 	"github.com/Manual-debuger/VibeConform/internal/module/conformance"
 	"github.com/Manual-debuger/VibeConform/internal/module/editors/vscode"
 	"github.com/Manual-debuger/VibeConform/internal/module/editors/zed"
@@ -84,15 +85,17 @@ func Lookup(name, version string) (*Standard, error) {
 // agents, then code intelligence, then repository policies, then
 // development settings. claude and codex are on by default, so a vibe.yaml
 // without integrations: composes exactly what every standard composed
-// before spec 0026.
-func catalog() []Option {
+// before spec 0026. A standard appends its own options with extra; they
+// come last, so the shared order, and with it report order, is the same
+// in every standard.
+func catalog(extra ...Option) []Option {
 	editors, agents := integrationGroup(manifest.CategoryEditors), integrationGroup(manifest.CategoryAgents)
 	le := scalarGroup(manifest.ScalarKey{Map: manifest.MapPolicy, Key: manifest.PolicyLineEndings})
 	wf := scalarGroup(manifest.ScalarKey{Map: manifest.MapDevelopment, Key: manifest.DevelopmentWorkflow})
 	docs := scalarGroup(manifest.ScalarKey{Map: manifest.MapDevelopment, Key: manifest.DevelopmentDocsLayout})
 	devDocs := scalarGroup(manifest.ScalarKey{Map: manifest.MapDevelopment, Key: manifest.DevelopmentDocsDevelopment})
 	opsDocs := scalarGroup(manifest.ScalarKey{Map: manifest.MapDevelopment, Key: manifest.DevelopmentDocsOperations})
-	return []Option{
+	return append([]Option{
 		{Group: editors, Name: "vscode", Module: vscode.New()},
 		{Group: editors, Name: "zed", Module: zed.New()},
 		{Group: agents, Name: "claude", Module: claude.New(), Default: true},
@@ -115,6 +118,20 @@ func catalog() []Option {
 			Requires: []string{workflow.DocsLayoutStandard}},
 		{Group: opsDocs, Name: workflow.On, Module: workflow.NewDocsDir("docs-operations"),
 			Requires: []string{workflow.DocsLayoutStandard}},
+	}, extra...)
+}
+
+// ciProviders is ci.provider's group, offered by prod-mono only (spec
+// 0038 §2). github is the default, so an absent ci: generates exactly
+// what prod-mono generated before the key existed. Like the docs
+// directories, the options resolve nothing: the CI, conformance and
+// repo-tooling modules read the value.
+func ciProviders() []Option {
+	g := scalarGroup(manifest.ScalarKey{Map: manifest.MapCI, Key: manifest.CIProvider})
+	return []Option{
+		{Group: g, Name: module.CIGitHub, Module: module.NewSetting("ci-github"), Default: true},
+		{Group: g, Name: module.CIGitLab, Module: module.NewSetting("ci-gitlab")},
+		{Group: g, Name: module.CINone, Module: module.NewSetting("ci-none")},
 	}
 }
 
@@ -167,8 +184,8 @@ func init() {
 	Register(Standard{
 		Name:            "prod-mono",
 		Version:         "v1",
-		Modules:         []module.Module{monotooling.New(), githubmono.New(), conformance.New(), monorepotooling.New()},
-		Options:         catalog(),
+		Modules:         []module.Module{monotooling.New(), githubmono.New(), gitlabmono.New(), conformance.New(), monorepotooling.New()},
+		Options:         catalog(ciProviders()...),
 		TakesComponents: true,
 	})
 }

@@ -236,6 +236,9 @@ func TestSelectWorkflow(t *testing.T) {
 			for _, m := range s.ModulesFor(sel) {
 				mods = append(mods, m.Name())
 			}
+			// prod-mono's ci.provider options come after the development
+			// settings in its catalog (spec 0038).
+			mods = slices.DeleteFunc(mods, func(m string) bool { return strings.HasPrefix(m, "ci-") })
 			if mods[len(mods)-1] != "development-workflow" || slices.Index(mods, "development-workflow") != len(mods)-1 {
 				t.Errorf("%s %s: modules %v, want one workflow module, last", name, v, mods)
 			}

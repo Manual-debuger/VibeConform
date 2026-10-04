@@ -56,8 +56,12 @@ func (githubmonoModule) Name() string {
 }
 
 // Resolve returns ci.yml, dependabot.yml, and the pull request template,
-// in the order the other github-ci modules use.
+// in the order the other github-ci modules use, under ci.provider github
+// (the default), and nothing otherwise (spec 0038).
 func (githubmonoModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
+	if module.CIProvider(mctx) != module.CIGitHub {
+		return nil, nil
+	}
 	components := module.ComponentsOf(mctx)
 	if len(components) == 0 {
 		return nil, errors.New("prod-mono needs at least one component in vibe.yaml")

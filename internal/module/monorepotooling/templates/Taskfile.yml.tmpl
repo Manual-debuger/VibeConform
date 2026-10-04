@@ -48,11 +48,13 @@ tasks:
       - task: [[.ID]]:[[$t.Name]]
 [[- end]]
 [[- end]]
+[[- if .GitHub]]
 
   workflows:lint:
     desc: Validate GitHub Actions workflow files.
     cmds:
       - actionlint
+[[- end]]
 
   # Called by Claude Code, not by people: .claude/settings.json runs
   # "task -x hook:guard" before every shell command and file edit. No desc,
@@ -195,15 +197,23 @@ tasks:
         task -s verify:fast 1>&2 || exit 2
 
   verify:
+[[- if .GitHub]]
     desc: Local verification gate for every component, then the workflow
       files — native language tooling only, never VibeConform itself;
       "task audit" is VibeConform's check, which CI runs in its own
       Conformance workflow.
+[[- else]]
+    desc: Local verification gate for every component — native language
+      tooling only, never VibeConform itself; "task audit" is
+      VibeConform's check, which CI runs as a job of its own.
+[[- end]]
     cmds:
 [[- range .Components]]
       - task: [[.ID]]:verify
 [[- end]]
+[[- if .GitHub]]
       - task: workflows:lint
+[[- end]]
 
   # The agents' Stop hook and background check run this after edits (spec
   # 0023): every component's own verify:fast.

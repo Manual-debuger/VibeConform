@@ -1,7 +1,13 @@
 # Plan 0038: CI provider selection, and GitLab CI for `prod-mono`
 
-Implements `docs/specs/0038-ci-provider.md`. Status: draft, for
-approval after the spec. Nothing here is implemented yet.
+Implements `docs/specs/0038-ci-provider.md`. Status: approved and
+implemented. Two deviations from the steps below:
+
+- `Taskfile.vibe.yml`'s header is rewritten by exact anchor
+  (`module.ReplaceOnce`) rather than becoming a `text/template`, so the
+  GitHub bytes are the embedded file itself.
+- The `monorepotooling` lefthook template needs no provider field: spec
+  0036 made its header provider-neutral.
 
 Branch: `feat/ci-gitlab`, off `main`. One pull request.
 
@@ -120,7 +126,7 @@ need two toolchains.
 |---|---|---|
 | Go | `golang:${GO_VERSION}` | as on GitHub |
 | TypeScript | `node:${NODE_VERSION}` | `corepack enable`, then pnpm from `packageManager` |
-| Python | `ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm-slim` | `uv sync` |
+| Python | `ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm` | `uv sync` |
 
 Each job keeps its caches under `$CI_PROJECT_DIR/.ci-cache/<id>/`:
 
