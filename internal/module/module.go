@@ -41,6 +41,21 @@ type Context struct {
 	// single-language standard's own, or its components', in
 	// manifest.Profiles order.
 	Profiles []manifest.Profile
+	// Generated lists the files a generator owns, relative to the root of
+	// the project a tooling module configures: vibe.yaml's top-level list
+	// for a single-language standard, or one component's list, which
+	// monotooling passes to each component's tooling (spec 0037). Empty
+	// leaves every template unchanged.
+	Generated []string
+}
+
+// GeneratedOf returns the context's generated paths; nil for a nil
+// context.
+func GeneratedOf(mctx *Context) []string {
+	if mctx == nil {
+		return nil
+	}
+	return mctx.Generated
 }
 
 // AgentHookIntegration is the integration whose settings run the hook:*
@@ -155,6 +170,18 @@ type Retirer interface {
 	// Retired maps each retired path, slash-separated, to the reason
 	// messages give for removing it.
 	Retired() map[string]string
+}
+
+// ConditionalSectioner is implemented by a module that resolves a managed
+// section only for some vibe.yaml values, like ts-tooling's generated
+// section of .prettierignore, which exists only while generated: lists
+// paths. A recorded section with one of these IDs that the current plan
+// does not resolve is removed under the rules for a deselected option's
+// section (docs/specs/0037-generated-paths.md §5).
+type ConditionalSectioner interface {
+	// ConditionalSections describes each such section: its SectionID,
+	// Markers and Placement. Path is not used.
+	ConditionalSections() []resource.Resource
 }
 
 // SectionMover is implemented by a module whose section can move to

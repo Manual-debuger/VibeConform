@@ -135,3 +135,14 @@ func TestTemplatesAreLF(t *testing.T) {
 		}
 	}
 }
+
+// TestExcludeInRuffRefusesMissingAnchor pins spec 0037's edit rule: a
+// template without its anchor is refused, never half edited.
+func TestExcludeInRuffRefusesMissingAnchor(t *testing.T) {
+	if _, err := excludeInRuff([]byte("target-version = \"py312\"\n"), []string{"src/gen/**"}); err == nil {
+		t.Fatal("excludeInRuff accepted a ruff.toml without line-length")
+	}
+	if got, err := excludeInRuff(ruffConfig, nil); err != nil || !bytes.Equal(got, ruffConfig) {
+		t.Errorf("no generated paths changed ruff.toml (err %v)", err)
+	}
+}
