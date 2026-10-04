@@ -201,6 +201,26 @@ jobs:
           task -x hook:format
           task fmt:check
           rm services/api/x.go apps/web/src/y.ts services/worker/src/example/x.py
+      # Spec 0037: the committed generated files fail Prettier/ESLint and
+      # ruff, and pass only because vibe.yaml declares them. hook:format
+      # must leave them alone, and the same content at a path that is not
+      # declared must still fail, so the exclusion did not switch the
+      # checks off.
+      - name: Generated paths are excluded, and only they are
+        working-directory: examples/monorepo
+        run: |
+          web=apps/web/src/contracts/greeting.ts
+          worker=services/worker/src/example/contracts/greeting.py
+          touch "$web" "$worker"
+          before="$(cat "$web" "$worker")"
+          task -x hook:format
+          [ "$(cat "$web" "$worker")" = "$before" ] || { echo "hook:format changed a generated file"; exit 1; }
+          cp "$web" apps/web/src/notgen.ts
+          cp "$worker" services/worker/src/example/notgen.py
+          for t in web:fmt:check web:lint worker:fmt:check worker:lint; do
+            if task "$t"; then echo "$t passed on a file that is not declared generated"; exit 1; fi
+          done
+          rm apps/web/src/notgen.ts services/worker/src/example/notgen.py
       - name: Build vibe from source
         run: |
           mkdir -p "$RUNNER_TEMP/bin"

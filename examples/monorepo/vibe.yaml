@@ -7,9 +7,15 @@ components:
   - id: web
     path: apps/web
     profile: ts
+    # Committed generator output: not formatted or linted, still
+    # type-checked (spec 0037).
+    generated:
+      - src/contracts/**
   - id: worker
     path: services/worker
     profile: py
+    generated:
+      - src/example/contracts/**
 # Two editors (listing order does not matter) and one agent.
 integrations:
   editors: [zed, vscode]
