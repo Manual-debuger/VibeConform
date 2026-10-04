@@ -25,14 +25,15 @@ func resolvePaths(t *testing.T, mctx *module.Context) map[string]resource.Resour
 }
 
 // TestAdapterNeedsAWorkflow: without development.workflow the module
-// resolves exactly what it did before spec 0030.
+// resolves exactly what it did before spec 0030, plus the .gitignore
+// section of spec 0039.
 func TestAdapterNeedsAWorkflow(t *testing.T) {
 	for name, mctx := range map[string]*module.Context{
 		"isolated":    nil,
 		"no workflow": {Integrations: []string{"claude"}, Policies: map[string]string{"line_endings": "lf"}},
 	} {
 		rs := resolvePaths(t, mctx)
-		if len(rs) != 2 || rs[SpecSkillPath].Path != "" || rs[ClaudeMDPath].Path != "" {
+		if len(rs) != 3 || rs[IgnorePath].SectionID != IgnoreSectionID || rs[SpecSkillPath].Path != "" || rs[ClaudeMDPath].Path != "" {
 			t.Errorf("%s: resources %v", name, rs)
 		}
 	}
@@ -77,7 +78,7 @@ func TestComponentImports(t *testing.T) {
 			t.Errorf("%s: CLAUDE.md section %+v", c.ID, imp)
 		}
 	}
-	if none := resolvePaths(t, &module.Context{Components: comps, Integrations: []string{"claude"}, Policies: map[string]string{}}); len(none) != 2 {
+	if none := resolvePaths(t, &module.Context{Components: comps, Integrations: []string{"claude"}, Policies: map[string]string{}}); len(none) != 3 {
 		t.Errorf("without a workflow: %v", none)
 	}
 	r := resource.Resource{Path: "services/api/CLAUDE.md", Content: []byte("@AGENTS.md\n")}

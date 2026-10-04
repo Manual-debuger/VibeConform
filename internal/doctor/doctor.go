@@ -184,7 +184,8 @@ func why(err error, stderr string) string {
 // later check that needs git depends on this one passing.
 func Git(ctx context.Context, env Env, repoRoot string) Result {
 	res := Result{Name: "git"}
-	if _, err := env.LookPath("git"); err != nil {
+	path, err := env.LookPath("git")
+	if err != nil {
 		res.Status, res.Detail = Fail, "not found on PATH"
 		return res
 	}
@@ -195,7 +196,9 @@ func Git(ctx context.Context, env Env, repoRoot string) Result {
 		res.Status, res.Detail = Fail, "git --version failed: "+why(err, stderr)
 		return res
 	}
-	version := firstLine(out)
+	// The path says which git runs: in WSL, a Linux one or a Windows one
+	// through interop (spec 0039).
+	version := firstLine(out) + " (" + path + ")"
 	if _, stderr, err := env.Run(ctx, repoRoot, "git", "rev-parse", "--git-dir"); err != nil {
 		res.Status, res.Detail = Fail, version+"; not a readable git repository: "+why(err, stderr)
 		return res
@@ -250,7 +253,9 @@ func tool(ctx context.Context, env Env, repoRoot string, t Tool) Result {
 		out, _, err := env.Run(probe, repoRoot, t.Name, t.Version...)
 		cancel()
 		if version := firstLine(out); err == nil && version != "" {
-			res.Detail = version
+			// Keep the path beside the version: in WSL it is what tells a
+			// Linux binary from a Windows one (spec 0039).
+			res.Detail = version + " (" + path + ")"
 		} else {
 			res.Status, res.Detail = Warn, path+": found on PATH but did not report a version"
 		}

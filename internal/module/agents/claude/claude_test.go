@@ -34,6 +34,7 @@ func TestResolveReturnsExpectedResourcesInOrder(t *testing.T) {
 	want := []string{
 		".claude/settings.json",
 		".claude/hooks/policy.json",
+		IgnorePath,
 	}
 	if len(resources) != len(want) {
 		t.Fatalf("Resolve returned %d resources, want %d", len(resources), len(want))
@@ -42,6 +43,14 @@ func TestResolveReturnsExpectedResourcesInOrder(t *testing.T) {
 	for i, r := range resources {
 		if r.Path != want[i] {
 			t.Errorf("resource %d path = %q, want %q", i, r.Path, want[i])
+		}
+		if r.Path == IgnorePath {
+			// The .gitignore section (spec 0039): a managed section, last.
+			if r.Ownership != resource.ManagedSection || r.SectionID != IgnoreSectionID || r.Placement != resource.Bottom ||
+				string(r.Content) != "# Managed by VibeConform: integrations.agents claude in vibe.yaml.\n.claude/settings.local.json\n" {
+				t.Errorf(".gitignore section = %+v", r)
+			}
+			continue
 		}
 		if r.Ownership != resource.Generated {
 			t.Errorf("%s ownership = %v, want Generated", r.Path, r.Ownership)

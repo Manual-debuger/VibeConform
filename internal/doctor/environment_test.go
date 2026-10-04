@@ -21,7 +21,7 @@ func TestAgentHooks(t *testing.T) {
 		{Name: "codex", Suspended: "suspended (spec 0024); nothing to check"},
 	})
 	want := []Result{
-		{Status: Pass, Name: "claude hooks", Detail: ".claude/settings.json present; task on PATH"},
+		{Status: Pass, Name: "claude hooks", Detail: ".claude/settings.json present; on PATH: task (/bin/task)"},
 		{Status: Fail, Name: "claude hooks", Detail: ".claude/settings.json present, but go not on PATH: the hooks, the guard included, cannot run"},
 		{Status: Fail, Name: "claude hooks", Detail: ".claude/other.json is missing; run vibe sync"},
 		{Status: Pass, Name: "codex hooks", Detail: "suspended (spec 0024); nothing to check"},
