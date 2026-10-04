@@ -21,6 +21,13 @@ const (
 		"# Managed by VibeConform: integrations.intelligence graphify in vibe.yaml.\n" +
 		"graphify-out/\n" +
 		"# vibeconform:end graphify\n"
+
+	// claudeSection is claude-config's .gitignore section (spec 0039),
+	// which goDefaults and goGraphify select through the default claude.
+	claudeSection = "# vibeconform:begin claude\n" +
+		"# Managed by VibeConform: integrations.agents claude in vibe.yaml.\n" +
+		".claude/settings.local.json\n" +
+		"# vibeconform:end claude\n"
 )
 
 // TestGraphifyKeepsUserIgnores pins spec 0035 acceptance criterion 3: the
@@ -39,7 +46,7 @@ func TestGraphifyKeepsUserIgnores(t *testing.T) {
 			t.Errorf("sync lacks %q:\n%s", want, out)
 		}
 	}
-	if got := readFile(t, dir, ".gitignore"); got != user+"\n"+graphifySection {
+	if got := readFile(t, dir, ".gitignore"); got != user+"\n"+claudeSection+"\n"+graphifySection {
 		t.Errorf(".gitignore = %q", got)
 	}
 	mustConform(t, dir)
@@ -57,8 +64,8 @@ func TestGraphifyKeepsUserIgnores(t *testing.T) {
 			t.Errorf("deselecting sync lacks %q:\n%s", want, out)
 		}
 	}
-	if got := readFile(t, dir, ".gitignore"); got != user {
-		t.Errorf(".gitignore = %q, want the user's entries alone", got)
+	if got := readFile(t, dir, ".gitignore"); got != user+"\n"+claudeSection {
+		t.Errorf(".gitignore = %q, want the user's entries and claude's section", got)
 	}
 	mustConform(t, dir)
 }
@@ -87,7 +94,8 @@ func TestGraphifyIgnoresItsOutput(t *testing.T) {
 // TestGraphifyDeselectKeepsModifiedSkillAndGraph pins acceptance
 // criterion 7: an edited skill is someone's work and is kept as a
 // conflict; graphify-out/ was never recorded, so it is never touched;
-// a .gitignore that VibeConform created is deleted with its section.
+// graphify's section goes from a .gitignore VibeConform created, and
+// claude's (spec 0039) stays.
 func TestGraphifyDeselectKeepsModifiedSkillAndGraph(t *testing.T) {
 	dir := t.TempDir()
 	writeVibeYAML(t, dir, goGraphify)
@@ -115,8 +123,8 @@ func TestGraphifyDeselectKeepsModifiedSkillAndGraph(t *testing.T) {
 	if !exists(t, dir, graphify.GraphPath) {
 		t.Error("graphify-out/graph.json was removed; vibe never owned it")
 	}
-	if exists(t, dir, ".gitignore") {
-		t.Error(".gitignore survived, though VibeConform created it and only its section was in it")
+	if got := readFile(t, dir, ".gitignore"); got != claudeSection {
+		t.Errorf(".gitignore = %q, want only claude's section", got)
 	}
 	s, _ := state.Load(dir)
 	if _, ok := s.Resources[graphify.SkillPath]; !ok {

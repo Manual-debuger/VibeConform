@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.5.0-alpha.1.0.20261002094238-d986d9e2ae85
+vibe_version: v0.5.0-alpha.1.0.20261004060304-faa097e27815
 standard: prod-ts/v1
 resources:
     - path: .claude/hooks/block-dangerous.sh
@@ -39,6 +39,11 @@ resources:
     - path: .github/workflows/conformance.yml
       ownership: generated
       sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
+    - path: .gitignore
+      section_id: claude
+      ownership: managed-section
+      created: true
+      sha256: c33cbf71360fbc0d95e26f68883e43a31b7f8d4c9a2fa527f4299a92cc15a3c5
     - path: .prettierrc.json
       ownership: generated
       sha256: df255c2cca0182046808ae7e21fcfda78c5a49fa1f3283ad157f9397dec3cb2a

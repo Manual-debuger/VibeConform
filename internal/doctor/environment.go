@@ -36,18 +36,21 @@ func AgentHooks(env Env, repoRoot string, hooks []AgentHook) []Result {
 		case !env.Exists(filepath.Join(repoRoot, filepath.FromSlash(h.Config))):
 			res.Status, res.Detail = Fail, h.Config+" is missing; run vibe sync"
 		default:
-			var missing []string
+			var missing, found []string
 			for _, bin := range h.Binaries {
-				if _, err := env.LookPath(bin); err != nil {
+				path, err := env.LookPath(bin)
+				if err != nil {
 					missing = append(missing, bin)
+					continue
 				}
+				found = append(found, bin+" ("+path+")")
 			}
 			if len(missing) > 0 {
 				res.Status = Fail
 				res.Detail = fmt.Sprintf("%s present, but %s not on PATH: the hooks, the guard included, cannot run", h.Config, strings.Join(missing, ", "))
 			} else {
 				res.Status = Pass
-				res.Detail = fmt.Sprintf("%s present; %s on PATH", h.Config, strings.Join(h.Binaries, ", "))
+				res.Detail = fmt.Sprintf("%s present; on PATH: %s", h.Config, strings.Join(found, ", "))
 			}
 		}
 		results = append(results, res)

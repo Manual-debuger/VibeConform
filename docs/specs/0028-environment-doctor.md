@@ -132,7 +132,9 @@ and repository.
    shows its version when it declares a version probe. A probe that fails
    or takes longer than 5 seconds is `WARN` ("found on PATH but did not
    report a version"). A tool without a version probe is `PASS` with its
-   path.
+   path. (Since spec 0039 every found tool shows its path, the version
+   then the path in parentheses, and so do the `git` and agent-hooks
+   lines; the sample below predates that.)
 4. **Taskfile loads**: `task --list-all` exits 0 at the repository root.
    A Taskfile that does not load is `FAIL`. It turns off every `task`
    entry point, and with it the agent guard (`docs/usage.md`, known gap).

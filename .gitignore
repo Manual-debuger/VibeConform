@@ -36,5 +36,7 @@ Thumbs.db
 !.vscode/*.code-snippets
 .idea/
 
-# Claude Code local (never shared) config
+# vibeconform:begin claude
+# Managed by VibeConform: integrations.agents claude in vibe.yaml.
 .claude/settings.local.json
+# vibeconform:end claude

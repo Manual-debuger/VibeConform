@@ -3,7 +3,9 @@
 ## Status
 
 Accepted. Implemented per `docs/specs/0035-graphify.md`. Narrows spec
-0026's non-goal "no `.gitignore` editing".
+0026's non-goal "no `.gitignore` editing". Amended by ADR 0020, which also
+allows a section for a runtime's per-developer file (`claude-config` and
+`.claude/settings.local.json`).
 
 ## Context
 

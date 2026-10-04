@@ -73,7 +73,7 @@ func TestGit(t *testing.T) {
 				"git --version":           {stdout: "git version 2.47.1\n"},
 				"git rev-parse --git-dir": {stdout: ".git\n"},
 			}},
-			status: Pass, detail: "git version 2.47.1; repository readable",
+			status: Pass, detail: "git version 2.47.1 (/bin/git); repository readable",
 		},
 		{
 			name:   "not on PATH",
@@ -86,7 +86,7 @@ func TestGit(t *testing.T) {
 				"git --version":           {stdout: "git version 2.47.1\n"},
 				"git rev-parse --git-dir": {stderr: "fatal: not a git repository\n", err: errExit},
 			}},
-			status: Fail, detail: "git version 2.47.1; not a readable git repository: fatal: not a git repository",
+			status: Fail, detail: "git version 2.47.1 (/bin/git); not a readable git repository: fatal: not a git repository",
 		},
 		{
 			name: "hangs",
@@ -123,7 +123,7 @@ func TestTools(t *testing.T) {
 	}
 	got := Tools(context.Background(), f.env(), ".", tools)
 	want := []Result{
-		{Status: Pass, Name: "go", Detail: "go1.27.0"},
+		{Status: Pass, Name: "go", Detail: "go1.27.0 (/bin/go)"},
 		{Status: Pass, Name: "goimports", Detail: "/bin/goimports"},
 		{Status: Warn, Name: "lefthook", Detail: "/bin/lefthook: found on PATH but did not report a version"},
 		{Status: Fail, Name: "actionlint", Detail: "not found on PATH (required by repo-tooling: task workflows:lint)"},
@@ -145,8 +145,8 @@ func TestToolsTaskfileLoads(t *testing.T) {
 		load reply
 		want Result
 	}{
-		{"loads", reply{stdout: "task: Available tasks\n"}, Result{Status: Pass, Name: "task", Detail: "3.53.1; Taskfile.yml loads"}},
-		{"broken", reply{stderr: "task: Failed to parse Taskfile.yml\n", err: errExit}, Result{Status: Fail, Name: "task", Detail: "3.53.1; Taskfile.yml does not load: task: Failed to parse Taskfile.yml"}},
+		{"loads", reply{stdout: "task: Available tasks\n"}, Result{Status: Pass, Name: "task", Detail: "3.53.1 (/bin/task); Taskfile.yml loads"}},
+		{"broken", reply{stderr: "task: Failed to parse Taskfile.yml\n", err: errExit}, Result{Status: Fail, Name: "task", Detail: "3.53.1 (/bin/task); Taskfile.yml does not load: task: Failed to parse Taskfile.yml"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := fake{onPath: map[string]bool{"task": true}, commands: map[string]reply{

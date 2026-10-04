@@ -56,6 +56,17 @@ const (
 //go:embed templates/settings.json
 var settings []byte
 
+// The .gitignore section claude-config owns (spec 0039, ADR 0020). It
+// ignores Claude Code's per-developer settings file, which Claude Code
+// merges over the managed settings.json, and which is where per-developer
+// hooks go, such as graphify's hook-guard hooks.
+const (
+	IgnorePath      = ".gitignore"
+	IgnoreSectionID = "claude"
+	LocalSettings   = ".claude/settings.local.json"
+	ignoreContent   = "# Managed by VibeConform: integrations.agents claude in vibe.yaml.\n" + LocalSettings + "\n"
+)
+
 type claudeModule struct{}
 
 // New returns the claude-config module.
@@ -93,5 +104,15 @@ func (claudeModule) Resolve(_ context.Context, mctx *module.Context) ([]resource
 			Content:   policyJSON,
 		},
 	}
-	return append(resources, workflowResources(mctx)...), nil
+	resources = append(resources, workflowResources(mctx)...)
+	// Last, so the order of everything above is unchanged, and at the
+	// bottom of .gitignore so the project's own entries keep their place.
+	return append(resources, resource.Resource{
+		Path:      IgnorePath,
+		Ownership: resource.ManagedSection,
+		SectionID: IgnoreSectionID,
+		Markers:   resource.HashComment,
+		Placement: resource.Bottom,
+		Content:   []byte(ignoreContent),
+	}), nil
 }
