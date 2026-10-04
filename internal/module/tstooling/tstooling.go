@@ -9,6 +9,8 @@ package tstooling
 import (
 	"context"
 	_ "embed"
+	"fmt"
+	"strings"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
@@ -26,6 +28,26 @@ var prettierConfig []byte
 
 //go:embed templates/tsconfig.base.json
 var tsconfigBase []byte
+
+// GeneratedSectionID is the .prettierignore section that lists vibe.yaml's
+// generated paths (spec 0037 §4).
+const GeneratedSectionID = "generated"
+
+// PrettierIgnorePath is where that section lives.
+const PrettierIgnorePath = ".prettierignore"
+
+// eslintIgnores is the global ignores line of eslint.config.js, the anchor
+// generated paths are appended to.
+const eslintIgnores = "ignores: ['**/dist/**', '**/coverage/**']"
+
+// generatedSection is the .prettierignore section shape, without content.
+var generatedSection = resource.Resource{
+	Path:      PrettierIgnorePath,
+	Ownership: resource.ManagedSection,
+	SectionID: GeneratedSectionID,
+	Markers:   resource.HashComment,
+	Placement: resource.Bottom,
+}
 
 type tstoolingModule struct{}
 
@@ -49,12 +71,21 @@ func (tstoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 
 // Resolve returns this module's resources in a fixed order; see the
 // github-ci module for why order is part of the contract.
-func (tstoolingModule) Resolve(_ context.Context, _ *module.Context) ([]resource.Resource, error) {
-	return []resource.Resource{
+//
+// Generated paths (spec 0037) are appended to eslint.config.js's global
+// ignores and listed in a .prettierignore section, so both tools skip them
+// at every entry point. Without any, every file is the embedded template.
+func (tstoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
+	generated := module.GeneratedOf(mctx)
+	eslint, err := ignoreInESLint(eslintConfig, generated)
+	if err != nil {
+		return nil, err
+	}
+	rs := []resource.Resource{
 		{
 			Path:      "eslint.config.js",
 			Ownership: resource.Generated,
-			Content:   eslintConfig,
+			Content:   eslint,
 		},
 		{
 			Path:      ".prettierrc.json",
@@ -71,5 +102,37 @@ func (tstoolingModule) Resolve(_ context.Context, _ *module.Context) ([]resource
 			Ownership: resource.Generated,
 			Content:   tsconfigBase,
 		},
-	}, nil
+	}
+	if len(generated) > 0 {
+		section := generatedSection
+		var b strings.Builder
+		b.WriteString("# Managed by VibeConform: generated: in vibe.yaml. Not formatted.\n")
+		for _, g := range generated {
+			b.WriteString(g + "\n")
+		}
+		section.Content = []byte(b.String())
+		rs = append(rs, section)
+	}
+	return rs, nil
+}
+
+// ConditionalSections declares the generated section, which exists only
+// while vibe.yaml lists generated paths.
+func (tstoolingModule) ConditionalSections() []resource.Resource {
+	return []resource.Resource{generatedSection}
+}
+
+// ignoreInESLint appends each generated path to the global ignores. The
+// grammar admits no quote or backslash, so single quotes need no escaping.
+func ignoreInESLint(config []byte, generated []string) ([]byte, error) {
+	if len(generated) == 0 {
+		return config, nil
+	}
+	var b strings.Builder
+	b.WriteString(strings.TrimSuffix(eslintIgnores, "]"))
+	for _, g := range generated {
+		fmt.Fprintf(&b, ", '%s'", g)
+	}
+	b.WriteString("]")
+	return module.ReplaceOnce(config, "eslint.config.js", "ignore generated paths", eslintIgnores, b.String())
 }

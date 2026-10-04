@@ -58,6 +58,9 @@ func (tsrepotoolingModule) HookBinaries(_ *module.Context) []string {
 	return []string{"task", "node"}
 }
 
+// eslintStaged is lefthook.yml's ESLint pre-commit command.
+const eslintStaged = "run: pnpm exec eslint {staged_files}"
+
 // Resolve returns this module's resources in a fixed order; see the
 // github-ci module for why order is part of the contract.
 func (tsrepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
@@ -85,6 +88,15 @@ func (tsrepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]r
 	lefthook, err := excludeFromPrettierLefthook(lefthookConfig, owned)
 	if err != nil {
 		return nil, err
+	}
+	// ESLint warns about an explicitly passed file its ignores skip. With
+	// generated paths declared, a commit touching one must not warn
+	// (spec 0037 §3).
+	if len(module.GeneratedOf(mctx)) > 0 {
+		if lefthook, err = module.ReplaceOnce(lefthook, "lefthook.yml", "ignore generated paths",
+			eslintStaged, "run: pnpm exec eslint --no-warn-ignored {staged_files}"); err != nil {
+			return nil, err
+		}
 	}
 	if module.Selected(mctx, module.GraphifyIntegration) {
 		if taskfile, lefthook, err = module.AddGraphify(taskfile, lefthook, hooks); err != nil {

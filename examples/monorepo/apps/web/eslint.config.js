@@ -17,7 +17,7 @@ const configFiles = ['**/*.config.ts', '**/*.config.*.ts']
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/coverage/**'],
+    ignores: ['**/dist/**', '**/coverage/**', 'src/contracts/**'],
   },
   {
     ...js.configs.recommended,

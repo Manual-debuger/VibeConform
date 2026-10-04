@@ -52,6 +52,18 @@ func (monotoolingModule) RequiredTools(mctx *module.Context) []module.Tool {
 	return tools
 }
 
+// ConditionalSections forwards the tooling modules' conditional sections,
+// since the planner sees this module rather than the ones it wraps.
+func (monotoolingModule) ConditionalSections() []resource.Resource {
+	var out []resource.Resource
+	for _, p := range manifest.Profiles {
+		if cs, ok := tooling[p].(module.ConditionalSectioner); ok {
+			out = append(out, cs.ConditionalSections()...)
+		}
+	}
+	return out
+}
+
 // Resolve returns each component's configuration files in vibe.yaml
 // order, and within a component in its tooling module's order.
 func (monotoolingModule) Resolve(ctx context.Context, mctx *module.Context) ([]resource.Resource, error) {
@@ -65,7 +77,14 @@ func (monotoolingModule) Resolve(ctx context.Context, mctx *module.Context) ([]r
 		if !ok {
 			return nil, fmt.Errorf("component %s: no tooling for profile %q", c.ID, c.Profile)
 		}
-		rs, err := m.Resolve(ctx, nil)
+		// Each tooling module resolves as it would in a single-language
+		// repository: in isolation, apart from the component's own
+		// generated paths (spec 0037).
+		var cctx *module.Context
+		if len(c.Generated) > 0 {
+			cctx = &module.Context{Generated: c.Generated}
+		}
+		rs, err := m.Resolve(ctx, cctx)
 		if err != nil {
 			return nil, fmt.Errorf("component %s: resolve %s: %w", c.ID, m.Name(), err)
 		}

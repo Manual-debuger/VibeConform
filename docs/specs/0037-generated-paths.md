@@ -1,6 +1,7 @@
 # Spec 0037: Declared Generated-Code Paths
 
-Status: draft. Builds on spec 0025 (`prod-mono/v1`), ADR 0012
+Status: accepted and implemented (ADR 0018). Revised after the plan's
+step-0 probe: the grammar admits `**` but no single `*` (§2, A1). Builds on spec 0025 (`prod-mono/v1`), ADR 0012
 (`components:`), spec 0029 / ADR 0014 (managed sections) and spec 0026
 §10 (Prettier exclusions for owned editor files).
 
@@ -62,6 +63,11 @@ adapted.
   `force-exclude = true`, files passed explicitly are skipped too (the
   ruff settings docs say so). Ruff exits 0 when every file it is given
   is excluded.
+  **Probe result (ruff 0.16.8): partly false.** Anchoring, `**`,
+  `force-exclude` and exit 0 hold, but `*` does cross `/`. The grammar
+  was narrowed to whole-segment `**` (§2). When every file passed is
+  excluded, ruff also prints `warning: No Python files found under the
+  given path(s)` to stderr, with exit 0.
 - A2. ESLint flat-config global `ignores` are relative to
   `eslint.config.js`. A pattern without a trailing `/` matches files and
   directories (the ESLint docs say so). A file passed explicitly that a
@@ -99,7 +105,7 @@ components:
     path: apps/web
     profile: ts
     generated:
-      - src/contracts/*.ts
+      - src/contracts/**
 ```
 
 A single-language standard has the same thing as a top-level key,
@@ -138,14 +144,20 @@ anything resolves, unless every entry satisfies all of the following:
 | already clean: `path.Clean` leaves it unchanged, so no `./`, `//`, trailing `/` | `./src/gen/*.py`, `src/gen/` |
 | no `..` segment, and not `.` | `../shared/gen.py`, `src/../x` |
 | at least two segments, and the first one is literal (no `*`) | `contracts.py`, `*/gen.py`, `**/*.py`, `**` |
-| each segment uses only `A-Z a-z 0-9 . _ -` and `*`; `**` only as a whole segment | `src/gen/[a-z].py`, `src/{a,b}/x.ts`, `!src/gen`, `src/gen/**.py` |
+| each segment is either exactly `**`, or uses only `A-Z a-z 0-9 . _ -` (no single `*`) | `src/gen/*.py`, `src/gen/[a-z].py`, `src/{a,b}/x.ts`, `!src/gen`, `src/gen/**.py` |
 | unique within its list | |
 
 The first-literal-segment rule anchors every pattern to a named
 directory of the component. It is what stops a typo from excluding the
 whole component, and it gives one meaning across the tools: in ruff and
 in gitignore syntax, a single-segment pattern would otherwise match at
-any depth. The character set excludes every metacharacter on which
+any depth. A single `*` is not admitted because the tools disagree on
+it: the step-0 probe showed that in ruff `*` also matches `/`, so
+`src/gen/*.py` excluded `src/gen/sub/x.py`, while ESLint and Prettier
+keep `*` within one directory. `**` as a whole segment means the same in
+all three: zero or more directories in the middle (`src/**/gen/x.ts`
+matches `src/gen/x.ts` and `src/a/b/gen/x.ts`), and everything below at
+the end (`src/contracts/**`). The character set excludes every metacharacter on which
 ruff, minimatch and gitignore disagree. It also excludes every character
 that would need escaping in TOML, JavaScript or a `.prettierignore`
 line.
@@ -271,7 +283,7 @@ Unit tests unless marked otherwise.
   conformant without re-syncing (`TestExamplesAreConformant`,
   `task audit`).
 - [ ] AC2. **Parsing.** `manifest.Parse` accepts each valid form in §1
-  and §2 (`src/a/*.py`, `src/a/**`, `src/**/gen/*.ts`, `src/a.gen.ts`),
+  and §2 (`src/a/**`, `src/**/gen/types.ts`, `src/a.gen.ts`, `src/a/b.py`),
   and rejects each rejected example in §2's table, plus a duplicate,
   with an error naming the component id and the index of the offending
   entry. Unknown keys under a component are still rejected.
@@ -308,7 +320,9 @@ Unit tests unless marked otherwise.
   documented manual check, shows that `ruff format --check`,
   `ruff check`, `prettier --check` and `eslint`, each given a declared
   generated file explicitly (as lefthook and `fmt:changed` do), exit 0
-  with no finding and no warning.
+  with no finding and no warning. Exception, recorded by the probe:
+  ruff prints "No Python files found" to stderr when every file it was
+  given is excluded. That is a notice, not a finding, and the exit is 0.
 - [ ] AC9. **Go.** The probe confirms A4 for the pinned golangci-lint:
   a file with the standard header and a lint finding passes
   `golangci-lint run` with the managed `.golangci.yml`, and a
