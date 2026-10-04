@@ -30,7 +30,7 @@ components:
 ## Decision
 
 `vibe.yaml` gains an optional `components:` list. Each entry has exactly
-three fields:
+three fields (ADR 0018 later adds an optional fourth, `generated:`):
 
 | Field | Rule |
 |---|---|
