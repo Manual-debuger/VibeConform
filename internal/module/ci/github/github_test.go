@@ -6,8 +6,30 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
+
+// TestGoTestNeverReplaysCachedResults pins issue #64: setup-go restores
+// GOCACHE, which also holds test results, so without -count=1 CI can
+// report a cached pass instead of running the tests. The flag goes in
+// GOFLAGS, not the Taskfile, whose verify:fast relies on the test cache.
+func TestGoTestNeverReplaysCachedResults(t *testing.T) {
+	resources, err := New().Resolve(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	var wf struct {
+		Env map[string]string `yaml:"env"`
+	}
+	if err := yaml.Unmarshal(resources[0].Content, &wf); err != nil {
+		t.Fatal(err)
+	}
+	if got := wf.Env["GOFLAGS"]; got != "-count=1" {
+		t.Errorf("ci.yml env GOFLAGS = %q, want -count=1", got)
+	}
+}
 
 func TestName(t *testing.T) {
 	if got := New().Name(); got != "github-ci" {

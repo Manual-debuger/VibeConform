@@ -25,6 +25,10 @@ env:
   TASK_VERSION: "v3.53.1"
 [[- if .HasGo]]
   GOLANGCI_LINT_VERSION: "v2.13.2"
+  # setup-go caches GOCACHE, which also holds test results: run the tests
+  # rather than replay a cached pass. Commands other than go test ignore
+  # the flag.
+  GOFLAGS: "-count=1"
 [[- end]]
 [[- if .HasTS]]
   NODE_VERSION: "22"

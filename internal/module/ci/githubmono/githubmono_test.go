@@ -156,6 +156,20 @@ func TestEnvFollowsProfiles(t *testing.T) {
 	}
 }
 
+// TestGoTestNeverReplaysCachedResults pins issue #64: setup-go restores
+// GOCACHE, which also holds test results, so a Go component's CI needs
+// -count=1 to run its tests rather than report cached passes.
+func TestGoTestNeverReplaysCachedResults(t *testing.T) {
+	wf, _ := parseCI(t, components)
+	if got := wf.Env["GOFLAGS"]; got != "-count=1" {
+		t.Errorf("ci.yml env GOFLAGS = %q, want -count=1", got)
+	}
+	wf, _ = parseCI(t, components[1:])
+	if _, ok := wf.Env["GOFLAGS"]; ok {
+		t.Error("a ci.yml with no Go component sets GOFLAGS")
+	}
+}
+
 func TestDependabotPerComponent(t *testing.T) {
 	var doc struct {
 		Updates []struct {

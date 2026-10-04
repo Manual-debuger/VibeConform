@@ -946,6 +946,10 @@ Under `none`, your own CI must run `task verify-ci` and `task audit`.
   both.
 - Caches live under `.ci-cache/<id>/` at the repository root, which is
   never a component.
+- Go jobs set `GOFLAGS: -count=1`, so a restored `GOCACHE` cannot make
+  `go test` report a cached pass instead of running. The GitHub workflow
+  sets the same in its `env:`, because `setup-go` caches `GOCACHE` as
+  well. Local `task verify:fast` keeps the test cache (issue #64).
 - `workflow:rules` runs merge request pipelines, and branch pipelines
   for branches without an open merge request.
 - Every generated job declares `stage`, `image`, `needs`, `rules`,
