@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.5.0-alpha.1.0.20261004060304-faa097e27815
+vibe_version: v0.6.0-alpha.1.0.20261004080533-d8d736dfa829
 standard: prod-go/v1
 resources:
     - path: .claude/hooks/block-dangerous.sh
@@ -38,7 +38,7 @@ resources:
       sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
     - path: .github/workflows/ci.yml
       ownership: generated
-      sha256: 63d9279abb97aba78246a6395660e50dada613f38e2ec451009bc632036282de
+      sha256: 33ccffc01f7e7e08d3ded8c9cc7d9e9653143c586c532eae8b5f427aacc76300
     - path: .github/workflows/conformance.yml
       ownership: generated
       sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714

@@ -159,6 +159,25 @@ func TestPipelineStructure(t *testing.T) {
 	}
 }
 
+// TestGoTestNeverReplaysCachedResults pins issue #64: the Go job caches
+// GOCACHE, which also holds test results, so without -count=1 a restored
+// cache makes go test report cached passes instead of running.
+func TestGoTestNeverReplaysCachedResults(t *testing.T) {
+	_, doc := resolvePipeline(t, components)
+	for _, c := range components {
+		var j struct {
+			Variables map[string]string `yaml:"variables"`
+		}
+		n := doc[c.ID]
+		if err := n.Decode(&j); err != nil {
+			t.Fatal(err)
+		}
+		if got, want := j.Variables["GOFLAGS"], map[bool]string{true: "-count=1"}[c.Profile == manifest.ProfileGo]; got != want {
+			t.Errorf("%s: GOFLAGS = %q, want %q", c.ID, got, want)
+		}
+	}
+}
+
 // TestPipelineNeverRunsVibe pins spec 0038 acceptance criterion 5 for
 // .gitlab-ci.yml: its only mention of vibe is the include path.
 func TestPipelineNeverRunsVibe(t *testing.T) {

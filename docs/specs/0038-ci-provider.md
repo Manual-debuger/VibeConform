@@ -131,7 +131,10 @@ directory, and runs `task <id>:verify`. Go components also run
 (`GO_VERSION`, `TASK_VERSION`, `GOLANGCI_LINT_VERSION`, `NODE_VERSION`,
 `PYTHON_VERSION`). TypeScript takes pnpm from the component's
 `packageManager` field (spec 0020). Python uses `uv sync`. Jobs run on
-Linux only; see "Explicit non-goals".
+Linux only; see "Explicit non-goals". Go jobs set `GOFLAGS: -count=1`,
+because the cached `GOCACHE` also holds test results, which a restored
+cache would otherwise replay as passes (issue #64; the GitHub templates
+set it too).
 
 **Hardening against configuration merges.** GitLab deep-merges included
 configuration into jobs of the same name, and the main file wins only

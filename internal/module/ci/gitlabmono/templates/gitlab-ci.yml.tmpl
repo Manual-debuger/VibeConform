@@ -64,6 +64,9 @@ variables:
   variables:
     GOMODCACHE: $CI_PROJECT_DIR/.ci-cache/[[.ID]]/mod
     GOCACHE: $CI_PROJECT_DIR/.ci-cache/[[.ID]]/build
+    # GOCACHE also holds test results: run the tests rather than replay a
+    # cached pass. Commands other than go test ignore the flag.
+    GOFLAGS: "-count=1"
   cache:
     key:
       prefix: [[.ID]]
