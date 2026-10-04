@@ -126,7 +126,7 @@ need two toolchains.
 |---|---|---|
 | Go | `golang:${GO_VERSION}` | as on GitHub |
 | TypeScript | `node:${NODE_VERSION}` | `corepack enable`, then pnpm from `packageManager` |
-| Python | `ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm-slim` | `uv sync` |
+| Python | `ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm` | `uv sync` |
 
 Each job keeps its caches under `$CI_PROJECT_DIR/.ci-cache/<id>/`:
 

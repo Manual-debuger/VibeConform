@@ -85,7 +85,7 @@ func TestResolvesNothingUnlessGitLab(t *testing.T) {
 func TestPipelineStructure(t *testing.T) {
 	content, doc := resolvePipeline(t, components)
 
-	images := map[string]string{"api": "golang:${GO_VERSION}", "web": "node:${NODE_VERSION}", "worker": "ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm-slim"}
+	images := map[string]string{"api": "golang:${GO_VERSION}", "web": "node:${NODE_VERSION}", "worker": "ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm"}
 	for _, c := range components {
 		j := decodeJob(t, doc, c.ID)
 		if j.Image != images[c.ID] {
