@@ -1,6 +1,10 @@
 # Spec 0038: CI Provider Selection, and GitLab CI for `prod-mono`
 
-Status: draft. Implementation plan: `docs/plans/0038-ci-provider.md`.
+Status: accepted and implemented (ADR 0019). Implementation plan:
+`docs/plans/0038-ci-provider.md`. Open questions resolved 2026-10-02 with
+the recommended answers: a child pipeline, `prod-mono` only, `none`
+included, Linux only, a merge request template, image tags, a `ci:` map.
+The minimum GitLab version is 18.2, the first with `strategy: mirror`.
 Builds on spec 0010 (GitHub CI module), spec 0022 (conformance
 isolation), spec 0025 (`prod-mono/v1`), spec 0026 (optional
 integrations and pruning), spec 0029/ADR 0014 (single-valued options)

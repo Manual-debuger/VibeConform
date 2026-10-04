@@ -836,8 +836,9 @@ generating `go.work`.
 | Module | Resources |
 |---|---|
 | `mono-tooling` | per component, its profile's config at `<path>/`: `.golangci.yml`; `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json`; or `ruff.toml`, `pyrightconfig.json` — byte for byte what `prod-go`/`prod-ts`/`prod-py` write at a root, plus the component's [`generated:`](#generated-code-generated) exclusions and its `.prettierignore` section |
-| `github-ci-mono` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
-| `vibe-conformance` | `.github/workflows/conformance.yml`, `Taskfile.vibe.yml`, as in every standard |
+| `github-ci-mono` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` (under `ci.provider: github`, the default) |
+| `gitlab-ci-mono` | `.gitlab-ci.yml`, `.gitlab/merge_request_templates/Default.md` (under `ci.provider: gitlab` only) |
+| `vibe-conformance` | `.github/workflows/conformance.yml` (or `.gitlab-ci.vibe.yml`, or nothing, per `ci.provider`), `Taskfile.vibe.yml`, as in every standard |
 | `mono-repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.*`, and `<path>/Taskfile.yml` per component |
 | `claude-config`, `codex-config` | as in every standard |
 
@@ -875,7 +876,8 @@ build and test on Windows as `prod-go` does. A `workflows` job runs
 actionlint. `CI / gate` requires every job, so branch protection needs
 that one check however many components there are. Dependabot gets one
 entry per component, in its ecosystem and directory, plus
-`github-actions`.
+`github-actions`. That is the default; see [CI provider](#ci-provider-ciprovider)
+for GitLab, or for no generated CI at all.
 
 **Agent hooks.** Work as described in "Agent hooks" below, per component:
 `hook:format` runs each component's `fmt:changed` from inside that
@@ -901,6 +903,107 @@ repository with no Python component is not warned about `uv`.
 
 `examples/monorepo/` is a worked example with one component of each
 profile, checked the same way as the other examples.
+
+### CI provider: `ci.provider`
+
+`prod-mono` generates GitHub Actions by default. A repository hosted
+elsewhere says so in `vibe.yaml` (spec 0038):
+
+```yaml
+ci:
+  provider: gitlab   # github (the default) | gitlab | none
+```
+
+CI stays part of the standard; only the system that carries it varies.
+`prod-go`, `prod-ts` and `prod-py` do not offer the setting yet, and a
+`ci:` key there is an error.
+
+| `provider` | CI files | Root `Taskfile.yml` | `actionlint` |
+|---|---|---|---|
+| `github` (or absent) | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md`, `.github/workflows/conformance.yml` | `verify` ends with `workflows:lint` | required |
+| `gitlab` | `.gitlab-ci.yml`, `.gitlab/merge_request_templates/Default.md`, `.gitlab-ci.vibe.yml` | no `workflows:lint` | not required |
+| `none` | none | no `workflows:lint` | not required |
+
+`Taskfile.vibe.yml`, `task verify`, `task verify-ci` and `task audit`
+are generated under every provider. They are what any CI system calls.
+Under `none`, your own CI must run `task verify-ci` and `task audit`.
+
+**What `.gitlab-ci.yml` contains.**
+
+- One job per component, named by its `id`, in its toolchain's image:
+  `golang:${GO_VERSION}`, `node:${NODE_VERSION}` (pnpm through
+  corepack, from `packageManager`), or
+  `ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm-slim`.
+- Each job installs the pinned Task, installs its dependencies in its
+  directory, and runs `task <id>:verify`. Go jobs also run
+  `task <id>:test:race`.
+- In the Node and uv images, Task comes from its release archive,
+  checked against `TASK_SHA256`. Bumping `TASK_VERSION` means bumping
+  both.
+- Caches live under `.ci-cache/<id>/` at the repository root, which is
+  never a component.
+- `workflow:rules` runs merge request pipelines, and branch pipelines
+  for branches without an open merge request.
+- Every generated job declares `stage`, `image`, `needs`, `rules`,
+  `allow_failure: false`, `before_script`, `script` and
+  `interruptible`, so an included file cannot change them by merging
+  into it.
+- There is no gate job: GitLab's "Pipelines must succeed" covers the
+  whole pipeline. Turn that setting on yourself; VibeConform does not
+  configure GitLab projects.
+- `.gitlab-ci.vibe.yml` holds the one `conformance:audit` job, the only
+  GitLab file that runs `vibe` (through `task audit`, which pins the
+  recorded version). `.gitlab-ci.yml` includes it only when it exists.
+
+**Your own jobs: `.gitlab-ci.local.yml`.** A generated job named `local`
+runs `.gitlab-ci.local.yml` as a child pipeline when the file exists. It
+uses `strategy: mirror`, so the `local` job's status is the child
+pipeline's, and a failing job of yours fails the pipeline. VibeConform
+never creates, reads or audits the file. A sketch of a migration check
+against Postgres:
+
+```yaml
+# .gitlab-ci.local.yml: a separate pipeline, so declare what you need.
+migrations:
+  image: golang:1.27.0
+  services:
+    - postgres:17
+  variables:
+    POSTGRES_PASSWORD: test
+    DATABASE_URL: postgres://postgres:test@postgres:5432/postgres?sslmode=disable
+  script:
+    - go run ./services/api/cmd/migrate up
+```
+
+A child pipeline can add jobs but cannot redefine the generated ones,
+which is the same property `Taskfile.local.yml` has. The cost is that
+its jobs cannot `needs:` a generated job or share its artifacts, and
+they appear as a downstream pipeline. A child pipeline sees
+`CI_PIPELINE_SOURCE=parent_pipeline` and the parent's
+`CI_MERGE_REQUEST_*` variables.
+
+**Moving an existing GitLab repository over.**
+
+1. Move your own jobs into `.gitlab-ci.local.yml`.
+2. Delete your hand-written `.gitlab-ci.yml`. If it is still there,
+   `sync` reports it as a conflict and leaves it alone.
+3. Set `ci: {provider: gitlab}` in `vibe.yaml`.
+4. Run `vibe diff`, then `vibe sync`, then `task audit`.
+
+**Switching provider.** The old provider's files are removed if you left
+them unmodified, forgotten if you already deleted them, and kept as a
+conflict if you edited them, as for any deselected option
+([Deselecting](#deselecting)). Switching back is the same in reverse.
+
+**Known gaps under `gitlab`.**
+
+- No Windows job. `github` tests Go on Windows; GitLab's hosted Windows
+  runners are beta, and self-managed instances may have none.
+- No dependency-update bot (no Dependabot equivalent).
+- No offline lint of the GitLab configuration in `task verify`; GitLab
+  rejects invalid configuration when it creates the pipeline.
+- Images are pinned by version tag, not digest.
+- Requires GitLab 18.2 or newer, for `trigger:strategy: mirror`.
 
 ## Generated code: `generated:`
 
@@ -1966,7 +2069,8 @@ see "Line-ending policy" above. And every standard accepts
 `development:`, which opts in to a development workflow and the docs
 layout; see "Development workflow" above. `prod-ts` and `prod-py` accept a
 top-level `generated:` list, and `prod-mono` components accept one each;
-see "Generated code" above. No other key is accepted: `vibe.yaml` is
+see "Generated code" above. `prod-mono` accepts `ci:`, which selects the
+CI system; see "CI provider" above. No other key is accepted: `vibe.yaml` is
 decoded strictly, and `components:` on any other standard is an error.
 
 There is no `.vibe/lock.yaml`, no `depends_on` between components (so no
@@ -2082,6 +2186,10 @@ skill. A [`generated:`](#generated-code-generated) section of
 `.prettierignore` is an ordinary ignore list. With [Graphify](#graphify) selected, its `.gitignore` section,
 skill, `graph:update` task, and Git hook jobs keep working the same
 way: they call `graphify` and `task`, never `vibe`.
+On GitLab (`ci.provider: gitlab`) the VibeConform-specific files are
+`vibe.yaml`, `.vibe/`, `.gitlab-ci.vibe.yml` and `Taskfile.vibe.yml`;
+`.gitlab-ci.yml`'s include of `.gitlab-ci.vibe.yml` then matches nothing
+and does nothing.
 `.github/workflows/examples.yml` in this repository demonstrates the split
 for its own TS/PY fixtures: `task verify` runs first, with no `vibe` on
 `PATH`; building `vibe` and running `task audit` is a separate, later step.

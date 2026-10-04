@@ -302,7 +302,9 @@ on those files.
 - **No code-intelligence providers.** The category and its validation
   exist; LSP and GitNexus are separate issues.
 - **No core deselection.** Verification, hooks, CI, and conformance are
-  not integrations.
+  not integrations. (Narrowed by spec 0038 / ADR 0019: `prod-mono`'s
+  `ci.provider: none` generates no CI files, while verification and
+  `task audit` stay.)
 - **No `vibe init` flags** for integrations, and no `.gitignore` editing.
   (Narrowed by ADR 0016: since spec 0035 an integration may own a
   managed section of `.gitignore` for its own output.)
