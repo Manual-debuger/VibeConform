@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.6.0-alpha.1+dirty
+vibe_version: v0.6.0-alpha.1.0.20261004080533-d8d736dfa829
 standard: prod-go/v1
 resources:
     - path: .claude/hooks/block-dangerous.sh
