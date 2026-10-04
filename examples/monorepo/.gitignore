@@ -1,8 +1,3 @@
-# vibeconform:begin graphify
-# Managed by VibeConform: integrations.intelligence graphify in vibe.yaml.
-graphify-out/
-# vibeconform:end graphify
-
 # vibeconform:begin claude
 # Managed by VibeConform: integrations.agents claude in vibe.yaml.
 .claude/settings.local.json
