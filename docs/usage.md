@@ -937,7 +937,7 @@ Under `none`, your own CI must run `task verify-ci` and `task audit`.
 - One job per component, named by its `id`, in its toolchain's image:
   `golang:${GO_VERSION}`, `node:${NODE_VERSION}` (pnpm through
   corepack, from `packageManager`), or
-  `ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm-slim`.
+  `ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm`.
 - Each job installs the pinned Task, installs its dependencies in its
   directory, and runs `task <id>:verify`. Go jobs also run
   `task <id>:test:race`.

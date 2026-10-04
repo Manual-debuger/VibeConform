@@ -112,7 +112,9 @@ variables:
 
 [[.ID]]:
   stage: test
-  image: ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm-slim
+  # Not -slim: pyright's bundled Node needs libatomic, which the slim
+  # image lacks.
+  image: ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm
   needs: []
   rules:
     - when: on_success
@@ -129,8 +131,7 @@ variables:
       - .ci-cache/[[.ID]]/
   before_script: []
   script:
-    # The slim image has no curl; Python fetches the archive instead.
-    - python -c 'import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])' "https://github.com/go-task/task/releases/download/${TASK_VERSION}/task_linux_amd64.tar.gz" /tmp/task.tar.gz
+    - curl -fsSL -o /tmp/task.tar.gz "https://github.com/go-task/task/releases/download/${TASK_VERSION}/task_linux_amd64.tar.gz"
     - echo "${TASK_SHA256}  /tmp/task.tar.gz" | sha256sum -c -
     - tar -xzf /tmp/task.tar.gz -C /usr/local/bin task
     - (cd [[.Path]] && uv sync)
