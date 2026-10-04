@@ -113,3 +113,25 @@ func TestTemplatesAreLF(t *testing.T) {
 		}
 	}
 }
+
+// TestIgnoreInESLintRefusesMissingAnchor pins spec 0037's edit rule: a
+// template without its anchor is refused, never half edited.
+func TestIgnoreInESLintRefusesMissingAnchor(t *testing.T) {
+	if _, err := ignoreInESLint([]byte("export default []\n"), []string{"src/gen/**"}); err == nil {
+		t.Fatal("ignoreInESLint accepted an eslint.config.js without the ignores line")
+	}
+}
+
+// TestGeneratedSectionIsConditional pins spec 0037 §5: the section the
+// module declares conditional is the one it resolves.
+func TestGeneratedSectionIsConditional(t *testing.T) {
+	rs, err := New().Resolve(context.Background(), &module.Context{Generated: []string{"src/gen/**"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := rs[len(rs)-1]
+	cs := New().(module.ConditionalSectioner).ConditionalSections()
+	if len(cs) != 1 || cs[0].SectionID != last.SectionID || cs[0].Markers != last.Markers || cs[0].Placement != last.Placement || last.Path != PrettierIgnorePath {
+		t.Errorf("conditional %+v does not describe resolved %+v", cs, last)
+	}
+}

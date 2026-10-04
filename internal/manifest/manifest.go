@@ -38,6 +38,10 @@ type Manifest struct {
 	// nil means nothing, since every setting is opt-in
 	// (docs/decisions/0015-agents-md-workflow-section.md).
 	Development *Development `yaml:"development,omitempty"`
+	// Generated lists the files a generator owns, relative to the
+	// repository root, for a single-language standard. A monorepo
+	// declares them per component instead (spec 0037).
+	Generated []string `yaml:"generated,omitempty"`
 }
 
 // Policy is vibe.yaml's policy: map. Each key takes one value, and an
@@ -200,6 +204,10 @@ type Component struct {
 	Path string `yaml:"path"`
 	// Profile is the component's language.
 	Profile Profile `yaml:"profile"`
+	// Generated lists the files a generator owns, relative to Path. They
+	// are excluded from formatting and linting, never from type checking
+	// or tests (spec 0037).
+	Generated []string `yaml:"generated,omitempty"`
 }
 
 var idPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -234,6 +242,9 @@ func Parse(data []byte) (*Manifest, error) {
 	if err := validateDevelopment(m.Development); err != nil {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
+	if err := validateGenerated("generated", m.Generated); err != nil {
+		return nil, fmt.Errorf("parse manifest: %w", err)
+	}
 	return &m, nil
 }
 
@@ -258,6 +269,12 @@ func validateComponents(components []Component) error {
 
 		if err := validatePath(c.Path); err != nil {
 			return fmt.Errorf("%s (%s): %w", where, c.ID, err)
+		}
+		if c.Profile == ProfileGo && len(c.Generated) > 0 {
+			return fmt.Errorf("%s (%s): generated: is not offered for profile go; %s", where, c.ID, GoGeneratedHint)
+		}
+		if err := validateGenerated(fmt.Sprintf("%s (%s).generated", where, c.ID), c.Generated); err != nil {
+			return err
 		}
 		for _, other := range components[:i] {
 			if within(c.Path, other.Path) || within(other.Path, c.Path) {
@@ -306,6 +323,62 @@ func validatePath(p string) error {
 		return errors.New(`path "." is the repository root; a component must be a subdirectory`)
 	case p == ".." || strings.HasPrefix(p, "../"):
 		return fmt.Errorf("path %q is outside the repository", p)
+	}
+	return nil
+}
+
+// GoGeneratedHint is why Go takes no generated: list. Go has its own
+// convention, which golangci-lint already honours.
+const GoGeneratedHint = "mark generated Go files with the \"// Code generated ... DO NOT EDIT.\" header instead, which golangci-lint already skips (gofmt still applies)"
+
+// segmentPattern is the character set of a literal glob segment. Single
+// "*" is not admitted: ruff lets it match "/", while ESLint and Prettier
+// do not, so it would mean different things per tool (spec 0037 §2).
+var segmentPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// validateGenerated checks a generated: list against spec 0037's grammar.
+// where names the list in errors, e.g. "components[1] (web).generated".
+func validateGenerated(where string, globs []string) error {
+	seen := map[string]bool{}
+	for i, g := range globs {
+		if err := validateGlob(g); err != nil {
+			return fmt.Errorf("%s[%d]: %w", where, i, err)
+		}
+		if seen[g] {
+			return fmt.Errorf("%s[%d]: duplicate pattern %q", where, i, g)
+		}
+		seen[g] = true
+	}
+	return nil
+}
+
+func validateGlob(g string) error {
+	switch {
+	case g == "":
+		return errors.New("pattern is empty")
+	case strings.ContainsAny(g, " \t\r\n"):
+		return fmt.Errorf("pattern %q contains whitespace", g)
+	case strings.Contains(g, `\`):
+		return fmt.Errorf("pattern %q must use forward slashes", g)
+	case strings.HasPrefix(g, "/") || strings.Contains(g, ":"):
+		return fmt.Errorf("pattern %q must be relative", g)
+	case path.Clean(g) != g:
+		return fmt.Errorf("pattern %q must be clean (%q)", g, path.Clean(g))
+	}
+	segments := strings.Split(g, "/")
+	if len(segments) < 2 {
+		return fmt.Errorf("pattern %q must have at least two segments, starting with a directory name", g)
+	}
+	for i, s := range segments {
+		switch {
+		case s == "." || s == "..":
+			return fmt.Errorf("pattern %q must not contain %q", g, s)
+		case s == "**" && i == 0:
+			return fmt.Errorf("pattern %q must start with a literal directory name", g)
+		case s == "**":
+		case !segmentPattern.MatchString(s):
+			return fmt.Errorf("pattern %q: segment %q may use only A-Z a-z 0-9 . _ - (or be exactly **)", g, s)
+		}
 	}
 	return nil
 }

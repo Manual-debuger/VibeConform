@@ -118,6 +118,9 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 	if err := checkComponents(s, m); err != nil {
 		return nil, err
 	}
+	if err := checkGenerated(s, m); err != nil {
+		return nil, err
+	}
 	if err := checkDocsDirs(repoRoot, m); err != nil {
 		return nil, err
 	}
@@ -139,6 +142,7 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 		Policies:     selected.Policies,
 		DocsDirs:     m.Development.DocsDirs(),
 		Profiles:     profiles(s, m),
+		Generated:    m.Generated,
 	}
 	p := &repoPlan{Standard: s, Context: mctx, Selection: selected, Previous: previous, Modules: s.ModulesFor(selected)}
 	for _, mod := range p.Modules {
@@ -242,7 +246,32 @@ func planPrunes(repoRoot string, p *repoPlan) error {
 		return err
 	}
 	planMoved(p, sections)
+	planConditional(p, sections)
 	return nil
+}
+
+// planConditional adds a prune for every recorded section of a selected
+// module's conditional section ID that the plan no longer resolves: the
+// vibe.yaml value it came from is gone (module.ConditionalSectioner).
+func planConditional(p *repoPlan, sections map[state.SectionKey]bool) {
+	for _, mod := range p.Modules {
+		cs, ok := mod.(module.ConditionalSectioner)
+		if !ok {
+			continue
+		}
+		for _, r := range cs.ConditionalSections() {
+			for _, key := range slices.SortedFunc(maps.Keys(p.Previous.Sections), compareSectionKeys) {
+				if key.ID != r.SectionID || sections[key] {
+					continue
+				}
+				sections[key] = true
+				old := resource.Resource{Path: key.Path, Ownership: resource.ManagedSection, SectionID: r.SectionID,
+					Markers: r.Markers, Placement: r.Placement}
+				p.Prunes = append(p.Prunes, prunePlan{Path: key.Path, Retired: "no longer declared in vibe.yaml", Resource: old,
+					Section: &sectionPlan{ID: r.SectionID, Pruned: true, resource: old}})
+			}
+		}
+	}
 }
 
 // planMoved adds a prune for every recorded section that a selected
@@ -384,6 +413,24 @@ func checkComponents(s *standard.Standard, m *manifest.Manifest) error {
 	case !s.TakesComponents && len(m.Components) > 0:
 		return fmt.Errorf("%s/%s takes no components, but %s declares %d; "+
 			"use prod-mono for a repository with components", s.Name, s.Version, manifestFileName, len(m.Components))
+	}
+	return nil
+}
+
+// checkGenerated refuses a top-level generated: list the standard cannot
+// honour (spec 0037 §1): a monorepo declares generated paths per component,
+// and Go marks generated files with a header instead. Parse has already
+// checked the grammar and rejected generated: on a profile go component.
+func checkGenerated(s *standard.Standard, m *manifest.Manifest) error {
+	if len(m.Generated) == 0 {
+		return nil
+	}
+	switch {
+	case s.TakesComponents:
+		return fmt.Errorf("%s/%s declares generated paths per component: move the top-level generated: list in %s "+
+			"under the component it belongs to", s.Name, s.Version, manifestFileName)
+	case s.Profile == manifest.ProfileGo:
+		return fmt.Errorf("%s/%s takes no generated: list; %s", s.Name, s.Version, manifest.GoGeneratedHint)
 	}
 	return nil
 }

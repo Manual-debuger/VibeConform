@@ -1,9 +1,10 @@
 package tsrepotooling
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
+
+	"github.com/Manual-debuger/VibeConform/internal/module"
 )
 
 // Keeping Prettier off a selected editor's owned files rewrites exact
@@ -67,11 +68,7 @@ func excludeFromPrettierLefthook(lefthook []byte, paths []string) ([]byte, error
 	return replaceOnce(lefthook, "lefthook.yml", lefthookGlob, list.String())
 }
 
-// replaceOnce replaces old with replacement, which must occur exactly
-// once in data.
+// replaceOnce edits a template to keep Prettier off owned editor files.
 func replaceOnce(data []byte, file, old, replacement string) ([]byte, error) {
-	if n := bytes.Count(data, []byte(old)); n != 1 {
-		return nil, fmt.Errorf("exclude owned editor files from prettier: %s has %d copies of %q, want 1", file, n, old)
-	}
-	return bytes.Replace(data, []byte(old), []byte(replacement), 1), nil
+	return module.ReplaceOnce(data, file, "exclude owned editor files from prettier", old, replacement)
 }
