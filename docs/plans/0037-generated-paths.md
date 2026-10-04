@@ -1,8 +1,26 @@
 # Plan 0037: Declared generated-code paths
 
-Implements `docs/specs/0037-generated-paths.md` (draft). The spec and this
-plan are approved separately. Nothing below is implemented until both
-are.
+Implements `docs/specs/0037-generated-paths.md`. Status: approved and
+implemented. Open questions resolved 2026-10-02: pyright still checks
+generated code, Go rejects the key, the strict grammar stays, and the
+doctor checks are a follow-on.
+
+Step-0 probe record (2026-10-04, Windows; ruff 0.16.8, ESLint 10.11.0,
+Prettier 3.9.8, golangci-lint v2.13.2):
+
+- ruff: `extend-exclude` is anchored at `ruff.toml`. `force-exclude`
+  skips explicitly passed files, with exit 0 and a "No Python files
+  found" warning. `**` crosses directories, and **so does `*`**, which
+  contradicts A1. The spec's grammar was narrowed to whole-segment `**`
+  (user decision).
+- ESLint: global `ignores` are relative to the config. An explicitly
+  passed ignored file warns with exit 0, and `--no-warn-ignored` silences
+  it. `*` stays within one directory.
+- Prettier: `.prettierignore` skips explicitly passed files for
+  `--check` and `--write`, with exit 0.
+- golangci-lint: a file with the generated header and an `errcheck`
+  finding passes, a hand-written one fails, and `gofmt -l` lists a
+  misformatted generated file.
 
 Branch: `feat/generated-paths`, off `main`. One pull request.
 

@@ -161,7 +161,10 @@ kept as a conflict when it was modified (spec 0026). A whole file a
 module has retired (`module.Retirer`, spec 0031), such as the `/spec`
 command the spec skill replaced, is removed by the same rules. So is a
 section whose file moved with `vibe.yaml` (`module.SectionMover`, spec
-0034): the specs section, which follows `development.specs_dir`. Nothing
+0034): the specs section, which follows `development.specs_dir`. So is a
+section that exists only while `vibe.yaml` declares something
+(`module.ConditionalSectioner`, spec 0037): the `generated` section of
+`.prettierignore`, which goes when its `generated:` list does. Nothing
 unrecorded is ever deleted, and orphans left by a standard dropping a
 resource without retiring it are still not pruned.
 
@@ -225,6 +228,9 @@ Since spec 0025, `vibe.yaml` carries this list as `components:`
 (`id`, `path`, `profile`; ADR 0012), and `prod-mono/v1` resolves from it:
 each component gets its profile's single-language configuration at its
 path, and the root `Taskfile.yml` and `ci.yml` fan out to every component.
+Since spec 0037 a `ts` or `py` component may also list `generated:` paths
+(ADR 0018), which its tooling renders into ruff, ESLint and Prettier
+excludes; `monotooling` passes each component its own list.
 `depends_on` and the graph engine are still not built, so every task runs
 every component (see `docs/plans/0001-bootstrap.md`).
 

@@ -835,7 +835,7 @@ generating `go.work`.
 
 | Module | Resources |
 |---|---|
-| `mono-tooling` | per component, its profile's config at `<path>/`: `.golangci.yml`; `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json`; or `ruff.toml`, `pyrightconfig.json` — byte for byte what `prod-go`/`prod-ts`/`prod-py` write at a root |
+| `mono-tooling` | per component, its profile's config at `<path>/`: `.golangci.yml`; `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json`; or `ruff.toml`, `pyrightconfig.json` — byte for byte what `prod-go`/`prod-ts`/`prod-py` write at a root, plus the component's [`generated:`](#generated-code-generated) exclusions and its `.prettierignore` section |
 | `github-ci-mono` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
 | `vibe-conformance` | `.github/workflows/conformance.yml`, `Taskfile.vibe.yml`, as in every standard |
 | `mono-repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.*`, and `<path>/Taskfile.yml` per component |
@@ -892,13 +892,119 @@ apply unchanged), and names the component's verification tasks. With
 `claude` selected, each component's `CLAUDE.md` also gets the `@AGENTS.md`
 import, so Claude Code reads that section when it works there. The rest
 of both files is yours. Deselecting the workflow removes the sections.
-Removing a component leaves them, like its other generated files.
+Removing a component leaves them, like its other generated files. (The
+one exception is a [`generated:`](#generated-code-generated) section in
+the component's `.prettierignore`, which goes with its declaration.)
 
 `sync`'s missing-tool warnings cover only the profiles declared: a
 repository with no Python component is not warned about `uv`.
 
 `examples/monorepo/` is a worked example with one component of each
 profile, checked the same way as the other examples.
+
+## Generated code: `generated:`
+
+Code a generator writes from a schema (API types, database models) is
+committed, but its style is the generator's, not yours. Declare it, and
+the managed formatter and linter configuration skip it (spec 0037):
+
+```yaml
+# prod-mono: per component, relative to the component's path
+components:
+  - id: worker
+    path: services/worker
+    profile: py
+    generated:
+      - src/worker/contracts/**
+  - id: web
+    path: apps/web
+    profile: ts
+    generated:
+      - src/contracts/**
+      - src/api/client.gen.ts
+```
+
+```yaml
+# prod-ts and prod-py: top level, relative to the repository root
+standard: prod-py
+version: v1
+generated:
+  - src/example/contracts/**
+```
+
+**What is skipped.** Checks whose findings you would fix by editing the
+file are skipped. Checks that judge whether the program is correct are
+not, because a generated file is fixed by changing the generator or the
+schema, and a type error in it is a real defect in a contract everything
+imports.
+
+| Profile | Format | Lint | Typecheck |
+|---|---|---|---|
+| py | skipped: `ruff.toml` `extend-exclude`, with `force-exclude = true` | skipped: the same keys | still checked (`pyright`) |
+| ts | skipped: a managed `generated` section in `.prettierignore` | skipped: `eslint.config.js` global `ignores` | still checked (`tsc`) |
+| go | not offered: `generated:` is an error | skipped by the `// Code generated ... DO NOT EDIT.` header (golangci-lint's default) | still checked (`go build`, `go vet`) |
+
+The exclusion is ordinary tool configuration, so it holds wherever the
+tool runs: `task fmt`, `fmt:check`, `lint` and `verify`, the agents'
+`hook:format` and `hook:check`, lefthook (where files are passed
+explicitly, hence `force-exclude`, and `--no-warn-ignored` on `prod-ts`'s
+ESLint pre-commit command), and your editor. When every file ruff is
+given is excluded, it prints `warning: No Python files found under the
+given path(s)` and exits 0.
+
+**Go uses its own convention.** Go marks a generated file with a first
+comment line matching `^// Code generated .* DO NOT EDIT\.$`, and
+golangci-lint skips such files by default. `gofmt` still checks them:
+it has one style and no configuration, and Go generators emit it
+through `go/format`. So `generated:` on `prod-go` or on a `profile: go`
+component is an error that points to the header. Verified with
+golangci-lint v2.13.2.
+
+**The pattern grammar** is narrow on purpose, so that a typo cannot
+exclude a whole component, and so that a pattern means the same thing in
+ruff, ESLint and Prettier:
+
+- relative and clean, with forward slashes: no leading `/`, `./`, `..`,
+  `//`, trailing `/`, `:` or whitespace;
+- at least two segments, and the first is a literal directory name:
+  `src/gen/**`, not `**/gen` or `gen.py`;
+- each segment is exactly `**`, or uses only `A-Z a-z 0-9 . _ -`. A
+  single `*` is not accepted: ruff lets it match across `/` and the
+  other tools do not. Use `dir/**` for a directory's contents, and name
+  a single file in full (`src/api/client.gen.ts`);
+- no duplicates in a list.
+
+`**` matches zero or more directories in the middle (`src/**/gen/x.ts`
+matches `src/gen/x.ts` and `src/a/b/gen/x.ts`) and everything below at
+the end. A pattern that matches nothing excludes nothing; `vibe` never
+looks at the files.
+
+**Removing a declaration.** Edit the list and `vibe sync` re-renders the
+files. When a list becomes empty or is removed, or its component is
+removed, the `.prettierignore` section is removed if you left it
+unmodified (and the file with it, if VibeConform created it and nothing
+else is in it), and kept as a conflict if you edited it. A stale ignore
+list never outlives its declaration.
+
+**Keeping generated code current** is the repository's job, not the
+standard's: VibeConform never runs generators. A `Taskfile.local.yml`
+task that regenerates and fails on a diff does it:
+
+```yaml
+version: "3"
+
+tasks:
+  contracts:check:
+    desc: Fail if committed generated contracts are out of date.
+    cmds:
+      - task: contracts:generate
+      - git diff --exit-code -- services/worker/src/worker/contracts apps/web/src/contracts
+```
+
+`examples/monorepo/` declares a generated file in `web` and in `worker`,
+each deliberately unformatted and with a lint finding. CI checks that
+`task verify` passes there, and that the same content at a path that is
+not declared still fails.
 
 ## Selecting integrations
 
@@ -1858,12 +1964,14 @@ code-intelligence providers; see "Selecting integrations" above. Every
 standard also accepts `policy:`, which opts in to repository policies;
 see "Line-ending policy" above. And every standard accepts
 `development:`, which opts in to a development workflow and the docs
-layout; see "Development workflow" above. No other key is accepted:
-`vibe.yaml` is decoded strictly, and `components:` on any other standard
-is an error.
+layout; see "Development workflow" above. `prod-ts` and `prod-py` accept a
+top-level `generated:` list, and `prod-mono` components accept one each;
+see "Generated code" above. No other key is accepted: `vibe.yaml` is
+decoded strictly, and `components:` on any other standard is an error.
 
 There is no `.vibe/lock.yaml`, no `depends_on` between components (so no
-affected-component graph yet), and no overrides: a repository either
+affected-component graph yet), and no overrides (`generated:` describes
+the code; it does not relax a check for hand-written files): a repository either
 conforms to its standard as written or it does not.
 Editing `vibe.yaml` by hand is safe and expected — `init` only exists to
 create the first one.
@@ -1970,7 +2078,8 @@ written it by hand. That includes the line-ending policy's section of
 agents read them with or without VibeConform, and the markers are plain
 comments (HTML comments in Markdown, invisible when rendered) that you
 can delete or keep. The `spec` skill stays an ordinary Claude Code
-skill. With [Graphify](#graphify) selected, its `.gitignore` section,
+skill. A [`generated:`](#generated-code-generated) section of
+`.prettierignore` is an ordinary ignore list. With [Graphify](#graphify) selected, its `.gitignore` section,
 skill, `graph:update` task, and Git hook jobs keep working the same
 way: they call `graphify` and `task`, never `vibe`.
 `.github/workflows/examples.yml` in this repository demonstrates the split
