@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.6.0-alpha.1.0.20261004080533-d8d736dfa829
+vibe_version: v0.7.0-alpha.1.0.20261005035104-d29bb5b951cb
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go
@@ -14,6 +14,9 @@ resources:
     - path: .claude/skills/spec/SKILL.md
       ownership: generated
       sha256: 6e73fcab0e36e89b871f8980dd119fb986b6d582d6ae38e33063e6d179256ba9
+    - path: .claude/skills/vibeconform/SKILL.md
+      ownership: generated
+      sha256: d63e881a447ed3252801c450aa958cbdf9d37c65fcf8891de88652278ed8275a
     - path: .github/dependabot.yml
       ownership: generated
       sha256: 1a3acf0186b1f12f28a1451a81b4a95de36d61c6e2ad42afcd13215ae5f1c512
