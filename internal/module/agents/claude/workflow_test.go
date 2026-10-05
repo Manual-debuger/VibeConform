@@ -78,7 +78,9 @@ func TestComponentImports(t *testing.T) {
 			t.Errorf("%s: CLAUDE.md section %+v", c.ID, imp)
 		}
 	}
-	if none := resolvePaths(t, &module.Context{Components: comps, Integrations: []string{"claude"}, Policies: map[string]string{}}); len(none) != 3 {
+	// settings.json, policy.json, the vibeconform skill (spec 0041) and
+	// the .gitignore section.
+	if none := resolvePaths(t, &module.Context{Components: comps, Integrations: []string{"claude"}, Policies: map[string]string{}}); len(none) != 4 {
 		t.Errorf("without a workflow: %v", none)
 	}
 	r := resource.Resource{Path: "services/api/CLAUDE.md", Content: []byte("@AGENTS.md\n")}

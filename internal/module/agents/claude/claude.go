@@ -27,6 +27,7 @@ import (
 	_ "embed"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/agents/vibeskill"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
@@ -67,6 +68,9 @@ const (
 	ignoreContent   = "# Managed by VibeConform: integrations.agents claude in vibe.yaml.\n" + LocalSettings + "\n"
 )
 
+// SkillsDir is where Claude Code reads project skills.
+const SkillsDir = ".claude/skills"
+
 type claudeModule struct{}
 
 // New returns the claude-config module.
@@ -105,6 +109,8 @@ func (claudeModule) Resolve(_ context.Context, mctx *module.Context) ([]resource
 		},
 	}
 	resources = append(resources, workflowResources(mctx)...)
+	// The vibeconform skill, whatever development: selects (spec 0041).
+	resources = append(resources, vibeskill.Resources(SkillsDir, mctx)...)
 	// Last, so the order of everything above is unchanged, and at the
 	// bottom of .gitignore so the project's own entries keep their place.
 	return append(resources, resource.Resource{
