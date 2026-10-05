@@ -11,12 +11,27 @@
 # Project-owned jobs go in .gitlab-ci.local.yml, which the local job below
 # runs as a child pipeline when the file exists. A child pipeline can add
 # jobs but cannot redefine these ones, and its result is this pipeline's.
-# See docs/specs/0038-ci-provider.md and docs/usage.md's "CI provider".
+#
+# Where and how fast these jobs run is the project's: runner tags, retry,
+# services and the like go under default: in .gitlab-ci.defaults.yml, and
+# the cache policy comes from VIBE_CACHE_POLICY. What they run, and whether
+# their result counts, stays here. The conformance audit fails a defaults
+# file with any top-level key but default:.
+# See docs/specs/0038-ci-provider.md, docs/specs/0040-ci-floor-environment-seam.md
+# and docs/usage.md's "CI provider".
 
 workflow:
   rules:
     # Merge request pipelines, and branch pipelines for branches without
     # an open merge request: one pipeline per change, never two.
+    #
+    # Opt-in (project CI/CD variable VIBE_MR_CACHE_POLICY=pull): merge
+    # request pipelines read caches without uploading them again. Off by
+    # default: under GitLab's separate caches for protected branches, a
+    # Developer's merge request pipeline would then never get a cache.
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $VIBE_MR_CACHE_POLICY == "pull"
+      variables:
+        VIBE_CACHE_POLICY: pull
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
@@ -30,8 +45,15 @@ include:
     rules:
       - exists:
           - .gitlab-ci.vibe.yml
+  # The project's defaults for every job here: default: only.
+  - local: .gitlab-ci.defaults.yml
+    rules:
+      - exists:
+          - .gitlab-ci.defaults.yml
 
 variables:
+  # Each component job's cache policy. A project CI/CD variable overrides it.
+  VIBE_CACHE_POLICY: "pull-push"
 [[- if .HasGo]]
   GO_VERSION: "1.27.0"
 [[- end]]
@@ -74,6 +96,7 @@ variables:
         - [[.Path]]/go.mod
     paths:
       - .ci-cache/[[.ID]]/
+    policy: $VIBE_CACHE_POLICY
   before_script: []
   script:
     - go install github.com/go-task/task/v3/cmd/task@${TASK_VERSION}
@@ -101,6 +124,7 @@ variables:
         - [[.Path]]/pnpm-lock.yaml
     paths:
       - .ci-cache/[[.ID]]/
+    policy: $VIBE_CACHE_POLICY
   before_script: []
   script:
     - curl -fsSL -o /tmp/task.tar.gz "https://github.com/go-task/task/releases/download/${TASK_VERSION}/task_linux_amd64.tar.gz"
@@ -132,6 +156,7 @@ variables:
         - [[.Path]]/uv.lock
     paths:
       - .ci-cache/[[.ID]]/
+    policy: $VIBE_CACHE_POLICY
   before_script: []
   script:
     - curl -fsSL -o /tmp/task.tar.gz "https://github.com/go-task/task/releases/download/${TASK_VERSION}/task_linux_amd64.tar.gz"
@@ -153,6 +178,9 @@ local:
         - .gitlab-ci.local.yml
   allow_failure: false
   interruptible: true
+  # The child pipeline sets its own defaults in .gitlab-ci.local.yml.
+  inherit:
+    default: false
   trigger:
     include:
       - local: .gitlab-ci.local.yml

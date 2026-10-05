@@ -11,9 +11,12 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"text/template"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
@@ -37,6 +40,9 @@ const (
 	MergeRequestTemplatePath = ".gitlab/merge_request_templates/Default.md"
 	// LocalPath is the project-owned child pipeline, never written.
 	LocalPath = ".gitlab-ci.local.yml"
+	// DefaultsPath is the project-owned default: for the generated jobs,
+	// never written; GuardedFiles checks its shape.
+	DefaultsPath = ".gitlab-ci.defaults.yml"
 )
 
 // ReservedIDs are GitLab top-level keywords and reserved job names. A
@@ -102,6 +108,46 @@ func (gitlabmonoModule) Resolve(_ context.Context, mctx *module.Context) ([]reso
 		{Path: PipelinePath, Ownership: resource.Generated, Content: buf.Bytes()},
 		{Path: MergeRequestTemplatePath, Ownership: resource.Generated, Content: mr},
 	}, nil
+}
+
+// GuardedFiles names .gitlab-ci.defaults.yml under ci.provider gitlab, and
+// nothing otherwise.
+func (gitlabmonoModule) GuardedFiles(mctx *module.Context) []module.GuardedFile {
+	if module.CIProvider(mctx) != module.CIGitLab {
+		return nil
+	}
+	return []module.GuardedFile{{Path: DefaultsPath, Check: CheckDefaults}}
+}
+
+// CheckDefaults reports what makes content more than a default: block. Any
+// other top-level key would merge into the generated jobs: a job of the same
+// name could add allow_failure or variables, which the floor forbids. What
+// is under default: is the project's; a job's own keyword wins over it
+// anyway (docs/specs/0040-ci-floor-environment-seam.md §2).
+func CheckDefaults(content []byte) []string {
+	dec := yaml.NewDecoder(bytes.NewReader(content))
+	var doc yaml.Node
+	if err := dec.Decode(&doc); err != nil {
+		if errors.Is(err, io.EOF) {
+			return []string{"empty: the file must hold a default: mapping"}
+		}
+		return []string{fmt.Sprintf("not valid YAML: %v", err)}
+	}
+	var problems []string
+	var next yaml.Node
+	if err := dec.Decode(&next); !errors.Is(err, io.EOF) {
+		problems = append(problems, "more than one YAML document: the file must be a single default: mapping")
+	}
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return append(problems, "not a mapping: the file must hold a default: mapping")
+	}
+	for i := 0; i < len(root.Content); i += 2 {
+		if key := root.Content[i].Value; key != "default" {
+			problems = append(problems, fmt.Sprintf("top-level key %q: only default: may be set here", key))
+		}
+	}
+	return problems
 }
 
 // mergeRequestTemplate reuses github-ci's pull request template, which is

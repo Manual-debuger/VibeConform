@@ -141,7 +141,9 @@ configuration into jobs of the same name, and the main file wins only
 for the keys it declares. So every generated job explicitly declares the
 keys that decide whether and how it runs and passes: `stage`, `image`,
 `needs`, `rules`, `allow_failure: false`, `before_script`, `script` and
-`interruptible`.
+`interruptible`. Spec 0040 names these keys the floor, and adds a
+project-owned `.gitlab-ci.defaults.yml` (`default:` only, checked by
+audit) and a cache-policy variable for everything else.
 
 **Pipeline rules.** A `workflow:rules` block runs merge request
 pipelines, and branch pipelines for branches without an open merge

@@ -102,6 +102,17 @@ func runAudit(cmd *cobra.Command, repoRoot string) error {
 			return fmt.Errorf("audit: %w", err)
 		}
 	}
+	// A guarded project file that breaks its seam's limits: a conflict,
+	// since sync never writes it.
+	for _, g := range p.Guards {
+		checked++
+		if len(g.Problems) > 0 {
+			conflicts++
+		}
+		if err := printGuard(out, g); err != nil {
+			return fmt.Errorf("audit: %w", err)
+		}
+	}
 
 	if _, err := fmt.Fprintf(out, "%d %s checked, %d drifted, %d out of date, %d conflicts\n",
 		checked, pluralize(checked, "resource"), drifted, outOfDate, conflicts); err != nil {

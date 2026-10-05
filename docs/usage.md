@@ -955,7 +955,11 @@ Under `none`, your own CI must run `task verify-ci` and `task audit`.
 - Every generated job declares `stage`, `image`, `needs`, `rules`,
   `allow_failure: false`, `before_script`, `script` and
   `interruptible`, so an included file cannot change them by merging
-  into it.
+  into it. These, the declared variables and the cache key and paths
+  are the floor: what a required job runs, and whether its result
+  counts (spec 0040).
+- Each component job's cache policy is `$VIBE_CACHE_POLICY`, which is
+  `pull-push` unless you set it.
 - There is no gate job: GitLab's "Pipelines must succeed" covers the
   whole pipeline. Turn that setting on yourself; VibeConform does not
   configure GitLab projects.
@@ -989,6 +993,52 @@ its jobs cannot `needs:` a generated job or share its artifacts, and
 they appear as a downstream pipeline. A child pipeline sees
 `CI_PIPELINE_SOURCE=parent_pipeline` and the parent's
 `CI_MERGE_REQUEST_*` variables.
+
+**Where and how the generated jobs run: `.gitlab-ci.defaults.yml`.**
+Runner tags, retries, services and the like are yours to set (spec
+0040, ADR 0021). Put them under `default:` in `.gitlab-ci.defaults.yml`,
+which `.gitlab-ci.yml` includes when it exists:
+
+```yaml
+# .gitlab-ci.defaults.yml: default: only.
+default:
+  tags: [linux, docker]
+  retry: 1
+```
+
+- GitLab applies `default:` only to keywords a job leaves out. Every
+  generated job declares its floor, so a default can set `tags`,
+  `retry`, `services`, `artifacts`, `after_script`, `hooks` or
+  `id_tokens`, but not what the job runs or whether it may fail.
+- The defaults reach every component job and `conformance:audit`. They
+  do not reach the `local` job (it declares `inherit: default: false`),
+  or the child pipeline, which sets its own in `.gitlab-ci.local.yml`.
+- VibeConform never creates or writes the file. `vibe audit`, `diff`
+  and `sync` check its shape: `default:` must be its only top-level key.
+  A job, `variables`, `include` or anything else there could merge into
+  a generated job, so each one is reported as a conflict and audit
+  exits 2. Nothing under `default:` is checked.
+
+**Cache policy on merge requests.** Every job uploads its cache when it
+ends, even when nothing changed. To have merge request pipelines only
+read caches, set the project CI/CD variable `VIBE_MR_CACHE_POLICY` to
+`pull` (Settings > CI/CD > Variables). Other pipelines keep
+`pull-push`. To change the policy for every pipeline, set
+`VIBE_CACHE_POLICY` instead.
+
+It is off by default because of GitLab's "Use separate caches for
+protected branches", which is on by default. A pipeline started by a
+Developer on an unprotected branch uses `-non_protected` cache keys,
+and only merge request pipelines write those. With `pull`, such
+pipelines never get a cache. A pipeline started by a Maintainer or
+Owner uses `-protected` keys and reads the default branch's cache. Turn
+`pull` on when your merge request pipelines are mostly started by
+Maintainers, or when that setting is off.
+
+**What this does not guard.** Project CI/CD variables override anything
+in these files and can change how tools behave (for example
+`PYTEST_ADDOPTS`). `default: retry` can turn a flaky failure into a
+pass. The floor stops accidental drift, not a determined maintainer.
 
 **Moving an existing GitLab repository over.**
 
