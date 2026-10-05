@@ -75,8 +75,11 @@ func TestLefthookExtendsLocal(t *testing.T) {
 
 // TestLocalLefthookIsNotManaged pins spec 0036 acceptance criterion 2:
 // lefthook.local.yml is the project's, so no standard resolves it and no
-// Go code outside tests reads or writes it. Only the templates name it.
+// Go code outside tests reads or writes it. Only the templates name it,
+// and the vibeconform skill's prose (spec 0041), which tells an agent the
+// file is the project's.
 func TestLocalLefthookIsNotManaged(t *testing.T) {
+	prose := filepath.Join("..", "module", "agents", "vibeskill", "vibeskill.go")
 	for k, s := range registry {
 		selected := slices.Clone(s.Defaults().Integrations)
 		if len(s.Options) > 0 {
@@ -89,7 +92,7 @@ func TestLocalLefthookIsNotManaged(t *testing.T) {
 		}
 	}
 	err := filepath.WalkDir("..", func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || path == prose {
 			return err
 		}
 		data, err := os.ReadFile(path)

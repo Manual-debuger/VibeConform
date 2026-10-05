@@ -92,7 +92,13 @@ func TestDeselectRemovesUnchangedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync: %v\n%s", err, out)
 	}
-	for _, want := range []string{".codex/config.toml: removed (codex deselected)", ", 2 removed"} {
+	// codex's copy of the vibeconform skill goes with it, and claude's
+	// stays (spec 0041).
+	for _, want := range []string{
+		".codex/config.toml: removed (codex deselected)",
+		".agents/skills/vibeconform/SKILL.md: removed (codex deselected)",
+		", 3 removed",
+	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("sync output missing %q\n%s", want, out)
 		}
@@ -100,7 +106,10 @@ func TestDeselectRemovesUnchangedFiles(t *testing.T) {
 	if exists(t, dir, ".codex") {
 		t.Error(".codex/ left behind, empty")
 	}
-	if !exists(t, dir, ".claude/settings.json") {
+	if exists(t, dir, ".agents") {
+		t.Error(".agents/ left behind, empty")
+	}
+	if !exists(t, dir, ".claude/settings.json") || !exists(t, dir, ".claude/skills/vibeconform/SKILL.md") {
 		t.Error("claude's files went with codex's")
 	}
 	s, err := state.Load(dir)
@@ -108,7 +117,7 @@ func TestDeselectRemovesUnchangedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	for key := range s.Resources {
-		if strings.HasPrefix(key, ".codex/") {
+		if strings.HasPrefix(key, ".codex/") || strings.HasPrefix(key, ".agents/") {
 			t.Errorf("state still records %s", key)
 		}
 	}

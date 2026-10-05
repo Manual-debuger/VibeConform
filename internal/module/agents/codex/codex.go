@@ -16,6 +16,7 @@ import (
 	_ "embed"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/agents/vibeskill"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
@@ -36,10 +37,16 @@ func (codexModule) Name() string {
 	return "codex-config"
 }
 
+// SkillsDir is where Codex reads repository skills: it scans
+// .agents/skills in every directory from the working directory up to the
+// repository root (spec 0041).
+const SkillsDir = ".agents/skills"
+
 // Resolve returns this module's resources in a fixed order; see the
-// github-ci module for why order is part of the contract.
-func (codexModule) Resolve(_ context.Context, _ *module.Context) ([]resource.Resource, error) {
-	return []resource.Resource{
+// github-ci module for why order is part of the contract. The vibeconform
+// skill comes last (spec 0041).
+func (codexModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
+	return append([]resource.Resource{
 		{
 			Path:      ".codex/config.toml",
 			Ownership: resource.Generated,
@@ -50,5 +57,5 @@ func (codexModule) Resolve(_ context.Context, _ *module.Context) ([]resource.Res
 			Ownership: resource.Generated,
 			Content:   hooks,
 		},
-	}, nil
+	}, vibeskill.Resources(SkillsDir, mctx)...), nil
 }

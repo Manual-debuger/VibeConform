@@ -564,8 +564,8 @@ its modules compose:
 | `github-ci` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
 | `vibe-conformance` | `.github/workflows/conformance.yml`, `Taskfile.vibe.yml` |
 | `repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.go` |
-| `claude-config` | `.claude/settings.json`, `.claude/hooks/policy.json` |
-| `codex-config` | `.codex/config.toml`, `.codex/hooks.json` (no hooks: suspended, see "Codex: hooks suspended") |
+| `claude-config` | `.claude/settings.json`, `.claude/hooks/policy.json`, `.claude/skills/vibeconform/SKILL.md` |
+| `codex-config` | `.codex/config.toml`, `.codex/hooks.json` (no hooks: suspended, see "Codex: hooks suspended"), `.agents/skills/vibeconform/SKILL.md` |
 
 The last two are default-on integrations, and `repo-tooling`'s guard and
 `hook:*` tasks follow `claude`; the `vscode` and `zed` integrations add
@@ -672,7 +672,8 @@ exactly as it does for `prod-go`. `claude-config` gives a TypeScript or
 Python repository the same `.claude/` guardrails a Go repository gets;
 only the guard's language differs (see "The agent guard" below).
 `codex-config` writes the same `.codex/` files as for `prod-go`, with
-hooks suspended.
+hooks suspended. Both write the [`vibeconform` skill](#the-vibeconform-skill)
+for their standard.
 
 **As of M3 these are complete standards, not lint/format/typecheck only.**
 Through M2 they composed neither `repo-tooling` nor `github-ci` — a
@@ -1181,8 +1182,8 @@ deselected.
 |---|---|---|---|
 | `editors` | `vscode` | off | four tasks in `.vscode/tasks.json`; per-language entries in `.vscode/extensions.json` |
 | `editors` | `zed` | off | four tasks in `.zed/tasks.json` |
-| `agents` | `claude` | on | `.claude/settings.json`, `.claude/hooks/policy.json`, the guard program, and the `hook:*` tasks in `Taskfile.yml` |
-| `agents` | `codex` | on | `.codex/config.toml`, `.codex/hooks.json` |
+| `agents` | `claude` | on | `.claude/settings.json`, `.claude/hooks/policy.json`, `.claude/skills/vibeconform/SKILL.md`, the guard program, and the `hook:*` tasks in `Taskfile.yml` |
+| `agents` | `codex` | on | `.codex/config.toml`, `.codex/hooks.json`, `.agents/skills/vibeconform/SKILL.md` |
 | `intelligence` | `graphify` | off | a `graphify` section in `.gitignore`; `graph:update` in `Taskfile.yml` and the `post-commit`/`post-checkout` jobs in `lefthook.yml`; with `claude`, `.claude/skills/graphify/SKILL.md` and a `hook:context` line; with a workflow, a paragraph in AGENTS.md (see [Graphify](#graphify)) |
 
 A category you leave out takes its defaults; an empty list means none.
@@ -1675,6 +1676,36 @@ removed if you have not changed it, and kept as a conflict if you have.
 last two. Removing `docs_layout` removes its two sections. Your text
 stays. A file VibeConform created is deleted once nothing else is in it,
 and a modified section is kept and reported as a conflict.
+
+## The `vibeconform` skill
+
+Every selected agent gets a skill that tells it how the repository's
+VibeConform tooling works, so it does not have to read this
+documentation or VibeConform's repository (spec 0041, ADR 0022):
+
+| Agent | Path |
+|---|---|
+| `claude` | `.claude/skills/vibeconform/SKILL.md` |
+| `codex` | `.agents/skills/vibeconform/SKILL.md` |
+
+- Both copies are the same bytes. Each harness loads its copy when a task
+  matches the skill's description: editing a managed file or
+  `vibe.yaml`, adding tasks or Git hooks, a failing `task audit`, or a
+  question about the tooling.
+- It covers:
+  - what a managed file is, and that `vibe audit` lists them;
+  - how to change one: `vibe.yaml`, then `vibe diff` and `vibe sync`;
+  - where project changes go: `Taskfile.local.yml` and
+    `lefthook.local.yml`;
+  - the commands and audit's exit codes;
+  - the `vibe.yaml` keys;
+  - the tasks, toolchain and required CI checks of the repository's
+    standard, and for `prod-mono`, of its `ci.provider`;
+  - how to remove VibeConform.
+- It does not depend on `development:`. It changes only when the
+  standard, `ci.provider` or `vibe` changes.
+- It does not list the repository's managed files: `vibe audit` does.
+- Deselecting an agent removes its copy.
 
 ## Agent hooks
 
@@ -2246,7 +2277,7 @@ Nothing generated depends on VibeConform staying installed to keep
 working: `task verify`/`task verify-ci` depend only on native language
 tooling (spec 0017), never on a `vibe` binary. Since spec 0022, every
 VibeConform-specific piece is a file of its own, so removing it means
-deleting four things and editing none:
+deleting these and editing none:
 
 - `vibe.yaml`
 - `.vibe/`
@@ -2254,6 +2285,9 @@ deleting four things and editing none:
   from your branch protection's required checks, or pull requests will
   wait forever for a check that no longer runs.
 - `Taskfile.vibe.yml`
+- the [`vibeconform` skill](#the-vibeconform-skill):
+  `.claude/skills/vibeconform/` and `.agents/skills/vibeconform/`. It
+  tells agents to run `vibe`, so it is wrong once `vibe` is gone.
 
 `Taskfile.yml`'s `includes:` block then names two optional files that
 don't have to exist: `Taskfile.local.yml` (yours, never `vibe`'s) and the
@@ -2277,7 +2311,8 @@ skill. A [`generated:`](#generated-code-generated) section of
 skill, `graph:update` task, and Git hook jobs keep working the same
 way: they call `graphify` and `task`, never `vibe`.
 On GitLab (`ci.provider: gitlab`) the VibeConform-specific files are
-`vibe.yaml`, `.vibe/`, `.gitlab-ci.vibe.yml` and `Taskfile.vibe.yml`;
+`vibe.yaml`, `.vibe/`, `.gitlab-ci.vibe.yml`, `Taskfile.vibe.yml` and
+the `vibeconform` skill;
 `.gitlab-ci.yml`'s include of `.gitlab-ci.vibe.yml` then matches nothing
 and does nothing.
 `.github/workflows/examples.yml` in this repository demonstrates the split
