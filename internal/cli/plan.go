@@ -88,6 +88,9 @@ type repoPlan struct {
 	// Prunes are the recorded paths of deselected integrations, in catalog
 	// then resolution order.
 	Prunes []prunePlan
+	// Guards are the project-owned files modules guard and that exist, in
+	// module order (module.ProjectFileGuard).
+	Guards []guardPlan
 	// Warnings are findings that fail nothing, for stderr.
 	Warnings []string
 }
@@ -166,6 +169,9 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 		return nil, err
 	}
 	if err := markIgnored(repoRoot, p); err != nil {
+		return nil, err
+	}
+	if err := planGuards(repoRoot, p); err != nil {
 		return nil, err
 	}
 

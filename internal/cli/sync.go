@@ -112,6 +112,17 @@ func runSync(cmd *cobra.Command, repoRoot string, allowDowngrade bool) error {
 	if applyErr == nil {
 		applyErr = applyPrunes(out, repoRoot, p.Prunes, next, &counts)
 	}
+	// Guarded project files are reported, never written: a broken one is a
+	// conflict, and everything else is still applied.
+	for _, g := range p.Guards {
+		if applyErr != nil {
+			break
+		}
+		if len(g.Problems) > 0 {
+			counts.conflicts++
+		}
+		applyErr = printGuard(out, g)
+	}
 
 	// Record what actually landed before surfacing any failure: a run that
 	// wrote some resources and then died must not leave them unrecorded, or

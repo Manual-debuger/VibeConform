@@ -1,6 +1,7 @@
 # Spec 0040: The CI Floor, and an Environment Seam for GitLab Jobs
 
-Status: accepted (2026-10-05). Implementation plan:
+Status: accepted and implemented (2026-10-05); real GitLab pipeline
+UNVERIFIED. Implementation plan:
 `docs/plans/0040-ci-floor-environment-seam.md`. Open questions resolved
 with the user: audit checks the seam file's shape, the file is named
 `.gitlab-ci.defaults.yml`, and an image-registry prefix is deferred until
@@ -202,24 +203,24 @@ The guard stops accidental drift, not someone set on getting around it.
 
 ## Acceptance Criteria
 
-- [ ] **Unchanged behaviour by default.** With no seam file and no new
+- [x] **Unchanged behaviour by default.** With no seam file and no new
       variable set, every generated job has the same script, image name
       and tag, cache key and paths as before, with the policy resolving
       to `pull-push` (structural test on the parsed YAML).
-- [ ] **Contract keys stay declared.** Every component job and
+- [x] **Contract keys stay declared.** Every component job and
       `conformance:audit` declares every §1 contract key. A test lists
       them so a template change can't silently drop one.
-- [ ] **Defaults include.** `.gitlab-ci.yml` includes
+- [x] **Defaults include.** `.gitlab-ci.yml` includes
       `.gitlab-ci.defaults.yml` with `rules: exists` on its own path,
       after the `.gitlab-ci.vibe.yml` include. `local` declares
       `inherit: default: false`.
-- [ ] **Variable.** Every component job's `cache:policy` is
+- [x] **Variable.** Every component job's `cache:policy` is
       `$VIBE_CACHE_POLICY`, and the top level sets it to `pull-push`.
-- [ ] **MR rule.** The opt-in rule comes before the plain merge request
+- [x] **MR rule.** The opt-in rule comes before the plain merge request
       rule, matches only merge request pipelines with
       `VIBE_MR_CACHE_POLICY == "pull"`, and sets only
       `VIBE_CACHE_POLICY: pull`. The other workflow rules are unchanged.
-- [ ] **Audit shape check.** In a temp `prod-mono` + `gitlab`
+- [x] **Audit shape check.** In a temp `prod-mono` + `gitlab`
       repository:
       - an absent `.gitlab-ci.defaults.yml` is conformant;
       - a file with only `default:` (any content under it) is
@@ -228,9 +229,9 @@ The guard stops accidental drift, not someone set on getting around it.
         `include:`) is non-conformant, exits 2 and names each key;
       - a file that is not a YAML mapping is non-conformant;
       - `sync` never creates, changes or deletes the file.
-- [ ] **Scope.** Under `github` and `none`, the output is byte-identical
+- [x] **Scope.** Under `github` and `none`, the output is byte-identical
       and audit never reads `.gitlab-ci.defaults.yml`.
-- [ ] **Repository checks.** `examples/` and this repository are
+- [x] **Repository checks.** `examples/` and this repository are
       conformant after the sync. `task verify` and `task audit` pass.
 - [ ] **Real integration (a separate ledger line).** On a GitLab
       project holding a `gitlab` copy of `examples/monorepo`:
@@ -241,7 +242,7 @@ The guard stops accidental drift, not someone set on getting around it.
       - with `VIBE_MR_CACHE_POLICY=pull`, a merge request job logs that
         it is not uploading the cache, and a default-branch job uploads
         it.
-- [ ] **Documentation.** §5 is written, including ADR 0021.
+- [x] **Documentation.** §5 is written, including ADR 0021.
 
 ## Resolved questions
 

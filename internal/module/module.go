@@ -204,3 +204,24 @@ type SectionChecker interface {
 	// audit; warnings are reported and fail nothing.
 	CheckSection(r resource.Resource, before, after []byte) (conflicts, warnings []string)
 }
+
+// ProjectFileGuard is implemented by a module that opens a seam for a
+// project-owned file and limits what the file may hold, such as GitLab's
+// .gitlab-ci.defaults.yml, which may set only default:. VibeConform never
+// writes the file; commands read it and report each problem as a conflict
+// (docs/specs/0040-ci-floor-environment-seam.md). Optional, like
+// SectionChecker.
+type ProjectFileGuard interface {
+	// GuardedFiles lists the files to check under mctx. An absent file is
+	// never checked.
+	GuardedFiles(mctx *Context) []GuardedFile
+}
+
+// GuardedFile is one project-owned file a ProjectFileGuard checks.
+type GuardedFile struct {
+	// Path is relative to the repository root and slash-separated.
+	Path string
+	// Check returns what is wrong with content; none means conformant. It
+	// reads; it never edits.
+	Check func(content []byte) []string
+}

@@ -78,6 +78,11 @@ func runDiff(cmd *cobra.Command, repoRoot string) error {
 			return fmt.Errorf("diff: %w", err)
 		}
 	}
+	for _, g := range p.Guards {
+		if err := printGuard(out, g); err != nil {
+			return fmt.Errorf("diff: %w", err)
+		}
+	}
 
 	return nil
 }

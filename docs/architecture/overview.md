@@ -80,7 +80,11 @@ themselves; the CI, conformance and repo-tooling modules read
 `module.CIProvider`, so pruning's trial selection finds the old
 provider's files. `.gitlab-ci.yml` delegates project jobs to a child
 pipeline from the project-owned `.gitlab-ci.local.yml`, a seam beside a
-generated file like `Taskfile.local.yml` (ADR 0019). Keys are unique across maps, so the selection stays
+generated file like `Taskfile.local.yml` (ADR 0019). The generated jobs
+fix only their floor, the keys that decide what runs and whether it
+counts. A project sets runner tags and other environment keys through
+the project-owned, `default:`-only `.gitlab-ci.defaults.yml`, whose shape
+audit checks (ADR 0021). Keys are unique across maps, so the selection stays
 one flat map. Selection, resolution order, `Requires`/`Excludes`
 and pruning share one code path for both kinds. `module.Context.Policies`
 carries the selected values. See
@@ -103,6 +107,12 @@ mechanism. See `docs/decisions/0003-resource-ownership.md` and
 - `managed-section` — VibeConform owns a delimited section of a
   project-owned file.
 - `project-owned` — read-only context; never written.
+
+A module may also guard a project-owned file it opens a seam for, by
+implementing `module.ProjectFileGuard`: the planner reads each guarded
+file that exists, the module's pure check returns problems, and audit,
+diff and sync report each one as a conflict without writing the file.
+GitLab's `.gitlab-ci.defaults.yml` is the first (spec 0040).
 
 Since spec 0026 `structured-patch` is implemented for owned elements of one
 JSON(C) array (`internal/jsonarray`, over `github.com/tailscale/hujson`):

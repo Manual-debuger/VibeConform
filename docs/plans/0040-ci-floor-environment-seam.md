@@ -1,7 +1,7 @@
 # Plan 0040: The CI floor, and an environment seam for GitLab jobs
 
 Implements `docs/specs/0040-ci-floor-environment-seam.md` (issue #65).
-Status: approved 2026-10-05.
+Status: approved 2026-10-05 and implemented.
 
 Branch: `feat/65-ci-environment-seam`. One pull request.
 
