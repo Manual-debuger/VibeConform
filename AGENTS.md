@@ -91,11 +91,9 @@ Knowledge:
 - If an approved spec, an ADR and the code disagree, say so. Do not
   pick one silently.
 
-Workflow: spec-driven.
+Workflow: plan-triggered lightweight SDD.
 
-- A non-trivial behavioural change needs an approved spec with
-  acceptance criteria before it is planned, in any mode. A small fix
-  may go straight to implement and verify.
+- Normal mode: implement, then verify. Respect any spec that applies.
 - Planning context (the harness's plan mode, or `/spec`): use the
   `spec` skill. List the constraints that apply and the assumptions
   you have not verified, then write a lightweight spec with acceptance
