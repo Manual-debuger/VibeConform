@@ -96,7 +96,7 @@ func (docsLayout) Resolve(_ context.Context, mctx *module.Context) ([]resource.R
 	if selected := layoutOf(mctx); selected != nil {
 		l = *selected
 	}
-	return []resource.Resource{
+	rs := []resource.Resource{
 		{
 			Path:      DocsIndexPath,
 			Ownership: resource.ManagedSection,
@@ -113,5 +113,17 @@ func (docsLayout) Resolve(_ context.Context, mctx *module.Context) ([]resource.R
 			Placement: resource.Top,
 			Content:   []byte(specsIndex(l.Specs)),
 		},
-	}, nil
+	}
+	// Without a workflow, whose section names the layout, AGENTS.md gets
+	// the knowledge section instead (spec 0043 §1).
+	if !Selected(mctx) {
+		rs = append(rs, AgentsSection(KnowledgeSectionID, KnowledgeContent(l)))
+	}
+	return rs, nil
+}
+
+// ConditionalSections: the knowledge section leaves AGENTS.md when a
+// workflow is selected (spec 0043 §4).
+func (docsLayout) ConditionalSections() []resource.Resource {
+	return []resource.Resource{AgentsSection(KnowledgeSectionID, "")}
 }

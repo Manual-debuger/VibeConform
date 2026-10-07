@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.8.0-alpha.1.0.20261007062430-464394a65b0a
+vibe_version: v0.8.0-alpha.1.0.20261007070940-1d41b781a37d
 standard: prod-py/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
@@ -54,6 +54,16 @@ resources:
       ownership: managed-section
       created: true
       sha256: 6452cf8f4946f427655646518393d70a331a9dafa55ddfc19d1479ae8acd236d
+    - path: AGENTS.md
+      section_id: intelligence
+      ownership: managed-section
+      created: true
+      sha256: d1fb48c9e0f03e768576e4639fbced09a486adb37c00047fa76067b2ac1e3002
+    - path: AGENTS.md
+      section_id: knowledge
+      ownership: managed-section
+      created: true
+      sha256: 1b3eaebb55efd34b3e5106f3f36c4687bb13b6094a18bbd3e7efb61bb778c397
     - path: CLAUDE.md
       section_id: agents
       ownership: managed-section

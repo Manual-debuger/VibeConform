@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/module/intelligence/graphify"
+	"github.com/Manual-debuger/VibeConform/internal/module/workflow"
 )
 
 // graphifyTouches are the paths selecting graphify may change; every
@@ -45,13 +46,18 @@ func TestGraphifyFollowsSelection(t *testing.T) {
 					}
 				}
 				for path := range got {
-					if _, ok := without[path]; !ok && path != graphify.IgnorePath && path != graphify.SkillPath {
+					// With no workflow, AGENTS.md gets the intelligence section
+					// (spec 0043 §2).
+					if _, ok := without[path]; !ok && path != graphify.IgnorePath && path != graphify.SkillPath && path != workflow.AgentsPath {
 						t.Errorf("agents %v: graphify added unexpected resource %s", agents, path)
 					}
 				}
 
 				if _, ok := got[graphify.IgnorePath]; !ok {
 					t.Errorf("agents %v: no .gitignore section", agents)
+				}
+				if r := got[workflow.AgentsPath]; r.SectionID != workflow.IntelligenceSectionID {
+					t.Errorf("agents %v: AGENTS.md resource %+v, want the intelligence section", agents, r)
 				}
 				if _, ok := got[graphify.SkillPath]; ok != claude {
 					t.Errorf("agents %v: skill present = %v, want %v", agents, ok, claude)

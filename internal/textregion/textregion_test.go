@@ -1,6 +1,7 @@
 package textregion
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -149,6 +150,27 @@ func TestRemoveUndoesInsert(t *testing.T) {
 			if got := string(Remove(inserted, span, at)); got != data {
 				t.Errorf("%q at %v: Remove = %q", data, at, got)
 			}
+		}
+	}
+}
+
+// TestRemoveFirstBottomSection is the regression test for plan 0043: two
+// Bottom sections inserted into an empty file, then the first removed, left
+// a leading empty line, so the file never became empty again and was not
+// deleted when the second section left too.
+func TestRemoveFirstBottomSection(t *testing.T) {
+	for _, nl := range []string{"\n", "\r\n"} {
+		data := Insert(nil, HTML, "a", []byte("x"+nl), Bottom)
+		data = bytes.ReplaceAll(data, []byte("\n"), []byte(nl))
+		data = Insert(data, HTML, "b", []byte("y"+nl), Bottom)
+		span, _, _ := Parse(data, HTML).Find("a")
+		data = Remove(data, span, Bottom)
+		if want := Begin(HTML, "b") + "\n" + "y" + nl + End(HTML, "b") + "\n"; string(data) != want {
+			t.Errorf("%q: after removing a: %q, want %q", nl, data, want)
+		}
+		span, _, _ = Parse(data, HTML).Find("b")
+		if got := Remove(data, span, Bottom); len(got) != 0 {
+			t.Errorf("%q: after removing both: %q, want empty", nl, got)
 		}
 	}
 }

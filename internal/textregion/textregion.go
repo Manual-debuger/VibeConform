@@ -215,9 +215,16 @@ func Replace(data []byte, span Span, content []byte) []byte {
 
 // Remove returns data without span's section, and without the one empty
 // line Insert put next to it at placement, if that line is still there.
+// A Bottom section that starts the file was inserted into an empty file,
+// with no empty line before it; the one after it was put there by the
+// next Bottom section, and goes too, so that section starts the file.
 func Remove(data []byte, span Span, at Placement) []byte {
 	before, after := data[:span.Start], data[span.End:]
 	switch {
+	case at == Bottom && len(before) == 0 && bytes.HasPrefix(after, []byte("\r\n")):
+		after = after[2:]
+	case at == Bottom && len(before) == 0 && bytes.HasPrefix(after, []byte("\n")):
+		after = after[1:]
 	case at == Top && bytes.HasPrefix(after, []byte("\r\n")):
 		after = after[2:]
 	case at == Top && bytes.HasPrefix(after, []byte("\n")):

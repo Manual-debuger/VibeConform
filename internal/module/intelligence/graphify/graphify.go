@@ -10,6 +10,7 @@ import (
 	"context"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/workflow"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
@@ -73,7 +74,8 @@ func (graphifyModule) Name() string {
 // Resolve returns the ignore section, at the bottom of .gitignore so the
 // project's own entries keep their place, and the skill when Claude Code
 // is selected. Codex reads AGENTS.md, whose workflow section names the
-// graph, and gets nothing of its own (spec 0035 §2).
+// graph, and gets nothing of its own (spec 0035 §2). Without a workflow,
+// AGENTS.md gets the intelligence section instead (spec 0043 §2).
 func (graphifyModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
 	rs := []resource.Resource{{
 		Path:      IgnorePath,
@@ -90,7 +92,16 @@ func (graphifyModule) Resolve(_ context.Context, mctx *module.Context) ([]resour
 			Content:   []byte(Skill),
 		})
 	}
+	if !workflow.Selected(mctx) {
+		rs = append(rs, workflow.AgentsSection(workflow.IntelligenceSectionID, workflow.IntelligenceContent()))
+	}
 	return rs, nil
+}
+
+// ConditionalSections: the intelligence section leaves AGENTS.md when a
+// workflow is selected (spec 0043 §4).
+func (graphifyModule) ConditionalSections() []resource.Resource {
+	return []resource.Resource{workflow.AgentsSection(workflow.IntelligenceSectionID, "")}
 }
 
 // RequiredTools declares graphify as optional: without it the Git hooks
