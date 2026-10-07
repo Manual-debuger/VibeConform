@@ -3,5 +3,5 @@ version: v1
 policy:
   line_endings: lf
 development:
-  workflow: always-sdd
+  workflow: plan-triggered-sdd
   docs_layout: standard
