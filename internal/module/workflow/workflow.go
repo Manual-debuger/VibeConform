@@ -77,8 +77,11 @@ const (
 	// graphify is the repository-intelligence paragraph, present when
 	// vibe.yaml selects the Graphify integration (spec 0035 §2). Every agent
 	// reads it here; Claude Code also has the graphify skill.
-	graphify = "Repository intelligence:\n\n" +
-		"- Graphify keeps a knowledge graph in `graphify-out/`. Use it only when\n" +
+	graphify = "Repository intelligence:\n\n" + graphifyRule
+
+	// graphifyRule is the paragraph's list, which the intelligence section
+	// of spec 0043 shares.
+	graphifyRule = "- Graphify keeps a knowledge graph in `graphify-out/`. Use it only when\n" +
 		"  `built_at_commit` in `graph.json` matches HEAD (`task graph:update`\n" +
 		"  rebuilds it); otherwise, or when it is absent, use search, the\n" +
 		"  compiler and tests. It never replaces verification.\n" +

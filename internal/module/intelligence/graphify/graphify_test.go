@@ -41,12 +41,43 @@ func TestResolve(t *testing.T) {
 			if !strings.Contains(string(ignore.Content), "\ngraphify-out/\n") {
 				t.Errorf("section does not ignore graphify-out/:\n%s", ignore.Content)
 			}
-			if got := len(rs) == 2 && rs[1].Path == SkillPath && rs[1].Ownership == resource.Generated; got != tc.skills {
+			if got := len(rs) > 1 && rs[1].Path == SkillPath && rs[1].Ownership == resource.Generated; got != tc.skills {
 				t.Errorf("skill generated = %v, want %v (%+v)", got, tc.skills, rs)
+			}
+			// No workflow in any of these contexts: AGENTS.md gets the
+			// intelligence section, last (spec 0043 §2).
+			if last := rs[len(rs)-1]; last.Path != "AGENTS.md" || last.SectionID != "intelligence" || last.Placement != resource.Bottom ||
+				string(last.Content) != wantIntelligence {
+				t.Errorf("last resource %+v, want the intelligence section of AGENTS.md", last)
 			}
 		})
 	}
 }
+
+// TestNoSectionWithAWorkflow: the workflow section names the graph, so the
+// intelligence section is not generated, and it is declared conditional so
+// that sync removes a recorded copy (spec 0043 §3, §4).
+func TestNoSectionWithAWorkflow(t *testing.T) {
+	for _, r := range resolve(t, &module.Context{Integrations: []string{"graphify"}, Policies: map[string]string{"workflow": "direct"}}) {
+		if r.Path == "AGENTS.md" {
+			t.Errorf("resolved %+v with a workflow", r)
+		}
+	}
+	cs := New().(module.ConditionalSectioner).ConditionalSections()
+	if len(cs) != 1 || cs[0].SectionID != "intelligence" || cs[0].Markers != resource.HTMLComment {
+		t.Errorf("ConditionalSections() = %+v", cs)
+	}
+}
+
+const wantIntelligence = "\n## Repository intelligence\n" +
+	"\n" +
+	"Managed by VibeConform from `integrations.intelligence` in `vibe.yaml`.\n" +
+	"\n" +
+	"- Graphify keeps a knowledge graph in `graphify-out/`. Use it only when\n" +
+	"  `built_at_commit` in `graph.json` matches HEAD (`task graph:update`\n" +
+	"  rebuilds it); otherwise, or when it is absent, use search, the\n" +
+	"  compiler and tests. It never replaces verification.\n" +
+	"\n"
 
 // TestSkill keeps the skill's promises: freshness before use, a fallback,
 // no empty-result success, and no substitute for verification.

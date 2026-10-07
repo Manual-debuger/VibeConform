@@ -56,8 +56,13 @@ func MarkdownSection(body string) string {
 
 // knowledge is the AGENTS.md section's knowledge rule for l.
 func (l Layout) knowledge() string {
-	s := "Knowledge:\n\n" +
-		"- Specs (what must be true) live in `" + l.Specs + "/`, architecture (how it\n" +
+	return "Knowledge:\n\n" + l.knowledgeRules()
+}
+
+// knowledgeRules is the knowledge rule's list for l, which the knowledge
+// section of spec 0043 shares.
+func (l Layout) knowledgeRules() string {
+	s := "- Specs (what must be true) live in `" + l.Specs + "/`, architecture (how it\n" +
 		"  works now) in `" + l.Architecture + "/`, decisions (ADRs) in\n" +
 		"  `" + l.Decisions + "/`. Read the relevant ones before a non-trivial change.\n"
 	switch {

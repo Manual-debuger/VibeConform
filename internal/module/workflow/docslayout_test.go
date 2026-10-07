@@ -15,8 +15,14 @@ func TestDocsLayoutResources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rs) != 2 {
-		t.Fatalf("%d resources, want 2", len(rs))
+	// The two docs sections, and, with no workflow, AGENTS.md's knowledge
+	// section (spec 0043 §1).
+	if len(rs) != 3 {
+		t.Fatalf("%d resources, want 3", len(rs))
+	}
+	if k := rs[2]; k.Path != "AGENTS.md" || k.SectionID != "knowledge" || k.Markers != resource.HTMLComment ||
+		k.Placement != resource.Bottom || string(k.Content) != KnowledgeContent(DefaultLayout()) {
+		t.Errorf("knowledge resource %+v", k)
 	}
 
 	index := rs[0]
