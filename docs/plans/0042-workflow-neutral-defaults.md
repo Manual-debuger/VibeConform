@@ -46,7 +46,7 @@ Branch: `feat/0042-workflow-neutral`, off `main` after PR #69.
   section of `AGENTS.md` (spec 0035). A neutral `examples/python`
   therefore no longer has it. Its `graphify` skill and Git hooks remain.
   This is the same gap as the docs layout's: without a workflow, nothing
-  in `AGENTS.md` routes agents. It is recorded as follow-up.
+  in `AGENTS.md` routes agents. Spec 0043 closes it.
 - **Clean build for sync.** A `go install` in a working tree with
   untracked files stamps `+dirty`. The binary used for sync was built
   from a clean detached worktree of the commit.

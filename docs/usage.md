@@ -579,10 +579,13 @@ Deliberately **not** managed, and left for you to maintain by hand:
 - `AGENTS.md` and `CLAUDE.md` — prose written by a human for a specific
   repository. Generating them whole would produce exactly the fabricated,
   ignored-by-everyone instruction file this project argues against. Both
-  stay yours, except for two short sections: the `AGENTS.md` section
-  that a selected [development workflow](#development-workflow) adds
-  (ADR 0015), and the `CLAUDE.md` import of `AGENTS.md` that comes with
-  `claude` (ADR 0023).
+  stay yours, except for a few short sections:
+  - in `AGENTS.md`, the section that a selected
+    [development workflow](#development-workflow) adds (ADR 0015);
+  - also in `AGENTS.md` when there is no workflow, the `knowledge` and
+    `intelligence` routing sections (spec 0043);
+  - the `CLAUDE.md` import of `AGENTS.md` that comes with `claude`
+    (ADR 0023).
 - `.claude/settings.local.json` — user-local, possibly
   machine-specific. Never written. With `claude` selected, a managed
   `claude` section of `.gitignore` ignores it (spec 0039).
@@ -1188,7 +1191,7 @@ deselected.
 | `editors` | `zed` | off | four tasks in `.zed/tasks.json` |
 | `agents` | `claude` | on | `.claude/settings.json`, `.claude/hooks/policy.json`, `.claude/skills/vibeconform/SKILL.md`, the guard program, and the `hook:*` tasks in `Taskfile.yml` |
 | `agents` | `codex` | on | `.codex/config.toml`, `.codex/hooks.json`, `.agents/skills/vibeconform/SKILL.md` |
-| `intelligence` | `graphify` | off | a `graphify` section in `.gitignore`; `graph:update` in `Taskfile.yml` and the `post-commit`/`post-checkout` jobs in `lefthook.yml`; with `claude`, `.claude/skills/graphify/SKILL.md` and a `hook:context` line; with a workflow, a paragraph in AGENTS.md (see [Graphify](#graphify)) |
+| `intelligence` | `graphify` | off | a `graphify` section in `.gitignore`; `graph:update` in `Taskfile.yml` and the `post-commit`/`post-checkout` jobs in `lefthook.yml`; with `claude`, `.claude/skills/graphify/SKILL.md` and a `hook:context` line; a paragraph in AGENTS.md, in the workflow section or, without one, its own `intelligence` section (see [Graphify](#graphify)) |
 
 A category you leave out takes its defaults; an empty list means none.
 The categories are independent: choosing editors never changes agents.
@@ -1350,8 +1353,10 @@ VibeConform owns, so `vibe audit` would report them as drift.
     absence;
   - `hook:context` prints `Graphify: graph present …` or
     `Graphify: no graph yet …` at session start.
-- With a development workflow, the AGENTS.md section gains a "Repository
-  intelligence" paragraph that every agent, Codex included, reads.
+- Every agent, Codex included, reads a "Repository intelligence"
+  paragraph in `AGENTS.md`. With a development workflow, that paragraph
+  is part of the workflow section. Without one, it is a section of its
+  own, `intelligence`, at the end of the file (spec 0043).
 
 **Diagnostics.**
 
@@ -1564,9 +1569,12 @@ development:
   docs_layout: standard   # optional, and independent of workflow
 ```
 
-`docs_layout` works without a workflow. Without one, though, nothing in
-`AGENTS.md` points agents at the layout. That is a known gap, for
-follow-up.
+`docs_layout` works without a workflow. Without one, it adds a short
+`knowledge` section at the end of `AGENTS.md`, "Repository documents".
+That section says where specs, architecture docs and ADRs live
+(spec 0043). It names no process. When a workflow is selected, the
+workflow section says the same thing, so `sync` removes the `knowledge`
+section. Removing the workflow brings it back.
 
 **The bundled workflow (optional).** For a repository that wants
 VibeConform to state a way of working, `workflow` selects a bundled,
@@ -1707,7 +1715,8 @@ remove `workflow` and run `vibe sync`. That removes the `AGENTS.md`
 section, `/spec`, and the component `CLAUDE.md` sections. The root
 `CLAUDE.md` import stays while `claude` is selected. Deselecting
 `claude` removes `/spec` and every `CLAUDE.md` section. Removing
-`docs_layout` removes its two sections. Your text
+`docs_layout` removes its sections, including the `AGENTS.md`
+`knowledge` section, which only exists without a workflow. Your text
 stays. A file VibeConform created is deleted once nothing else is in it,
 and a modified section is kept and reported as a conflict.
 

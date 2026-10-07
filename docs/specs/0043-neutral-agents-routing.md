@@ -1,6 +1,6 @@
 # Spec 0043: AGENTS.md routing without a workflow
 
-Status: draft. Follow-up to spec 0042 (#71).
+Status: approved 2026-10-07. Follow-up to spec 0042 (#71).
 
 ## Problem
 
