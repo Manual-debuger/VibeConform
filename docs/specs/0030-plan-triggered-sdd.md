@@ -6,6 +6,12 @@ Revises the `AGENTS.md`/`CLAUDE.md` non-goal in `docs/usage.md`.
 §5's `/spec` command is replaced by a skill in spec 0031. The sections'
 bytes gained blank lines, which make them stable under Prettier (plan
 0032); the examples below show the text without them.
+Amended by spec 0042 (ADR 0023): leaving `workflow` out is the
+recommended setting, and the root `CLAUDE.md` import now comes with
+`claude` whatever the workflow. So the §8 rows that prune that section
+when `development:` is removed no longer hold. This repository switched
+from `always-sdd` to `plan-triggered-sdd` in spec 0042 (§7 below is
+historical).
 
 ## Problem
 

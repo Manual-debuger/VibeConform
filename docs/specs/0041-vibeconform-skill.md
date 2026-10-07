@@ -116,6 +116,8 @@ at most 900 words for every standard and provider.
 - Listing the repository's managed files in the skill. `vibe audit` is
   the source.
 - Codex copies of the `spec` and `graphify` skills (the rest of #50).
+  After spec 0042, a Codex `spec` skill would come only with a selected
+  workflow, never merely because `codex` is selected.
 
 ## Acceptance criteria
 

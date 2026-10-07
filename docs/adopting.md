@@ -119,12 +119,18 @@ integrations:
 policy:
   line_endings: lf
 
-# Optional development workflow (usage.md, "Development workflow"):
-# a short managed section in AGENTS.md, CLAUDE.md, and docs/.
+# Optional docs layout (usage.md, "Development workflow"): a short
+# managed section in docs/README.md and docs/specs/README.md.
 development:
-  workflow: plan-triggered-sdd   # or: direct, always-sdd
   docs_layout: standard
 ```
+
+There is no `workflow` key in this sample, and that is the recommended
+setting: VibeConform chooses no development process, so you can use
+your own. If you want VibeConform's bundled lightweight-SDD workflow,
+add `workflow: plan-triggered-sdd` (or `always-sdd`, or `direct`). Each
+value adds a managed section to `AGENTS.md`, so none of them is neutral.
+See usage.md, "Development workflow".
 
 `vibe.yaml` is decoded strictly: a misspelled key is an error, not
 ignored. See [What `vibe.yaml` means today](usage.md#what-vibeyaml-means-today).

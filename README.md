@@ -38,10 +38,15 @@
 > It does this through one managed section of `.gitattributes`, and the
 > project's own rules in that file stay untouched (see
 > [`docs/specs/0029-text-policy.md`](docs/specs/0029-text-policy.md)).
-> Its opt-in `development:` map selects a workflow (`direct`,
-> `plan-triggered-sdd` or `always-sdd`) that owns one short routing
-> section of `AGENTS.md`, plus a Claude Code `spec` skill (`/spec`), and a
-> standard docs layout (see
+> VibeConform is workflow-neutral by default. It chooses no development
+> process unless `vibe.yaml` selects one, and leaving it out is the
+> recommended setting (see
+> [`docs/specs/0042-workflow-neutral-defaults.md`](docs/specs/0042-workflow-neutral-defaults.md)).
+> The opt-in `development:` map can select a standard docs layout. It
+> can also select an optional, bundled workflow (`direct`,
+> `plan-triggered-sdd` or `always-sdd`). That workflow owns one short
+> routing section of `AGENTS.md`, plus a Claude Code `spec` skill
+> (`/spec`) (see
 > [`docs/specs/0030-plan-triggered-sdd.md`](docs/specs/0030-plan-triggered-sdd.md)).
 > `vibe diff` previews the reconciliation VibeConform would perform for that
 > resource against `.vibe/state.yaml` — see
