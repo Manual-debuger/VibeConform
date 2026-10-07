@@ -24,17 +24,21 @@ func resolvePaths(t *testing.T, mctx *module.Context) map[string]resource.Resour
 	return out
 }
 
-// TestAdapterNeedsAWorkflow: without development.workflow the module
-// resolves exactly what it did before spec 0030, plus the .gitignore
-// section of spec 0039.
+// TestAdapterNeedsAWorkflow: without development.workflow there is no spec
+// skill, and nothing implies SDD. The CLAUDE.md import is a harness
+// capability and comes anyway (spec 0042 §4, §5).
 func TestAdapterNeedsAWorkflow(t *testing.T) {
 	for name, mctx := range map[string]*module.Context{
 		"isolated":    nil,
 		"no workflow": {Integrations: []string{"claude"}, Policies: map[string]string{"line_endings": "lf"}},
 	} {
 		rs := resolvePaths(t, mctx)
-		if len(rs) != 3 || rs[IgnorePath].SectionID != IgnoreSectionID || rs[SpecSkillPath].Path != "" || rs[ClaudeMDPath].Path != "" {
+		if rs[IgnorePath].SectionID != IgnoreSectionID || rs[SpecSkillPath].Path != "" {
 			t.Errorf("%s: resources %v", name, rs)
+		}
+		imp := rs[ClaudeMDPath]
+		if imp.SectionID != ImportSectionID || imp.Placement != resource.Top || string(imp.Content) != "\n@AGENTS.md\n\n" {
+			t.Errorf("%s: CLAUDE.md section %+v", name, imp)
 		}
 	}
 }
@@ -78,9 +82,10 @@ func TestComponentImports(t *testing.T) {
 			t.Errorf("%s: CLAUDE.md section %+v", c.ID, imp)
 		}
 	}
-	// settings.json, policy.json, the vibeconform skill (spec 0041) and
-	// the .gitignore section.
-	if none := resolvePaths(t, &module.Context{Components: comps, Integrations: []string{"claude"}, Policies: map[string]string{}}); len(none) != 4 {
+	// settings.json, policy.json, the root CLAUDE.md import (spec 0042),
+	// the vibeconform skill (spec 0041) and the .gitignore section: no
+	// component imports.
+	if none := resolvePaths(t, &module.Context{Components: comps, Integrations: []string{"claude"}, Policies: map[string]string{}}); len(none) != 5 {
 		t.Errorf("without a workflow: %v", none)
 	}
 	r := resource.Resource{Path: "services/api/CLAUDE.md", Content: []byte("@AGENTS.md\n")}

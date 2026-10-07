@@ -85,8 +85,9 @@ func (claudeModule) Name() string {
 // Resolve returns this module's resources in a fixed order; see the
 // github-ci module for why order is part of the contract.
 //
-// With a development workflow selected, the spec skill and CLAUDE.md's
-// import of AGENTS.md follow (spec 0030 §5, spec 0031).
+// CLAUDE.md's import of AGENTS.md follows (spec 0042 §4), and with a
+// development workflow selected the spec skill and the component imports
+// too (spec 0030 §5, spec 0031).
 //
 // policy.json's content is computed rather than embedded. It is still
 // deterministic, because renderPolicy is.

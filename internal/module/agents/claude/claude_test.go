@@ -34,6 +34,7 @@ func TestResolveReturnsExpectedResourcesInOrder(t *testing.T) {
 	want := []string{
 		".claude/settings.json",
 		".claude/hooks/policy.json",
+		ClaudeMDPath,
 		IgnorePath,
 	}
 	if len(resources) != len(want) {
@@ -49,6 +50,13 @@ func TestResolveReturnsExpectedResourcesInOrder(t *testing.T) {
 			if r.Ownership != resource.ManagedSection || r.SectionID != IgnoreSectionID || r.Placement != resource.Bottom ||
 				string(r.Content) != "# Managed by VibeConform: integrations.agents claude in vibe.yaml.\n.claude/settings.local.json\n" {
 				t.Errorf(".gitignore section = %+v", r)
+			}
+			continue
+		}
+		if r.Path == ClaudeMDPath {
+			// The import of AGENTS.md, with or without a workflow (spec 0042).
+			if r.Ownership != resource.ManagedSection || r.SectionID != ImportSectionID || r.Placement != resource.Top {
+				t.Errorf("CLAUDE.md section = %+v", r)
 			}
 			continue
 		}
