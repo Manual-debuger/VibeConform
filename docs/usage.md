@@ -579,8 +579,10 @@ Deliberately **not** managed, and left for you to maintain by hand:
 - `AGENTS.md` and `CLAUDE.md` — prose written by a human for a specific
   repository. Generating them whole would produce exactly the fabricated,
   ignored-by-everyone instruction file this project argues against. Both
-  stay yours, except for the one short section each that a selected
-  [development workflow](#development-workflow) adds (ADR 0015).
+  stay yours, except for two short sections: the `AGENTS.md` section
+  that a selected [development workflow](#development-workflow) adds
+  (ADR 0015), and the `CLAUDE.md` import of `AGENTS.md` that comes with
+  `claude` (ADR 0023).
 - `.claude/settings.local.json` — user-local, possibly
   machine-specific. Never written. With `claude` selected, a managed
   `claude` section of `.gitignore` ignores it (spec 0039).
@@ -897,8 +899,10 @@ order Go, Node, Python (`guard.go`, `guard.mjs`, or `guard.py`).
 and its profile, links to the root `AGENTS.md` (whose workflow and rules
 apply unchanged), and names the component's verification tasks. With
 `claude` selected, each component's `CLAUDE.md` also gets the `@AGENTS.md`
-import, so Claude Code reads that section when it works there. The rest
-of both files is yours. Deselecting the workflow removes the sections.
+import, so Claude Code reads that section when it works there. Without a
+workflow, components get neither section. The root `CLAUDE.md` import
+comes with `claude` alone (spec 0042). The rest of both files is yours.
+Deselecting the workflow removes the component sections.
 Removing a component leaves them, like its other generated files. (The
 one exception is a [`generated:`](#generated-code-generated) section in
 the component's `.prettierignore`, which goes with its declaration.)
@@ -1546,19 +1550,40 @@ reported as a conflict, as in "Deselecting" above.
 
 ## Development workflow
 
-Two opt-in settings, the same for every standard, that give people and
-agents one agreed way to work here (spec 0030, ADR 0015):
+**VibeConform is workflow-neutral unless you select a workflow** (spec
+0042, ADR 0023). It sets up the environment around your agents: tooling,
+hooks, CI and harness integration. How you plan and approve work is
+yours to choose, for example with your own TDD, spec or ticketing
+skills. The recommended configuration leaves `development.workflow`
+out:
 
 ```yaml
 standard: prod-go
 version: v1
 development:
+  docs_layout: standard   # optional, and independent of workflow
+```
+
+`docs_layout` works without a workflow. Without one, though, nothing in
+`AGENTS.md` points agents at the layout. That is a known gap, for
+follow-up.
+
+**The bundled workflow (optional).** For a repository that wants
+VibeConform to state a way of working, `workflow` selects a bundled,
+lightweight spec-driven workflow (spec 0030, ADR 0015). It stays
+supported for repositories that choose it:
+
+```yaml
+development:
   workflow: plan-triggered-sdd   # direct | plan-triggered-sdd | always-sdd
   docs_layout: standard
 ```
 
-Leaving `development:` out selects neither. `workflow` takes one value,
-so the three modes can't be combined:
+Leaving `development:` out selects neither. Every value of `workflow`,
+`direct` included, is a workflow that VibeConform manages: it writes the
+`AGENTS.md` section and, with `claude`, a `spec` skill. `direct` is not
+the neutral setting; leaving `workflow` out is. `workflow` takes one
+value, so the three modes can't be combined:
 
 | `workflow` | Normal work | In a planning context |
 |---|---|---|
@@ -1593,13 +1618,17 @@ above it for your own rules. As with `.gitattributes`:
 - If there is no `AGENTS.md`, it is created with the section alone.
 - Editing inside the markers is drift.
 
-**Claude Code.** Claude Code reads `CLAUDE.md`, not `AGENTS.md`. With
-`claude` selected, a workflow also adds:
+**Claude Code.** Claude Code reads `CLAUDE.md`, not `AGENTS.md`. So
+whenever `claude` is selected, with or without a workflow, `CLAUDE.md`
+gets the `agents` section at its top. The section holds `@AGENTS.md`,
+Claude Code's documented import (spec 0042). If your `CLAUDE.md` already
+imports `AGENTS.md` outside the section, `sync` warns, and you can
+delete your line. Without an `AGENTS.md`, the import loads nothing.
 
-- the `agents` section at the top of `CLAUDE.md`, holding `@AGENTS.md`,
-  Claude Code's documented import. If your `CLAUDE.md` already imports
-  `AGENTS.md` outside the section, `sync` warns and you can delete your
-  line.
+A selected harness never implies a workflow. With `claude` selected, a
+workflow also adds:
+
+- the same import in each component's `CLAUDE.md` (prod-mono);
 - `.claude/skills/spec/SKILL.md`, a project skill named `spec`, which is
   also the slash command `/spec <feature>` (spec 0031). It reads the
   relevant docs, lists constraints and unverified assumptions, writes or
@@ -1609,7 +1638,9 @@ above it for your own rules. As with `.gitattributes`:
   tells it to. Under `direct` it is yours alone to invoke
   (`disable-model-invocation: true`).
 
-Codex reads `AGENTS.md` directly and gets no skill.
+Codex reads `AGENTS.md` directly and gets no `spec` skill. Plan-mode
+SDD exists only under the two SDD workflows. No harness adapter routes
+its planning mode into it on its own.
 
 Before spec 0031 this was a command, `.claude/commands/spec.md`. Once
 the skill replaces it, `sync` removes a recorded copy that you have not
@@ -1671,9 +1702,12 @@ and the specs section goes in `<specs_dir>/README.md`. Changing
 `specs_dir` later moves that section: the copy at the old path is
 removed if you have not changed it, and kept as a conflict if you have.
 
-**Deselecting.** Removing `workflow` removes the `AGENTS.md` section,
-`/spec` and the `CLAUDE.md` section. Deselecting `claude` removes the
-last two. Removing `docs_layout` removes its two sections. Your text
+**Deselecting.** This is how to move to the workflow-neutral setting:
+remove `workflow` and run `vibe sync`. That removes the `AGENTS.md`
+section, `/spec`, and the component `CLAUDE.md` sections. The root
+`CLAUDE.md` import stays while `claude` is selected. Deselecting
+`claude` removes `/spec` and every `CLAUDE.md` section. Removing
+`docs_layout` removes its two sections. Your text
 stays. A file VibeConform created is deleted once nothing else is in it,
 and a modified section is kept and reported as a conflict.
 
@@ -2166,8 +2200,10 @@ rather than putting `bin/` on `PATH`.
 Still hand-maintained here, by the non-goals above:
 `.github/workflows/release.yml`, `.goreleaser.yaml`, `.gitignore`,
 `Taskfile.local.yml`. This repository selects the line-ending policy, so
-its `.gitattributes` is the managed section alone. It also selects
-`workflow: always-sdd` and the docs layout: `AGENTS.md` and
+its `.gitattributes` is the managed section alone. It also opts into the
+bundled workflow with `workflow: plan-triggered-sdd`, and into the docs
+layout. That is a choice for this repository, not the recommended
+default: `AGENTS.md` and
 `docs/README.md` are its own prose plus one managed section each, and
 `CLAUDE.md` is the managed import alone.
 
@@ -2301,8 +2337,9 @@ Everything else `vibe sync` wrote — `.golangci.yml`, `eslint`/`prettier`/
 and its `CI / gate`, and any editor or agent configuration you selected —
 is ordinary project configuration at that point, no different from having
 written it by hand. That includes the line-ending policy's section of
-`.gitattributes`, and the development workflow's sections of `AGENTS.md`,
-`CLAUDE.md`, `docs/README.md` and `docs/specs/README.md`. Git and the
+`.gitattributes`, the `CLAUDE.md` import, and the development
+workflow's and docs layout's sections of `AGENTS.md`, `docs/README.md`
+and `docs/specs/README.md`. Git and the
 agents read them with or without VibeConform, and the markers are plain
 comments (HTML comments in Markdown, invisible when rendered) that you
 can delete or keep. The `spec` skill stays an ordinary Claude Code

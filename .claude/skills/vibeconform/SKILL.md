@@ -74,8 +74,11 @@ Every standard accepts these keys:
   intelligence, off by default). A category that is not given takes
   its defaults. `[]` means none.
 - `policy: {line_endings: lf}`: a managed section of `.gitattributes`.
-- `development:` with `workflow` (`direct`, `plan-triggered-sdd` or
-  `always-sdd`) and `docs_layout: standard`.
+- `development:` with `docs_layout: standard` and `workflow`
+  (`direct`, `plan-triggered-sdd` or `always-sdd`). Without
+  `workflow`, VibeConform chooses no development process, and that is
+  the recommended setting. Each value, `direct` too, is a workflow
+  that VibeConform manages.
 
 VibeConform decodes the file strictly: an unknown key is an error.
 

@@ -1,10 +1,10 @@
 schema: 4
-vibe_version: v0.7.0-alpha.1.0.20261005035104-d29bb5b951cb
+vibe_version: v0.8.0-alpha.1.0.20261007062430-464394a65b0a
 standard: prod-py/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
       ownership: generated
-      sha256: 8212dea9aea16c64006f17b6e882313a49e7545dd797728911ef4725e865b824
+      sha256: a9ef79b8405e86647f519f91cc3d33b0bc4b946e3759bfee87d8afee3f9c3f64
     - path: .claude/hooks/block-dangerous.sh
       ownership: generated
       sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
@@ -23,12 +23,9 @@ resources:
     - path: .claude/skills/graphify/SKILL.md
       ownership: generated
       sha256: 2dbed3fca2a9ef209260c582d575faa11a225178b11ad56b2e8941b10d2d8cac
-    - path: .claude/skills/spec/SKILL.md
-      ownership: generated
-      sha256: 6e73fcab0e36e89b871f8980dd119fb986b6d582d6ae38e33063e6d179256ba9
     - path: .claude/skills/vibeconform/SKILL.md
       ownership: generated
-      sha256: 8212dea9aea16c64006f17b6e882313a49e7545dd797728911ef4725e865b824
+      sha256: a9ef79b8405e86647f519f91cc3d33b0bc4b946e3759bfee87d8afee3f9c3f64
     - path: .codex/config.toml
       ownership: generated
       sha256: 886d348f8109660e2e05069f7caba033d3035cbb25f1db58b4b80ae9f188c931
@@ -57,11 +54,6 @@ resources:
       ownership: managed-section
       created: true
       sha256: 6452cf8f4946f427655646518393d70a331a9dafa55ddfc19d1479ae8acd236d
-    - path: AGENTS.md
-      section_id: workflow
-      ownership: managed-section
-      created: true
-      sha256: 42acd3b576cffebe397623b16698be434c929970ccd66adb1fa0464c57f37234
     - path: CLAUDE.md
       section_id: agents
       ownership: managed-section

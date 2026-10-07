@@ -12,9 +12,9 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
-// The Claude Code adapter of spec 0030 §5, as revised by spec 0031: the
-// spec skill, which is also /spec, and the import that makes Claude Code
-// read AGENTS.md at all.
+// The Claude Code adapter of spec 0030 §5, as revised by specs 0031 and
+// 0042: the spec skill, which is also /spec, with a workflow, and the
+// import that makes Claude Code read AGENTS.md at all, without one too.
 const (
 	// SpecSkillPath is the project skill spec, invocable as /spec.
 	SpecSkillPath = ".claude/skills/spec/SKILL.md"
@@ -87,12 +87,14 @@ func SpecSkill(mode string) string {
 	return skillModelInvoked + skillBody
 }
 
-// workflowResources returns the adapter's resources when vibe.yaml selects
-// a development workflow, and none otherwise. Every workflow gets /spec:
-// under direct it is how one asks for a spec.
+// workflowResources returns the adapter's resources: the root CLAUDE.md
+// import always, since it is how Claude Code reads AGENTS.md at all (spec
+// 0042 §4), and the rest only when vibe.yaml selects a development
+// workflow. Every workflow gets /spec: under direct it is how one asks for
+// a spec.
 func workflowResources(mctx *module.Context) []resource.Resource {
 	if mctx == nil || mctx.Policies[manifest.DevelopmentWorkflow] == "" {
-		return nil
+		return []resource.Resource{importSection(ClaudeMDPath)}
 	}
 	rs := []resource.Resource{
 		{

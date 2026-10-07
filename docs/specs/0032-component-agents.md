@@ -2,7 +2,9 @@
 
 Status: accepted and implemented. Tracks issue #49 ("Component-level
 AGENTS.md"). Builds on spec 0025 (`prod-mono`), spec 0030 (the workflow
-section) and spec 0031 (the spec skill).
+section) and spec 0031 (the spec skill). Component imports stay tied to
+a workflow after spec 0042, which moved only the root `CLAUDE.md`
+import to the `claude` integration.
 
 ## Problem
 

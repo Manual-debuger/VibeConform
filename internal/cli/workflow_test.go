@@ -186,7 +186,9 @@ func TestWorkflowClaudeAdapter(t *testing.T) {
 	}
 	mustConform(t, dir)
 
-	// Selecting claude again, then dropping the workflow, removes all three.
+	// Selecting claude again, then dropping the workflow, removes the
+	// workflow's files. CLAUDE.md's import is the harness's and stays while
+	// claude is selected (spec 0042 §4).
 	writeVibeYAML(t, dir, goWorkflow(workflow.PlanTriggered))
 	mustSync(t, dir)
 	writeVibeYAML(t, dir, goDefaults)
@@ -194,16 +196,50 @@ func TestWorkflowClaudeAdapter(t *testing.T) {
 	for _, want := range []string{
 		"AGENTS.md (section workflow): removed",
 		".claude/skills/spec/SKILL.md: removed (development.workflow deselected)",
-		"CLAUDE.md (section agents): removed",
+		"CLAUDE.md (section agents): unchanged",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("sync: missing %q\n%s", want, out)
 		}
 	}
-	for _, p := range []string{"AGENTS.md", "CLAUDE.md", ".claude/skills/spec/SKILL.md"} {
+	for _, p := range []string{"AGENTS.md", ".claude/skills/spec/SKILL.md"} {
 		if exists(t, dir, p) {
 			t.Errorf("%s survived deselection", p)
 		}
+	}
+	if !exists(t, dir, "CLAUDE.md") {
+		t.Error("CLAUDE.md went with the workflow, though claude is still selected")
+	}
+	mustConform(t, dir)
+}
+
+// TestClaudeWithoutWorkflow: selecting claude implies no workflow. CLAUDE.md
+// imports AGENTS.md, and there is no spec skill and no AGENTS.md section
+// (spec 0042 §4, §5).
+func TestClaudeWithoutWorkflow(t *testing.T) {
+	dir := t.TempDir()
+	writeVibeYAML(t, dir, goDefaults)
+	out := mustSync(t, dir)
+	if !strings.Contains(out, "CLAUDE.md (section agents): created") {
+		t.Errorf("sync:\n%s", out)
+	}
+	if got := readFile(t, dir, "CLAUDE.md"); got != "<!-- vibeconform:begin agents -->\n\n@AGENTS.md\n\n<!-- vibeconform:end agents -->\n" {
+		t.Errorf("CLAUDE.md = %q", got)
+	}
+	for _, p := range []string{"AGENTS.md", ".claude/skills/spec/SKILL.md"} {
+		if exists(t, dir, p) {
+			t.Errorf("sync wrote %s without a workflow", p)
+		}
+	}
+	mustConform(t, dir)
+
+	// Deselecting claude takes the import with it.
+	writeVibeYAML(t, dir, goDefaults+"integrations:\n  agents: [codex]\n")
+	if out := mustSync(t, dir); !strings.Contains(out, "CLAUDE.md (section agents): removed, and the file (claude deselected; nothing else was in it)") {
+		t.Errorf("sync:\n%s", out)
+	}
+	if exists(t, dir, "CLAUDE.md") {
+		t.Error("CLAUDE.md survived deselecting claude")
 	}
 	mustConform(t, dir)
 }

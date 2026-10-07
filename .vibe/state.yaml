@@ -1,10 +1,10 @@
 schema: 4
-vibe_version: v0.7.0-alpha.1.0.20261005035104-d29bb5b951cb
+vibe_version: v0.8.0-alpha.1.0.20261007062430-464394a65b0a
 standard: prod-go/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
       ownership: generated
-      sha256: 49288b56d86c5ea39a8dc2c1fd12e2dac657fdee4a1a18cd11a400b05e2fccc0
+      sha256: 2cd16e2aa7faaf83aaa75251779b8ab8500735981de17fb49f3303910e5ad73a
     - path: .claude/hooks/block-dangerous.sh
       ownership: generated
       sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
@@ -25,7 +25,7 @@ resources:
       sha256: 6e73fcab0e36e89b871f8980dd119fb986b6d582d6ae38e33063e6d179256ba9
     - path: .claude/skills/vibeconform/SKILL.md
       ownership: generated
-      sha256: 49288b56d86c5ea39a8dc2c1fd12e2dac657fdee4a1a18cd11a400b05e2fccc0
+      sha256: 2cd16e2aa7faaf83aaa75251779b8ab8500735981de17fb49f3303910e5ad73a
     - path: .codex/config.toml
       ownership: generated
       sha256: 886d348f8109660e2e05069f7caba033d3035cbb25f1db58b4b80ae9f188c931
@@ -58,7 +58,7 @@ resources:
     - path: AGENTS.md
       section_id: workflow
       ownership: managed-section
-      sha256: c85d4731786d6008e68d608712c4d751b99930ba32aea492a67b505123fabb53
+      sha256: 803738cd02d076813cf8a469bf0f00890efb24679995d93726ffd817c6a6c21d
     - path: CLAUDE.md
       section_id: agents
       ownership: managed-section

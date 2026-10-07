@@ -69,9 +69,11 @@ to a group, which is one of two kinds:
 - **An integration category**, selected as a list under `integrations:`.
 - **A single-valued key**, selected as one value under its own map:
   `policy:` for a repository policy (`policy: {line_endings: lf}`),
-  since spec 0030 `development:` for how the repository is worked on
-  (`development: {workflow: always-sdd, docs_layout: standard}`), and
-  since spec 0038 `ci:` for the CI system (`ci: {provider: gitlab}`).
+  since spec 0030 `development:` for the docs layout and an optional
+  bundled workflow (`development: {docs_layout: standard}`; leaving
+  `workflow` out is the recommended, workflow-neutral setting, spec
+  0042), and since spec 0038 `ci:` for the CI system
+  (`ci: {provider: gitlab}`).
 
 Both are opt-in, with one exception: `ci.provider` defaults to `github`,
 so an absent `ci:` generates what `prod-mono` always generated. Only
@@ -295,7 +297,7 @@ internal/
     pyrepotooling/          # Taskfile.yml, lefthook.yml, Python guard (prod-py)
     monorepotooling/        # root + per-component Taskfiles, lefthook.yml, guard (prod-mono)
     monotooling/            # each component's language config, re-rooted (prod-mono)
-    agents/claude/          # Claude Code settings + guard policy (policy.json), /spec with a workflow; the claude integration
+    agents/claude/          # Claude Code settings + guard policy (policy.json), CLAUDE.md import, /spec with a workflow; the claude integration
     agents/codex/           # Codex config; hooks suspended (spec 0024); the codex integration
     editors/vscode/         # owned entries in .vscode/tasks.json, extensions.json (spec 0026)
     editors/zed/            # owned entries in .zed/tasks.json (spec 0026)

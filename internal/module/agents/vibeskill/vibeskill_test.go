@@ -87,8 +87,11 @@ const (
 		"  intelligence, off by default). A category that is not given takes\n" +
 		"  its defaults. `[]` means none.\n" +
 		"- `policy: {line_endings: lf}`: a managed section of `.gitattributes`.\n" +
-		"- `development:` with `workflow` (`direct`, `plan-triggered-sdd` or\n" +
-		"  `always-sdd`) and `docs_layout: standard`.\n" +
+		"- `development:` with `docs_layout: standard` and `workflow`\n" +
+		"  (`direct`, `plan-triggered-sdd` or `always-sdd`). Without\n" +
+		"  `workflow`, VibeConform chooses no development process, and that is\n" +
+		"  the recommended setting. Each value, `direct` too, is a workflow\n" +
+		"  that VibeConform manages.\n" +
 		"\n" +
 		"VibeConform decodes the file strictly: an unknown key is an error.\n" +
 		"\n"
