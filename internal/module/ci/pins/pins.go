@@ -22,8 +22,13 @@ type Table struct {
 	// archive at version Task. Change both together.
 	TaskSHA256   string
 	GolangciLint string
-	Node         string
-	Python       string
+	// Goimports is a golang.org/x/tools version, the module goimports is
+	// installed from.
+	Goimports   string
+	Govulncheck string
+	Actionlint  string
+	Node        string
+	Python      string
 }
 
 // Current is the table the generated CI uses. Modules read it when they
@@ -33,6 +38,9 @@ var Current = Table{
 	Task:         "v3.53.1",
 	TaskSHA256:   "a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7",
 	GolangciLint: "v2.13.2",
+	Goimports:    "v0.51.0",
+	Govulncheck:  "v1.8.0",
+	Actionlint:   "v1.7.12",
 	Node:         "22",
 	Python:       "3.12",
 }

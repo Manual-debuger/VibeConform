@@ -32,7 +32,7 @@ func fields(t pins.Table) map[string]string {
 
 // TestTemplatesHoldNoPins: no CI or conformance template names a pinned
 // version itself, so the table is the only place a bump has to happen
-// (spec 0044 §1). A value counts as named when it appears quoted, after @
+// (spec 0044 §1), and none installs a tool @latest (§2). A value counts as named when it appears quoted, after @
 // (go install), or after : (an image tag).
 func TestTemplatesHoldNoPins(t *testing.T) {
 	sources, err := filepath.Glob(filepath.Join("..", "*", "templates", "*"))
@@ -51,6 +51,11 @@ func TestTemplatesHoldNoPins(t *testing.T) {
 		content, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
+		}
+		// Spec 0044 §2: a floating tool can change CI's verdict with no
+		// change to the repository.
+		if bytes.Contains(content, []byte("@latest")) {
+			t.Errorf("%s installs a tool @latest; pin it in the table", path)
 		}
 		for name, value := range fields(pins.Current) {
 			for _, literal := range []string{`"` + value + `"`, "@" + value, ":" + value} {
@@ -111,6 +116,11 @@ func TestRenderedPins(t *testing.T) {
 	want := renderAll(t)
 	if len(want) != 7 {
 		t.Fatalf("rendered %d CI files, want 7: %v", len(want), keys(want))
+	}
+	for file, content := range want {
+		if bytes.Contains(content, []byte("@latest")) {
+			t.Errorf("%s installs a tool @latest", file)
+		}
 	}
 
 	sentinels := pins.Table{}
