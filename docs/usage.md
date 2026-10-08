@@ -940,6 +940,18 @@ CI stays part of the standard; only the system that carries it varies.
 are generated under every provider. They are what any CI system calls.
 Under `none`, your own CI must run `task verify-ci` and `task audit`.
 
+**Pinned tools.** Every tool the generated CI installs is pinned:
+- Go, Task, golangci-lint, goimports, govulncheck, actionlint, Node and
+  Python, in GitHub and GitLab files alike
+- no tool is installed `@latest`
+
+So two runs of one commit install the same tools and reach the same
+verdict. The pins sit in generated files, so you cannot bump them
+yourself: a bump comes with a VibeConform release and your next
+`vibe sync` (spec 0044). A pinned `govulncheck` still reads the live
+vulnerability database, so vulnerabilities published later are still
+reported.
+
 **What `.gitlab-ci.yml` contains.**
 
 - One job per component, named by its `id`, in its toolchain's image:
@@ -950,8 +962,8 @@ Under `none`, your own CI must run `task verify-ci` and `task audit`.
   directory, and runs `task <id>:verify`. Go jobs also run
   `task <id>:test:race`.
 - In the Node and uv images, Task comes from its release archive,
-  checked against `TASK_SHA256`. Bumping `TASK_VERSION` means bumping
-  both.
+  checked against `TASK_SHA256`, which is pinned together with
+  `TASK_VERSION`.
 - Caches live under `.ci-cache/<id>/` at the repository root, which is
   never a component.
 - Go jobs set `GOFLAGS: -count=1`, so a restored `GOCACHE` cannot make

@@ -11,17 +11,22 @@ import (
 	"fmt"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/pins"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
-//go:embed templates/conformance.yml
-var conformanceWorkflow []byte
+var (
+	//go:embed templates/conformance.yml.tmpl
+	conformanceSrc string
+	//go:embed templates/gitlab-ci.vibe.yml.tmpl
+	gitlabConformanceSrc string
+
+	conformanceTemplate       = pins.Parse("conformance.yml", conformanceSrc)
+	gitlabConformanceTemplate = pins.Parse(".gitlab-ci.vibe.yml", gitlabConformanceSrc)
+)
 
 //go:embed templates/Taskfile.vibe.yml
 var vibeTaskfile []byte
-
-//go:embed templates/gitlab-ci.vibe.yml
-var gitlabConformance []byte
 
 // GitLabPath is the GitLab conformance job's file (spec 0038 §4).
 const GitLabPath = ".gitlab-ci.vibe.yml"
@@ -51,21 +56,30 @@ func (conformanceModule) Name() string {
 // The conformance job follows ci.provider (spec 0038): the GitHub workflow,
 // the GitLab include, or none. Taskfile.vibe.yml is always resolved, since
 // task audit is what any CI system calls, and its header names the file
-// deleted with it. Under github every byte is the template's.
+// deleted with it. Under github every byte is the template's, with the
+// pins from internal/module/ci/pins filled in.
 func (conformanceModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
 	taskfile := vibeTaskfile
 	var rs []resource.Resource
 	switch provider := module.CIProvider(mctx); provider {
 	case module.CIGitHub:
+		workflow, err := pins.RenderCurrent(conformanceTemplate)
+		if err != nil {
+			return nil, err
+		}
 		rs = append(rs, resource.Resource{
 			Path:      ".github/workflows/conformance.yml",
 			Ownership: resource.Generated,
-			Content:   conformanceWorkflow,
+			Content:   workflow,
 		})
 	case module.CIGitLab, module.CINone:
 		line := "# vibe.yaml and .vibe/ — removes\n"
 		if provider == module.CIGitLab {
-			rs = append(rs, resource.Resource{Path: GitLabPath, Ownership: resource.Generated, Content: gitlabConformance})
+			job, err := pins.RenderCurrent(gitlabConformanceTemplate)
+			if err != nil {
+				return nil, err
+			}
+			rs = append(rs, resource.Resource{Path: GitLabPath, Ownership: resource.Generated, Content: job})
 			line = "# " + GitLabPath + ", vibe.yaml, and .vibe/ — removes\n"
 		}
 		var err error

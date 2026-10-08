@@ -23,8 +23,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.27.0"
-  TASK_VERSION: "v3.53.1"
+  GO_VERSION: "[[.Pins.Go]]"
+  TASK_VERSION: "[[.Pins.Task]]"
 
 jobs:
   audit:

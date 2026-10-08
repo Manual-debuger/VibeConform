@@ -54,28 +54,16 @@ include:
 variables:
   # Each component job's cache policy. A project CI/CD variable overrides it.
   VIBE_CACHE_POLICY: "pull-push"
-[[- if .HasGo]]
-  GO_VERSION: "[[$.Pins.Go]]"
-[[- end]]
-  TASK_VERSION: "[[$.Pins.Task]]"
-[[- if .NeedsTaskArchive]]
+  GO_VERSION: "1.27.0"
+  TASK_VERSION: "v3.53.1"
   # The task_linux_amd64.tar.gz checksum of TASK_VERSION's release. Change
   # both together.
-  TASK_SHA256: "[[$.Pins.TaskSHA256]]"
-[[- end]]
-[[- if .HasGo]]
-  GOLANGCI_LINT_VERSION: "[[$.Pins.GolangciLint]]"
-[[- end]]
-[[- if .HasTS]]
-  NODE_VERSION: "[[$.Pins.Node]]"
-[[- end]]
-[[- if .HasPy]]
-  PYTHON_VERSION: "[[$.Pins.Python]]"
-[[- end]]
-[[- range .Components]]
-[[- if eq .Profile "go"]]
+  TASK_SHA256: "a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7"
+  GOLANGCI_LINT_VERSION: "v2.13.2"
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
 
-[[.ID]]:
+api:
   stage: test
   image: golang:${GO_VERSION}
   needs: []
@@ -84,30 +72,29 @@ variables:
   allow_failure: false
   interruptible: true
   variables:
-    GOMODCACHE: $CI_PROJECT_DIR/.ci-cache/[[.ID]]/mod
-    GOCACHE: $CI_PROJECT_DIR/.ci-cache/[[.ID]]/build
+    GOMODCACHE: $CI_PROJECT_DIR/.ci-cache/api/mod
+    GOCACHE: $CI_PROJECT_DIR/.ci-cache/api/build
     # GOCACHE also holds test results: run the tests rather than replay a
     # cached pass. Commands other than go test ignore the flag.
     GOFLAGS: "-count=1"
   cache:
     key:
-      prefix: [[.ID]]
+      prefix: api
       files:
-        - [[.Path]]/go.mod
+        - services/api/go.mod
     paths:
-      - .ci-cache/[[.ID]]/
+      - .ci-cache/api/
     policy: $VIBE_CACHE_POLICY
   before_script: []
   script:
     - go install github.com/go-task/task/v3/cmd/task@${TASK_VERSION}
-    - go install golang.org/x/tools/cmd/goimports@[[$.Pins.Goimports]]
+    - go install golang.org/x/tools/cmd/goimports@v0.51.0
     - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
-    - go install golang.org/x/vuln/cmd/govulncheck@[[$.Pins.Govulncheck]]
-    - task [[.ID]]:verify
-    - task [[.ID]]:test:race
-[[- else if eq .Profile "ts"]]
+    - go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+    - task api:verify
+    - task api:test:race
 
-[[.ID]]:
+web:
   stage: test
   image: node:${NODE_VERSION}
   needs: []
@@ -119,11 +106,11 @@ variables:
     COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
   cache:
     key:
-      prefix: [[.ID]]
+      prefix: web
       files:
-        - [[.Path]]/pnpm-lock.yaml
+        - apps/web/pnpm-lock.yaml
     paths:
-      - .ci-cache/[[.ID]]/
+      - .ci-cache/web/
     policy: $VIBE_CACHE_POLICY
   before_script: []
   script:
@@ -133,11 +120,10 @@ variables:
     # pnpm's version comes from the component's package.json
     # packageManager field (docs/specs/0020-prod-ts-pnpm.md).
     - corepack enable
-    - (cd [[.Path]] && pnpm config set store-dir "$CI_PROJECT_DIR/.ci-cache/[[.ID]]/pnpm-store" && pnpm install --frozen-lockfile)
-    - task [[.ID]]:verify
-[[- else if eq .Profile "py"]]
+    - (cd apps/web && pnpm config set store-dir "$CI_PROJECT_DIR/.ci-cache/web/pnpm-store" && pnpm install --frozen-lockfile)
+    - task web:verify
 
-[[.ID]]:
+worker:
   stage: test
   # Not -slim: pyright's bundled Node needs libatomic, which the slim
   # image lacks.
@@ -148,24 +134,22 @@ variables:
   allow_failure: false
   interruptible: true
   variables:
-    UV_CACHE_DIR: $CI_PROJECT_DIR/.ci-cache/[[.ID]]/uv
+    UV_CACHE_DIR: $CI_PROJECT_DIR/.ci-cache/worker/uv
   cache:
     key:
-      prefix: [[.ID]]
+      prefix: worker
       files:
-        - [[.Path]]/uv.lock
+        - services/worker/uv.lock
     paths:
-      - .ci-cache/[[.ID]]/
+      - .ci-cache/worker/
     policy: $VIBE_CACHE_POLICY
   before_script: []
   script:
     - curl -fsSL -o /tmp/task.tar.gz "https://github.com/go-task/task/releases/download/${TASK_VERSION}/task_linux_amd64.tar.gz"
     - echo "${TASK_SHA256}  /tmp/task.tar.gz" | sha256sum -c -
     - tar -xzf /tmp/task.tar.gz -C /usr/local/bin task
-    - (cd [[.Path]] && uv sync)
-    - task [[.ID]]:verify
-[[- end]]
-[[- end]]
+    - (cd services/worker && uv sync)
+    - task worker:verify
 
 # The project's own jobs, from .gitlab-ci.local.yml, as a child pipeline.
 # mirror makes this job's status the child pipeline's, so a failing
