@@ -184,5 +184,5 @@ release no longer reaches their CI until a VibeConform release.
   output: PASS. A copy with `interuptible` fails: PASS.
 - the three new pins build with Go 1.27.0: PASS
 - CI on the PR (`CI`, `Conformance / audit`, `examples` with the
-  `monorepo-gitlab` schema step): UNVERIFIED until the PR runs
+  `monorepo-gitlab` schema step): PASS on PR #76
 - real GitLab run: UNVERIFIED, issue #74

@@ -1,7 +1,7 @@
 # Spec 0044: One Pin Table for Generated CI, and a GitLab Schema Check
 
-Status: accepted and implemented (2026-10-08); CI on the pull request
-and a real GitLab run (issue #74) outstanding. Implementation plan:
+Status: accepted and implemented (2026-10-08); CI green on PR #76,
+real GitLab run UNVERIFIED (issue #74). Implementation plan:
 `docs/plans/0044-ci-pin-table.md`. Pinning
 `actionlint` together with `goimports` and `govulncheck` was confirmed
 with the user, along with bumping the tool pins whenever `GO_VERSION`
@@ -192,14 +192,14 @@ This test replaces `TestVersionsMatchGitHub`.
       that had `@latest`. A golden or diff test shows this.
 - [x] **Task checksum.** `TASK_SHA256` in the GitLab output comes from
       the table entry next to `TASK_VERSION`.
-- [ ] **Schema check runs.** The `monorepo-gitlab` job runs
+- [x] **Schema check runs.** The `monorepo-gitlab` job runs
       `check-jsonschema` at a pinned version with
       `--builtin-schema vendor.gitlab-ci --data-transform gitlab-ci` on
       `.gitlab-ci.yml` and `.gitlab-ci.vibe.yml`, and it is green.
 - [x] **Schema check fails when it should.** Checked once by hand and
       recorded in the PR: a copy with a misspelled keyword fails the
       step.
-- [ ] **Repository checks.** This repository and `examples/` are
+- [x] **Repository checks.** This repository and `examples/` are
       conformant after the sync. `task verify` and `task audit` pass.
       CI (`CI`, `Conformance / audit`, `examples`) is green on the PR.
 - [ ] **Real integration.** UNVERIFIED by design, tracked in #74.
