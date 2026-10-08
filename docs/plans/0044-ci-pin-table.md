@@ -1,7 +1,17 @@
 # Plan 0044: One pin table for generated CI, and a GitLab schema check
 
 Implements `docs/specs/0044-ci-pin-table.md`.
-Status: draft, awaiting approval.
+Status: approved 2026-10-08 and implemented. Deviations from the
+plan:
+- **Test data.** Instead of rewriting the template tests, a
+  `rendered_test.go` per static module keeps their old variable names,
+  holding the rendered output.
+- **Mono templates use `$.Pins`.** The tool pins sit inside
+  `range .Components`, where `.` is the component, so the GitHub and
+  GitLab mono templates use `$.Pins`.
+- **Docs commit.** The spec, plan and glossary landed with the golden
+  commit, so commit 5 holds only `docs/usage.md` and the status
+  updates.
 
 Branch: `feat/0044-ci-pin-table`. One pull request.
 
@@ -160,14 +170,19 @@ The job already installs `uv` (`astral-sh/setup-uv`).
 one behaviour change: a newer goimports, govulncheck or actionlint
 release no longer reaches their CI until a VibeConform release.
 
-## Verification ledger (to fill in)
+## Verification ledger
 
-- `task verify:fast` while working; `task verify`
-- `task audit` (repository, after sync)
-- unit tests: `TestTemplatesHoldNoPins`, `TestRenderedPins`, GitLab
-  golden, live-file tests
-- negative schema check by hand (misspelled keyword fails), recorded in
-  the PR
-- CI on the PR: `CI`, `Conformance / audit`, `examples` (including
-  `monorepo-gitlab`'s schema step)
+- `task verify`: PASS (2026-10-08)
+- `task audit`: PASS for this repository and all three examples, run
+  with a vibe built from a clean worktree of `0492909`
+- unit tests: PASS. `TestTemplatesHoldNoPins` was also mutation-checked:
+  a literal `"1.27.0"` put back into a template made it fail.
+- GitLab golden diff: exactly the two `@latest` lines
+- synced CI diff: only the `@latest` lines (repository `ci.yml`,
+  `examples/monorepo` `ci.yml`). Python and TypeScript CI are unchanged.
+- schema check by hand, `check-jsonschema@0.38.2` on the new GitLab
+  output: PASS. A copy with `interuptible` fails: PASS.
+- the three new pins build with Go 1.27.0: PASS
+- CI on the PR (`CI`, `Conformance / audit`, `examples` with the
+  `monorepo-gitlab` schema step): UNVERIFIED until the PR runs
 - real GitLab run: UNVERIFIED, issue #74

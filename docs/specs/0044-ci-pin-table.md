@@ -1,6 +1,8 @@
 # Spec 0044: One Pin Table for Generated CI, and a GitLab Schema Check
 
-Status: accepted (2026-10-08); not yet implemented. Pinning
+Status: accepted and implemented (2026-10-08); CI on the pull request
+and a real GitLab run (issue #74) outstanding. Implementation plan:
+`docs/plans/0044-ci-pin-table.md`. Pinning
 `actionlint` together with `goimports` and `govulncheck` was confirmed
 with the user, along with bumping the tool pins whenever `GO_VERSION`
 is bumped. First of five specs that simplify the generated CI for
@@ -176,29 +178,29 @@ This test replaces `TestVersionsMatchGitHub`.
 
 ## Acceptance Criteria
 
-- [ ] **One source.** No template under `internal/module` (CI modules
+- [x] **One source.** No template under `internal/module` (CI modules
       and conformance) contains a version literal that the table
       defines, nor `@latest`. A test checks this on the template
       sources.
-- [ ] **Rendered agreement.** For each of `prod-go`, `prod-ts`,
+- [x] **Rendered agreement.** For each of `prod-go`, `prod-ts`,
       `prod-py`, `prod-mono`+`github` and `prod-mono`+`gitlab`, every
       generated CI and conformance file uses exactly the table's
       versions. Changing one table value in a test makes every file
       that uses it change.
-- [ ] **Shape unchanged.** For each case above, the generated CI files
+- [x] **Shape unchanged.** For each case above, the generated CI files
       differ from those generated at `main` (`5223f2b`) only in lines
       that had `@latest`. A golden or diff test shows this.
-- [ ] **Task checksum.** `TASK_SHA256` in the GitLab output comes from
+- [x] **Task checksum.** `TASK_SHA256` in the GitLab output comes from
       the table entry next to `TASK_VERSION`.
 - [ ] **Schema check runs.** The `monorepo-gitlab` job runs
       `check-jsonschema` at a pinned version with
       `--builtin-schema vendor.gitlab-ci --data-transform gitlab-ci` on
       `.gitlab-ci.yml` and `.gitlab-ci.vibe.yml`, and it is green.
-- [ ] **Schema check fails when it should.** Checked once by hand and
+- [x] **Schema check fails when it should.** Checked once by hand and
       recorded in the PR: a copy with a misspelled keyword fails the
       step.
 - [ ] **Repository checks.** This repository and `examples/` are
       conformant after the sync. `task verify` and `task audit` pass.
       CI (`CI`, `Conformance / audit`, `examples`) is green on the PR.
 - [ ] **Real integration.** UNVERIFIED by design, tracked in #74.
-- [ ] **Documentation.** §6 is written.
+- [x] **Documentation.** §6 is written.
