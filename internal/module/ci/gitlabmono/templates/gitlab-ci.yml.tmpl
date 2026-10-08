@@ -55,22 +55,22 @@ variables:
   # Each component job's cache policy. A project CI/CD variable overrides it.
   VIBE_CACHE_POLICY: "pull-push"
 [[- if .HasGo]]
-  GO_VERSION: "1.27.0"
+  GO_VERSION: "[[.Pins.Go]]"
 [[- end]]
-  TASK_VERSION: "v3.53.1"
+  TASK_VERSION: "[[.Pins.Task]]"
 [[- if .NeedsTaskArchive]]
   # The task_linux_amd64.tar.gz checksum of TASK_VERSION's release. Change
   # both together.
-  TASK_SHA256: "a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7"
+  TASK_SHA256: "[[.Pins.TaskSHA256]]"
 [[- end]]
 [[- if .HasGo]]
-  GOLANGCI_LINT_VERSION: "v2.13.2"
+  GOLANGCI_LINT_VERSION: "[[.Pins.GolangciLint]]"
 [[- end]]
 [[- if .HasTS]]
-  NODE_VERSION: "22"
+  NODE_VERSION: "[[.Pins.Node]]"
 [[- end]]
 [[- if .HasPy]]
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "[[.Pins.Python]]"
 [[- end]]
 [[- range .Components]]
 [[- if eq .Profile "go"]]

@@ -12,7 +12,6 @@ import (
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
-	"github.com/Manual-debuger/VibeConform/internal/module/ci/githubmono"
 	"github.com/Manual-debuger/VibeConform/internal/module/conformance"
 )
 
@@ -358,30 +357,5 @@ func TestPipelineOnlyNeededVersions(t *testing.T) {
 	}
 }
 
-// TestVersionsMatchGitHub keeps the GitLab pins equal to the GitHub
-// workflow's, so changing a provider never changes a toolchain.
-func TestVersionsMatchGitHub(t *testing.T) {
-	gl, _ := resolvePipeline(t, components)
-	rs, err := githubmono.New().Resolve(context.Background(), &module.Context{Components: components})
-	if err != nil {
-		t.Fatal(err)
-	}
-	gh := string(rs[0].Content)
-	pin := regexp.MustCompile(`(?m)^\s+(GO_VERSION|TASK_VERSION|GOLANGCI_LINT_VERSION|NODE_VERSION|PYTHON_VERSION): (".*")$`)
-	want := map[string]string{}
-	for _, m := range pin.FindAllStringSubmatch(gh, -1) {
-		want[m[1]] = m[2]
-	}
-	got := map[string]string{}
-	for _, m := range pin.FindAllStringSubmatch(gl, -1) {
-		got[m[1]] = m[2]
-	}
-	if len(want) != 5 || len(got) != 5 {
-		t.Fatalf("pins: github %v, gitlab %v", want, got)
-	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Errorf("%s: gitlab %s, github %s", k, got[k], v)
-		}
-	}
-}
+// Both providers' pins come from internal/module/ci/pins, whose tests check
+// them, so changing a provider never changes a toolchain (spec 0044).

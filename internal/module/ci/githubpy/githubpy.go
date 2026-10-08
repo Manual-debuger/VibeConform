@@ -10,11 +10,14 @@ import (
 	_ "embed"
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/pins"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
-//go:embed templates/ci.yml
-var ciWorkflow []byte
+//go:embed templates/ci.yml.tmpl
+var ciSrc string
+
+var ciTemplate = pins.Parse("ci.yml", ciSrc)
 
 //go:embed templates/dependabot.yml
 var dependabotConfig []byte
@@ -36,11 +39,15 @@ func (githubpyModule) Name() string {
 // Resolve returns this module's resources in a fixed order; see the
 // github-ci module for why order is part of the contract.
 func (githubpyModule) Resolve(_ context.Context, _ *module.Context) ([]resource.Resource, error) {
+	ci, err := pins.RenderCurrent(ciTemplate)
+	if err != nil {
+		return nil, err
+	}
 	return []resource.Resource{
 		{
 			Path:      ".github/workflows/ci.yml",
 			Ownership: resource.Generated,
-			Content:   ciWorkflow,
+			Content:   ci,
 		},
 		{
 			Path:      ".github/dependabot.yml",

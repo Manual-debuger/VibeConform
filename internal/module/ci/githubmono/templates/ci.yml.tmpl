@@ -21,20 +21,20 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.27.0"
-  TASK_VERSION: "v3.53.1"
+  GO_VERSION: "[[.Pins.Go]]"
+  TASK_VERSION: "[[.Pins.Task]]"
 [[- if .HasGo]]
-  GOLANGCI_LINT_VERSION: "v2.13.2"
+  GOLANGCI_LINT_VERSION: "[[.Pins.GolangciLint]]"
   # setup-go caches GOCACHE, which also holds test results: run the tests
   # rather than replay a cached pass. Commands other than go test ignore
   # the flag.
   GOFLAGS: "-count=1"
 [[- end]]
 [[- if .HasTS]]
-  NODE_VERSION: "22"
+  NODE_VERSION: "[[.Pins.Node]]"
 [[- end]]
 [[- if .HasPy]]
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "[[.Pins.Python]]"
 [[- end]]
 
 jobs:

@@ -14,22 +14,21 @@ import (
 	"io"
 	"slices"
 	"strings"
-	"text/template"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/github"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/pins"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
-// [[ ]] delimiters leave GitLab's own $VAR and ${VAR} untouched.
 var (
 	//go:embed templates/gitlab-ci.yml.tmpl
 	pipelineSrc string
 
-	pipeline = template.Must(template.New(".gitlab-ci.yml").Delims("[[", "]]").Parse(pipelineSrc))
+	pipeline = pins.Parse(".gitlab-ci.yml", pipelineSrc)
 )
 
 // The paths this module writes, and the ones it names but never writes.
@@ -84,12 +83,13 @@ func (gitlabmonoModule) Resolve(_ context.Context, mctx *module.Context) ([]reso
 		return slices.ContainsFunc(components, func(c manifest.Component) bool { return c.Profile == p })
 	}
 
-	var buf bytes.Buffer
-	err := pipeline.Execute(&buf, struct {
+	content, err := pins.Render(pipeline, struct {
+		Pins                pins.Table
 		Components          []manifest.Component
 		HasGo, HasTS, HasPy bool
 		NeedsTaskArchive    bool
 	}{
+		Pins:             pins.Current,
 		Components:       components,
 		HasGo:            has(manifest.ProfileGo),
 		HasTS:            has(manifest.ProfileTS),
@@ -97,7 +97,7 @@ func (gitlabmonoModule) Resolve(_ context.Context, mctx *module.Context) ([]reso
 		NeedsTaskArchive: has(manifest.ProfileTS) || has(manifest.ProfilePy),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("render %s: %w", PipelinePath, err)
+		return nil, err
 	}
 
 	mr, err := mergeRequestTemplate()
@@ -105,7 +105,7 @@ func (gitlabmonoModule) Resolve(_ context.Context, mctx *module.Context) ([]reso
 		return nil, err
 	}
 	return []resource.Resource{
-		{Path: PipelinePath, Ownership: resource.Generated, Content: buf.Bytes()},
+		{Path: PipelinePath, Ownership: resource.Generated, Content: content},
 		{Path: MergeRequestTemplatePath, Ownership: resource.Generated, Content: mr},
 	}, nil
 }

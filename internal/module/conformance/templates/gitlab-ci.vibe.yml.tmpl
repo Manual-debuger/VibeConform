@@ -10,14 +10,14 @@
 
 conformance:audit:
   stage: test
-  image: golang:1.27.0
+  image: golang:[[.Pins.Go]]
   needs: []
   rules:
     - when: on_success
   allow_failure: false
   interruptible: true
   variables:
-    TASK_VERSION: "v3.53.1"
+    TASK_VERSION: "[[.Pins.Task]]"
   before_script: []
   script:
     - go install github.com/go-task/task/v3/cmd/task@${TASK_VERSION}
