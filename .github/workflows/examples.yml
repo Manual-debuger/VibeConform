@@ -288,6 +288,12 @@ jobs:
             [ -f "$f" ] || { echo "$f was not created"; exit 1; }
           done
           echo "COPY=$copy" >> "$GITHUB_ENV"
+      # Spec 0044: GitLab's published schema catches a misspelled keyword or
+      # an invalid value. It does not resolve include, extends or rules, and
+      # it is no real run (issue #74). The checker version pins the schema.
+      - name: GitLab CI schema check
+        working-directory: ${{ env.COPY }}
+        run: uvx check-jsonschema@0.38.2 --builtin-schema vendor.gitlab-ci --data-transform gitlab-ci .gitlab-ci.yml .gitlab-ci.vibe.yml
       - name: Install dependencies
         run: |
           (cd "$COPY/apps/web" && pnpm install --frozen-lockfile)
