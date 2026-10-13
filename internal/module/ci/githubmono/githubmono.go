@@ -7,30 +7,28 @@
 package githubmono
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
-	"text/template"
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/module/ci/github"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/pins"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
-// [[ ]] delimiters leave GitHub Actions' own ${{ }} expressions untouched.
 var (
 	//go:embed templates/ci.yml.tmpl
 	ciSrc string
 	//go:embed templates/dependabot.yml.tmpl
 	dependabotSrc string
 
-	ciWorkflow = template.Must(template.New("ci.yml").Delims("[[", "]]").Parse(ciSrc))
-	dependabot = template.Must(template.New("dependabot.yml").Delims("[[", "]]").Parse(dependabotSrc))
+	ciWorkflow = pins.Parse("ci.yml", ciSrc)
+	dependabot = pins.Parse("dependabot.yml", dependabotSrc)
 )
 
 // ecosystems are the dependabot package ecosystems per profile, the same
@@ -76,11 +74,13 @@ func (githubmonoModule) Resolve(_ context.Context, mctx *module.Context) ([]reso
 	}
 	needs = append(needs, "workflows")
 
-	ci, err := render(ciWorkflow, struct {
+	ci, err := pins.Render(ciWorkflow, struct {
+		Pins                pins.Table
 		Components          []manifest.Component
 		Needs               string
 		HasGo, HasTS, HasPy bool
 	}{
+		Pins:       pins.Current,
 		Components: components,
 		Needs:      "[" + strings.Join(needs, ", ") + "]",
 		HasGo:      has(manifest.ProfileGo),
@@ -96,7 +96,7 @@ func (githubmonoModule) Resolve(_ context.Context, mctx *module.Context) ([]reso
 	for _, c := range components {
 		entries = append(entries, entry{Path: c.Path, Ecosystem: ecosystems[c.Profile]})
 	}
-	deps, err := render(dependabot, struct{ Components []entry }{entries})
+	deps, err := pins.Render(dependabot, struct{ Components []entry }{entries})
 	if err != nil {
 		return nil, err
 	}
@@ -126,12 +126,4 @@ func pullRequestTemplate() (resource.Resource, error) {
 		}
 	}
 	return resource.Resource{}, fmt.Errorf("github-ci resolves no %s", pullRequestTemplatePath)
-}
-
-func render(t *template.Template, data any) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
-		return nil, fmt.Errorf("render %s: %w", t.Name(), err)
-	}
-	return buf.Bytes(), nil
 }

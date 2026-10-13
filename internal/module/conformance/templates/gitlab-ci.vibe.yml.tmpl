@@ -1,0 +1,37 @@
+# VibeConform's own check on GitLab, and the only CI file that runs vibe.
+# .gitlab-ci.yml includes this file only when it exists, and no job there
+# depends on it. If this repository stops using VibeConform, delete this
+# file together with Taskfile.vibe.yml, vibe.yaml, and .vibe/; the include
+# then does nothing. See docs/specs/0022-conformance-isolation.md,
+# docs/specs/0038-ci-provider.md and docs/usage.md's "Removing VibeConform".
+#
+# A managed file edited directly instead of through its module template
+# fails here: vibe audit exits 2 for drift, 1 if it could not answer.
+
+conformance:audit:
+  stage: test
+  image: golang:[[.Pins.Go]]
+  needs: []
+  rules:
+    - when: on_success
+  allow_failure: false
+  interruptible: true
+  variables:
+    TASK_VERSION: "[[.Pins.Task]]"
+  before_script: []
+  script:
+    - go install github.com/go-task/task/v3/cmd/task@${TASK_VERSION}
+    # No vibe install step: task audit runs the vibe version recorded in
+    # .vibe/state.yaml when none is on PATH, so CI's verdict cannot change
+    # without a change to this repository (spec 0022).
+    #
+    # Self-hosting only: a repository that provides cmd/vibe audits with
+    # its own working tree's templates, not a published release (see
+    # docs/decisions/0008-self-hosting-probe-in-shipped-templates.md).
+    - |
+      if [ -d ./cmd/vibe ]; then
+        mkdir -p "$CI_PROJECT_DIR/.ci-cache/bin"
+        go build -o "$CI_PROJECT_DIR/.ci-cache/bin/vibe" ./cmd/vibe
+        export PATH="$CI_PROJECT_DIR/.ci-cache/bin:$PATH"
+      fi
+      task audit
