@@ -116,8 +116,9 @@ result does not depend on the TypeScript project service.
 - PASS: unit tests (`task verify`, Windows).
 - PASS: regression test, local (Windows). It was red against the old
   template and green after the fix.
-- UNVERIFIED: regression test in CI (`examples/typescript`, Linux and
-  Windows). Pending the PR.
+- PASS: regression test in CI, on PR #88. Both cases ran and passed in
+  `examples/typescript` (ubuntu-latest and windows-latest), not skipped.
+  All 25 checks were green.
 - PASS: `task audit` in this repository and both examples.
 - PASS: D6 by hand, ESLint 10.3.0 and 10.11.0.
 - PASS: real-worktree probe.
