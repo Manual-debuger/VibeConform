@@ -1,9 +1,23 @@
 # Spec 0045: The Generated ESLint Config Honors `.gitignore`
 
-Status: accepted (2026-10-14). Issue #87. Settled with the user on 2026-10-14, after #85
-was closed: keeping `.gitignore` up to date is the adopting repository's
-job, and the generated tools should honor it. Followed by the fixes for
-#82 and #84. One tag after all three are merged.
+Status: accepted and implemented (2026-10-14); CI pending. Issue #87.
+Implementation plan: `docs/plans/0045-eslint-honors-gitignore.md`.
+Settled with the user on 2026-10-14, after #85 was closed: keeping
+`.gitignore` up to date is the adopting repository's job, and the
+generated tools should honor it. Followed by the fixes for #82 and #84.
+One tag after all three are merged.
+
+Verified by hand on 2026-10-14, on Windows:
+- **D6.** In a scratch copy of `examples/typescript` with a file that has
+  a lint error under `.claude/worktrees/`, the synced config was run under
+  two ESLint versions:
+  - ESLint 10.3.0: the config loaded without error and linted 4 files,
+    the worktree file included. That is the behavior before this spec.
+  - ESLint 10.11.0: it linted 3 files, and the worktree file was not one
+    of them.
+- **Probe.** The spec's real-worktree probe in `examples/typescript`,
+  repeated after the sync: 3 files linted, 0 in the worktree (before:
+  10, with 7 in the worktree). `task fmt:check` passed.
 
 ## Problem
 
@@ -86,22 +100,22 @@ The only way is to edit the managed `eslint.config.js`, which is drift.
 
 ## Acceptance Criteria
 
-- [ ] A regression test fails before the fix and passes after it. In a
+- [x] A regression test fails before the fix and passes after it. In a
       `prod-ts` layout with a gitignored directory that holds a file
       with a lint error, `eslint .` with the generated config reports
       nothing from that directory.
-- [ ] With no `.gitignore`, the generated config loads and lints as
+- [x] With no `.gitignore`, the generated config loads and lints as
       before. A test covers this.
-- [ ] The existing `ts-tooling` tests for generated paths (spec 0037)
+- [x] The existing `ts-tooling` tests for generated paths (spec 0037)
       pass unchanged.
-- [ ] D6 is checked once by hand: the generated config loads under
+- [x] D6 is checked once by hand: the generated config loads under
       ESLint 10.3.0 in a scratch copy of `examples/typescript`, and
       `eslint .` lints as before. The result is recorded here. CI does
       not repeat this, because it installs only the pinned ESLint.
-- [ ] `docs/usage.md` names ESLint 10.4.0 as the minimum for D1.
-- [ ] `examples/typescript` and `examples/monorepo` are synced and
+- [x] `docs/usage.md` names ESLint 10.4.0 as the minimum for D1.
+- [x] `examples/typescript` and `examples/monorepo` are synced and
       conformant, and their `task lint` passes.
-- [ ] The probe from the Problem section, repeated with a real worktree
+- [x] The probe from the Problem section, repeated with a real worktree
       and the `.gitignore` line, shows 0 worktree files linted.
-- [ ] `docs/usage.md` documents D1 to D3, D5 and D6.
-- [ ] `task verify` and `task audit` pass.
+- [x] `docs/usage.md` documents D1 to D3, D5 and D6.
+- [x] `task verify` and `task audit` pass.

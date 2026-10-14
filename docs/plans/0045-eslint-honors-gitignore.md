@@ -1,7 +1,23 @@
 # Plan 0045: The generated ESLint config honors `.gitignore`
 
 Implements `docs/specs/0045-eslint-honors-gitignore.md`.
-Status: approved 2026-10-14.
+Status: approved 2026-10-14 and implemented. Deviations from the plan:
+- **Fixtures under `node_modules/.cache`.** The test first wrote its
+  fixtures into the working tree of `examples/typescript`. That raced
+  with the agent hooks' `task lint` runs in the example: ESLint failed
+  while scanning a fixture directory that the test was removing at the
+  same moment. Each case now lints its own directory under the example's
+  `node_modules/.cache`, with its own `.gitignore`. Git, Prettier and the
+  example's own ESLint never look there. So the test no longer depends on
+  the example's `.gitignore`, and that line stays only as the adopter
+  practice that D5 recommends.
+- **The examples test between commits.** `TestExamplesAreConformant`
+  fails on the fix commit until the sync commit that follows it. The
+  reason is that `vibe` is built from a committed tree. Spec 0044 did the
+  same.
+- **Local `vibe`.** The `v0.9.0-alpha.1` installed in `~/go/bin` refused
+  to audit repositories synced by the newer build, so the clean build was
+  installed there.
 
 ## Repository impact
 
@@ -95,11 +111,13 @@ result does not depend on the TypeScript project service.
 8. `task verify`, `task audit`, push, open the PR, and wait for CI,
    including both `examples/typescript` jobs.
 
-## Verification ledger (to fill in)
+## Verification ledger
 
-- Unit tests (`task verify`)
-- Regression test, local (Windows)
-- Regression test, CI (Linux and Windows `examples/typescript`)
-- `task audit` in this repository and both examples
-- D6, ESLint 10.3.0, by hand
-- Real-worktree probe
+- PASS: unit tests (`task verify`, Windows).
+- PASS: regression test, local (Windows). It was red against the old
+  template and green after the fix.
+- UNVERIFIED: regression test in CI (`examples/typescript`, Linux and
+  Windows). Pending the PR.
+- PASS: `task audit` in this repository and both examples.
+- PASS: D6 by hand, ESLint 10.3.0 and 10.11.0.
+- PASS: real-worktree probe.
