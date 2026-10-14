@@ -100,6 +100,26 @@ func TestTypedFilesGlobIsNotTheSeedRepositoryLayout(t *testing.T) {
 	}
 }
 
+// TestESLintConfigLoadsGitignoreTolerantly pins spec 0045's D6: a static
+// import of includeIgnoreFile fails the whole config on ESLint < 10.4.0, so
+// it must be loaded with a dynamic import that falls back to nothing.
+// TestESLintGitignore covers the behavior; this covers the version floor
+// CI cannot reach, because CI installs only the pinned ESLint.
+func TestESLintConfigLoadsGitignoreTolerantly(t *testing.T) {
+	for _, want := range []string{
+		"await import('eslint/config').catch(() => ({}))",
+		"existsSync(gitignore)",
+		"...gitignored,",
+	} {
+		if !bytes.Contains(eslintConfig, []byte(want)) {
+			t.Errorf("eslint.config.js lacks %q", want)
+		}
+	}
+	if bytes.Contains(eslintConfig, []byte("from 'eslint/config'")) {
+		t.Error("eslint.config.js imports eslint/config statically; that fails to load on ESLint < 10.4.0")
+	}
+}
+
 // TestTemplatesAreLF — see internal/module/ci/github for why CR bytes in an
 // embedded template make the binary's output platform-dependent.
 func TestTemplatesAreLF(t *testing.T) {
