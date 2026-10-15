@@ -28,6 +28,11 @@ const (
 	// ProjectOwned resources are never written by VibeConform; they are
 	// read for context only.
 	ProjectOwned
+	// Seeded resources belong to the repository too, but VibeConform
+	// writes Content, the seed, when the file is missing. Once it exists
+	// the file is only checked: it must still name Base
+	// (docs/decisions/0024-floor-and-content-seams.md).
+	Seeded
 )
 
 // Resource is a single piece of desired state resolved by a Module.
@@ -63,6 +68,10 @@ type Resource struct {
 	// Placement is where a new ManagedSection goes in an existing file.
 	// Once written, a section is never moved.
 	Placement Placement
+	// Base is the file name of the base config a Seeded resource extends,
+	// in the same directory, such as "eslint.base.config.js". The file
+	// must keep naming it. Empty for every other ownership.
+	Base string
 }
 
 // MarkerSyntax is the comment syntax a managed section's markers use.

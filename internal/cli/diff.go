@@ -54,6 +54,10 @@ func runDiff(cmd *cobra.Command, repoRoot string) error {
 		switch {
 		case rp.Supported && rp.Ignored:
 			line = ignoredLine(rp.Resource.Path)
+		case rp.Seed != nil:
+			line = diffSeedLine(rp.Seed)
+		case rp.HeldBy != "" && rp.Decision != reconcile.NoChange:
+			line = heldLine(rp.HeldBy)
 		case rp.Supported:
 			line = diffLine(rp.Decision)
 		}
