@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.10.1-alpha.1.0.20261015073744-89c751de9c77
+vibe_version: v0.10.1-alpha.1.0.20261015083647-bad56bce517a
 standard: prod-go/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
@@ -13,10 +13,10 @@ resources:
       sha256: a12815be5dd837f16ef67099a647ec207d494f5066329ddcf4a0a495ca52fedb
     - path: .claude/hooks/guard.go
       ownership: generated
-      sha256: 4fd4fb6999701d5c186197cdfbf655dec3b2ad315808a48737ffe563ea44b37b
+      sha256: e7961955812ae4abb343ce09ccbc2d241c7cc28bc68dd9736aecaaa3029b5b9b
     - path: .claude/hooks/policy.json
       ownership: generated
-      sha256: aeaabda7a4c74d5ddda54eab026eb57e14b89a6c54ab78869942676510deaa5b
+      sha256: d80fc8060d140a1ee7928ac280ad7fd23a2e23988b0d45dbef1c16476c0872e6
     - path: .claude/settings.json
       ownership: generated
       sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
