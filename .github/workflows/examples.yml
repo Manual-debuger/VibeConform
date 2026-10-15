@@ -75,10 +75,10 @@ jobs:
       - name: Install dependencies
         working-directory: examples/typescript
         run: pnpm install --frozen-lockfile
-      # The ESLint regression test needs this job's node_modules, so ci.yml's
-      # Go job skips it and it runs here (spec 0045).
-      - name: ESLint honors .gitignore
-        run: go test ./internal/module/tstooling -run ESLintGitignore -count=1 -v
+      # The ESLint regression tests need this job's node_modules, so ci.yml's
+      # Go job skips them and they run here (specs 0045, 0048).
+      - name: ESLint regression tests
+        run: go test ./internal/module/tstooling -run ESLint -count=1 -v
       - name: task verify
         working-directory: examples/typescript
         run: task verify

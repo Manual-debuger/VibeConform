@@ -92,8 +92,8 @@ func TestRequiredTools(t *testing.T) {
 // to a pnpm workspace; a config that type-checks nothing still exits 0, so
 // this is the failure that would otherwise ship silently.
 func TestTypedFilesGlobIsNotTheSeedRepositoryLayout(t *testing.T) {
-	if !bytes.Contains(eslintConfig, []byte("const typedFiles = ['**/*.ts']")) {
-		t.Error("typedFiles is not the generalized glob; see docs/specs/0014-m2-milestone.md")
+	if !bytes.Contains(eslintConfig, []byte("const typedFiles = ['**/*.{ts,tsx}']")) {
+		t.Error("typedFiles is not the generalized glob; see docs/specs/0014-m2-milestone.md and 0048-eslint-tsx.md")
 	}
 	if bytes.Contains(eslintConfig, []byte("packages/")) {
 		t.Error("eslint.config.js still names the seed repository's directory layout")

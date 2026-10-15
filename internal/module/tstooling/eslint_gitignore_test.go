@@ -109,9 +109,24 @@ func writeFile(t *testing.T, path, content string) string {
 }
 
 // runESLint lints dir with config and returns the files that have at least
-// one problem. Exit 1 (problems found) is expected; anything else, such as
-// a config that fails to load, fails the test.
+// one problem.
 func runESLint(t *testing.T, eslint eslintCmd, dir, config string) map[string]bool {
+	t.Helper()
+	reported := map[string]bool{}
+	for file, rules := range runESLintRules(t, eslint, dir, config) {
+		if len(rules) > 0 {
+			reported[file] = true
+		}
+	}
+	return reported
+}
+
+// runESLintRules lints dir with config and returns, per file with a
+// problem, the rule ids it was reported for. A problem without a rule id,
+// such as a parse error, is recorded as "". Exit 1 (problems found) is
+// expected; anything else, such as a config that fails to load, fails the
+// test.
+func runESLintRules(t *testing.T, eslint eslintCmd, dir, config string) map[string][]string {
 	t.Helper()
 	cmd := exec.Command(eslint.node, eslint.bin, ".", "--no-cache", "--config", config, "--format", "json")
 	cmd.Dir = dir
@@ -124,20 +139,25 @@ func runESLint(t *testing.T, eslint eslintCmd, dir, config string) map[string]bo
 	}
 
 	var results []struct {
-		FilePath     string `json:"filePath"`
-		ErrorCount   int    `json:"errorCount"`
-		WarningCount int    `json:"warningCount"`
+		FilePath string `json:"filePath"`
+		Messages []struct {
+			RuleID *string `json:"ruleId"`
+		} `json:"messages"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &results); err != nil {
 		t.Fatalf("eslint JSON: %v\n%s", err, stdout.String())
 	}
-	reported := map[string]bool{}
+	rules := map[string][]string{}
 	for _, r := range results {
-		if r.ErrorCount+r.WarningCount > 0 {
-			reported[key(r.FilePath)] = true
+		for _, m := range r.Messages {
+			id := ""
+			if m.RuleID != nil {
+				id = *m.RuleID
+			}
+			rules[key(r.FilePath)] = append(rules[key(r.FilePath)], id)
 		}
 	}
-	return reported
+	return rules
 }
 
 // key makes a path from ESLint comparable with one from Go: on Windows the
