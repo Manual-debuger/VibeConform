@@ -1,7 +1,7 @@
 # Plan 0046: Graphify rebuilds the graph after a pull
 
 Implements `docs/specs/0046-graphify-post-merge.md`.
-Status: approved 2026-10-15.
+Status: approved 2026-10-15 and implemented as planned.
 
 ## Repository impact
 
@@ -88,11 +88,14 @@ and that is D5.
    the status of the spec and this plan.
 7. `task verify`, `task audit`, push, open the PR, and wait for CI.
 
-## Verification ledger (filled in as the steps run)
+## Verification ledger
 
-- unit tests (`task verify`, Windows)
-- regression test: red before the fix, green after it
-- golden diff: only `post-merge` lines added, Graphify goldens only
-- `task audit` in this repository and the three examples
-- D2 by hand, `pull --ff-only` and fast-forward `pull --rebase`
-- CI on the PR
+- PASS: unit tests (`go test ./...`, Windows), after the sync commit.
+- PASS: regression test, red before the fix (the hooks loop, the
+  `post-merge:` check, the skill text and the reason all failed) and
+  green after it.
+- PASS: golden diff. Only the four `-graphify` goldens changed, each by
+  the `post-merge` job alone.
+- PASS: `task audit` in this repository and the three examples. Only
+  `examples/python` changed content; the others changed `vibe_version`.
+- PASS: D2 by hand, `pull --ff-only` and fast-forward `pull --rebase`.

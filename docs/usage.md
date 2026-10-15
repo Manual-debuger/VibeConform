@@ -1220,7 +1220,7 @@ deselected.
 | `editors` | `zed` | off | four tasks in `.zed/tasks.json` |
 | `agents` | `claude` | on | `.claude/settings.json`, `.claude/hooks/policy.json`, `.claude/skills/vibeconform/SKILL.md`, the guard program, and the `hook:*` tasks in `Taskfile.yml` |
 | `agents` | `codex` | on | `.codex/config.toml`, `.codex/hooks.json`, `.agents/skills/vibeconform/SKILL.md` |
-| `intelligence` | `graphify` | off | a `graphify` section in `.gitignore`; `graph:update` in `Taskfile.yml` and the `post-commit`/`post-checkout` jobs in `lefthook.yml`; with `claude`, `.claude/skills/graphify/SKILL.md` and a `hook:context` line; a paragraph in AGENTS.md, in the workflow section or, without one, its own `intelligence` section (see [Graphify](#graphify)) |
+| `intelligence` | `graphify` | off | a `graphify` section in `.gitignore`; `graph:update` in `Taskfile.yml` and the `post-commit`/`post-checkout`/`post-merge` jobs in `lefthook.yml`; with `claude`, `.claude/skills/graphify/SKILL.md` and a `hook:context` line; a paragraph in AGENTS.md, in the workflow section or, without one, its own `intelligence` section (see [Graphify](#graphify)) |
 
 A category you leave out takes its defaults; an empty list means none.
 The categories are independent: choosing editors never changes agents.
@@ -1364,10 +1364,12 @@ VibeConform owns, so `vibe audit` would report them as drift.
   does not exist, sync creates it.
 - A `graph:update` task that runs `graphify update .`. That is the
   code-only rebuild: no LLM, no network.
-- `post-commit` and `post-checkout` jobs in `lefthook.yml` that run
-  `task graph:update`, so the graph follows every commit and branch
-  switch. The logic is in the task, not in `lefthook.yml`, because
-  lefthook on Windows does not keep shell quoting in a `run:` line.
+- `post-commit`, `post-checkout` and `post-merge` jobs in `lefthook.yml`
+  that run `task graph:update`, so the graph follows every commit, branch
+  switch and pull. A fast-forward `git pull`, with or without `--rebase`,
+  fires only `post-merge` (spec 0046). The logic is in the task, not in
+  `lefthook.yml`, because lefthook on Windows does not keep shell quoting
+  in a `run:` line.
   - Without graphify on PATH, the task prints
     `graphify: not on PATH; graph not updated …` and exits 0.
   - If the update fails, it prints `graphify: update failed;
@@ -1455,7 +1457,8 @@ repository):
 - `graphify update` re-extracts code only. Documents, papers, and images
   need graphify's own LLM pipeline (`/graphify` in an agent), which
   VibeConform does not run.
-- `post-checkout` adds the rebuild's time to every branch switch.
+- `post-checkout` and `post-merge` add the rebuild's time to every branch
+  switch and every pull.
 - The graph is static analysis. It never replaces the compiler, a
   language server, the linter, the tests, or CI.
 
@@ -2180,9 +2183,12 @@ additions into `lefthook.local.yml`, restore the managed file with
 `git checkout lefthook.yml`, then run `vibe sync`.
 
 **Graphify's hook jobs are not yours to copy.** When the
-[Graphify](#graphify) integration is selected, the `post-commit` and
-`post-checkout` `graph:update` jobs are generated into `lefthook.yml`.
-Don't repeat them in `lefthook.local.yml`.
+[Graphify](#graphify) integration is selected, the `post-commit`,
+`post-checkout` and `post-merge` `graph:update` jobs are generated into
+`lefthook.yml`. Don't repeat them in `lefthook.local.yml`. If you added a
+`post-merge` job there as a workaround for #82, delete it: under the name
+`graphify-update` it only merges into the managed job, and under any
+other name it rebuilds the graph a second time after every pull.
 
 See `docs/decisions/0017-lefthook-local-extension.md`.
 

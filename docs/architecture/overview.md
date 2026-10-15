@@ -267,7 +267,7 @@ The first code-intelligence provider is not GitNexus but **Graphify**
 (spec 0035), an opt-in integration in the `intelligence` category. It
 follows the same rule. VibeConform configures it and never runs it:
 `sync` writes a `.gitignore` section, a skill, a `graph:update` task,
-and `post-commit`/`post-checkout` lefthook jobs. The graph is rebuilt by
+and `post-commit`/`post-checkout`/`post-merge` lefthook jobs (spec 0046). The graph is rebuilt by
 those Git hooks, and is never consulted by `verify` or CI. `vibe
 doctor` reports whether the graph is current, using its
 `built_at_commit`. Core repo-tooling modules read the selection through

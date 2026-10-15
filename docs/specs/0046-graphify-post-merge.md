@@ -1,6 +1,6 @@
 # Spec 0046: Graphify Rebuilds the Graph After a Pull
 
-Status: accepted (2026-10-15). Issue #82. Replaces acceptance criterion 4 of spec 0035
+Status: accepted and implemented (2026-10-15). Issue #82. Replaces acceptance criterion 4 of spec 0035
 ("They exist only under `post-commit` and `post-checkout`"). The rest of
 spec 0035 stays as it is.
 Settled with the user on 2026-10-14 in the grilling of #82, #84 and #85.
@@ -28,6 +28,14 @@ its name in a scratch clone:
 So a fast-forward pull fires `post-merge` whether it is configured to
 merge or to rebase. A rebase over local commits already fires
 `post-checkout`.
+
+Verified by hand on 2026-10-15, on Windows (Git 2.53.0, graphify
+0.8.18): a scratch repository built from the committed `examples/python`
+and a clone of it, with `lefthook install` run in the clone.
+- After `git pull --ff-only` of a new upstream commit, `post-merge` ran
+  `graphify-update`, `built_at_commit` equalled `HEAD`, and `vibe doctor`
+  reported `graphify graph  current: built at HEAD`.
+- The same after a fast-forward `git pull --rebase`.
 
 ## Constraints
 
@@ -85,21 +93,21 @@ merge or to rebase. A rebase over local commits already fires
 
 ## Acceptance Criteria
 
-- [ ] A regression test fails before the fix and passes after it: with
+- [x] A regression test fails before the fix and passes after it: with
       `graphify` selected, the generated `lefthook.yml` of every
       single-language standard has `post-merge`, `post-commit` and
       `post-checkout` `graphify-update` jobs that run
       `task graph:update`, and no Graphify job under `pre-commit` or
       `pre-push`.
-- [ ] The test for a manifest without `intelligence` passes unchanged
+- [x] The test for a manifest without `intelligence` passes unchanged
       (D5).
-- [ ] Spec 0035's AC 4 points to this spec.
-- [ ] D3: the texts named there list all three hooks. A test pins the
+- [x] Spec 0035's AC 4 points to this spec.
+- [x] D3: the texts named there list all three hooks. A test pins the
       skill text and the resource reason.
-- [ ] D4 is in `docs/usage.md`.
-- [ ] `examples/python` is synced and conformant.
-- [ ] D2 is checked once by hand in a scratch clone of
+- [x] D4 is in `docs/usage.md`.
+- [x] `examples/python` is synced and conformant.
+- [x] D2 is checked once by hand in a scratch clone of
       `examples/python` with graphify installed: after
       `git pull --ff-only` of a new commit, `graph.json`'s
       `built_at_commit` equals `HEAD`. The result is recorded here.
-- [ ] `task verify` and `task audit` pass.
+- [x] `task verify` and `task audit` pass.
