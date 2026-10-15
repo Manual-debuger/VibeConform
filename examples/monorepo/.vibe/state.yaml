@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.9.0-alpha.1.0.20261014091259-0643a118e219
+vibe_version: v0.9.0-alpha.1.0.20261015012121-b0fed9df1bfc
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go

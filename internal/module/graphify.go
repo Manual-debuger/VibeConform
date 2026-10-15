@@ -14,10 +14,11 @@ import (
 // graph must never block work; a skipped or failed update says so loudly.
 const GraphUpdateTask = `
   # Rebuilds the Graphify knowledge graph in graphify-out/ from the code
-  # (no LLM, no network). The post-commit and post-checkout Git hooks run
-  # it; nothing in verify or CI does. See docs/specs/0035-graphify.md.
+  # (no LLM, no network). The post-commit, post-checkout and post-merge Git
+  # hooks run it; nothing in verify or CI does. See docs/specs/0035-graphify.md
+  # and docs/specs/0046-graphify-post-merge.md.
   graph:update:
-    desc: Rebuild the Graphify graph in graphify-out/ (run by the post-commit hook)
+    desc: Rebuild the Graphify graph in graphify-out/ (run by the post-commit, post-checkout and post-merge hooks)
     silent: true
     cmds:
       - |
@@ -37,7 +38,9 @@ const GraphContextLine = `        if test -f graphify-out/graph.json; then echo 
 
 // GraphHookJobs are the lefthook hooks that keep the graph current. They
 // are separate hooks, never pre-commit or pre-push, so a missing or
-// failing graphify cannot hold up a commit or a push.
+// failing graphify cannot hold up a commit or a push. post-merge is there
+// because a fast-forward pull, with or without --rebase, fires only that
+// hook (spec 0046).
 const GraphHookJobs = `
 post-commit:
   commands:
@@ -45,6 +48,11 @@ post-commit:
       run: task graph:update
 
 post-checkout:
+  commands:
+    graphify-update:
+      run: task graph:update
+
+post-merge:
   commands:
     graphify-update:
       run: task graph:update
@@ -56,7 +64,7 @@ var contextAnchor = []byte("        echo \"Task: {{.TASK_VERSION}}\"\n")
 
 // AddGraphify returns a repo-tooling Taskfile and
 // lefthook.yml with the Graphify integration's additions: the graph:update
-// task, the post-commit and post-checkout jobs, and, when the agent-hook
+// task, the post-commit, post-checkout and post-merge jobs, and, when the agent-hook
 // surface is generated (hooks), the hook:context line. Without graphify
 // selected the module does not call it, so its files stay byte-identical.
 func AddGraphify(taskfile, lefthook []byte, hooks bool) (newTaskfile, newLefthook []byte, err error) {

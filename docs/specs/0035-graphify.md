@@ -178,6 +178,8 @@ repository does not self-host it.
    `graphify-out/graph.json` is reported ignored by `git check-ignore`.
 4. The lefthook jobs exit 0 when graphify is absent and print the skip
    line. They exist only under `post-commit` and `post-checkout`.
+   (Replaced by spec 0046: also under `post-merge`, never under
+   `pre-commit` or `pre-push`.)
 5. Doctor returns each §3 status through test seams. Graphify-only
    problems keep exit code 0. Doctor writes nothing.
 6. `sync` warns about a missing `graphify` and still exits 0.

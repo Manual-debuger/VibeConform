@@ -43,7 +43,7 @@ const Skill = "---\n" +
 	"\n" +
 	"This repository keeps a Graphify knowledge graph in `graphify-out/`. It is\n" +
 	"derived output, ignored by Git, and rebuilt by `task graph:update`, which\n" +
-	"the post-commit and post-checkout Git hooks run.\n" +
+	"the post-commit, post-checkout and post-merge Git hooks run.\n" +
 	"\n" +
 	"1. Check that it can be trusted before using it:\n" +
 	"   - `graphify --version` works. If not, graphify is not installed: say so.\n" +
@@ -109,7 +109,7 @@ func (graphifyModule) ConditionalSections() []resource.Resource {
 func (graphifyModule) RequiredTools(*module.Context) []module.Tool {
 	return []module.Tool{{
 		Name:     "graphify",
-		Why:      "task graph:update, run by the post-commit and post-checkout hooks",
+		Why:      "task graph:update, run by the post-commit, post-checkout and post-merge hooks",
 		Version:  []string{"--version"},
 		Optional: true,
 		Install:  "uv tool install graphifyy, or pip install graphifyy",
