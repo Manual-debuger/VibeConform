@@ -23,17 +23,26 @@ func TestResolveReturnsExpectedResourcesInOrder(t *testing.T) {
 		t.Fatalf("Resolve: %v", err)
 	}
 
-	want := []string{"ruff.toml", "pyrightconfig.json"}
+	// ruff.toml is the repository's, seeded to extend the base (spec 0049).
+	want := []struct {
+		path      string
+		ownership resource.Ownership
+		base      string
+	}{
+		{"ruff.base.toml", resource.Generated, ""},
+		{"ruff.toml", resource.Seeded, "ruff.base.toml"},
+		{"pyrightconfig.json", resource.Generated, ""},
+	}
 	if len(resources) != len(want) {
 		t.Fatalf("Resolve returned %d resources, want %d", len(resources), len(want))
 	}
 
 	for i, r := range resources {
-		if r.Path != want[i] {
-			t.Errorf("resource %d path = %q, want %q", i, r.Path, want[i])
+		if r.Path != want[i].path || r.Ownership != want[i].ownership || r.Base != want[i].base {
+			t.Errorf("resource %d = %s %v base %q, want %+v", i, r.Path, r.Ownership, r.Base, want[i])
 		}
-		if r.Ownership != resource.Generated {
-			t.Errorf("%s ownership = %v, want Generated", r.Path, r.Ownership)
+		if r.Base != "" && !bytes.Contains(r.Content, []byte(r.Base)) {
+			t.Errorf("the %s seed does not name its base %s", r.Path, r.Base)
 		}
 		if len(r.Content) == 0 {
 			t.Errorf("%s has empty content", r.Path)
@@ -108,18 +117,18 @@ func TestRuffConfigIsRerootedForStandaloneUse(t *testing.T) {
 			continue
 		}
 		if strings.HasPrefix(line, "[tool.") {
-			t.Errorf("ruff.toml still uses pyproject.toml's table names (%s); "+
+			t.Errorf("ruff.base.toml still uses pyproject.toml's table names (%s); "+
 				"standalone config puts lint settings under [lint]", line)
 		}
 	}
 	for _, want := range []string{"[lint]", "[lint.per-file-ignores]", "target-version"} {
 		if !bytes.Contains(ruffConfig, []byte(want)) {
-			t.Errorf("ruff.toml is missing %q", want)
+			t.Errorf("ruff.base.toml is missing %q", want)
 		}
 	}
 	// app/routes/*.py was a FastAPI-specific ignore in the seed repository.
 	if bytes.Contains(ruffConfig, []byte("app/routes")) {
-		t.Error("ruff.toml still carries the seed repository's FastAPI-specific per-file ignore")
+		t.Error("ruff.base.toml still carries the seed repository's FastAPI-specific per-file ignore")
 	}
 }
 
@@ -127,7 +136,8 @@ func TestRuffConfigIsRerootedForStandaloneUse(t *testing.T) {
 // embedded template make the binary's output platform-dependent.
 func TestTemplatesAreLF(t *testing.T) {
 	for name, content := range map[string][]byte{
-		"ruff.toml":          ruffConfig,
+		"ruff.base.toml":     ruffConfig,
+		"ruff.toml":          ruffSeed,
 		"pyrightconfig.json": pyrightConfig,
 	} {
 		if bytes.Contains(content, []byte("\r")) {

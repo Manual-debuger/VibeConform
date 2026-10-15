@@ -22,17 +22,29 @@ func TestResolveReturnsExpectedResourcesInOrder(t *testing.T) {
 		t.Fatalf("Resolve: %v", err)
 	}
 
-	want := []string{"eslint.config.js", ".prettierrc.json", "tsconfig.base.json"}
+	// eslint.config.js and tsconfig.json are the repository's, seeded to
+	// extend the bases (spec 0049).
+	want := []struct {
+		path      string
+		ownership resource.Ownership
+		base      string
+	}{
+		{"eslint.base.config.js", resource.Generated, ""},
+		{"eslint.config.js", resource.Seeded, "eslint.base.config.js"},
+		{".prettierrc.json", resource.Generated, ""},
+		{"tsconfig.base.json", resource.Generated, ""},
+		{"tsconfig.json", resource.Seeded, "tsconfig.base.json"},
+	}
 	if len(resources) != len(want) {
 		t.Fatalf("Resolve returned %d resources, want %d", len(resources), len(want))
 	}
 
 	for i, r := range resources {
-		if r.Path != want[i] {
-			t.Errorf("resource %d path = %q, want %q", i, r.Path, want[i])
+		if r.Path != want[i].path || r.Ownership != want[i].ownership || r.Base != want[i].base {
+			t.Errorf("resource %d = %s %v base %q, want %+v", i, r.Path, r.Ownership, r.Base, want[i])
 		}
-		if r.Ownership != resource.Generated {
-			t.Errorf("%s ownership = %v, want Generated", r.Path, r.Ownership)
+		if r.Base != "" && !bytes.Contains(r.Content, []byte(r.Base)) {
+			t.Errorf("the %s seed does not name its base %s", r.Path, r.Base)
 		}
 		if len(r.Content) == 0 {
 			t.Errorf("%s has empty content", r.Path)
@@ -96,7 +108,7 @@ func TestTypedFilesGlobIsNotTheSeedRepositoryLayout(t *testing.T) {
 		t.Error("typedFiles is not the generalized glob; see docs/specs/0014-m2-milestone.md and 0048-eslint-tsx.md")
 	}
 	if bytes.Contains(eslintConfig, []byte("packages/")) {
-		t.Error("eslint.config.js still names the seed repository's directory layout")
+		t.Error("eslint.base.config.js still names the seed repository's directory layout")
 	}
 }
 
@@ -112,11 +124,11 @@ func TestESLintConfigLoadsGitignoreTolerantly(t *testing.T) {
 		"...gitignored,",
 	} {
 		if !bytes.Contains(eslintConfig, []byte(want)) {
-			t.Errorf("eslint.config.js lacks %q", want)
+			t.Errorf("eslint.base.config.js lacks %q", want)
 		}
 	}
 	if bytes.Contains(eslintConfig, []byte("from 'eslint/config'")) {
-		t.Error("eslint.config.js imports eslint/config statically; that fails to load on ESLint < 10.4.0")
+		t.Error("eslint.base.config.js imports eslint/config statically; that fails to load on ESLint < 10.4.0")
 	}
 }
 
@@ -124,9 +136,11 @@ func TestESLintConfigLoadsGitignoreTolerantly(t *testing.T) {
 // embedded template make the binary's output platform-dependent.
 func TestTemplatesAreLF(t *testing.T) {
 	for name, content := range map[string][]byte{
-		"eslint.config.js":   eslintConfig,
-		"prettierrc.json":    prettierConfig,
-		"tsconfig.base.json": tsconfigBase,
+		"eslint.base.config.js": eslintConfig,
+		"eslint.config.js":      eslintSeed,
+		"prettierrc.json":       prettierConfig,
+		"tsconfig.base.json":    tsconfigBase,
+		"tsconfig.json":         tsconfigSeed,
 	} {
 		if bytes.Contains(content, []byte("\r")) {
 			t.Errorf("%s contains CR bytes; the working copy it was embedded from is CRLF", name)

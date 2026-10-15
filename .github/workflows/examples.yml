@@ -121,6 +121,10 @@ jobs:
       - name: Install dependencies
         working-directory: examples/python
         run: uv sync
+      # The Ruff seam test needs this job's .venv, so ci.yml's Go job skips
+      # it and it runs here (spec 0049).
+      - name: Ruff seam test
+        run: go test ./internal/module/pythontooling -run Ruff -count=1 -v
       - name: task verify
         working-directory: examples/python
         run: task verify

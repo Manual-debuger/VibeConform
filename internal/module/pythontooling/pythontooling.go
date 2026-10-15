@@ -2,10 +2,11 @@
 // ruff for lint and format, pyright for typecheck, mirroring gotooling's
 // shape.
 //
-// Both configurations are standalone files rather than pyproject.toml
-// sections. VibeConform owns whole files, and pyproject.toml also holds
-// [project] metadata belonging to the repository — see
-// docs/specs/0014-m2-milestone.md.
+// Both configurations are files of their own rather than pyproject.toml
+// sections: pyproject.toml holds [project] metadata belonging to the
+// repository — see docs/specs/0014-m2-milestone.md. The standard owns
+// ruff.base.toml; the repository owns the ruff.toml extending it, which
+// VibeConform writes only when it is missing (ADR 0024).
 package pythontooling
 
 import (
@@ -17,8 +18,13 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
-//go:embed templates/ruff.toml
+//go:embed templates/ruff.base.toml
 var ruffConfig []byte
+
+// ruffSeed is the repository's ruff.toml as VibeConform first writes it.
+//
+//go:embed templates/ruff.toml
+var ruffSeed []byte
 
 //go:embed templates/pyrightconfig.json
 var pyrightConfig []byte
@@ -51,9 +57,15 @@ func (pythontoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]r
 	}
 	return []resource.Resource{
 		{
-			Path:      "ruff.toml",
+			Path:      "ruff.base.toml",
 			Ownership: resource.Generated,
 			Content:   ruff,
+		},
+		{
+			Path:      "ruff.toml",
+			Ownership: resource.Seeded,
+			Content:   ruffSeed,
+			Base:      "ruff.base.toml",
 		},
 		{
 			Path:      "pyrightconfig.json",
@@ -63,7 +75,7 @@ func (pythontoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]r
 	}, nil
 }
 
-// ruffAnchor is the last top-level key of ruff.toml before its first table;
+// ruffAnchor is the last top-level key of ruff.base.toml before its first table;
 // the generated keys go right after it, so they stay top-level.
 const ruffAnchor = "line-length = 100\n"
 
@@ -84,5 +96,5 @@ func excludeInRuff(config []byte, generated []string) ([]byte, error) {
 		"# type-checked. force-exclude applies it to files passed explicitly too.\n" +
 		"extend-exclude = [" + strings.Join(quoted, ", ") + "]\n" +
 		"force-exclude = true\n"
-	return module.ReplaceOnce(config, "ruff.toml", "exclude generated paths", ruffAnchor, keys)
+	return module.ReplaceOnce(config, "ruff.base.toml", "exclude generated paths", ruffAnchor, keys)
 }

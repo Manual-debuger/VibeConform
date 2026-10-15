@@ -30,8 +30,9 @@ func TestResolveReroots(t *testing.T) {
 	}
 	want := []string{
 		"services/api/.golangci.yml",
-		"apps/web/eslint.config.js", "apps/web/.prettierrc.json", "apps/web/tsconfig.base.json",
-		"services/worker/ruff.toml", "services/worker/pyrightconfig.json",
+		"apps/web/eslint.base.config.js", "apps/web/eslint.config.js", "apps/web/.prettierrc.json",
+		"apps/web/tsconfig.base.json", "apps/web/tsconfig.json",
+		"services/worker/ruff.base.toml", "services/worker/ruff.toml", "services/worker/pyrightconfig.json",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("paths %v, want %v", got, want)
