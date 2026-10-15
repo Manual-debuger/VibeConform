@@ -1,6 +1,6 @@
 # Spec 0050: Guard Exceptions and Extra Guard Rules
 
-Status: accepted (2026-10-15). Issue #80 (the umbrella), the third step after specs 0048
+Status: accepted and implemented (2026-10-15). Issue #80 (the umbrella), the third step after specs 0048
 and 0049. Settled with the user on 2026-10-15 in the grilling of #80
 (Q11, Q12, Q16). Decided by ADR 0024: rule content may be extended and
 weakened through a seam, and audit reports it.
@@ -45,7 +45,8 @@ list without editing a managed file, which `vibe audit` then fails:
   so it is not ignored.
 - **A2.** A guard runtime can test whether a pattern matches a whole
   string in all three languages within the portable subset (an anchored
-  `^(?:…)$`).
+  `^(?:…)$`, Python's `re.fullmatch`). Holds: the corpus's whole-value
+  cases pass in all three.
 
 ## Desired Behavior
 
@@ -129,21 +130,21 @@ list without editing a managed file, which `vibe audit` then fails:
 
 ## Acceptance Criteria
 
-- [ ] The shared guard corpus covers, for all three runtimes alike: an
+- [x] The shared guard corpus covers, for all three runtimes alike: an
       exception lifting its rule for a whole-value match; the same
       command with a dangerous suffix still denied; another rule still
       applying to an excepted command; an exception with a broken pattern
       lifting nothing; an extra rule denying; a broken local file denying
       everything with a message naming it; no local file behaving as
       today; edits of either policy file denied (D12).
-- [ ] The CI guard jobs (`Hook guard / gate`) run that corpus on Linux
+- [x] The CI guard jobs (`Hook guard / gate`) run that corpus on Linux
       and Windows.
-- [ ] `vibe audit` reports each D8 problem as a conflict and each
+- [x] `vibe audit` reports each D8 problem as a conflict and each
       exception and extra rule as a non-failing line; with no file the
       output is unchanged.
-- [ ] The canary in `docs/usage.md` shows, in a live session in this
+- [x] The canary in `docs/usage.md` shows, in a live session in this
       repository, an excepted command running and the same command with
       another destructive part still denied. Recorded in the ledger.
-- [ ] `docs/usage.md` carries D11.
-- [ ] This repository and the three examples are synced and conformant;
+- [x] `docs/usage.md` carries D11.
+- [x] This repository and the three examples are synced and conformant;
       `task verify` and `task audit` pass.

@@ -1,7 +1,19 @@
 # Plan 0050: Guard exceptions and extra guard rules
 
 Implements `docs/specs/0050-guard-exceptions.md` under ADR 0024.
-Status: approved 2026-10-15.
+Status: approved 2026-10-15 and implemented. Deviations from the plan:
+- **More corpus cases than listed**: also no version, not an object,
+  `rules: null`, a non-object exception, a rule on an unknown field, an
+  extra rule whose pattern does not compile, and a backup file next to the
+  policy (allowed). 31 new cases, 162 in all, run by each runtime.
+- **`AGENTS.md`** gained one sentence in its hand-written guardrails: an
+  exception is the user's to grant, and the agent does not write the file
+  through the shell either.
+- **Live check** done as planned: `git clean -fdn no-such-dir/` ran, the
+  same command followed by a second `git clean -fdn` was refused by
+  `git-clean-fd`, an Edit of the local file was refused by
+  `guard-policy-file`, and after `rm` of the file audit printed what it did
+  before.
 
 ## Spec amendment (approved with this plan)
 
