@@ -85,6 +85,7 @@ func TestPolicyRules(t *testing.T) {
 	want := []string{
 		"rm-rf", "remove-item-recurse-force", "git-reset-hard", "git-clean-fd",
 		"git-push-force", "git-branch-force-delete", "git-discard-worktree", "secret-file",
+		"guard-policy-file",
 	}
 	var got []string
 	for _, r := range policy.Rules {

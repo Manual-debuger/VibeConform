@@ -227,6 +227,16 @@ var policy = Policy{
 			Raw:     `"file_path"\s*:\s*"[^"]*(\.env(\.[a-zA-Z]+)?|\.pem|\.key|id_rsa|id_ed25519|credentials\.json|\.npmrc|\.netrc)"`,
 			Message: "Blocked: this looks like a secret/credential file. Ask the user to edit it themselves (in Claude Code: ! <command>, or their editor).",
 		},
+		{
+			// An agent the guard refuses must not write itself an exception
+			// (spec 0050 D12). The guard is not a sandbox: a shell write
+			// still gets through.
+			ID:      "guard-policy-file",
+			Field:   FieldFilePath,
+			Pattern: `(^|[/\\])\.claude[/\\]+hooks[/\\]+policy(\.local)?\.json$`,
+			Raw:     `"file_path"\s*:\s*"([^"]*[/\\])?\.claude[/\\]+hooks[/\\]+policy(\.local)?\.json"`,
+			Message: "Blocked: the guard's policy files are the user's to change, an exception above all. Ask the user to edit it themselves (in Claude Code: ! <command>, or their editor).",
+		},
 	},
 }
 
