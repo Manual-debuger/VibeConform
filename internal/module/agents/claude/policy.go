@@ -59,10 +59,143 @@ func commandRule(id, pattern, message string) Rule {
 	return Rule{ID: id, Field: FieldCommand, Pattern: pattern, Raw: pattern, Message: message}
 }
 
-// policy is the single source of the guard's rules: a port, rule for rule,
-// of block-dangerous.sh and block-secret-files.sh as they stood before spec
-// 0021. POSIX classes ([[:space:]]) became \s, the only change, because
-// Python and JavaScript regular expressions have no POSIX classes.
+// The parts the command patterns are built from (spec 0047). Each must stay
+// in the subset Go, Python and JavaScript read alike (spec 0021 §3).
+const (
+	// cmdStart is where a command word may begin, so /bin/rm, sudo rm and
+	// $(rm match while farm and rm-old do not.
+	cmdStart = `(^|[^a-zA-Z0-9_.-])`
+	// word is one word of a simple command. It never holds a separator, so
+	// no match crosses into the next command.
+	word = `[^ \t;&|\n]+`
+	// gap is up to 16 whole words of the same command. The cap keeps the
+	// backtracking engines linear: with any text allowed between two
+	// options, a long commit message took Python over a minute.
+	gap = `(` + word + `[ \t]+){0,16}`
+	// optEnd closes an option that another option follows. The colon
+	// covers PowerShell's -Recurse:$true.
+	optEnd = `(:[^ \t;&|\n]*)?[ \t]+`
+	// lastEnd closes the last option.
+	lastEnd = `([^a-zA-Z0-9_-]|$)`
+	// fullTree is a pathspec for the whole working tree.
+	fullTree = `["']?(\.|\./|:/)["']?`
+)
+
+// both matches cmd with options a and b, in either order.
+func both(cmd, a, b string) string {
+	return cmd + gap + a + optEnd + gap + b + lastEnd + "|" + cmd + gap + b + optEnd + gap + a + lastEnd
+}
+
+// prefixes matches opt or any prefix of it at least minLen bytes long:
+// the abbreviations of a long option that the tool accepts.
+func prefixes(opt string, minLen int) string {
+	tail := ""
+	for i := len(opt) - 1; i >= minLen; i-- {
+		tail = "(" + regexp.QuoteMeta(opt[i:i+1]) + tail + ")?"
+	}
+	return regexp.QuoteMeta(opt[:minLen]) + tail
+}
+
+// anyCase matches s in any letter case. The engines share no portable
+// case-insensitive flag, and PowerShell ignores case.
+func anyCase(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if lower, upper := strings.ToLower(string(r)), strings.ToUpper(string(r)); lower != upper {
+			b.WriteString("[" + upper + lower + "]")
+			continue
+		}
+		b.WriteString(regexp.QuoteMeta(string(r)))
+	}
+	return b.String()
+}
+
+// anyCasePrefixes is prefixes for a PowerShell parameter: any case.
+func anyCasePrefixes(opt string, minLen int) string {
+	tail := ""
+	for i := len(opt) - 1; i >= minLen; i-- {
+		tail = "(" + anyCase(opt[i:i+1]) + tail + ")?"
+	}
+	return anyCase(opt[:minLen]) + tail
+}
+
+// gitCommand matches git, up to eight of its global options, and the
+// subcommand sub.
+func gitCommand(sub string) string {
+	globalOpt := `-[Cc][ \t]+` + word + `|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \t]+` + word + `|-[^ \t;&|\n]*`
+	return cmdStart + `git([ \t]+(` + globalOpt + `)){0,8}[ \t]+` + sub + `[ \t]+`
+}
+
+// Command patterns. The comments name the spellings each one covers; the
+// corpus (testdata/guard_corpus.json) holds the examples.
+var (
+	// rm with recursion (-r, -R, --recursive or a prefix) and force (-f,
+	// --force or a prefix), separate in either order or in one cluster.
+	rmRF = func() string {
+		cmd := cmdStart + `rm[ \t]+`
+		recursive := `(-[a-zA-Z]*[rR][a-zA-Z]*|` + prefixes("--recursive", 3) + `)`
+		force := `(-[a-zA-Z]*f[a-zA-Z]*|` + prefixes("--force", 3) + `)`
+		return both(cmd, recursive, force) + "|" + cmd + gap + `-[a-zA-Z]*([rR][a-zA-Z]*f|f[a-zA-Z]*[rR])`
+	}()
+
+	// Remove-Item or an alias of it, in any case, with -Recurse (-r and up)
+	// and -Force (-fo and up: -f alone is ambiguous with -Filter).
+	removeItemRF = func() string {
+		names := []string{"Remove-Item", "ri", "del", "erase", "rd", "rmdir", "rm"}
+		for i, n := range names {
+			names[i] = anyCase(n)
+		}
+		cmd := cmdStart + `(` + strings.Join(names, "|") + `)[ \t]+`
+		return both(cmd, `-`+anyCasePrefixes("recurse", 1), `-`+anyCasePrefixes("force", 2))
+	}()
+
+	// git reset --hard, or --ha / --har.
+	gitResetHard = gitCommand("reset") + gap + prefixes("--hard", 4) + lastEnd
+
+	// git clean with force (-f, --force or a prefix) and -d.
+	gitCleanFD = func() string {
+		force := `(-[a-zA-Z]*f[a-zA-Z]*|` + prefixes("--force", 3) + `)`
+		return both(gitCommand("clean"), force, `-[a-zA-Z]*d[a-zA-Z]*`) + "|" +
+			gitCommand("clean") + gap + `-[a-zA-Z]*(f[a-zA-Z]*d|d[a-zA-Z]*f)`
+	}()
+
+	// git push with -f in a cluster, exactly --force (Git rejects --forc as
+	// ambiguous), or a refspec forced with +. --force-with-lease is not
+	// --force.
+	gitPushForce = gitCommand("push") + gap + `(-[a-zA-Z]*f[a-zA-Z]*` + lastEnd + `|--force` + lastEnd + `|["']?\+[^ \t])`
+
+	// git branch -D, or delete (-d, --delete or a prefix) with force (-f,
+	// --forc or --force: --for is ambiguous with --format).
+	gitBranchForceDelete = func() string {
+		del := `(-[a-zA-Z]*d[a-zA-Z]*|` + prefixes("--delete", 3) + `)`
+		force := `(-[a-zA-Z]*f[a-zA-Z]*|` + prefixes("--force", 6) + `)`
+		return gitCommand("branch") + gap + `-[a-zA-Z]*D` + "|" + both(gitCommand("branch"), del, force) + "|" +
+			gitCommand("branch") + gap + `-[a-zA-Z]*(d[a-zA-Z]*f|f[a-zA-Z]*d)`
+	}()
+
+	// git checkout or git restore of the whole working tree. git restore
+	// --staged (-S) without --worktree (-W) only unstages, so it is
+	// allowed: the first alternative accepts any word before the pathspec
+	// except a --staged or -S one.
+	gitDiscardWorktree = func() string {
+		notStaged := `([^- \t;&|\n][^ \t;&|\n]*|--|--[^s \t;&|\n][^ \t;&|\n]*|--s[^t \t;&|\n][^ \t;&|\n]*|-[a-zA-RT-Z0-9]+)[ \t]+`
+		worktree := `(-[a-zA-Z]*W[a-zA-Z]*|` + prefixes("--worktree", 3) + `)`
+		treeEnd := `([ \t;&|)]|$)`
+		return gitCommand("restore") + `(` + notStaged + `){0,16}` + fullTree + treeEnd + "|" +
+			both(gitCommand("restore"), worktree, fullTree) + "|" +
+			gitCommand("checkout") + gap + fullTree + treeEnd
+	}()
+)
+
+// escape ends every command deny message: the agent asks, the user runs it.
+// A command run with ! in Claude Code does not go through the guard (spec
+// 0047, verified).
+const escape = " Ask the user to run it themselves (in Claude Code: ! <command>)."
+
+// policy is the single source of the guard's rules. It began as a port, rule
+// for rule, of block-dangerous.sh and block-secret-files.sh (spec 0021).
+// Spec 0047 widened the command rules to every spelling the tools accept for
+// the same command, and added git-discard-worktree.
 //
 // Changing what is blocked is a policy decision, not a refactor: keep it
 // out of commits that only move code (spec 0021, non-goals).
@@ -73,30 +206,26 @@ var policy = Policy{
 		FieldFilePath: {"Edit", "MultiEdit", "Write"},
 	},
 	Rules: []Rule{
-		commandRule("rm-rf",
-			`rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)(\s|"|$)`,
-			"Blocked: rm -rf (or equivalent) is a destructive operation. Ask the user to run it themselves if intended."),
-		commandRule("remove-item-recurse-force",
-			`Remove-Item[^"\\]*-Recurse[^"\\]*-Force|Remove-Item[^"\\]*-Force[^"\\]*-Recurse`,
-			"Blocked: Remove-Item -Recurse -Force is a destructive operation. Ask the user to run it themselves if intended."),
-		commandRule("git-reset-hard",
-			`git\s+reset\s+--hard`,
-			"Blocked: git reset --hard discards uncommitted work. Ask the user to run it themselves if intended."),
-		commandRule("git-clean-fd",
-			`git\s+clean\s+-[a-zA-Z]*f[a-zA-Z]*d|git\s+clean\s+-[a-zA-Z]*d[a-zA-Z]*f`,
-			"Blocked: git clean -fd (or equivalent) permanently deletes untracked files. Ask the user to run it themselves if intended."),
-		commandRule("git-push-force",
-			`git\s+push[^"\\]*(--force(\s|"|$)|\s-f(\s|"|$))`,
-			"Blocked: git push --force can overwrite remote history. Ask the user to run it themselves if intended."),
-		commandRule("git-branch-force-delete",
-			`git\s+branch\s+-D`,
-			"Blocked: git branch -D force-deletes a branch. Ask the user to run it themselves if intended."),
+		commandRule("rm-rf", rmRF,
+			"Blocked: rm -rf (or equivalent) is a destructive operation."+escape),
+		commandRule("remove-item-recurse-force", removeItemRF,
+			"Blocked: Remove-Item -Recurse -Force (or equivalent) is a destructive operation."+escape),
+		commandRule("git-reset-hard", gitResetHard,
+			"Blocked: git reset --hard discards uncommitted work."+escape),
+		commandRule("git-clean-fd", gitCleanFD,
+			"Blocked: git clean -fd (or equivalent) permanently deletes untracked files."+escape),
+		commandRule("git-push-force", gitPushForce,
+			"Blocked: git push --force (or a +refspec) can overwrite remote history."+escape),
+		commandRule("git-branch-force-delete", gitBranchForceDelete,
+			"Blocked: git branch -D (or equivalent) force-deletes a branch."+escape),
+		commandRule("git-discard-worktree", gitDiscardWorktree,
+			"Blocked: git restore . (or git checkout -- .) discards uncommitted changes to tracked files."+escape),
 		{
 			ID:      "secret-file",
 			Field:   FieldFilePath,
 			Pattern: `(\.env(\.[a-zA-Z]+)?|\.pem|\.key|id_rsa|id_ed25519|credentials\.json|\.npmrc|\.netrc)$`,
 			Raw:     `"file_path"\s*:\s*"[^"]*(\.env(\.[a-zA-Z]+)?|\.pem|\.key|id_rsa|id_ed25519|credentials\.json|\.npmrc|\.netrc)"`,
-			Message: "Blocked: this looks like a secret/credential file. Ask the user to edit it themselves.",
+			Message: "Blocked: this looks like a secret/credential file. Ask the user to edit it themselves (in Claude Code: ! <command>, or their editor).",
 		},
 	},
 }

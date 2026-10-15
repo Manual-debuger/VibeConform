@@ -8,7 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 )
 
 // corpusCase is one entry of testdata/guard_corpus.json.
@@ -190,6 +192,52 @@ func TestGuardCorpusPython(t *testing.T) {
 	uv := requireTool(t, "uv")
 	runCorpus(t, guardDir(t), uv, "run", "--no-project", "python",
 		guardTemplate(t, "pyrepotooling", "guard.py"), "policy.json")
+}
+
+// TestGuardLongCommand pins spec 0047's bounded gaps. Python and JavaScript
+// regular expressions backtrack, and a pattern that allows any text between
+// two options takes over a minute on a long commit message full of
+// near-misses. Go's RE2 is linear, so only the backtracking runtimes are
+// timed. The time is the long command's minus a short one's, so the
+// runtime's own start-up does not count.
+func TestGuardLongCommand(t *testing.T) {
+	long := "git commit -m '" + strings.Repeat("rm -r and git reset and git restore . and Remove-Item -Recurse ", 550) + "'"
+	payload := func(command string) []byte {
+		b, err := json.Marshal(map[string]any{"tool_name": "Bash", "tool_input": map[string]string{"command": command}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	elapsed := func(dir string, argv []string, stdin []byte) time.Duration {
+		// #nosec G204 -- argv is fixed by the calling test, never user input
+		cmd := exec.Command(argv[0], argv[1:]...)
+		cmd.Dir = dir
+		cmd.Stdin = bytes.NewReader(stdin)
+		start := time.Now()
+		_ = cmd.Run() // the decision is the corpus tests' business; only the time matters here
+		return time.Since(start)
+	}
+	for _, rt := range []struct {
+		name, tool string
+		argv       func(tool string) []string
+	}{
+		{"node", "node", func(node string) []string {
+			return []string{node, guardTemplate(t, "tsrepotooling", "guard.mjs"), "policy.json"}
+		}},
+		{"python", "uv", func(uv string) []string {
+			return []string{uv, "run", "--no-project", "python", guardTemplate(t, "pyrepotooling", "guard.py"), "policy.json"}
+		}},
+	} {
+		t.Run(rt.name, func(t *testing.T) {
+			argv := rt.argv(requireTool(t, rt.tool))
+			dir := guardDir(t)
+			base := elapsed(dir, argv, payload("ls"))
+			if extra := elapsed(dir, argv, payload(long)) - base; extra > 2*time.Second {
+				t.Errorf("a %d-character command took %v longer than ls; a pattern backtracks", len(long), extra)
+			}
+		})
+	}
 }
 
 // TestGuardCorpusEndToEnd runs the corpus through the exact command the
