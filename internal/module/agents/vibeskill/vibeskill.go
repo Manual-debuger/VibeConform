@@ -142,6 +142,16 @@ const (
 		"the work is done. Both use the language tools only and never need\n" +
 		"`vibe`. The `hook:*` tasks are for the agent hooks. Do not copy them.\n" +
 		"\n" +
+		"## The agent guard\n" +
+		"\n" +
+		"With Claude Code, `task -x hook:guard` runs before every shell command\n" +
+		"and file edit. It refuses a few destructive commands (`rm -rf`,\n" +
+		"`git reset --hard`, `git push --force` and their other spellings) and\n" +
+		"edits to files that look like secrets. It stops accidents. It is not a\n" +
+		"security boundary and does not replace Claude Code's permission rules\n" +
+		"or sandbox. When it refuses a command you need, ask the user to run it\n" +
+		"with `! <command>`.\n" +
+		"\n" +
 		"## `vibe.yaml`\n" +
 		"\n" +
 		"Every standard accepts these keys:\n" +

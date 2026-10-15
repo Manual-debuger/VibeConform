@@ -1975,9 +1975,20 @@ With the `claude` integration selected (the default), every standard
 configures Claude Code to run a guard before each shell command and each
 file edit. It blocks a short list
 of destructive commands (`rm -rf`, `git reset --hard`, `git push --force`,
-and a few more) and edits to files that conventionally hold secrets
-(`.env`, `*.pem`, `id_rsa`, …). See
-`docs/specs/0021-agent-hooks-task-interface.md`.
+`git restore .`, and a few more) and edits to files that conventionally
+hold secrets (`.env`, `*.pem`, `id_rsa`, …). It blocks each command in
+every spelling the tool itself accepts: `rm -r -f`, `rm --recursive
+--force`, `git -C dir reset --har`, `git push origin +main`,
+`git branch -d -f`, and PowerShell's `ri -Rec -Fo` all count. See
+`docs/specs/0021-agent-hooks-task-interface.md` and
+`docs/specs/0047-guard-respellings.md`.
+
+**It is not a sandbox.** The guard stops common accidents. It is not a
+security boundary: it matches text, and a command it does not recognize
+runs. For hard limits, use Claude Code's permission `deny` rules and its
+sandbox. When the guard refuses a command you do want, run it yourself:
+in Claude Code, `! <command>` runs it in the session without the guard.
+The refusal message says so.
 
 How it fits together:
 
@@ -2032,6 +2043,21 @@ shouldn't:
   no longer blocks it. But a pattern *inside* the command still matches,
   even inside a quoted argument or a heredoc: `gh issue create --body "…git
   reset --hard…"` is denied.
+- **Other commands with the same effect are allowed.** The guard blocks
+  respellings of its commands, not every way to do the same damage:
+  `find . -delete`, `git checkout -f`, `git switch --discard-changes`,
+  `cmd /c rd /s /q`, and deleting a remote branch (`git push origin
+  --delete x`, `git push origin :x`) all run. A secret file written
+  through the shell (`echo X=1 > .env`) or named without an extension
+  (`deploy/secrets/db_password`) is not caught either.
+- **Some spellings are out of reach of a text match**: a command built
+  from a variable or `eval`, quotes inside the command word (`r''m`), a
+  shell alias, a `;` or `|` inside a quoted argument, and an option more
+  than 16 words after its command. The last limit keeps the Node and
+  Python guards fast on long commands.
+
+The tests in `internal/module/agents/claude/testdata/guard_corpus.json`
+record each of these as an allowed "known limitation".
 
 **Checking it fires.** No automated check can see an agent's own hook
 dispatch. The manual canary: ask the agent to run

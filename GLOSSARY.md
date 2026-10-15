@@ -21,6 +21,13 @@ One single-language project inside a `prod-mono` repository, named by
 its id and laid out as the matching single-language standard.
 _Avoid_: package, workspace, sub-project
 
+**Agent guard**:
+The check that runs before an agent's shell command or file edit and
+refuses a short list of destructive commands and edits to secret files.
+It stops common accidents. It is not a security boundary, and it does not
+refuse every command with the same effect.
+_Avoid_: sandbox, firewall, policy engine
+
 ## CI
 
 **CI floor**:

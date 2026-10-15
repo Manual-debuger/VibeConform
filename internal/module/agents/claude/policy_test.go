@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -75,32 +76,26 @@ func TestPolicyRulesAreWellFormed(t *testing.T) {
 	}
 }
 
-// TestPolicyIsFaithfulPort guards spec 0021's "no new patterns" rule from
-// the other direction: every deny message the old bash hooks could print
-// must still come from exactly one rule, so porting did not drop one.
-func TestPolicyIsFaithfulPort(t *testing.T) {
-	oldMessages := []string{
-		"Blocked: rm -rf (or equivalent) is a destructive operation. Ask the user to run it themselves if intended.",
-		"Blocked: Remove-Item -Recurse -Force is a destructive operation. Ask the user to run it themselves if intended.",
-		"Blocked: git reset --hard discards uncommitted work. Ask the user to run it themselves if intended.",
-		"Blocked: git clean -fd (or equivalent) permanently deletes untracked files. Ask the user to run it themselves if intended.",
-		"Blocked: git push --force can overwrite remote history. Ask the user to run it themselves if intended.",
-		"Blocked: git branch -D force-deletes a branch. Ask the user to run it themselves if intended.",
-		"Blocked: this looks like a secret/credential file. Ask the user to edit it themselves.",
+// TestPolicyRules pins the rule set: the seven rules ported from the bash
+// hooks (spec 0021) plus git-discard-worktree (spec 0047). Adding or
+// dropping a rule is a policy decision, so it has to change this list. Every
+// message names the escape: the agent asks, the user runs the command with !
+// (spec 0047, D5).
+func TestPolicyRules(t *testing.T) {
+	want := []string{
+		"rm-rf", "remove-item-recurse-force", "git-reset-hard", "git-clean-fd",
+		"git-push-force", "git-branch-force-delete", "git-discard-worktree", "secret-file",
 	}
-	if len(policy.Rules) != len(oldMessages) {
-		t.Errorf("policy has %d rules, the old hooks had %d", len(policy.Rules), len(oldMessages))
+	var got []string
+	for _, r := range policy.Rules {
+		got = append(got, r.ID)
+		if !strings.HasPrefix(r.Message, "Blocked: ") || !strings.Contains(r.Message, "Ask the user to ") ||
+			!strings.Contains(r.Message, "(in Claude Code: ! <command>") {
+			t.Errorf("%s message %q does not say what was blocked and how the user runs it", r.ID, r.Message)
+		}
 	}
-	for _, msg := range oldMessages {
-		n := 0
-		for _, r := range policy.Rules {
-			if r.Message == msg {
-				n++
-			}
-		}
-		if n != 1 {
-			t.Errorf("%d rules print %q, want exactly 1", n, msg)
-		}
+	if !slices.Equal(got, want) {
+		t.Errorf("rules %v, want %v", got, want)
 	}
 }
 
@@ -122,7 +117,11 @@ func TestRenderPolicyDeterministic(t *testing.T) {
 	if !bytes.HasSuffix(first, []byte("}\n")) {
 		t.Error("policy.json does not end with a single newline")
 	}
-	if bytes.Contains(first, []byte(`<`)) || bytes.Contains(first, []byte(`&`)) {
+	// json.Encoder's HTML escaping writes &, < and > as backslash-u escapes
+	// (u0026, u003c, u003e). The patterns use & as a command separator (spec
+	// 0047), so it must appear as itself. Some editing tools decode a backslash-u
+	// sequence on write, which once left this check looking for & and < instead.
+	if bytes.Contains(first, []byte(`\u0026`)) || bytes.Contains(first, []byte(`\u003c`)) || bytes.Contains(first, []byte(`\u003e`)) {
 		t.Error("policy.json HTML-escapes its patterns; they must read as written")
 	}
 

@@ -65,6 +65,16 @@ Use `task verify:fast` while you work and `task verify` before you say
 the work is done. Both use the language tools only and never need
 `vibe`. The `hook:*` tasks are for the agent hooks. Do not copy them.
 
+## The agent guard
+
+With Claude Code, `task -x hook:guard` runs before every shell command
+and file edit. It refuses a few destructive commands (`rm -rf`,
+`git reset --hard`, `git push --force` and their other spellings) and
+edits to files that look like secrets. It stops accidents. It is not a
+security boundary and does not replace Claude Code's permission rules
+or sandbox. When it refuses a command you need, ask the user to run it
+with `! <command>`.
+
 ## `vibe.yaml`
 
 Every standard accepts these keys:
