@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.10.0-alpha.1.0.20261015063232-6f5d693e6bc8
+vibe_version: v0.10.1-alpha.1.0.20261015073744-89c751de9c77
 standard: prod-py/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
@@ -91,6 +91,6 @@ resources:
     - path: pyrightconfig.json
       ownership: generated
       sha256: ca1316bdda3ba3c86490ff023de71f39a48fa04105fd03fd888924c36ce0bb43
-    - path: ruff.toml
+    - path: ruff.base.toml
       ownership: generated
-      sha256: 29180a6715382235e570cd3501ebe73f20254801d4a919d680d8c6f0c8174ede
+      sha256: 6ced9595efc438c536fffa30d359bcfaac9c59c678fed2ca4bba1f3b7d6699da
