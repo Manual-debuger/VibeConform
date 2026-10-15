@@ -8,51 +8,58 @@
     {
       "id": "rm-rf",
       "field": "command",
-      "pattern": "rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)(\\s|\"|$)",
-      "raw": "rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)(\\s|\"|$)",
-      "message": "Blocked: rm -rf (or equivalent) is a destructive operation. Ask the user to run it themselves if intended."
+      "pattern": "(^|[^a-zA-Z0-9_.-])rm[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*[rR][a-zA-Z]*|--r(e(c(u(r(s(i(v(e)?)?)?)?)?)?)?)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--f(o(r(c(e)?)?)?)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])rm[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--f(o(r(c(e)?)?)?)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*[rR][a-zA-Z]*|--r(e(c(u(r(s(i(v(e)?)?)?)?)?)?)?)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])rm[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*([rR][a-zA-Z]*f|f[a-zA-Z]*[rR])",
+      "raw": "(^|[^a-zA-Z0-9_.-])rm[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*[rR][a-zA-Z]*|--r(e(c(u(r(s(i(v(e)?)?)?)?)?)?)?)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--f(o(r(c(e)?)?)?)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])rm[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--f(o(r(c(e)?)?)?)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*[rR][a-zA-Z]*|--r(e(c(u(r(s(i(v(e)?)?)?)?)?)?)?)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])rm[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*([rR][a-zA-Z]*f|f[a-zA-Z]*[rR])",
+      "message": "Blocked: rm -rf (or equivalent) is a destructive operation. Ask the user to run it themselves (in Claude Code: ! <command>)."
     },
     {
       "id": "remove-item-recurse-force",
       "field": "command",
-      "pattern": "Remove-Item[^\"\\\\]*-Recurse[^\"\\\\]*-Force|Remove-Item[^\"\\\\]*-Force[^\"\\\\]*-Recurse",
-      "raw": "Remove-Item[^\"\\\\]*-Recurse[^\"\\\\]*-Force|Remove-Item[^\"\\\\]*-Force[^\"\\\\]*-Recurse",
-      "message": "Blocked: Remove-Item -Recurse -Force is a destructive operation. Ask the user to run it themselves if intended."
+      "pattern": "(^|[^a-zA-Z0-9_.-])([Rr][Ee][Mm][Oo][Vv][Ee]-[Ii][Tt][Ee][Mm]|[Rr][Ii]|[Dd][Ee][Ll]|[Ee][Rr][Aa][Ss][Ee]|[Rr][Dd]|[Rr][Mm][Dd][Ii][Rr]|[Rr][Mm])[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[Rr]([Ee]([Cc]([Uu]([Rr]([Ss]([Ee])?)?)?)?)?)?(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[Ff][Oo]([Rr]([Cc]([Ee])?)?)?([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])([Rr][Ee][Mm][Oo][Vv][Ee]-[Ii][Tt][Ee][Mm]|[Rr][Ii]|[Dd][Ee][Ll]|[Ee][Rr][Aa][Ss][Ee]|[Rr][Dd]|[Rr][Mm][Dd][Ii][Rr]|[Rr][Mm])[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[Ff][Oo]([Rr]([Cc]([Ee])?)?)?(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[Rr]([Ee]([Cc]([Uu]([Rr]([Ss]([Ee])?)?)?)?)?)?([^a-zA-Z0-9_-]|$)",
+      "raw": "(^|[^a-zA-Z0-9_.-])([Rr][Ee][Mm][Oo][Vv][Ee]-[Ii][Tt][Ee][Mm]|[Rr][Ii]|[Dd][Ee][Ll]|[Ee][Rr][Aa][Ss][Ee]|[Rr][Dd]|[Rr][Mm][Dd][Ii][Rr]|[Rr][Mm])[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[Rr]([Ee]([Cc]([Uu]([Rr]([Ss]([Ee])?)?)?)?)?)?(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[Ff][Oo]([Rr]([Cc]([Ee])?)?)?([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])([Rr][Ee][Mm][Oo][Vv][Ee]-[Ii][Tt][Ee][Mm]|[Rr][Ii]|[Dd][Ee][Ll]|[Ee][Rr][Aa][Ss][Ee]|[Rr][Dd]|[Rr][Mm][Dd][Ii][Rr]|[Rr][Mm])[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[Ff][Oo]([Rr]([Cc]([Ee])?)?)?(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[Rr]([Ee]([Cc]([Uu]([Rr]([Ss]([Ee])?)?)?)?)?)?([^a-zA-Z0-9_-]|$)",
+      "message": "Blocked: Remove-Item -Recurse -Force (or equivalent) is a destructive operation. Ask the user to run it themselves (in Claude Code: ! <command>)."
     },
     {
       "id": "git-reset-hard",
       "field": "command",
-      "pattern": "git\\s+reset\\s+--hard",
-      "raw": "git\\s+reset\\s+--hard",
-      "message": "Blocked: git reset --hard discards uncommitted work. Ask the user to run it themselves if intended."
+      "pattern": "(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+reset[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}--ha(r(d)?)?([^a-zA-Z0-9_-]|$)",
+      "raw": "(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+reset[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}--ha(r(d)?)?([^a-zA-Z0-9_-]|$)",
+      "message": "Blocked: git reset --hard discards uncommitted work. Ask the user to run it themselves (in Claude Code: ! <command>)."
     },
     {
       "id": "git-clean-fd",
       "field": "command",
-      "pattern": "git\\s+clean\\s+-[a-zA-Z]*f[a-zA-Z]*d|git\\s+clean\\s+-[a-zA-Z]*d[a-zA-Z]*f",
-      "raw": "git\\s+clean\\s+-[a-zA-Z]*f[a-zA-Z]*d|git\\s+clean\\s+-[a-zA-Z]*d[a-zA-Z]*f",
-      "message": "Blocked: git clean -fd (or equivalent) permanently deletes untracked files. Ask the user to run it themselves if intended."
+      "pattern": "(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+clean[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--f(o(r(c(e)?)?)?)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*d[a-zA-Z]*([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+clean[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*d[a-zA-Z]*(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--f(o(r(c(e)?)?)?)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+clean[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*(f[a-zA-Z]*d|d[a-zA-Z]*f)",
+      "raw": "(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+clean[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--f(o(r(c(e)?)?)?)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*d[a-zA-Z]*([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+clean[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*d[a-zA-Z]*(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--f(o(r(c(e)?)?)?)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+clean[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*(f[a-zA-Z]*d|d[a-zA-Z]*f)",
+      "message": "Blocked: git clean -fd (or equivalent) permanently deletes untracked files. Ask the user to run it themselves (in Claude Code: ! <command>)."
     },
     {
       "id": "git-push-force",
       "field": "command",
-      "pattern": "git\\s+push[^\"\\\\]*(--force(\\s|\"|$)|\\s-f(\\s|\"|$))",
-      "raw": "git\\s+push[^\"\\\\]*(--force(\\s|\"|$)|\\s-f(\\s|\"|$))",
-      "message": "Blocked: git push --force can overwrite remote history. Ask the user to run it themselves if intended."
+      "pattern": "(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+push[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*([^a-zA-Z0-9_-]|$)|--force([^a-zA-Z0-9_-]|$)|[\"']?\\+[^ \\t])",
+      "raw": "(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+push[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*([^a-zA-Z0-9_-]|$)|--force([^a-zA-Z0-9_-]|$)|[\"']?\\+[^ \\t])",
+      "message": "Blocked: git push --force (or a +refspec) can overwrite remote history. Ask the user to run it themselves (in Claude Code: ! <command>)."
     },
     {
       "id": "git-branch-force-delete",
       "field": "command",
-      "pattern": "git\\s+branch\\s+-D",
-      "raw": "git\\s+branch\\s+-D",
-      "message": "Blocked: git branch -D force-deletes a branch. Ask the user to run it themselves if intended."
+      "pattern": "(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+branch[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*D|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+branch[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*d[a-zA-Z]*|--d(e(l(e(t(e)?)?)?)?)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--forc(e)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+branch[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--forc(e)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*d[a-zA-Z]*|--d(e(l(e(t(e)?)?)?)?)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+branch[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*(d[a-zA-Z]*f|f[a-zA-Z]*d)",
+      "raw": "(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+branch[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*D|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+branch[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*d[a-zA-Z]*|--d(e(l(e(t(e)?)?)?)?)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--forc(e)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+branch[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*f[a-zA-Z]*|--forc(e)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*d[a-zA-Z]*|--d(e(l(e(t(e)?)?)?)?)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+branch[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}-[a-zA-Z]*(d[a-zA-Z]*f|f[a-zA-Z]*d)",
+      "message": "Blocked: git branch -D (or equivalent) force-deletes a branch. Ask the user to run it themselves (in Claude Code: ! <command>)."
+    },
+    {
+      "id": "git-discard-worktree",
+      "field": "command",
+      "pattern": "(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+restore[ \\t]+(([^- \\t;&|\\n][^ \\t;&|\\n]*|--|--[^s \\t;&|\\n][^ \\t;&|\\n]*|--s[^t \\t;&|\\n][^ \\t;&|\\n]*|-[a-zA-RT-Z0-9]+)[ \\t]+){0,16}[\"']?(\\.|\\./|:/)[\"']?([ \\t;&|)]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+restore[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*W[a-zA-Z]*|--w(o(r(k(t(r(e(e)?)?)?)?)?)?)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}[\"']?(\\.|\\./|:/)[\"']?([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+restore[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}[\"']?(\\.|\\./|:/)[\"']?(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*W[a-zA-Z]*|--w(o(r(k(t(r(e(e)?)?)?)?)?)?)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+checkout[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}[\"']?(\\.|\\./|:/)[\"']?([ \\t;&|)]|$)",
+      "raw": "(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+restore[ \\t]+(([^- \\t;&|\\n][^ \\t;&|\\n]*|--|--[^s \\t;&|\\n][^ \\t;&|\\n]*|--s[^t \\t;&|\\n][^ \\t;&|\\n]*|-[a-zA-RT-Z0-9]+)[ \\t]+){0,16}[\"']?(\\.|\\./|:/)[\"']?([ \\t;&|)]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+restore[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*W[a-zA-Z]*|--w(o(r(k(t(r(e(e)?)?)?)?)?)?)?)(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}[\"']?(\\.|\\./|:/)[\"']?([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+restore[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}[\"']?(\\.|\\./|:/)[\"']?(:[^ \\t;&|\\n]*)?[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}(-[a-zA-Z]*W[a-zA-Z]*|--w(o(r(k(t(r(e(e)?)?)?)?)?)?)?)([^a-zA-Z0-9_-]|$)|(^|[^a-zA-Z0-9_.-])git([ \\t]+(-[Cc][ \\t]+[^ \\t;&|\\n]+|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env)[ \\t]+[^ \\t;&|\\n]+|-[^ \\t;&|\\n]*)){0,8}[ \\t]+checkout[ \\t]+([^ \\t;&|\\n]+[ \\t]+){0,16}[\"']?(\\.|\\./|:/)[\"']?([ \\t;&|)]|$)",
+      "message": "Blocked: git restore . (or git checkout -- .) discards uncommitted changes to tracked files. Ask the user to run it themselves (in Claude Code: ! <command>)."
     },
     {
       "id": "secret-file",
       "field": "file_path",
       "pattern": "(\\.env(\\.[a-zA-Z]+)?|\\.pem|\\.key|id_rsa|id_ed25519|credentials\\.json|\\.npmrc|\\.netrc)$",
       "raw": "\"file_path\"\\s*:\\s*\"[^\"]*(\\.env(\\.[a-zA-Z]+)?|\\.pem|\\.key|id_rsa|id_ed25519|credentials\\.json|\\.npmrc|\\.netrc)\"",
-      "message": "Blocked: this looks like a secret/credential file. Ask the user to edit it themselves."
+      "message": "Blocked: this looks like a secret/credential file. Ask the user to edit it themselves (in Claude Code: ! <command>, or their editor)."
     }
   ]
 }
