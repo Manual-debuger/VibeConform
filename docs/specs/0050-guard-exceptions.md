@@ -102,6 +102,15 @@ list without editing a managed file, which `vibe audit` then fails:
   weakened the guard. Extra rules are listed the same way.
 - **D10.** A repository without the file reports exactly as today.
 
+### The file is the user's
+
+- **D12.** The guard denies an agent's Edit, MultiEdit or Write of
+  `.claude/hooks/policy.json` and `.claude/hooks/policy.local.json`
+  (managed rule `guard-policy-file`) and tells it to ask the user. An
+  agent refused by the guard cannot write itself an exception. A shell
+  write is not covered: the guard is not a sandbox. Added with plan 0050's
+  approval.
+
 ### Documentation
 
 - **D11.** `docs/usage.md` ("The agent guard") documents the file, an
@@ -126,7 +135,7 @@ list without editing a managed file, which `vibe audit` then fails:
       applying to an excepted command; an exception with a broken pattern
       lifting nothing; an extra rule denying; a broken local file denying
       everything with a message naming it; no local file behaving as
-      today.
+      today; edits of either policy file denied (D12).
 - [ ] The CI guard jobs (`Hook guard / gate`) run that corpus on Linux
       and Windows.
 - [ ] `vibe audit` reports each D8 problem as a conflict and each
