@@ -30,6 +30,10 @@ Every `resource.Resource` carries an explicit `Ownership` mode:
   ownership in the first place.
 - `project-owned` — read-only context; the reconciler must never write it.
 
+*Amended by ADR 0024:* a fifth mode, `seeded`. The repository owns the
+file; VibeConform writes a minimal seed only when it is missing, and
+afterwards only checks that it still names its managed base config.
+
 Ownership is a property the *module* declares when it produces a resource,
 not something inferred by scanning file contents at reconciliation time.
 

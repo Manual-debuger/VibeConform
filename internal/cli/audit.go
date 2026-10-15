@@ -48,9 +48,24 @@ func runAudit(cmd *cobra.Command, repoRoot string) error {
 			checked++
 			conflicts++
 			line = ignoredLine(rp.Resource.Path)
+		case rp.Seed != nil:
+			checked++
+			line = auditSeedLine(rp.Seed)
+			switch rp.Seed.Action {
+			case seedCreate:
+				drifted++
+			case seedConvert, seedAdopt:
+				outOfDate++
+			case seedEdited, seedNoBase:
+				conflicts++
+			case seedOK:
+			}
 		case rp.Supported:
 			checked++
 			line = auditLine(rp.Decision)
+			if rp.HeldBy != "" && rp.Decision != reconcile.NoChange {
+				line += fmt.Sprintf("; held until %s is resolved", rp.HeldBy)
+			}
 			switch rp.Decision {
 			case reconcile.Create, reconcile.LocalDrift:
 				drifted++

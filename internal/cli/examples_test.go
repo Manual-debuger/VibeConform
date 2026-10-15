@@ -45,6 +45,15 @@ func TestExamplesAreConformant(t *testing.T) {
 					t.Errorf("%s: unsupported ownership %v", rp.Resource.Path, rp.Resource.Ownership)
 					continue
 				}
+				if rp.Seed != nil {
+					// The repository's own file: conformant when it exists
+					// and names its base (spec 0049).
+					if rp.Seed.Action != seedOK {
+						t.Errorf("%s: %s — run: vibe sync --repo-root examples/%s",
+							rp.Resource.Path, auditSeedLine(rp.Seed), example)
+					}
+					continue
+				}
 				if rp.Decision != reconcile.NoChange {
 					t.Errorf("%s: %v, want NoChange — run: vibe sync --repo-root examples/%s",
 						rp.Resource.Path, rp.Decision, example)

@@ -28,11 +28,27 @@ It stops common accidents. It is not a security boundary, and it does not
 refuse every command with the same effect.
 _Avoid_: sandbox, firewall, policy engine
 
+**Floor**:
+The part of a repository's tooling that decides what the gate runs and
+whether its result counts. No seam can change it.
+_Avoid_: lock, locked rule, contract
+
+**Guard exception**:
+An adopting repository's statement that one agent guard rule lets one
+named command through. Every other rule still applies to it.
+_Avoid_: allow rule, whitelist, override
+
+**Base config**:
+The managed half of a lint or compiler configuration, which the
+repository's own configuration under the tool's usual name extends.
+_Avoid_: managed config (alone), vendor config, default config
+
 ## CI
 
 **CI floor**:
-The part of a generated CI job that decides what it runs and whether its
-result counts. VibeConform owns it; an adopting repository cannot change it.
+The floor's part in a generated CI job: what the job runs and whether
+its result counts. VibeConform owns it; an adopting repository cannot
+change it.
 _Avoid_: hardening, contract (alone)
 
 **Seam**:

@@ -30,7 +30,7 @@ func TestESLintGitignore(t *testing.T) {
 		writeFile(t, filepath.Join(dir, ".gitignore"), ".claude/worktrees/\n")
 		ignored := writeFile(t, filepath.Join(dir, ".claude", "worktrees", "x", "bad.mjs"), unusedVar)
 		control := writeFile(t, filepath.Join(dir, "control.mjs"), unusedVar)
-		config := writeFile(t, filepath.Join(dir, "eslint.config.js"), string(eslintConfig))
+		config := writeConfig(t, dir, string(eslintSeed))
 
 		reported := runESLint(t, eslint, dir, config)
 		if !reported[key(control)] {
@@ -44,7 +44,7 @@ func TestESLintGitignore(t *testing.T) {
 	t.Run("no .gitignore changes nothing", func(t *testing.T) {
 		dir := fixtureDir(t, example)
 		bad := writeFile(t, filepath.Join(dir, ".claude", "worktrees", "x", "bad.mjs"), unusedVar)
-		config := writeFile(t, filepath.Join(dir, "eslint.config.js"), string(eslintConfig))
+		config := writeConfig(t, dir, string(eslintSeed))
 
 		if reported := runESLint(t, eslint, dir, config); !reported[key(bad)] {
 			t.Errorf("without a .gitignore, %s should be linted as before (reported: %v)", bad, reported)
@@ -93,6 +93,16 @@ func fixtureDir(t *testing.T, example string) string {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	return dir
+}
+
+// writeConfig writes the base under test and seed, the repository's
+// eslint.config.js that imports it, into dir, and returns the seed's path
+// (spec 0049): every real-ESLint test lints through the seam, as an
+// adopting repository does.
+func writeConfig(t *testing.T, dir, seed string) string {
+	t.Helper()
+	writeFile(t, filepath.Join(dir, "eslint.base.config.js"), string(eslintConfig))
+	return writeFile(t, filepath.Join(dir, "eslint.config.js"), seed)
 }
 
 // writeFile writes content to path, creating its directory, and returns

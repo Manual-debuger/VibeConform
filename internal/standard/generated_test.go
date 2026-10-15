@@ -63,11 +63,11 @@ func TestGeneratedAbsentIsByteIdentical(t *testing.T) {
 func TestGeneratedRendering(t *testing.T) {
 	generated := []string{"src/contracts/**", "src/api.gen.ts"}
 	allowed := map[string][]string{
-		"prod-py": {"ruff.toml"},
-		"prod-ts": {"eslint.config.js", "lefthook.yml", ".prettierignore"},
+		"prod-py": {"ruff.base.toml"},
+		"prod-ts": {"eslint.base.config.js", "lefthook.yml", ".prettierignore"},
 		"prod-mono": {
-			"services/worker/ruff.toml",
-			"apps/web/eslint.config.js", "apps/web/.prettierignore",
+			"services/worker/ruff.base.toml",
+			"apps/web/eslint.base.config.js", "apps/web/.prettierignore",
 		},
 	}
 	for k, s := range registry {
@@ -93,7 +93,7 @@ func TestGeneratedRendering(t *testing.T) {
 			}
 			for path, content := range got {
 				switch {
-				case strings.HasSuffix(path, "ruff.toml"):
+				case strings.HasSuffix(path, "ruff.base.toml"):
 					add := "\n# Generated code (vibe.yaml generated:): not formatted or linted, still\n" +
 						"# type-checked. force-exclude applies it to files passed explicitly too.\n" +
 						`extend-exclude = ["src/contracts/**", "src/api.gen.ts"]` + "\n" +
@@ -106,7 +106,7 @@ func TestGeneratedRendering(t *testing.T) {
 					if i := strings.Index(content, "force-exclude"); i < 0 || i > table {
 						t.Errorf("%s: force-exclude is not a top-level key", path)
 					}
-				case strings.HasSuffix(path, "eslint.config.js"):
+				case strings.HasSuffix(path, "eslint.base.config.js"):
 					line := "    ignores: ['**/dist/**', '**/coverage/**', 'src/contracts/**', 'src/api.gen.ts'],\n"
 					if !strings.Contains(content, line) {
 						t.Errorf("%s lacks %q", path, line)

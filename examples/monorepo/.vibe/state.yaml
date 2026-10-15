@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.10.0-alpha.1.0.20261015063232-6f5d693e6bc8
+vibe_version: v0.10.1-alpha.1.0.20261015073744-89c751de9c77
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go
@@ -91,9 +91,9 @@ resources:
     - path: apps/web/Taskfile.yml
       ownership: generated
       sha256: 60e3dc68b9394612efc67a961d142684f760f73edefe961d52ce20c2f6d7293b
-    - path: apps/web/eslint.config.js
+    - path: apps/web/eslint.base.config.js
       ownership: generated
-      sha256: e966ac140172ab792abaed6506811316e5ade509ee8f7d73c9ae5e7cfda86d6c
+      sha256: d3c756272687ea9a5fcf9841bdfc811522c86770653cb78e4235c7ed622d2249
     - path: apps/web/tsconfig.base.json
       ownership: generated
       sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217
@@ -112,6 +112,6 @@ resources:
     - path: services/worker/pyrightconfig.json
       ownership: generated
       sha256: ca1316bdda3ba3c86490ff023de71f39a48fa04105fd03fd888924c36ce0bb43
-    - path: services/worker/ruff.toml
+    - path: services/worker/ruff.base.toml
       ownership: generated
-      sha256: f6a6b37bdd5b48e26ef1039667777e9c544b8d9df32bfcea0ab905612997a6bb
+      sha256: 77cfcba7cc06d14a24c738ce5685b80e7cd408e568cebf0d93129f502e4b9eda

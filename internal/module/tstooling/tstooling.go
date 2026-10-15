@@ -16,8 +16,17 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
-//go:embed templates/eslint.config.js
+//go:embed templates/eslint.base.config.js
 var eslintConfig []byte
+
+// The seeds: what VibeConform writes as the repository's own
+// configuration when it is missing, and never again (ADR 0024).
+//
+//go:embed templates/eslint.config.js
+var eslintSeed []byte
+
+//go:embed templates/tsconfig.json
+var tsconfigSeed []byte
 
 // Template files are named without their leading dot: go:embed excludes
 // dot-prefixed names from directory patterns, and gotooling already sets the
@@ -36,7 +45,7 @@ const GeneratedSectionID = "generated"
 // PrettierIgnorePath is where that section lives.
 const PrettierIgnorePath = ".prettierignore"
 
-// eslintIgnores is the global ignores line of eslint.config.js, the anchor
+// eslintIgnores is the global ignores line of eslint.base.config.js, the anchor
 // generated paths are appended to.
 const eslintIgnores = "ignores: ['**/dist/**', '**/coverage/**']"
 
@@ -72,7 +81,7 @@ func (tstoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 // Resolve returns this module's resources in a fixed order; see the
 // github-ci module for why order is part of the contract.
 //
-// Generated paths (spec 0037) are appended to eslint.config.js's global
+// Generated paths (spec 0037) are appended to eslint.base.config.js's global
 // ignores and listed in a .prettierignore section, so both tools skip them
 // at every entry point. Without any, every file is the embedded template.
 func (tstoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
@@ -83,9 +92,15 @@ func (tstoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]resou
 	}
 	rs := []resource.Resource{
 		{
-			Path:      "eslint.config.js",
+			Path:      "eslint.base.config.js",
 			Ownership: resource.Generated,
 			Content:   eslint,
+		},
+		{
+			Path:      "eslint.config.js",
+			Ownership: resource.Seeded,
+			Content:   eslintSeed,
+			Base:      "eslint.base.config.js",
 		},
 		{
 			Path:      ".prettierrc.json",
@@ -93,14 +108,18 @@ func (tstoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]resou
 			Content:   prettierConfig,
 		},
 		{
-			// The base, not tsconfig.json: the standard owns the compiler
-			// options, and the repository owns a tsconfig.json extending
-			// this one with its own include, outDir, and paths. That split
-			// is the closest thing to a managed section available without
-			// any change to apply logic.
+			// The standard owns the compiler options, and the repository
+			// owns a tsconfig.json extending them with its own include,
+			// outDir, jsx and paths.
 			Path:      "tsconfig.base.json",
 			Ownership: resource.Generated,
 			Content:   tsconfigBase,
+		},
+		{
+			Path:      "tsconfig.json",
+			Ownership: resource.Seeded,
+			Content:   tsconfigSeed,
+			Base:      "tsconfig.base.json",
 		},
 	}
 	if len(generated) > 0 {
@@ -134,5 +153,5 @@ func ignoreInESLint(config []byte, generated []string) ([]byte, error) {
 		fmt.Fprintf(&b, ", '%s'", g)
 	}
 	b.WriteString("]")
-	return module.ReplaceOnce(config, "eslint.config.js", "ignore generated paths", eslintIgnores, b.String())
+	return module.ReplaceOnce(config, "eslint.base.config.js", "ignore generated paths", eslintIgnores, b.String())
 }

@@ -371,6 +371,13 @@ func applyResource(repoRoot string, rp resourcePlan, next *state.State, counts *
 		return ignoredLine(rp.Resource.Path), nil
 	}
 
+	if rp.Seed != nil {
+		return applySeed(repoRoot, rp, next, counts)
+	}
+	if rp.HeldBy != "" && rp.Decision != reconcile.NoChange {
+		return heldLine(rp.HeldBy), nil
+	}
+
 	key := stateKey(rp.Resource.Path)
 	switch rp.Decision {
 	// LocalDrift and OutOfDate both write the target; they differ only in

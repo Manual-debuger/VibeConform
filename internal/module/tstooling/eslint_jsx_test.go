@@ -17,7 +17,7 @@ func TestESLintJSX(t *testing.T) {
 	control := writeFile(t, filepath.Join(dir, "control.ts"), floatingPromise)
 	tsx := writeFile(t, filepath.Join(dir, "app.tsx"), floatingPromiseTSX)
 	jsx := writeFile(t, filepath.Join(dir, "view.jsx"), unusedJSX)
-	config := writeFile(t, filepath.Join(dir, "eslint.config.js"), string(eslintConfig))
+	config := writeConfig(t, dir, string(eslintSeed))
 
 	rules := runESLintRules(t, eslint, dir, config)
 	for _, c := range []struct{ file, rule string }{

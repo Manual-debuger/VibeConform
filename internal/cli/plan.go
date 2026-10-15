@@ -42,6 +42,11 @@ type resourcePlan struct {
 	// of the file it shares with the file's other sections.
 	Section     *sectionPlan
 	SectionFile *sectionFile
+	// Seed is the plan of a seeded file (resource.Seeded).
+	Seed *seedPlan
+	// HeldBy names the seeded file whose unresolved edits keep this base
+	// config from being written (spec 0049 D10); "" when not held.
+	HeldBy string
 }
 
 // prunePlan is one recorded path that the selection no longer produces
@@ -174,6 +179,7 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 	if err := planGuards(repoRoot, p); err != nil {
 		return nil, err
 	}
+	holdBases(p)
 
 	return p, nil
 }
@@ -486,6 +492,12 @@ func planResource(repoRoot string, previous *state.State, mod module.Module, r r
 		// Decided in planSections, with the file's other sections.
 		checker, _ := mod.(module.SectionChecker)
 		return resourcePlan{Resource: r, Supported: true, Section: &sectionPlan{ID: r.SectionID, checker: checker, resource: r}}, nil
+	}
+	if (r.Ownership == resource.Seeded) != (r.Base != "") {
+		return resourcePlan{}, fmt.Errorf("%s: a seeded resource needs a Base, and only one may have it", r.Path)
+	}
+	if r.Ownership == resource.Seeded {
+		return planSeed(repoRoot, previous, r)
 	}
 	if r.Patch != nil {
 		var recorded *state.ResourceState
