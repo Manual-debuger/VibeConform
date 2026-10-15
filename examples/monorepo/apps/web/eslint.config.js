@@ -14,10 +14,13 @@ const { includeIgnoreFile } = await import('eslint/config').catch(() => ({}))
 const gitignore = path.join(import.meta.dirname, '.gitignore')
 const gitignored = includeIgnoreFile && existsSync(gitignore) ? [includeIgnoreFile(gitignore)] : []
 
-// Every .ts file is type-checked. A narrower glob is faster, but a file
-// falling outside it is silently linted by nothing, and a lint run that
-// checks less than you think it does still exits 0.
-const typedFiles = ['**/*.ts']
+// Every .ts and .tsx file is type-checked, and every .js, .mjs and .jsx
+// file gets the untyped rules: what the standard formats as source, it
+// lints (spec 0048). A narrower glob is faster, but a file falling outside
+// it is silently linted by nothing, and a lint run that checks less than
+// you think it does still exits 0. A typed file must be in your
+// tsconfig.json's include, which is also where you set jsx.
+const typedFiles = ['**/*.{ts,tsx}']
 
 // Config files are the exception, and they have to be. Tool configs
 // (vitest.config.ts, drizzle.config.ts) normally sit outside every
@@ -33,8 +36,11 @@ export default tseslint.config(
   ...gitignored,
   {
     ...js.configs.recommended,
-    files: ['**/*.{js,mjs}'],
-    languageOptions: { globals: globals.node },
+    files: ['**/*.{js,mjs,jsx}'],
+    languageOptions: {
+      globals: globals.node,
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
   },
   ...tseslint.configs.recommendedTypeChecked.map((config) => ({
     ...config,

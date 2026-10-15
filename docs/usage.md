@@ -770,6 +770,16 @@ What's still true from M2:
   { "extends": "./tsconfig.base.json", "include": ["src"] }
   ```
 
+- **ESLint lints what the standard formats** (spec 0048): `.ts` and
+  `.tsx` files with the type-aware rules, `.js`, `.mjs` and `.jsx` files
+  without them. A `.ts` or `.tsx` file must be in your `tsconfig.json`'s
+  `include`. If it isn't, ESLint stops with a parse error for that file
+  instead of skipping it. The base sets no JSX runtime, because that
+  depends on your framework. If your `.tsx` files hold JSX, set `jsx` (and
+  `jsxImportSource` if you need it) in your `tsconfig.json`, next to
+  `include`. Rules for the browser or for a framework, such as React
+  hooks, are not part of the standard.
+
 - **ESLint skips what your `.gitignore` ignores** (spec 0045), as
   Prettier already does. `eslint.config.js` reads the `.gitignore` next to
   it, and only that one: nested `.gitignore` files, `.git/info/exclude`
