@@ -51,8 +51,8 @@ func parseTaskfile(t *testing.T, data []byte) (taskfileDoc, describedTaskfile) {
 
 // TestAddGraphifyShape pins spec 0035 §2 on every single-language
 // template: a public graph:update task, the hook:context line only with
-// the agent hooks, and Git hook jobs only under post-commit and
-// post-checkout.
+// the agent hooks, and Git hook jobs under post-commit, post-checkout and
+// post-merge (spec 0046), never under pre-commit or pre-push.
 func TestAddGraphifyShape(t *testing.T) {
 	for _, path := range repoToolingTaskfiles {
 		for _, hooks := range []bool{true, false} {
@@ -92,7 +92,7 @@ func TestAddGraphifyShape(t *testing.T) {
 				}
 
 				hooksDoc := parseLefthookHooks(t, lh)
-				for _, hook := range []string{"post-commit", "post-checkout"} {
+				for _, hook := range []string{"post-commit", "post-checkout", "post-merge"} {
 					if got := hooksDoc[hook].Commands["graphify-update"].Run; got != "task graph:update" {
 						t.Errorf("%s graphify-update runs %q, want task graph:update", hook, got)
 					}

@@ -70,7 +70,7 @@ func TestGraphifyFollowsSelection(t *testing.T) {
 					t.Errorf("agents %v: hook:context Graphify line present = %v, want %v", agents, line, claude)
 				}
 				lh := string(got["lefthook.yml"].Content)
-				if !strings.Contains(lh, "post-commit:") || !strings.Contains(lh, "post-checkout:") || !strings.Contains(lh, "run: task graph:update") {
+				if !strings.Contains(lh, "post-commit:") || !strings.Contains(lh, "post-checkout:") || !strings.Contains(lh, "post-merge:") || !strings.Contains(lh, "run: task graph:update") {
 					t.Errorf("agents %v: lefthook.yml lacks the graph update jobs:\n%s", agents, lh)
 				}
 			}

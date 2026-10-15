@@ -34,3 +34,8 @@ post-checkout:
   commands:
     graphify-update:
       run: task graph:update
+
+post-merge:
+  commands:
+    graphify-update:
+      run: task graph:update

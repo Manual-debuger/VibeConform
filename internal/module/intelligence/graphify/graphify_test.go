@@ -90,6 +90,11 @@ func TestSkill(t *testing.T) {
 			t.Errorf("skill lacks %q", want)
 		}
 	}
+	// Spec 0046: a fast-forward pull fires only post-merge, so the skill
+	// names all three hooks that keep the graph current.
+	if !strings.Contains(Skill, "post-commit, post-checkout and post-merge") {
+		t.Error("skill does not name the post-commit, post-checkout and post-merge hooks")
+	}
 	if strings.Contains(Skill, "\r") || !strings.HasSuffix(Skill, "\n") {
 		t.Error("skill must be LF-only with a final newline")
 	}
@@ -99,5 +104,8 @@ func TestRequiredToolIsOptional(t *testing.T) {
 	tools := New().(module.ToolRequirer).RequiredTools(nil)
 	if len(tools) != 1 || tools[0].Name != "graphify" || !tools[0].Optional || tools[0].Install == "" || len(tools[0].Version) == 0 {
 		t.Errorf("tools = %+v, want graphify, optional, with an install hint and a version probe", tools)
+	}
+	if len(tools) == 1 && !strings.Contains(tools[0].Why, "post-commit, post-checkout and post-merge") {
+		t.Errorf("reason %q does not name all three hooks (spec 0046)", tools[0].Why)
 	}
 }
