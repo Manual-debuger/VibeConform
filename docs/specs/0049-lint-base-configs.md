@@ -1,6 +1,6 @@
 # Spec 0049: Base Configs for ESLint and Ruff
 
-Status: accepted (2026-10-15). Issue #80 (the umbrella), the second step after spec
+Status: accepted and implemented (2026-10-15). Issue #80 (the umbrella), the second step after spec
 0048. Settled with the user on 2026-10-15 in the grilling of #80
 (Q1–Q18). Decided by ADR 0024.
 
@@ -47,7 +47,7 @@ writes one from `docs/usage.md`.
 
 ## Assumptions
 
-Not yet verified; the plan starts with a probe for each.
+Each was probed before the plan (plan 0049, "Probes"), and holds.
 
 - **A1.** Ruff resolves `extend-exclude` paths in an extended file
   relative to that file's directory, so the `generated:` exclusions in
@@ -157,25 +157,25 @@ Not yet verified; the plan starts with a probe for each.
 
 ## Acceptance Criteria
 
-- [ ] A fresh prod-ts, prod-py and prod-mono repository gets the bases
+- [x] A fresh prod-ts, prod-py and prod-mono repository gets the bases
       and the seeds; `task verify` and `vibe audit` pass in it, and the
       lint result equals today's whole-file configs on the same sources.
-- [ ] A test runs the real ESLint on a fixture with the seed and the
+- [x] A test runs the real ESLint on a fixture with the seed and the
       base: a typed rule, an untyped rule and a `generated:` exclusion
       behave as today; an entry added after the base turns a rule off.
-- [ ] A test runs the real Ruff on a fixture with the seed and the base:
+- [x] A test runs the real Ruff on a fixture with the seed and the base:
       a selected rule fires, a `generated:` path is skipped, and an
       `extend-select`/`ignore` in `ruff.toml` adds and removes a rule.
-- [ ] `sync` creates a missing seed, recreates a deleted one, and never
+- [x] `sync` creates a missing seed, recreates a deleted one, and never
       writes an existing file (tests for each file).
-- [ ] Audit fails on a repository file that no longer names its base,
+- [x] Audit fails on a repository file that no longer names its base,
       prints `extended` for one that differs from its seed, counts a
       missing one as drifted, and reports a gitignored one as a conflict.
-- [ ] Migration: an unchanged managed `eslint.config.js`/`ruff.toml` is
+- [x] Migration: an unchanged managed `eslint.config.js`/`ruff.toml` is
       converted and its state record dropped; an edited one stays and is
       a conflict with the resolution in the message.
-- [ ] The three examples are synced through the migration and
+- [x] The three examples are synced through the migration and
       conformant; this repository is unaffected (prod-go).
-- [ ] ADR 0024, `GLOSSARY.md`, `docs/usage.md` and the principles table
+- [x] ADR 0024, `GLOSSARY.md`, `docs/usage.md` and the principles table
       carry D12 and D13.
-- [ ] `task verify` and `task audit` pass, here and in the examples.
+- [x] `task verify` and `task audit` pass, here and in the examples.

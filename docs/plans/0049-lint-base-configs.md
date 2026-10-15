@@ -1,7 +1,18 @@
 # Plan 0049: Base configs for ESLint and Ruff
 
 Implements `docs/specs/0049-lint-base-configs.md` under ADR 0024.
-Status: approved 2026-10-15.
+Status: approved 2026-10-15 and implemented. Deviations from the plan:
+- **The ESLint seed exports `[...base]` on one line.** Prettier collapses
+  the multi-line form with a trailing comment slot, and the seed must be
+  Prettier-clean; the comment above the export says where entries go.
+- **No `Seeded.String()` test.** `resource.Ownership` has no `String`
+  method; the planner's refusal of a mismatched `Base` is tested instead.
+- **The migration end to end** is covered by the CLI fixture tests (every
+  row of the planning table, on a re-rooted fixture standard) and by the
+  real migration of the three examples in the sync commit, rather than a
+  separate prod-ts test.
+- **The fresh repositories** of acceptance 1 were copies of the examples'
+  sources without their lint configs, `.vibe/` or dependencies.
 
 ## Probes (done 2026-10-15, before this plan)
 

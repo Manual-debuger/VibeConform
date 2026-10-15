@@ -109,6 +109,13 @@ mechanism. See `docs/decisions/0003-resource-ownership.md` and
 - `managed-section` — VibeConform owns a delimited section of a
   project-owned file.
 - `project-owned` — read-only context; never written.
+- `seeded` — the repository owns the file; VibeConform writes its seed
+  only when the file is missing, never records it in state, and checks
+  that it still names its base config (`Resource.Base`). ESLint's, Ruff's
+  and TypeScript's own configurations are seeded next to their managed
+  base configs (spec 0049, ADR 0024). An unchanged file that a previous
+  version managed whole is converted; an edited one is a conflict, and
+  the base next to it is held until it is resolved.
 
 A module may also guard a project-owned file it opens a seam for, by
 implementing `module.ProjectFileGuard`: the planner reads each guarded
@@ -173,6 +180,8 @@ reconciliation
 - `current != previous` and `target != previous` → conflict, surfaced to the
   user rather than silently overwritten.
 - `project-owned` → never overwritten.
+- `seeded` → written only when missing; otherwise checked, never
+  overwritten (spec 0049).
 
 Removal is decided two-way, since there is no target: a recorded path
 that a deselected integration would produce is removed when the file

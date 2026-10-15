@@ -664,10 +664,10 @@ vibe sync
 
 | Standard | Module | Resources |
 |---|---|---|
-| `prod-ts/v1` | `ts-tooling` | `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json` |
+| `prod-ts/v1` | `ts-tooling` | `eslint.base.config.js`, `.prettierrc.json`, `tsconfig.base.json`; created once, then yours: `eslint.config.js`, `tsconfig.json` ([base configs](#base-configs-your-own-rules)) |
 | `prod-ts/v1` | `github-ci-ts` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
 | `prod-ts/v1` | `ts-repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.mjs` |
-| `prod-py/v1` | `python-tooling` | `ruff.toml`, `pyrightconfig.json` |
+| `prod-py/v1` | `python-tooling` | `ruff.base.toml`, `pyrightconfig.json`; created once, then yours: `ruff.toml` ([base configs](#base-configs-your-own-rules)) |
 | `prod-py/v1` | `github-ci-py` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` |
 | `prod-py/v1` | `py-repo-tooling` | `Taskfile.yml`, `lefthook.yml`, `.claude/hooks/guard.py` |
 
@@ -761,14 +761,22 @@ What's still true from M2:
   metadata (dependencies, project name, build config). Nothing pins eslint,
   prettier, typescript, ruff, or pyright to a version on your behalf — you
   install and pin them yourself, the way `examples/typescript/package.json`
-  and `examples/python/pyproject.toml` do. That is also why `ruff.toml` and
-  `pyrightconfig.json` are standalone files rather than `[tool.*]` sections.
-- **`tsconfig.base.json`, not `tsconfig.json`.** The standard owns the
-  compiler options; your repository owns a `tsconfig.json` that extends them:
+  and `examples/python/pyproject.toml` do. That is also why the Ruff and
+  pyright configurations are files of their own rather than `[tool.*]`
+  sections.
+- **`tsconfig.base.json`, and your `tsconfig.json`.** The standard owns the
+  compiler options; your repository owns a `tsconfig.json` that extends
+  them. `vibe sync` creates it when it is missing (spec 0049), as:
 
   ```json
-  { "extends": "./tsconfig.base.json", "include": ["src"] }
+  {
+    "extends": "./tsconfig.base.json",
+    "include": ["src"]
+  }
   ```
+
+  Change `include` to where your sources are; `tsc` fails when it finds
+  no input file.
 
 - **ESLint lints what the standard formats** (spec 0048): `.ts` and
   `.tsx` files with the type-aware rules, `.js`, `.mjs` and `.jsx` files
@@ -781,8 +789,8 @@ What's still true from M2:
   hooks, are not part of the standard.
 
 - **ESLint skips what your `.gitignore` ignores** (spec 0045), as
-  Prettier already does. `eslint.config.js` reads the `.gitignore` next to
-  it, and only that one: nested `.gitignore` files, `.git/info/exclude`
+  Prettier already does. `eslint.base.config.js` reads the `.gitignore`
+  next to it, and only that one: nested `.gitignore` files, `.git/info/exclude`
   and your global excludes file are not read. Without a `.gitignore` the
   config lints as before. This needs **ESLint 10.4.0 or newer**, the
   first version whose `eslint/config` exports `includeIgnoreFile`. On an
@@ -797,8 +805,90 @@ What's still true from M2:
   fail them. Put the line in `.gitignore`, not `.git/info/exclude`:
   neither ESLint nor Prettier reads that file.
 
-Content is fixed in `v1` exactly as it is for `prod-go/v1`: ES2023,
-Python 3.12, and the rule sets as written.
+The base configs are fixed in `v1` exactly as `prod-go/v1`'s are: ES2023,
+Python 3.12, and the rule sets as written. Your own rules go in your
+configuration, which extends them.
+
+### Base configs: your own rules
+
+Since spec 0049 (ADR 0024), each lint and compiler configuration has two
+halves:
+
+| Tool | Base (managed: `vibe sync` overwrites it) | Yours (created once) | How yours reads the base |
+|---|---|---|---|
+| ESLint | `eslint.base.config.js` | `eslint.config.js` | `import base from './eslint.base.config.js'` |
+| Ruff | `ruff.base.toml` | `ruff.toml` | `extend = "ruff.base.toml"` |
+| TypeScript | `tsconfig.base.json` | `tsconfig.json` | `"extends": "./tsconfig.base.json"` |
+
+Yours has the name the tool looks for. When it is missing, `vibe sync`
+writes a minimal one that only extends the base. After that VibeConform
+never writes it again, and `.vibe/state.yaml` does not record it. Delete it
+and the next sync writes the minimal one again. In `prod-mono/v1` both
+halves sit in each component's directory.
+
+**Adding and switching off rules.** Change your file the way the tool's
+documentation says:
+
+- ESLint: add entries after `...base`. A later entry wins, so one entry
+  can add a plugin, add rules, or switch a rule off:
+
+  ```js
+  import base from './eslint.base.config.js'
+  import globals from 'globals'
+
+  export default [
+    ...base,
+    { files: ['src/web/**'], languageOptions: { globals: globals.browser } },
+    { files: ['scripts/**'], rules: { '@typescript-eslint/no-floating-promises': 'off' } },
+  ]
+  ```
+
+- Ruff: settings in `ruff.toml` win over the base. `[lint]
+  extend-select` adds rules; `ignore` and `per-file-ignores` switch them
+  off.
+- TypeScript: `compilerOptions` in `tsconfig.json` win over the base.
+
+Switching rules off is allowed: the alternative, a second configuration
+next to the standard's, is one that `task verify` and CI never run. It is
+not hidden, though. `vibe audit` prints a non-failing line for every file
+of yours that differs from what vibe created:
+
+```text
+eslint.config.js: extended (project-owned; differs from the seed)
+```
+
+A reviewer reads the file to see what changed. What does not change
+through your file is the *floor*: `task verify`, `task audit`, the agent
+hooks and the CI jobs still run the same tools on the same files.
+
+**What fails audit.** Your file must keep naming its base. If it no longer
+does, `vibe audit`, `diff` and `sync` report a conflict, because the
+standard's rules no longer apply. The check is textual, like the
+`.gitlab-ci.defaults.yml` check: it catches a lost import, not a
+determined maintainer. A missing file is drifted (sync creates it), and a
+file Git ignores is a conflict, as for a managed file.
+
+**Moving over from a whole managed config.** Before spec 0049,
+`eslint.config.js` and `ruff.toml` were managed whole. The first `vibe
+sync` with a newer `vibe` does this:
+
+- If the file is unchanged since vibe last wrote it, sync writes the base,
+  replaces the file with the minimal one, and stops recording it. Your lint
+  result is the same. `vibe audit` reports it as out of date until then.
+- If you edited it, sync reports a conflict and does not write the base
+  next to it, since the old file would never read the base. Resolve it
+  either way:
+  - move your changes into a file that starts from the base, as in the
+    example above, and run `vibe sync`: once your file names the base, sync
+    stops recording it; or
+  - delete the file and run `vibe sync`, then add your changes again.
+
+An existing `tsconfig.json` is never touched. If it does not extend
+`tsconfig.base.json`, audit reports the conflict described above.
+
+golangci-lint has no way to extend another configuration, so `prod-go/v1`
+keeps one managed `.golangci.yml`. Prettier and pyright get a base config
+when someone needs one.
 
 ### Worked examples
 
@@ -872,7 +962,7 @@ generating `go.work`.
 
 | Module | Resources |
 |---|---|
-| `mono-tooling` | per component, its profile's config at `<path>/`: `.golangci.yml`; `eslint.config.js`, `.prettierrc.json`, `tsconfig.base.json`; or `ruff.toml`, `pyrightconfig.json` — byte for byte what `prod-go`/`prod-ts`/`prod-py` write at a root, plus the component's [`generated:`](#generated-code-generated) exclusions and its `.prettierignore` section |
+| `mono-tooling` | per component, its profile's config at `<path>/`: `.golangci.yml`; `eslint.base.config.js`, `.prettierrc.json`, `tsconfig.base.json` (and, created once, `eslint.config.js`, `tsconfig.json`); or `ruff.base.toml`, `pyrightconfig.json` (and, created once, `ruff.toml`) — byte for byte what `prod-go`/`prod-ts`/`prod-py` write at a root, plus the component's [`generated:`](#generated-code-generated) exclusions and its `.prettierignore` section |
 | `github-ci-mono` | `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.github/pull_request_template.md` (under `ci.provider: github`, the default) |
 | `gitlab-ci-mono` | `.gitlab-ci.yml`, `.gitlab/merge_request_templates/Default.md` (under `ci.provider: gitlab` only) |
 | `vibe-conformance` | `.github/workflows/conformance.yml` (or `.gitlab-ci.vibe.yml`, or nothing, per `ci.provider`), `Taskfile.vibe.yml`, as in every standard |
@@ -1148,8 +1238,8 @@ imports.
 
 | Profile | Format | Lint | Typecheck |
 |---|---|---|---|
-| py | skipped: `ruff.toml` `extend-exclude`, with `force-exclude = true` | skipped: the same keys | still checked (`pyright`) |
-| ts | skipped: a managed `generated` section in `.prettierignore` | skipped: `eslint.config.js` global `ignores` | still checked (`tsc`) |
+| py | skipped: `ruff.base.toml` `extend-exclude`, with `force-exclude = true` | skipped: the same keys | still checked (`pyright`) |
+| ts | skipped: a managed `generated` section in `.prettierignore` | skipped: `eslint.base.config.js` global `ignores` | still checked (`tsc`) |
 | go | not offered: `generated:` is an error | skipped by the `// Code generated ... DO NOT EDIT.` header (golangci-lint's default) | still checked (`go build`, `go vet`) |
 
 The exclusion is ordinary tool configuration, so it holds wherever the
