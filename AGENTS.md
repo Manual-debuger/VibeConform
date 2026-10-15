@@ -51,8 +51,11 @@ Don't include yourself as contributor in commits.
 - `.claude/settings.json` runs `task -x hook:guard` before tool calls. It
   runs `.claude/hooks/guard.go` against `.claude/hooks/policy.json`, which
   blocks destructive commands (`rm -rf`, `git reset --hard`,
-  `git push --force`, PowerShell's recursive forced `Remove-Item`, …) in
-  Bash and PowerShell calls, and edits to secret-looking files. The rules
+  `git push --force`, PowerShell's recursive forced `Remove-Item`,
+  `git restore .`, …) in every spelling the tool accepts (spec 0047), in
+  Bash and PowerShell calls, and edits to secret-looking files. When it
+  refuses a command you need, ask the user to run it with `! <command>`;
+  don't look for a spelling it misses. It is not a sandbox. The rules
   live in `internal/module/agents/claude/policy.go`; change them there, not
   in the generated `policy.json`.
 - Known gaps (`docs/usage.md`, "The agent guard"): a Taskfile that fails

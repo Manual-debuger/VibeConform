@@ -132,6 +132,8 @@ backreferences, no possessive quantifiers, and no engine-specific classes.
 A Go test rejects any table entry outside that subset.
 
 The policy is a **port** of the two existing scripts, pattern for pattern.
+(Extended by spec 0047: the command rules now cover every spelling the
+tools accept, and `git-discard-worktree` was added.)
 
 ### 4. Guard behavior
 

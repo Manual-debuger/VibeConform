@@ -1,6 +1,6 @@
 # Spec 0047: The Agent Guard Denies Other Spellings of Its Commands
 
-Status: accepted (2026-10-15). Issue #84. Extends spec 0021's policy. Its rule that the
+Status: accepted and implemented (2026-10-15). Issue #84. Extends spec 0021's policy. Its rule that the
 policy is a faithful port of the old bash hooks no longer holds for the
 rules named here.
 Settled with the user on 2026-10-14 in the grilling of #82, #84 and #85,
@@ -35,6 +35,11 @@ Users can also read the guard as a security boundary. It is not one, and
 the docs do not say so.
 
 Verified on 2026-10-15, on Windows:
+- **Live canary, after the sync.** In this repository's Claude Code
+  session, the guard refused `git branch -d -f zz-guard-canary-0047` and
+  `git restore --source=HEAD .` (in a scratch repository) with the new
+  messages, and let `git restore --staged .` run; the working-tree change
+  was kept.
 - **`!` skips the guard.** The user ran
   `! git branch -D zz-guard-canary-0047` in a Claude Code session with
   the guard live. Git answered `error: branch 'zz-guard-canary-0047' not
@@ -157,23 +162,23 @@ The guard matches only within one simple command: flags after a `;`,
 
 ## Acceptance Criteria
 
-- [ ] Every "Allowed today" row of the Problem table is a `deny` case in
+- [x] Every "Allowed today" row of the Problem table is a `deny` case in
       the corpus. The corpus test fails before the change and passes
       after it in all three runtimes (Go, Node, Python), and end to end
       through `task -x hook:guard`.
-- [ ] Each allowed command listed under Constraints is an `allow` case
+- [x] Each allowed command listed under Constraints is an `allow` case
       that passes before and after.
-- [ ] Each D6 limitation is an `allow` case whose name says
+- [x] Each D6 limitation is an `allow` case whose name says
       "known limitation".
 - [x] The PowerShell spellings in D3 were checked on real `pwsh` to
       delete a read-only file in a directory. The result is recorded
       here. A spelling that PowerShell rejects (`-f`, which is
       ambiguous) needs no rule of its own.
-- [ ] The portable-subset test passes for every pattern.
+- [x] The portable-subset test passes for every pattern.
 - [x] The `!` canary has been run and its result is recorded here.
-- [ ] The deny messages name `! <command>` (D5).
-- [ ] `docs/usage.md` and the `vibeconform` skill carry D6 and D7, and
+- [x] The deny messages name `! <command>` (D5).
+- [x] `docs/usage.md` and the `vibeconform` skill carry D6 and D7, and
       `GLOSSARY.md` has the "Agent guard" entry.
-- [ ] This repository and the three examples are synced and conformant.
+- [x] This repository and the three examples are synced and conformant.
       The guard canary in `docs/usage.md` still fires in a live session.
-- [ ] `task verify` and `task audit` pass.
+- [x] `task verify` and `task audit` pass.

@@ -1,7 +1,11 @@
 # Plan 0047: The agent guard denies other spellings of its commands
 
 Implements `docs/specs/0047-guard-respellings.md`.
-Status: approved 2026-10-15.
+Status: approved 2026-10-15 and implemented. One deviation: TestRenderPolicyDeterministic
+looked for a literal & and < instead of their JSON escapes, so it had never
+checked anything, and the new patterns contain &. It now looks for the
+escapes (an editing tool had decoded them on write, which is how the
+check went wrong).
 
 ## Repository impact
 
@@ -136,12 +140,16 @@ more, never less (spec 0021).
 8. `task verify`, `task audit`, push, open the PR, and wait for CI. CI
    runs the corpus in Go, Node and Python on Linux and Windows.
 
-## Verification ledger (filled in as the steps run)
+## Verification ledger
 
-- corpus tests: red before the fix, green after it, in Go, Node, Python
-  and end to end
-- long-command timing per runtime
-- `task verify` (Windows)
-- `task audit` here and in the three examples
-- live canary in this session
-- CI on the PR
+- PASS: corpus tests, red before the fix (50 failing cases in Go, the
+  same in Node and Python, including two over-matches of the old rules)
+  and green after it, in Go, Node 24 and Python 3.14 (uv).
+- PASS: long-command timing. Before: 4.3 s extra in Python on the old
+  rules. After: within the 2 s budget in Node and Python.
+- PASS: `task verify` (Windows).
+- PASS: `task audit` here and in the three examples; `task fmt:check` in
+  `examples/typescript` and `examples/monorepo` (Prettier over the new
+  `policy.json`).
+- PASS: live canary in this session (recorded in the spec).
+- CI: on the PR.
