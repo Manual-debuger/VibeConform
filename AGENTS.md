@@ -57,7 +57,10 @@ Don't include yourself as contributor in commits.
   refuses a command you need, ask the user to run it with `! <command>`;
   don't look for a spelling it misses. It is not a sandbox. The rules
   live in `internal/module/agents/claude/policy.go`; change them there, not
-  in the generated `policy.json`.
+  in the generated `policy.json`. An exception in
+  `.claude/hooks/policy.local.json` (spec 0050) is the user's to grant:
+  the guard refuses your edits of that file, and you don't write it
+  through the shell either.
 - Known gaps (`docs/usage.md`, "The agent guard"): a Taskfile that fails
   to load turns the guard off. A dangerous pattern quoted inside a command
   still matches.

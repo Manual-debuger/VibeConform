@@ -2121,6 +2121,73 @@ reports its program's exit `2` as `1`, which is how this was found.) When
 every tool call is suddenly blocked with a `guard:` message, fix what it
 names; the agent can't do it for you until you do.
 
+**Your own rules and exceptions: `policy.local.json`.** Since spec 0050
+(ADR 0024), the guard also reads an optional
+`.claude/hooks/policy.local.json` next to the managed `policy.json`.
+VibeConform never creates or writes it; commit it like `Taskfile.local.yml`,
+since it applies to everyone working in the repository. It can let one
+command through that a rule refuses, and deny commands the standard
+doesn't know are dangerous here:
+
+```json
+{
+  "version": 1,
+  "exceptions": [
+    { "rule": "git-clean-fd", "pattern": "git clean -fdx build/", "reason": "build output" },
+    { "rule": "secret-file", "pattern": "(.*[/\\\\])?\\.env\\.example" }
+  ],
+  "rules": [
+    {
+      "id": "terraform-destroy",
+      "field": "command",
+      "pattern": "terraform[ \\t]+destroy",
+      "message": "Blocked: terraform destroy. Ask the user to run it themselves."
+    }
+  ]
+}
+```
+
+- **An exception lifts one rule**, the one its `rule` names, and every
+  other rule still applies. The managed rule ids are `rm-rf`,
+  `remove-item-recurse-force`, `git-reset-hard`, `git-clean-fd`,
+  `git-push-force`, `git-branch-force-delete`, `git-discard-worktree`,
+  `secret-file` and `guard-policy-file`. There is no way to lift every
+  rule or to switch the guard off.
+- **The pattern must match the whole command** (or, for `secret-file`,
+  the whole path), not part of it. So the exception above lets
+  `git clean -fdx build/` run, but not `git clean -fdx build/ && git
+  clean -fdx .`. An exception does nothing for a tool call the guard
+  cannot parse, and one whose pattern does not compile lifts nothing.
+- **An extra rule** has the managed rules' shape: `id`, `field`
+  (`command` or `file_path`), `pattern`, `message`, and optionally `raw`
+  for a payload the guard cannot parse (it defaults to `pattern`). It
+  denies after the managed rules. Patterns must stay in the regular
+  expression subset Go, JavaScript and Python read alike.
+- **A broken file blocks everything.** If the file is not JSON, has a
+  `version` other than 1, has a key other than `version`, `rules` and
+  `exceptions`, or has a rule or exception missing a required field, the
+  guard denies every tool call and names the file. Ignoring it instead
+  would silently drop its rules.
+- **An agent cannot edit it.** The `guard-policy-file` rule refuses an
+  agent's Edit or Write of `policy.json` and `policy.local.json`, so an
+  agent the guard stops cannot write itself an exception; you edit the
+  file yourself. A write through the shell is not caught.
+- **`vibe audit` lists every exception and extra rule**, failing nothing,
+  so a reviewer sees each place the guard was weakened:
+
+  ```text
+  .claude/hooks/policy.local.json: exception git-clean-fd: git clean -fdx build/ (build output) (project-owned)
+  .claude/hooks/policy.local.json: ok (project-owned)
+  ```
+
+  It reports a conflict for everything that would make the guard block
+  every call, for an exception naming a rule that does not exist, for a
+  pattern that does not compile, and for an extra rule reusing an id.
+
+To check an exception fires, run the excepted command in the session you
+rely on, then the same command with a second destructive part appended:
+the first runs, the second is refused.
+
 **Known limitations**, where the guard does *not* run, or allows what it
 shouldn't:
 

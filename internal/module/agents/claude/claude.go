@@ -123,3 +123,22 @@ func (claudeModule) Resolve(_ context.Context, mctx *module.Context) ([]resource
 		Content:   []byte(ignoreContent),
 	}), nil
 }
+
+// GuardedFiles checks the repository's own guard policy (spec 0050): what
+// would make the guards deny every call, and what cannot do what it says,
+// are conflicts; each exception and extra rule is listed for review.
+func (claudeModule) GuardedFiles(_ *module.Context) []module.GuardedFile {
+	return []module.GuardedFile{{
+		Path: LocalPolicyPath,
+		Check: func(content []byte) []string {
+			c := checkLocal(policy, content)
+			if c.Broken != "" {
+				return []string{c.Broken + "; the guard blocks every tool call until it is fixed"}
+			}
+			return c.Problems
+		},
+		Notes: func(content []byte) []string {
+			return checkLocal(policy, content).Notes
+		},
+	}}
+}

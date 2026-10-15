@@ -224,4 +224,7 @@ type GuardedFile struct {
 	// Check returns what is wrong with content; none means conformant. It
 	// reads; it never edits.
 	Check func(content []byte) []string
+	// Notes, when set, returns lines that fail nothing but that a reviewer
+	// should see, such as each exception a file grants (spec 0050).
+	Notes func(content []byte) []string
 }

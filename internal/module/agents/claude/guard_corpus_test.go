@@ -19,6 +19,10 @@ type corpusCase struct {
 	Want    string          `json:"want"`
 	Payload json.RawMessage `json:"payload"`
 	Stdin   *string         `json:"stdin"`
+	// Local, or LocalText for a file that is not JSON, is the case's
+	// policy.local.json (spec 0050). Neither means no local file.
+	Local     json.RawMessage `json:"local"`
+	LocalText *string         `json:"local_text"`
 }
 
 func loadCorpus(t *testing.T) []corpusCase {
@@ -43,8 +47,40 @@ func loadCorpus(t *testing.T) []corpusCase {
 		if (tc.Payload == nil) == (tc.Stdin == nil) {
 			t.Fatalf("case %q: needs exactly one of payload and stdin", tc.Name)
 		}
+		if tc.Local != nil && tc.LocalText != nil {
+			t.Fatalf("case %q: has both local and local_text", tc.Name)
+		}
 	}
 	return c.Cases
+}
+
+// localFile returns the case's policy.local.json content, or nil.
+func (c corpusCase) localFile() []byte {
+	if c.LocalText != nil {
+		return []byte(*c.LocalText)
+	}
+	return c.Local
+}
+
+// writeLocal writes the case's local file to path for the duration of the
+// subtest. It refuses to replace a file that is already there: the
+// end-to-end run writes into a real repository.
+func writeLocal(t *testing.T, path string, content []byte) {
+	t.Helper()
+	if content == nil {
+		return
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatalf("%s already exists; the corpus will not overwrite it", path)
+	}
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Remove(path); err != nil {
+			t.Errorf("removing %s: %v", path, err)
+		}
+	})
 }
 
 func (c corpusCase) input() []byte {
@@ -55,11 +91,13 @@ func (c corpusCase) input() []byte {
 }
 
 // runCorpus feeds every case to the command and checks the exit code:
-// 2 with a reason on stderr for deny, 0 with no output for allow.
-func runCorpus(t *testing.T, dir string, argv ...string) {
+// 2 with a reason on stderr for deny, 0 with no output for allow. local is
+// where the guard looks for policy.local.json, relative to dir.
+func runCorpus(t *testing.T, dir, local string, argv ...string) {
 	t.Helper()
 	for _, tc := range loadCorpus(t) {
 		t.Run(tc.Name, func(t *testing.T) {
+			writeLocal(t, filepath.Join(dir, filepath.FromSlash(local)), tc.localFile())
 			// #nosec G204 -- argv is fixed by the calling test, never user input
 			cmd := exec.Command(argv[0], argv[1:]...)
 			cmd.Dir = dir
@@ -152,7 +190,7 @@ func TestGuardCorpusGo(t *testing.T) {
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building guard.go: %v\n%s", err, out)
 	}
-	runCorpus(t, dir, bin, "policy.json")
+	runCorpus(t, dir, "policy.local.json", bin, "policy.json")
 }
 
 // TestGoRunReportsGuardDenyAsOne pins why every hook:guard command ends in
@@ -183,14 +221,14 @@ func TestGoRunReportsGuardDenyAsOne(t *testing.T) {
 // TestGuardCorpusNode runs the prod-ts guard when node is installed.
 func TestGuardCorpusNode(t *testing.T) {
 	node := requireTool(t, "node")
-	runCorpus(t, guardDir(t), node, guardTemplate(t, "tsrepotooling", "guard.mjs"), "policy.json")
+	runCorpus(t, guardDir(t), "policy.local.json", node, guardTemplate(t, "tsrepotooling", "guard.mjs"), "policy.json")
 }
 
 // TestGuardCorpusPython runs the prod-py guard when uv is installed, the
 // same way hook:guard does.
 func TestGuardCorpusPython(t *testing.T) {
 	uv := requireTool(t, "uv")
-	runCorpus(t, guardDir(t), uv, "run", "--no-project", "python",
+	runCorpus(t, guardDir(t), "policy.local.json", uv, "run", "--no-project", "python",
 		guardTemplate(t, "pyrepotooling", "guard.py"), "policy.json")
 }
 
@@ -257,5 +295,5 @@ func TestGuardCorpusEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VIBE_GUARD_E2E_DIR is set but task is not on PATH: %v", err)
 	}
-	runCorpus(t, dir, task, "-x", "hook:guard")
+	runCorpus(t, dir, ".claude/hooks/policy.local.json", task, "-x", "hook:guard")
 }
