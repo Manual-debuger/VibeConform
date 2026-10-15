@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.8.0-alpha.1.0.20261008032722-04929090f7d7
+vibe_version: v0.9.0-alpha.1.0.20261014091259-0643a118e219
 standard: prod-ts/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
@@ -85,7 +85,7 @@ resources:
       sha256: 951582b09871e3e08088afb0677a8531b42eb78b0e52be198b117a964772070a
     - path: eslint.config.js
       ownership: generated
-      sha256: 8147fba1eb90bc4fcf4762f00af26a70a9e3a053ea6355d9f305b38cc7469286
+      sha256: a560987752d08ce518c6b3c90fa528fd8cb82addd5b92dcd26bf58f116a85cb9
     - path: lefthook.yml
       ownership: generated
       sha256: 39b94a660f43bd2e546c4b19a56d8611b4e6b87248d6481335909bca1f227038

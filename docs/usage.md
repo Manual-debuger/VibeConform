@@ -770,6 +770,23 @@ What's still true from M2:
   { "extends": "./tsconfig.base.json", "include": ["src"] }
   ```
 
+- **ESLint skips what your `.gitignore` ignores** (spec 0045), as
+  Prettier already does. `eslint.config.js` reads the `.gitignore` next to
+  it, and only that one: nested `.gitignore` files, `.git/info/exclude`
+  and your global excludes file are not read. Without a `.gitignore` the
+  config lints as before. This needs **ESLint 10.4.0 or newer**, the
+  first version whose `eslint/config` exports `includeIgnoreFile`. On an
+  older ESLint the config still loads and lints everything, as it did
+  before. Nothing warns you about it.
+
+  If you use agent worktrees (Claude Code puts them in
+  `.claude/worktrees/`), add that line to `.gitignore` yourself.
+  VibeConform does not manage it. Each worktree is a full checkout, so
+  without the line `task lint` and `task fmt:check` in the main checkout
+  also check every worktree, and an agent's work in progress there can
+  fail them. Put the line in `.gitignore`, not `.git/info/exclude`:
+  neither ESLint nor Prettier reads that file.
+
 Content is fixed in `v1` exactly as it is for `prod-go/v1`: ES2023,
 Python 3.12, and the rule sets as written.
 

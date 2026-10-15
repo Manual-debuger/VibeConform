@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.8.0-alpha.1.0.20261008032722-04929090f7d7
+vibe_version: v0.9.0-alpha.1.0.20261014091259-0643a118e219
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go
@@ -93,7 +93,7 @@ resources:
       sha256: 60e3dc68b9394612efc67a961d142684f760f73edefe961d52ce20c2f6d7293b
     - path: apps/web/eslint.config.js
       ownership: generated
-      sha256: 9c82dec547614800f8fe6d6b798d9c940559ffa748637ab5258c8e024588f274
+      sha256: 31bc9e7361a87070334a5d0711a9d23d61b26cae33de5ced1db2157e65888af7
     - path: apps/web/tsconfig.base.json
       ownership: generated
       sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217
