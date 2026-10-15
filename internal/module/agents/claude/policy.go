@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -292,4 +293,109 @@ func collapseStringArrays(b []byte) []byte {
 		}
 		return []byte(oneLine)
 	})
+}
+
+// LocalPolicyPath is the repository's own guard policy (spec 0050): extra
+// rules and exceptions the guards read next to policy.json. VibeConform
+// never writes it.
+const LocalPolicyPath = ".claude/hooks/policy.local.json"
+
+// localCheck is audit's reading of a policy.local.json.
+type localCheck struct {
+	// Broken is why the guards would deny every call with this file, or "".
+	Broken string
+	// Problems are what else audit reports as a conflict: entries the
+	// guards accept but that cannot do what they say.
+	Problems []string
+	// Notes list each exception and extra rule, for review.
+	Notes []string
+}
+
+// checkLocal reads a policy.local.json as the guards do (their addLocal),
+// and adds the checks only audit makes, against the managed policy p.
+func checkLocal(p Policy, content []byte) localCheck {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(content, &top); err != nil || top == nil {
+		return localCheck{Broken: "not a JSON object"}
+	}
+	for _, key := range slices.Sorted(maps.Keys(top)) {
+		if key != "version" && key != "rules" && key != "exceptions" {
+			return localCheck{Broken: fmt.Sprintf("unknown key %q; only version, rules and exceptions are allowed", key)}
+		}
+	}
+	var version int
+	if err := json.Unmarshal(top["version"], &version); err != nil || version != 1 {
+		return localCheck{Broken: "version is not 1, the only version the guards understand"}
+	}
+	rules, err := localObjects(top, "rules")
+	if err != nil {
+		return localCheck{Broken: err.Error()}
+	}
+	exceptions, err := localObjects(top, "exceptions")
+	if err != nil {
+		return localCheck{Broken: err.Error()}
+	}
+
+	var c localCheck
+	ids := map[string]bool{}
+	for _, r := range p.Rules {
+		ids[r.ID] = true
+	}
+	for i, r := range rules {
+		for _, key := range []string{"id", "field", "pattern", "message"} {
+			if v, ok := r[key].(string); !ok || v == "" {
+				return localCheck{Broken: fmt.Sprintf("rule %d has no %s", i+1, key)}
+			}
+		}
+		id, field, pattern := r["id"].(string), r["field"].(string), r["pattern"].(string)
+		if _, ok := p.Tools[Field(field)]; !ok {
+			return localCheck{Broken: fmt.Sprintf("rule %s has field %q, which the policy does not know", id, field)}
+		}
+		if ids[id] {
+			c.Problems = append(c.Problems, fmt.Sprintf("rule id %s is already taken; exceptions for it would be ambiguous", id))
+		}
+		ids[id] = true
+		patterns := []string{pattern}
+		if raw, ok := r["raw"].(string); ok && raw != "" {
+			patterns = append(patterns, raw)
+		}
+		for _, pat := range patterns {
+			if _, err := regexp.Compile(pat); err != nil {
+				c.Problems = append(c.Problems, fmt.Sprintf("rule %s: pattern %q does not compile, so it denies every %s", id, pat, field))
+			}
+		}
+		c.Notes = append(c.Notes, fmt.Sprintf("extra rule %s: %s", id, pattern))
+	}
+	for i, e := range exceptions {
+		id, _ := e["rule"].(string)
+		pattern, _ := e["pattern"].(string)
+		if id == "" || pattern == "" {
+			return localCheck{Broken: fmt.Sprintf("exception %d needs a rule and a pattern", i+1)}
+		}
+		if !ids[id] {
+			c.Problems = append(c.Problems, fmt.Sprintf("exception for %s: no rule has that id, so it lifts nothing", id))
+		}
+		if _, err := regexp.Compile(pattern); err != nil {
+			c.Problems = append(c.Problems, fmt.Sprintf("exception for %s: pattern %q does not compile, so it lifts nothing", id, pattern))
+		}
+		note := fmt.Sprintf("exception %s: %s", id, pattern)
+		if reason, ok := e["reason"].(string); ok && reason != "" {
+			note += " (" + reason + ")"
+		}
+		c.Notes = append(c.Notes, note)
+	}
+	return c
+}
+
+// localObjects decodes top[key], when present, as a list of objects.
+func localObjects(top map[string]json.RawMessage, key string) ([]map[string]any, error) {
+	raw, ok := top[key]
+	if !ok {
+		return nil, nil
+	}
+	var list []map[string]any
+	if err := json.Unmarshal(raw, &list); err != nil || list == nil || slices.ContainsFunc(list, func(m map[string]any) bool { return m == nil }) {
+		return nil, fmt.Errorf("%s is not a list of objects", key)
+	}
+	return list, nil
 }

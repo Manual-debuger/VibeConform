@@ -19,6 +19,8 @@ type guardPlan struct {
 	Path string
 	// Problems is what the module's check found; none means conformant.
 	Problems []string
+	// Notes are lines for review that count for nothing.
+	Notes []string
 }
 
 // planGuards checks every file a module guards and that exists. An absent
@@ -38,7 +40,11 @@ func planGuards(repoRoot string, p *repoPlan) error {
 			if err != nil {
 				return fmt.Errorf("%s: %w", f.Path, err)
 			}
-			p.Guards = append(p.Guards, guardPlan{Path: f.Path, Problems: f.Check(content)})
+			g := guardPlan{Path: f.Path, Problems: f.Check(content)}
+			if f.Notes != nil {
+				g.Notes = f.Notes(content)
+			}
+			p.Guards = append(p.Guards, g)
 		}
 	}
 	return nil
@@ -48,6 +54,11 @@ func planGuards(repoRoot string, p *repoPlan) error {
 // command reports a guarded file the same way: there is no action to
 // preview, only a state to describe.
 func printGuard(w io.Writer, g guardPlan) error {
+	for _, note := range g.Notes {
+		if _, err := fmt.Fprintf(w, "%s: %s (project-owned)\n", g.Path, note); err != nil {
+			return err
+		}
+	}
 	if len(g.Problems) == 0 {
 		_, err := fmt.Fprintf(w, "%s: ok (project-owned)\n", g.Path)
 		return err
