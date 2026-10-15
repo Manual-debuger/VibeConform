@@ -1,7 +1,11 @@
 # Plan 0048: ESLint lints every file the standard formats
 
 Implements `docs/specs/0048-eslint-tsx.md`.
-Status: approved 2026-10-15.
+Status: approved 2026-10-15 and implemented. Deviation from the plan:
+- **A glob assertion.** The plan said `tstooling_test.go` asserts no
+  glob. It does: `TestTypedFilesGlobIsNotTheSeedRepositoryLayout`
+  checks the literal `typedFiles` line (spec 0014). It now checks the
+  new glob.
 
 ## Repository impact
 

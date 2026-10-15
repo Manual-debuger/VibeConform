@@ -1,6 +1,6 @@
 # Spec 0048: ESLint Lints Every File the Standard Formats
 
-Status: accepted (2026-10-15). Issue #91. The first step of #80, settled with the user
+Status: accepted and implemented (2026-10-15). Issue #91. The first step of #80, settled with the user
 on 2026-10-15 in the grilling of #80. A file the standard treats as
 source is not left to an extension seam. It gets its own release tag.
 
@@ -50,10 +50,11 @@ agent hooks.
 ## Assumptions
 
 - typescript-eslint's parser reads JSX in a `.tsx` file from its
-  extension, so the typed set needs no extra parser option. To verify
-  in the regression test.
+  extension, so the typed set needs no extra parser option. Verified by
+  the regression test with ESLint 10.11.0: no parse error on `app.tsx`.
 - ESLint's default parser (espree) reads JSX in a `.jsx` file only with
-  `ecmaFeatures.jsx` set. To verify likewise.
+  `ecmaFeatures.jsx` set. The config sets it; the regression test shows
+  `view.jsx` parses.
 
 ## Desired Behavior
 
@@ -78,13 +79,13 @@ agent hooks.
 
 ## Acceptance Criteria
 
-- [ ] A regression test runs the real ESLint on a fixture, in the way of
+- [x] A regression test runs the real ESLint on a fixture, in the way of
       spec 0045's test. It fails before the change and passes after it:
   - a `.tsx` file with JSX and a floating promise is reported for
     `@typescript-eslint/no-floating-promises`;
   - a `.jsx` file with JSX and an unused variable is reported for
     `no-unused-vars`.
-- [ ] `.ts` and `.js` behaviour is unchanged: the existing tests pass.
-- [ ] `docs/usage.md` carries D4.
-- [ ] This repository and the three examples are synced and conformant.
-- [ ] `task verify` and `task audit` pass.
+- [x] `.ts` and `.js` behaviour is unchanged: the existing tests pass.
+- [x] `docs/usage.md` carries D4.
+- [x] This repository and the three examples are synced and conformant.
+- [x] `task verify` and `task audit` pass.
