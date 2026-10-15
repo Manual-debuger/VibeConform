@@ -5,7 +5,7 @@ description: Query the repository's Graphify knowledge graph (graphify-out/) for
 
 This repository keeps a Graphify knowledge graph in `graphify-out/`. It is
 derived output, ignored by Git, and rebuilt by `task graph:update`, which
-the post-commit and post-checkout Git hooks run.
+the post-commit, post-checkout and post-merge Git hooks run.
 
 1. Check that it can be trusted before using it:
    - `graphify --version` works. If not, graphify is not installed: say so.
