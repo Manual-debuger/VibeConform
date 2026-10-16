@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -77,16 +77,36 @@ func v1FlagError(f auditFlags, label string) error {
 		"%s is version 1 (a top-level standard key)", strings.Join(used, ", "), label)
 }
 
-// runContractAudit runs the contract audit on a version 2 configuration.
+// contractRules is the rule list the contract audit runs. Nil means the
+// registry; tests stand in for parts this vibe does not implement yet.
+var contractRules []contract.Rule
+
+// runContractAudit runs the contract audit on a version 2 configuration,
+// prints the report and returns the error that sets the exit code. An
+// invalid configuration prints no report.
 func runContractAudit(cmd *cobra.Command, f auditFlags, label string, data []byte) error {
-	repo, err := contract.OpenRepo(cmd.Context(), f.repoRoot)
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	repo, err := contract.OpenRepo(ctx, f.repoRoot)
 	if err != nil {
 		return err
 	}
-	if _, err := contract.Parse(label, data, repo); err != nil {
+	cfg, err := contract.Parse(label, data, repo)
+	if err != nil {
 		return err
 	}
-	return errors.New("cannot decide: rule engine not implemented (#99)")
+
+	rep := contract.Audit(ctx, cfg, repo, contract.Options{Static: f.static, Rules: contractRules})
+	write := writeContractText
+	if f.json {
+		write = writeContractJSON
+	}
+	if err := write(cmd.OutOrStdout(), rep, runningVersion(cmd)); err != nil {
+		return fmt.Errorf("audit: %w", err)
+	}
+	return verdictError(rep)
 }
 
 // runExplain explains one rule. It reads no repository and no

@@ -5,7 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -91,6 +94,28 @@ func (r *Repo) HasDir(dir string) bool {
 	prefix := dir + "/"
 	i, _ := slices.BinarySearch(r.files, prefix)
 	return i < len(r.files) && strings.HasPrefix(r.files[i], prefix)
+}
+
+// ReadFile returns the working-tree content of a tracked file (slash
+// separated, relative to the root). A file git ls-files does not list
+// does not exist for the audit: the error wraps fs.ErrNotExist.
+func (r *Repo) ReadFile(name string) ([]byte, error) {
+	if !r.HasFile(name) {
+		return nil, fmt.Errorf("%s: %w (not a tracked file)", name, fs.ErrNotExist)
+	}
+	return os.ReadFile(filepath.Join(r.root, filepath.FromSlash(name))) // #nosec G304 -- a tracked file of the audited repository
+}
+
+// FilesUnder returns the tracked files inside dir (slash separated, no
+// trailing slash), sorted.
+func (r *Repo) FilesUnder(dir string) []string {
+	prefix := dir + "/"
+	var out []string
+	i, _ := slices.BinarySearch(r.files, prefix)
+	for ; i < len(r.files) && strings.HasPrefix(r.files[i], prefix); i++ {
+		out = append(out, r.files[i])
+	}
+	return out
 }
 
 func gitOutput(ctx context.Context, dir string, args ...string) ([]byte, error) {

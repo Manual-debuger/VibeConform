@@ -13,6 +13,10 @@ import (
 // Config is a vibe.yaml version 2 configuration (spec 0051, "vibe.yaml"),
 // validated against the repository it configures.
 type Config struct {
+	// File names the configuration as the operator gave it, such as
+	// vibe.yaml or the --config path. Findings about the configuration
+	// name it.
+	File string
 	// Contract is the declared contract version and the one audited.
 	Contract Versions
 	// Platforms is a non-empty list of distinct platforms, in file order.
@@ -146,7 +150,7 @@ func Parse(file string, data []byte, repo *Repo) (*Config, error) {
 		}
 	}
 
-	p := &configParser{file: file, repo: repo, cfg: &Config{}}
+	p := &configParser{file: file, repo: repo, cfg: &Config{File: file}}
 	if err := p.top(top); err != nil {
 		return nil, err
 	}

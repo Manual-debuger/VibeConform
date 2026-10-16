@@ -43,7 +43,8 @@ func configWith(changes ...section) string {
 }
 
 // configCase is one invalid (or valid) configuration and what stderr must
-// name. A valid case reaches the rule engine.
+// name. A valid case reaches the rule engine and prints a report; no
+// fixture reaches a verdict in Phase 1, so it still exits 1.
 type configCase struct {
 	name   string
 	config string
@@ -60,14 +61,14 @@ func runConfigCases(t *testing.T, cases []configCase) {
 			r := runVibeAudit(t, "--repo-root", dir)
 			assertExit(t, r, 1)
 			if tc.want == nil {
-				assertStderr(t, r, engineStub)
+				assertReport(t, r)
 				if strings.Contains(r.stderr, "vibe.yaml:") {
 					t.Errorf("valid configuration reported an error:\n%s", r.stderr)
 				}
 				return
 			}
 			assertStderr(t, r, tc.want...)
-			if strings.Contains(r.stderr, engineStub) {
+			if r.stdout != "" {
 				t.Errorf("invalid configuration reached the rule engine:\n%s", r.stderr)
 			}
 		})
