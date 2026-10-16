@@ -1,6 +1,7 @@
 # Spec 0052: Contract audit, static checks (Phase 1)
 
-Status: accepted (2026-10-16). Spec issue #114. Tickets #98, #99, #100, #101 (milestone "Contract v1 ·
+Status: accepted (2026-10-16), amended during implementation (2026-10-16;
+each amendment is marked). Spec issue #114. Tickets #98, #99, #100, #101 (milestone "Contract v1 ·
 Phase 1: Static checks"). Builds on spec 0051 (contract v1.0.0) and
 ADR 0025. "Qn" refers to the grilling questions the issues cite. Where
 this spec and spec 0051 disagree, spec 0051 wins, and the disagreement
@@ -182,7 +183,8 @@ engine from the configuration it reads.
 - **`--explain <ID>`** reads no repository and no configuration. It
   prints the rule's ID, level, category, rule sentence, check kinds,
   source, rationale, the check as spec 0051 states it, when the rule is
-  not applicable, and whether it can be waived. An unknown ID is exit 1
+  not applicable, and whether it can be waived. The rationale is defined
+  under "Rule registry and results". An unknown ID is exit 1
   and lists the valid IDs. Combined with any other audit flag it is an
   error.
 - **Contract versions.** This vibe implements contract 1.0.0. A
@@ -235,6 +237,10 @@ engine from the configuration it reads.
   level, category, rule sentence, its check parts (static, execution,
   probe), source, rationale, an applicability decision and a check
   function per part. `--explain` and the report read only the registry.
+- **Rationale** (amended during implementation, approved 2026-10-16):
+  spec 0051 has no rationale column. A rule's rationale is its Source
+  from spec 0051, followed by the introduction of its category where
+  spec 0051 has one (H, C and A). No other text is written for it.
 - **Results** per rule: `pass`, `fail`, `not applicable`, `waived`,
   `cannot decide`, `not run`.
   - Not applicable, then waived, are decided first and stop the check.
@@ -447,6 +453,9 @@ Local guardrail adjustments
 Verdict: cannot decide. 10 rules did not run (--static); 1 MUST rule already fails.
 ```
 
+- The sample is illustrative. Category long names follow spec 0051's
+  headings, so R is "Removability and repository hygiene" (amended
+  during implementation, approved 2026-10-16).
 - The category line counts results; a failed MUST rule is in capitals.
   Sections with nothing in them print "(none)". Failures are listed
   MUST first, then by rule ID.
@@ -509,7 +518,10 @@ Verdict: cannot decide. 10 rules did not run (--static); 1 MUST rule already fai
   and prints the text report. It passes when the JSON shows no MUST rule
   with `fail` or `undecided`; `not_run` is expected under `--static`.
   The ticket says "a job in the conformance workflow"; a separate file
-  keeps the generated workflow unchanged for adopters.
+  keeps the generated workflow unchanged for adopters. The file is
+  `.github/workflows/contract-audit.yml`, workflow "Contract", job
+  "Contract / audit (static)" (amended during implementation, approved
+  2026-10-16).
 - **Static MUST failures to fix.** A static run today would fail
   these. Managed files change through their module templates and
   `vibe sync`; other files are edited directly.
@@ -528,7 +540,12 @@ Verdict: cannot decide. 10 rules did not run (--static); 1 MUST rule already fai
     are pinned to the versions `ci.yml` already uses.
   - C-03: `codeql.yml` and `release.yml` move their write scopes from
     top level to the job that needs them.
-  - C-04 and R-01 are satisfied by the new job.
+  - C-04 is satisfied by the new job.
+  - R-01 (amended during implementation, approved 2026-10-16; the new
+    job alone does not satisfy it): `examples.yml`'s monorepo-gitlab job
+    ran a bare `vibe sync`. It now calls the binary it built from source
+    by path, `"$RUNNER_TEMP/bin/vibe" sync`, which is not a call of
+    `vibe`.
 - **SHOULD results stay as they are.** The expected SHOULD failures
   (H-02, C-05, A-06, D-03, R-02) are listed in the record below, not
   waived to look clean.
@@ -630,6 +647,73 @@ Verdict: cannot decide. 10 rules did not run (--static); 1 MUST rule already fai
   audited; the A rules are not applicable without `claude` in `agents`;
   trigger filters with `paths` make a workflow not count; the default
   branch falls back to `main` or `master`.
+
+## Side by side
+
+The old and new audits on this repository, as recorded on 2026-10-16
+for #101 and for #111's cutover.
+
+- **Old audit** (`vibe audit`, v1 `vibe.yaml`): 22 resources checked,
+  0 drifted, 0 out of date, 0 conflicts, conformant, exit 0.
+- **New audit** (`vibe audit --static --config vibe.v2.yaml`): no MUST
+  rule fails or is undecided; "Verdict: cannot decide. 10 rules did not
+  run (--static)", exit 1. Five SHOULD rules fail.
+
+### Before the #101 fixes
+
+At 08b0433 the old audit said conformant while a static run of the new
+audit would have failed seven MUST rules. The old audit compares
+managed files with their templates, so a property the templates lack,
+or a file it does not manage, is invisible to it.
+
+| Rule | New audit | Why the old audit did not see it |
+|---|---|---|
+| A-01 | No PreToolUse hook matched `MultiEdit` | The template had the same matcher |
+| A-04 | `policy.json` was version 1 | The template rendered version 1 |
+| A-05 | The Stop hook ran `task -x hook:done`, not `task verify:fast` | The template had the same command |
+| C-02 | `@latest` installs in `examples.yml` and `hook-guard.yml` | Neither workflow is managed |
+| C-03 | Write scopes at top level in `codeql.yml` and `release.yml` | Neither workflow is managed |
+| C-04 | No job ran `vibe audit`; `conformance.yml` runs `task audit` | The old audit has no such rule |
+| R-01 | `examples.yml` ran a bare `vibe sync` | Not managed; no such rule |
+
+All seven pass now. A-01, A-04 and A-05 changed through the templates and
+`vibe sync`, so the old audit still reports no drift.
+
+### Rules that fail now (SHOULD)
+
+The old audit reports every file named here as in sync with its
+template, or does not read it. These are recommendations the templates
+do not meet, and they are left as they are (see "This repository").
+
+| Rule | New audit | Why |
+|---|---|---|
+| H-02 | `lefthook.yml`: pre-commit calls neither `task fmt:check` nor `task fmt`; pre-push calls neither `task verify:fast` nor `task verify` | The hooks run the tools directly (`gofmt -l`, `golangci-lint run`, `go test ./...`), which is not "calling" an entrypoint |
+| C-05 | `task lint`, `task mod:verify`, `task security` and `task workflows:lint` run on no Windows runner | `ci.yml` runs only `typecheck` and `test` on a Windows matrix; `fmt:check` reaches Windows through `examples.yml` |
+| A-06 | No PostToolUse hook that matches `Write` and `Edit` calls `task fmt` | The generated hook runs `task -x hook:format` |
+| D-03 | No workflow step runs a recognized scanner | `govulncheck` runs inside `task security`; the step's first word is `task`, and recognition reads only the step |
+| R-02 | `AGENTS.md` names none of the seven `verify` commands | It names `task verify`, which is not this repository's `verify` entrypoint (a list of seven tasks) |
+
+### Rules not run (`--static`)
+
+MUST: V-01, V-02, V-03, A-02, A-03, A-05 (probe), A-08, D-01, R-01
+(execution). SHOULD: A-07 (execution). They give no verdict until
+#102–#104 and #106. The old audit's nearest equivalents are that the
+guard files and the verification tasks match their templates; it never
+runs them.
+
+### Managed files
+
+No managed file's old-audit state differs: all 22 resources are in
+sync. The new audit does not read `.vibe/state.yaml` or template
+hashes. What #111's cutover changes:
+
+- A hand edit to a managed file that keeps every property passes the
+  new audit; the old audit reports it as drift (exit 2).
+- Files the old audit never read are judged: every workflow,
+  `AGENTS.md`, the pull request template and the update bot
+  configuration.
+- A property the templates lack fails the new audit even when every
+  managed file is in sync, as the seven MUST failures above did.
 
 ## Acceptance Criteria
 
