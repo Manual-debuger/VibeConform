@@ -85,12 +85,6 @@ func ParseFailure(file string, err error) Finding {
 	}
 }
 
-// notImplementedYet is a static part whose check is not written yet.
-// Phase 1 replaces every use before it ships.
-func notImplementedYet() PartResult {
-	return Undecided(Finding{Message: "not implemented yet"})
-}
-
 // PartOutcome is one part of a rule as the audit decided it.
 type PartOutcome struct {
 	Kind     PartKind
