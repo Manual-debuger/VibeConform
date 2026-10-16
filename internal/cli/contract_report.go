@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
@@ -153,70 +152,4 @@ func writeContractJSON(w io.Writer, rep *contract.Report, vibeVersion string) er
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
-}
-
-// resultText is a result as the text report words it.
-func resultText(r contract.Result) string {
-	switch r {
-	case contract.ResultNotApplicable:
-		return "not applicable"
-	case contract.ResultUndecided:
-		return "cannot decide"
-	case contract.ResultNotRun:
-		return "not run"
-	default:
-		return string(r)
-	}
-}
-
-// writeContractText prints the report as text. This is a plain listing;
-// #100 fixes the final format.
-func writeContractText(w io.Writer, rep *contract.Report, vibeVersion string) error {
-	var b strings.Builder
-	scope := ""
-	if rep.Static {
-		scope = ", static checks only"
-	}
-	fmt.Fprintf(&b, "vibe audit: contract %s (vibe %s)%s\n", rep.Contract.Audited, vibeVersion, scope)
-	if rep.Contract.Declared != rep.Contract.Audited {
-		fmt.Fprintf(&b, "declared contract %s, audited as %s\n", rep.Contract.Declared, rep.Contract.Audited)
-	}
-	b.WriteString("\n")
-	for _, rr := range rep.Rules {
-		fmt.Fprintf(&b, "  %s  %-6s  %s: %s\n", rr.Rule.ID, rr.Rule.Level, resultText(rr.Result), rr.Rule.Title)
-		if rr.Waiver != nil {
-			switch {
-			case rr.Waiver.Unused:
-				fmt.Fprintf(&b, "        waiver unused (the rule is not applicable)\n")
-			case rr.Waiver.Expired:
-				fmt.Fprintf(&b, "        waiver expired %s\n", rr.Waiver.Until.Format(time.DateOnly))
-			default:
-				fmt.Fprintf(&b, "        until %s: %s\n", rr.Waiver.Until.Format(time.DateOnly), rr.Waiver.Reason)
-			}
-		}
-		for _, f := range rr.Findings() {
-			line := f.Message
-			if f.File != "" {
-				line = f.File + ": " + line
-			}
-			fmt.Fprintf(&b, "        %s\n", line)
-			if f.Fix != "" {
-				fmt.Fprintf(&b, "        Fix: %s\n", f.Fix)
-			}
-		}
-	}
-	for _, n := range rep.Notes {
-		fmt.Fprintf(&b, "\nNote: %s\n", n)
-	}
-	b.WriteString("\n")
-	switch rep.Verdict {
-	case contract.VerdictConformant:
-		b.WriteString("Verdict: conformant\n")
-	case contract.VerdictNotConformant:
-		b.WriteString("Verdict: not conformant\n")
-	default:
-		fmt.Fprintf(&b, "Verdict: cannot decide. %s.\n", rep.Reason)
-	}
-	_, err := io.WriteString(w, b.String())
-	return err
 }

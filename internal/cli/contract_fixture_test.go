@@ -143,6 +143,7 @@ type auditResult struct {
 // runVibeAudit runs vibe audit in-process with args after "audit".
 func runVibeAudit(t *testing.T, args ...string) auditResult {
 	t.Helper()
+	defer watchReports(t)()
 	root := NewRootCmd("test")
 	var out, errOut bytes.Buffer
 	root.SetOut(&out)
