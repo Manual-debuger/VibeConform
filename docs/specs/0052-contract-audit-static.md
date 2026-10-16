@@ -310,7 +310,9 @@ beyond spec 0051.
     `reopened`. Job and step `if:` conditions are ignored.
   - **Default branch**: the target of `refs/remotes/origin/HEAD` when
     the clone has one. Otherwise a filter must admit `main` or
-    `master`, and the report says which it assumed.
+    `master`, and the report says which it assumed. A git failure
+    reading `refs/remotes/origin/HEAD`, other than its absence, is a
+    tool error.
   - **Reusable workflows**: a job that `uses:` a local workflow
     (`./.github/workflows/…`) is followed, with the caller's triggers.
     Remote reusable workflows and composite actions are not followed:
@@ -390,7 +392,10 @@ beyond spec 0051.
 - **R-01 (static part)**: no entrypoint, hook command or CI step calls
   `vibe` (a simple command whose first word is `vibe`), except in a job
   that satisfies C-04. #99 does not list it, but it is static, so this
-  spec includes it.
+  spec includes it. Hook commands are read as the H and A rules read
+  them (same files, `extends` merging, `entry` with `args`, strict
+  settings), for every Git hook of githooks(5) a recognized manager
+  configures (husky: `.husky/<hook>`) and every Claude Code hook event.
 - **R-02**: `AGENTS.md` contains each `verify` command as a substring,
   and `CLAUDE.md` contains the string `AGENTS.md`.
 - **R-03**: every tracked pull request template
