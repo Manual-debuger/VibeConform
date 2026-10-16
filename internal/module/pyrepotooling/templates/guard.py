@@ -39,7 +39,9 @@ def load_policy(path: str) -> dict:
         raise ValueError(f"reading policy {path}: {err}") from err
     version = policy.get("version") if isinstance(policy, dict) else None
     if type(version) is not int or version not in (1, 2):
-        raise ValueError(f"policy {path} has version {version}; this guard understands versions 1 and 2")
+        raise ValueError(
+            f"policy {path} has version {version}; this guard understands versions 1 and 2"
+        )
     if version == 2 and "exceptions" in policy:
         # The contract audit reads this list (spec 0052). This guard does
         # not apply it yet, so a list with anything in it is an error rather

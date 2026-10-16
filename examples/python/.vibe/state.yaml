@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.11.0-alpha.1.0.20261016072813-f397362be119
+vibe_version: v0.11.0-alpha.1.0.20261016081626-2dd1645e0e3c
 standard: prod-py/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
@@ -13,7 +13,7 @@ resources:
       sha256: a12815be5dd837f16ef67099a647ec207d494f5066329ddcf4a0a495ca52fedb
     - path: .claude/hooks/guard.py
       ownership: generated
-      sha256: e64c9a61fc84e9c2bc58eef3803f43d34cccd5f92b2a8f309f6bd183c220afbf
+      sha256: 7e33b327a2cb4b1d660b4c1e0180b884ec79aa42d0247ec61f1ab775b89c14a0
     - path: .claude/hooks/policy.json
       ownership: generated
       sha256: 7100219083e830d4ad20fea998cbe421e1125d694be3c92694acde96ce1d0d54
