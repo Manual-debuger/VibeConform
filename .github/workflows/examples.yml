@@ -290,7 +290,7 @@ jobs:
           git init -q -b main
           git add -A
           git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy"
-          vibe sync
+          "$RUNNER_TEMP/bin/vibe" sync
           [ ! -e .github ] || { echo ".github/ survived the switch"; exit 1; }
           for f in .gitlab-ci.yml .gitlab-ci.vibe.yml .gitlab/merge_request_templates/Default.md; do
             [ -f "$f" ] || { echo "$f was not created"; exit 1; }
