@@ -1,5 +1,5 @@
 {
-  "comment": "Allow/deny cases every guard runtime must agree on (spec 0021). Each case has either payload (a JSON tool call) or stdin (raw text, for malformed input). want is deny (exit 2) or allow (exit 0). Not a resource: nothing ships this file.",
+  "comment": "Allow/deny cases every guard runtime must agree on (spec 0021). Each case has either payload (a JSON tool call) or stdin (raw text, for malformed input). want is deny (exit 2) or allow (exit 0). local is the case's policy.local.json. policy replaces top-level keys of the generated policy.json for the case, and a null value removes the key. stderr is text a deny must print. Not a resource: nothing ships this file.",
   "cases": [
     {"name": "rm -rf", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "rm -rf build"}}},
     {"name": "rm -fr", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "rm -fr build"}}},
@@ -173,6 +173,16 @@
     {"name": "guard policy: an absolute path to policy.local.json is denied", "want": "deny", "payload": {"tool_name": "MultiEdit", "tool_input": {"file_path": "/repo/.claude/hooks/policy.local.json", "edits": []}}},
     {"name": "guard policy: a doc about the policy file is allowed", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "docs/policy.local.json.md", "content": "x"}}},
     {"name": "guard policy: a backup next to it is allowed", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": ".claude/hooks/policy.local.json.bak", "content": "x"}}},
-    {"name": "guard policy: the raw fallback denies a write of the file", "want": "deny", "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"/repo/.claude/hooks/policy.local.json\", \"content\": "}
+    {"name": "guard policy: the raw fallback denies a write of the file", "want": "deny", "stdin": "{\"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"/repo/.claude/hooks/policy.local.json\", \"content\": "},
+    {"name": "policy v2: no exceptions key allows", "want": "allow", "policy": {"version": 2, "exceptions": null}, "payload": {"tool_name": "Bash", "tool_input": {"command": "ls"}}},
+    {"name": "policy v2: no exceptions key still denies", "want": "deny", "policy": {"version": 2, "exceptions": null}, "payload": {"tool_name": "Bash", "tool_input": {"command": "rm -rf build"}}},
+    {"name": "policy v2: an exception blocks every call until the guards apply them", "want": "deny", "stderr": "policy.local.json", "policy": {"version": 2, "exceptions": [{"rule": "git-clean-fd", "match": "git clean -fdx build/", "reason": "build output"}]}, "payload": {"tool_name": "Bash", "tool_input": {"command": "ls"}}},
+    {"name": "policy v2: an exception does not lift its rule either", "want": "deny", "stderr": "policy.local.json", "policy": {"version": 2, "exceptions": [{"rule": "git-clean-fd", "match": "git clean -fdx build/", "reason": "build output"}]}, "payload": {"tool_name": "Bash", "tool_input": {"command": "git clean -fdx build/"}}},
+    {"name": "policy v2: an exception blocks file edits too", "want": "deny", "stderr": "policy.local.json", "policy": {"version": 2, "exceptions": [{"rule": "secret-file", "match": ".*", "reason": "x"}]}, "payload": {"tool_name": "Write", "tool_input": {"file_path": "/repo/README.md", "content": "x"}}},
+    {"name": "policy v2: exceptions that are not a list block every call", "want": "deny", "policy": {"version": 2, "exceptions": {}}, "payload": {"tool_name": "Bash", "tool_input": {"command": "ls"}}},
+    {"name": "policy v2: a v1 local file still lifts a rule", "want": "allow", "local": {"version": 1, "exceptions": [{"rule": "git-clean-fd", "pattern": "git clean -fdx build/", "reason": "build output"}]}, "payload": {"tool_name": "Bash", "tool_input": {"command": "git clean -fdx build/"}}},
+    {"name": "policy v1: the previous layout is still read", "want": "allow", "policy": {"version": 1, "exceptions": null}, "payload": {"tool_name": "Bash", "tool_input": {"command": "ls"}}},
+    {"name": "policy v1: the previous layout still denies", "want": "deny", "policy": {"version": 1, "exceptions": null}, "payload": {"tool_name": "Bash", "tool_input": {"command": "git reset --hard"}}},
+    {"name": "policy v3: an unknown version blocks every call", "want": "deny", "policy": {"version": 3}, "payload": {"tool_name": "Bash", "tool_input": {"command": "ls"}}}
   ]
 }

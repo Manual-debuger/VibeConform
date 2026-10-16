@@ -100,10 +100,41 @@ func loadPolicy(path string) (*policy, error) {
 	if err := json.Unmarshal(data, &p); err != nil {
 		return nil, fmt.Errorf("parsing policy %s: %w", path, err)
 	}
-	if p.Version != 1 {
-		return nil, fmt.Errorf("policy %s has version %d; this guard understands version 1", path, p.Version)
+	switch p.Version {
+	case 1:
+	case 2:
+		if err := noExceptions(data); err != nil {
+			return nil, fmt.Errorf("policy %s: %w", path, err)
+		}
+	default:
+		return nil, fmt.Errorf("policy %s has version %d; this guard understands versions 1 and 2", path, p.Version)
 	}
 	return &p, nil
+}
+
+// noExceptions checks a version 2 policy's exceptions list, which the
+// contract audit reads (spec 0052). This guard does not apply it yet, so a
+// list with anything in it is an error rather than an exception silently
+// not honoured.
+func noExceptions(data []byte) error {
+	var top struct {
+		Exceptions json.RawMessage `json:"exceptions"`
+	}
+	if err := json.Unmarshal(data, &top); err != nil {
+		return err
+	}
+	if top.Exceptions == nil {
+		return nil
+	}
+	var list []json.RawMessage
+	if err := json.Unmarshal(top.Exceptions, &list); err != nil || list == nil {
+		return errors.New("exceptions is not a list")
+	}
+	if len(list) > 0 {
+		return errors.New("lists exceptions, which this guard does not apply yet; " +
+			"put each exception in " + localName + " next to it instead (spec 0050)")
+	}
+	return nil
 }
 
 // addLocal adds the rules and exceptions of the local file at path to p.

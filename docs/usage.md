@@ -1887,7 +1887,8 @@ documentation or VibeConform's repository (spec 0041, ADR 0022):
 When the `claude` integration is selected — the default — the standard
 configures Claude Code (`.claude/settings.json`) to run five hooks. Each one is a hidden task in the generated `Taskfile.yml`,
 called as `task -x hook:<name>`, the same command in every standard and on
-every OS. See `docs/specs/0021-agent-hooks-task-interface.md` and
+every OS. The Stop hook also calls `task verify:fast` itself (see
+"`hook:done`" below). See `docs/specs/0021-agent-hooks-task-interface.md` and
 `docs/specs/0023-agent-lifecycle-hooks.md`. Codex hooks are suspended; see
 "Codex: hooks suspended" below.
 
@@ -1897,7 +1898,7 @@ every OS. See `docs/specs/0021-agent-hooks-task-interface.md` and
 | Before a shell command or file edit | `hook:guard` | denies destructive commands and secret-file edits | yes |
 | After a file edit | `hook:format` | formats the changed files, with cheap fixes | no (tool already ran) |
 | After a file edit, in the background | `hook:check` | runs the incremental checks | no |
-| When the agent ends its turn | `hook:done` | runs `task verify:fast` as a gate | yes, once per stop |
+| When the agent ends its turn | `hook:done` | gates the stop on `task verify:fast`, which the hook runs first | yes, once per stop |
 
 Nothing on these paths calls `vibe`, so all five keep working after you
 remove VibeConform. Every `hook:*` name is reserved like `verify`:
@@ -1906,13 +1907,15 @@ remove VibeConform. Every `hook:*` name is reserved like `verify`:
 
 **Exit 2 is the only code that reaches the agent.** On exit 2 Claude Code
 shows the model the hook's stderr; any other exit is treated as a
-non-blocking error. That's why every command is `task -x …` (without `-x`,
-Task reports a failure as 201) and why each hook ends its failing paths in
-`exit 2`.
+non-blocking error. That's why every hook task is called as `task -x …`
+(without `-x`, Task reports a failure as 201) and why each hook ends its
+failing paths in `exit 2`. The Stop hook's `task verify:fast` needs no
+`-x`: only whether it failed matters, and `hook:done` turns that into
+exit 2.
 
 ### `verify:fast` and the tool caches
 
-`hook:check` and `hook:done` run the fast, incremental part of `verify`,
+`hook:check` and the Stop hook run the fast, incremental part of `verify`,
 which you can also run yourself:
 
 | Standard | `task verify:fast` runs | Only in `task verify` |
@@ -2022,8 +2025,21 @@ Quick successive edits start overlapping runs.
 
 ### `hook:done` (end of turn)
 
-Runs `task verify:fast`. If it fails, the hook exits 2 and the agent
-can't stop: Claude Code keeps working with the failure as its reason.
+The Stop hook's command is
+
+```sh
+task verify:fast 1>&2 </dev/null || task -x hook:done
+```
+
+It runs `task verify:fast`, with the tools' output on stderr, where Claude
+Code shows it to the model. If that passes, the stop goes through. If it
+fails, `hook:done` exits 2 and the agent can't stop: Claude Code keeps
+working with the failure as its reason. The settings call `verify:fast`
+directly, rather than through `hook:done`, so `vibe audit` can see that
+the Stop hook runs it (contract rule A-05, spec 0052). `</dev/null` keeps
+the tools away from the hook's payload, which `hook:done` reads. The
+command is POSIX shell: Claude Code runs hook commands in `sh` or `bash`
+on Linux and in Git Bash on Windows.
 
 It blocks **once per stop**. If the agent stops again with the checks
 still failing, the payload's `stop_hook_active` is `true`, and the stop
@@ -2033,11 +2049,11 @@ also has its own cap of eight blocks. It's a deliberate
 soft spot: CI is still the authoritative gate, and `task audit` isn't part
 of it at all.
 
-To try it by hand, give it a payload on stdin. It reads stdin, so with
-nothing piped it waits:
+To try it by hand, give the command a payload on stdin. `hook:done` reads
+stdin, so with nothing piped it waits:
 
 ```console
-$ echo '{"stop_hook_active": false}' | task -x hook:done; echo $?
+$ echo '{"stop_hook_active": false}' | sh -c 'task verify:fast 1>&2 </dev/null || task -x hook:done'; echo $?
 0
 ```
 
@@ -2092,13 +2108,19 @@ The refusal message says so.
 
 How it fits together:
 
-- `.claude/settings.json` runs the same command in every standard:
-  `task -x hook:guard`.
+- `.claude/settings.json` runs the same command in every standard,
+  `task -x hook:guard`, before each `Bash`, `PowerShell`, `Write`, `Edit`
+  and `MultiEdit` call. The matcher names each tool, so it covers them
+  whether Claude Code reads it as a whole-name or a partial match.
 - `Taskfile.yml` defines `hook:guard`, which runs the guard on the
   standard's own runtime: `go run .claude/hooks/guard.go` for `prod-go`,
   `node .claude/hooks/guard.mjs` for `prod-ts`, and
   `uv run --no-project python .claude/hooks/guard.py` for `prod-py`.
 - All three guards read the same rules from `.claude/hooks/policy.json`.
+  It is version 2 (spec 0052): it has an `exceptions` list, which
+  `vibe audit` reads and VibeConform leaves empty. The guards do not apply
+  that list yet (#105): while it has anything in it, they deny every tool
+  call and point to `policy.local.json`, which is where exceptions go.
 
 Nothing on that path calls `vibe`, so the guard keeps working after you
 remove VibeConform.

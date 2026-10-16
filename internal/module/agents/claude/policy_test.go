@@ -167,3 +167,24 @@ func TestRenderPolicyRejectsUnsortedTools(t *testing.T) {
 		t.Error("renderPolicy accepted an unsorted tool list, which would make output order depend on source order")
 	}
 }
+
+// TestRenderedPolicyIsVersion2 pins what contract rule A-04 reads in
+// policy.json (spec 0052): version 2, and an exceptions list, empty
+// because VibeConform generates no exceptions. Exceptions the repository
+// wants go in policy.local.json, which stays version 1 (spec 0050).
+func TestRenderedPolicyIsVersion2(t *testing.T) {
+	content, err := renderPolicy(policy)
+	if err != nil {
+		t.Fatalf("renderPolicy: %v", err)
+	}
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(content, &top); err != nil {
+		t.Fatalf("policy.json is not a JSON object: %v", err)
+	}
+	if got := string(top["version"]); got != "2" {
+		t.Errorf("version = %s, want 2", got)
+	}
+	if got := string(top["exceptions"]); got != "[]" {
+		t.Errorf("exceptions = %q, want []", got)
+	}
+}

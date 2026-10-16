@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -177,9 +178,42 @@ func TestAgentConfigsCallTaskWithExitCode(t *testing.T) {
 		}
 	}
 	for _, h := range hookHandlers(t, ".claude/settings.json", settings) {
+		if h.event == "Stop" {
+			continue // TestStopHookCallsVerifyFast
+		}
 		if !slices.Contains(hookCommandsByName, h.command) {
 			t.Errorf(".claude/settings.json %s runs %q, want one of %q", h.event, h.command, hookCommandsByName)
 		}
+	}
+}
+
+// redirection matches a shell redirection word such as 1>&2 or </dev/null.
+var redirection = regexp.MustCompile(`^[0-9]*(<|>|>>|>&|<&)\S*$`)
+
+// TestStopHookCallsVerifyFast pins contract rule A-05's static part (spec
+// 0051): the Stop hook calls verify-fast, here `task verify:fast`, as a
+// simple command whose words, without redirections, are exactly those (spec
+// 0052). Only when it fails does hook:done run, through Task's -x like
+// every other hook task, to decide between blocking the stop (exit 2) and
+// letting a second stop through (spec 0023).
+func TestStopHookCallsVerifyFast(t *testing.T) {
+	var stops int
+	for _, h := range hookHandlers(t, ".claude/settings.json", settings) {
+		if h.event != "Stop" {
+			continue
+		}
+		stops++
+		first, rest, ok := strings.Cut(h.command, " || ")
+		if !ok || rest != DoneCommand {
+			t.Errorf("Stop runs %q, want `task verify:fast ... || %s`", h.command, DoneCommand)
+		}
+		words := slices.DeleteFunc(strings.Fields(first), redirection.MatchString)
+		if !slices.Equal(words, []string{"task", "verify:fast"}) {
+			t.Errorf("Stop's first command has the words %q without redirections, want [task verify:fast]", words)
+		}
+	}
+	if stops != 1 {
+		t.Errorf(".claude/settings.json has %d Stop hooks, want 1", stops)
 	}
 }
 
@@ -201,10 +235,10 @@ func TestAgentHookEvents(t *testing.T) {
 	}{
 		".claude/settings.json": {settings, []wantHandler{
 			{"SessionStart", "startup|resume|clear", ContextCommand, 30, false, false},
-			{"PreToolUse", "Bash|PowerShell|Write|Edit", GuardCommand, 0, false, false},
+			{"PreToolUse", "Bash|PowerShell|Write|Edit|MultiEdit", GuardCommand, 0, false, false},
 			{"PostToolUse", "Write|Edit|MultiEdit|NotebookEdit", FormatCommand, 60, false, false},
 			{"PostToolUse", "Write|Edit|MultiEdit|NotebookEdit", CheckCommand, 300, false, true},
-			{"Stop", "", DoneCommand, 600, false, false},
+			{"Stop", "", StopCommand, 600, false, false},
 		}},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -227,18 +261,24 @@ func TestAgentHookEvents(t *testing.T) {
 }
 
 // TestClaudeMatcherCoversCommandsAndEdits checks that Claude Code routes
-// every tool kind the policy has rules for to the guard.
+// every tool kind the policy has rules for to the guard, and every tool
+// contract rule A-01 names (spec 0051), under the reading the contract
+// audit uses: a matcher matches a tool when it matches the whole tool name
+// as a regular expression (spec 0052). Whether Claude Code anchors its
+// matchers is not verified; read unanchored, "Edit" alone would also cover
+// MultiEdit, and naming it does no harm.
 func TestClaudeMatcherCoversCommandsAndEdits(t *testing.T) {
 	matchers, _ := hookCommands(t, ".claude/settings.json", settings, "PreToolUse")
-	joined := strings.Join(matchers, "|")
-	for _, tools := range policy.Tools {
-		for _, tool := range tools {
-			if tool == "MultiEdit" {
-				continue // matched by "Edit": Claude Code matchers are regular expressions
-			}
-			if !strings.Contains("|"+joined+"|", "|"+tool+"|") {
-				t.Errorf("no .claude/settings.json matcher routes %s to the guard", tool)
-			}
+	tools := []string{"Bash", "PowerShell", "Write", "Edit", "MultiEdit"}
+	for _, ts := range policy.Tools {
+		tools = append(tools, ts...)
+	}
+	slices.Sort(tools)
+	for _, tool := range slices.Compact(tools) {
+		if !slices.ContainsFunc(matchers, func(m string) bool {
+			return regexp.MustCompile("^(?:" + m + ")$").MatchString(tool)
+		}) {
+			t.Errorf("no .claude/settings.json PreToolUse matcher matches the whole tool name %s", tool)
 		}
 	}
 }
