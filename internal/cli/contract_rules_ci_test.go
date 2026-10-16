@@ -345,7 +345,8 @@ func TestRuleR01(t *testing.T) {
 			edits:    []fixtureEdit{withFile("lefthook.yml", "pre-commit:\n  commands:\n    sync:\n      run: vibe sync\n")},
 			findings: []string{"lefthook.yml: ", "pre-commit.commands.sync", "`vibe sync`"}},
 		{name: "a lefthook job in a group", want: "fail",
-			edits:    []fixtureEdit{withFile(".lefthook.yml", "pre-push:\n  jobs:\n    - group:\n        jobs:\n          - run: task lint && vibe audit\n")},
+			edits: []fixtureEdit{withoutFile("lefthook.yml"),
+				withFile(".lefthook.yml", "pre-push:\n  jobs:\n    - group:\n        jobs:\n          - run: task lint && vibe audit\n")},
 			findings: []string{".lefthook.yml: ", "vibe audit"}},
 		{name: "a lefthook file it extends", want: "fail", edits: []fixtureEdit{
 			withFile("lefthook.yml", "extends:\n  - hooks/extra.yml\npre-commit:\n  commands:\n    fmt:\n      run: task fmt:check\n"),
@@ -354,6 +355,39 @@ func TestRuleR01(t *testing.T) {
 		{name: "an untracked lefthook file it extends", want: "pass", edits: []fixtureEdit{
 			withFile("lefthook.yml", "extends:\n  - lefthook.local.yml\npre-commit:\n  commands:\n    fmt:\n      run: task fmt:check\n"),
 			withUntracked("lefthook.local.yml", "pre-push:\n  commands:\n    s:\n      run: vibe sync\n")}},
+		// R-01 reads the hooks as the H rules do (regressions: it read
+		// lefthook-local.yml, missed ./-prefixed extends, read
+		// .lefthook.yml beside lefthook.yml, and decoded settings.json
+		// loosely).
+		{name: "a tracked lefthook-local.yml it extends is personal", want: "pass", edits: []fixtureEdit{
+			withFile("lefthook.yml", "extends:\n  - lefthook-local.yml\npre-commit:\n  commands:\n    fmt:\n      run: task fmt:check\n"),
+			withFile("lefthook-local.yml", "pre-push:\n  commands:\n    s:\n      run: vibe sync\n")}},
+		{name: "a ./ path it extends", want: "fail", edits: []fixtureEdit{
+			withFile("lefthook.yml", "extends:\n  - ./hooks/extra.yml\n"),
+			withFile("hooks/extra.yml", "pre-push:\n  commands:\n    s:\n      run: vibe sync\n")},
+			findings: []string{"hooks/extra.yml: ", "pre-push.commands.s", "`vibe sync`"}},
+		{name: "only the first lefthook file is read", want: "pass", edits: []fixtureEdit{
+			withFile("lefthook.yml", "pre-commit:\n  commands:\n    fmt:\n      run: task fmt:check\n"),
+			withFile(".lefthook.yml", "pre-push:\n  commands:\n    s:\n      run: vibe sync\n")}},
+		{name: "an extending file replaces a command of the same name", want: "pass", edits: []fixtureEdit{
+			withFile("lefthook.yml", "extends:\n  - hooks/extra.yml\npre-push:\n  commands:\n    s:\n      run: vibe sync\n"),
+			withFile("hooks/extra.yml", "pre-push:\n  commands:\n    s:\n      run: task verify:fast\n")}},
+		{name: "a lefthook script", want: "fail", edits: []fixtureEdit{
+			withFile("lefthook.yml", "pre-commit:\n  scripts:\n    sync.sh:\n      runner: bash\n"),
+			withFile(".lefthook/pre-commit/sync.sh", "vibe sync\n")},
+			findings: []string{".lefthook/pre-commit/sync.sh: ", "`vibe sync`"}},
+		{name: "a lefthook hook other than pre-commit and pre-push", want: "fail", edits: []fixtureEdit{
+			withFile("lefthook.yml", "post-checkout:\n  commands:\n    s:\n      run: vibe sync\n")},
+			findings: []string{"lefthook.yml: ", "post-checkout.commands.s"}},
+		{name: "a pre-commit entry with its args", want: "fail", edits: []fixtureEdit{withFile(".pre-commit-config.yaml",
+			"repos:\n  - repo: local\n    hooks:\n      - id: sync\n        name: sync\n        entry: vibe\n        args: [sync]\n        language: system\n")},
+			findings: []string{".pre-commit-config.yaml: ", "hook sync", "`vibe sync`"}},
+		{name: "a husky hook other than pre-commit and pre-push", want: "fail",
+			edits:    []fixtureEdit{withFile(".husky/commit-msg", "vibe sync\n")},
+			findings: []string{".husky/commit-msg: "}},
+		{name: "a Claude Code settings file the A rules do not accept", want: "fail", edits: []fixtureEdit{withFile(".claude/settings.json",
+			`{"hooks": {"Stop": [{"matcher": 1, "hooks": [{"type": "command", "command": "task verify:fast"}]}]}}`)},
+			findings: []string{".claude/settings.json: ", "does not parse"}},
 		{name: "lefthook commands without vibe", want: "pass",
 			edits: []fixtureEdit{withFile("lefthook.yml", "pre-commit:\n  commands:\n    fmt:\n      run: task fmt:check {staged_files}\n")}},
 		{name: "a pre-commit local hook", want: "fail", edits: []fixtureEdit{withFile(".pre-commit-config.yaml",

@@ -1,21 +1,21 @@
 package contract
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
+	"maps"
 	"slices"
-	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // The places R-01's static part reads for a call of vibe (spec 0052,
 // "Recognition rules", R-01): every declared entrypoint, every hook
-// command, and every CI step but those of a job that satisfies C-04. The
-// hook commands are read here on their own, as raw command strings; the
-// H rules' hook-manager model is separate.
+// command, and every CI step but those of a job that satisfies C-04.
+//
+// Hook commands are read through the models the H and A rules read, so
+// the three agree on which files count and how they parse: the hook
+// managers (hookManagers) and the Claude Code settings
+// (readClaudeSettings). R-01 reads every Git hook those managers
+// configure, not only pre-commit and pre-push, and every Claude Code hook
+// event.
 
 // vibeCall is one simple command whose first word is vibe.
 type vibeCall struct {
@@ -48,171 +48,46 @@ func entrypointVibeCalls(env *Env) []vibeCall {
 	return out
 }
 
-// hookVibeCalls reads every tracked hook command: lefthook (every run:,
-// in lefthook.yml or .lefthook.yml and the tracked files it extends),
-// pre-commit (the entry of each hook), husky (each script under .husky/)
-// and Claude Code (each command hook in .claude/settings.json). A file
-// that does not parse is a finding: R-01 cannot hold for it.
-func hookVibeCalls(env *Env) ([]vibeCall, []Finding) {
+// hookVibeCalls reads every hook command: each Git hook of each
+// recognized hook manager, and each command hook of .claude/settings.json.
+// A configuration or hook script that does not parse fails R-01, which
+// cannot hold for it; settings that cannot be read leave it undecided.
+func hookVibeCalls(env *Env) ([]vibeCall, PartResult) {
 	var calls []vibeCall
 	var broken []Finding
-	read := func(file string, parse func([]byte) ([]hookCommand, error)) {
-		data, err := env.ReadFile(file)
-		if errors.Is(err, fs.ErrNotExist) {
-			return
+	seen := map[string]bool{}
+	for _, m := range env.hookManagers() {
+		broken = append(broken, m.Broken...)
+		for _, hook := range slices.Sorted(maps.Keys(m.ScriptBroken)) {
+			broken = append(broken, m.ScriptBroken[hook]...)
 		}
-		if err == nil {
-			var hooks []hookCommand
-			if hooks, err = parse(data); err == nil {
-				for _, h := range hooks {
-					cmds, perr := ParseCommands(h.command)
-					if perr != nil {
-						continue // a command that does not parse calls nothing
+		for _, hook := range slices.Sorted(maps.Keys(m.Entries)) {
+			for _, en := range m.Entries[hook] {
+				for _, c := range callsVibe(en.File, en.Where, en.Commands) {
+					// A pre-commit hook in several stages is one entry.
+					key := c.file + "\x00" + c.where + "\x00" + c.cmd.String()
+					if !seen[key] {
+						seen[key] = true
+						calls = append(calls, c)
 					}
-					calls = append(calls, callsVibe(file, h.where, cmds)...)
-				}
-				return
-			}
-		}
-		broken = append(broken, ParseFailure(file, err))
-	}
-
-	lefthook := []string{"lefthook.yml", ".lefthook.yml"}
-	for i := 0; i < len(lefthook); i++ {
-		file := lefthook[i]
-		read(file, func(data []byte) ([]hookCommand, error) {
-			hooks, extends, err := lefthookRuns(data)
-			for _, e := range extends {
-				if env.Repo.HasFile(e) && !slices.Contains(lefthook, e) {
-					lefthook = append(lefthook, e)
-				}
-			}
-			return hooks, err
-		})
-	}
-	read(".pre-commit-config.yaml", preCommitEntries)
-	for _, f := range env.Repo.FilesUnder(".husky") {
-		if !strings.HasPrefix(f, ".husky/_/") {
-			read(f, func(data []byte) ([]hookCommand, error) {
-				return []hookCommand{{where: "script", command: string(data)}}, nil
-			})
-		}
-	}
-	read(".claude/settings.json", claudeHookCommands)
-	return calls, broken
-}
-
-// hookCommand is one hook's command string and where it is.
-type hookCommand struct {
-	where   string
-	command string
-}
-
-// lefthookRuns returns every run: string of a lefthook configuration,
-// wherever it is nested, and the files it extends.
-func lefthookRuns(data []byte) ([]hookCommand, []string, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, nil, err
-	}
-	if len(doc.Content) == 0 {
-		return nil, nil, nil
-	}
-	root := resolve(doc.Content[0])
-	var extends []string
-	if e := mapValue(root, "extends"); e != nil {
-		extends = filterPatterns(e)
-	}
-	var out []hookCommand
-	var walk func(n *yaml.Node, at string)
-	walk = func(n *yaml.Node, at string) {
-		n = resolve(n)
-		switch n.Kind {
-		case yaml.MappingNode:
-			for i := 0; i+1 < len(n.Content); i += 2 {
-				k, v := n.Content[i].Value, resolve(n.Content[i+1])
-				if k == "run" && v.Kind == yaml.ScalarNode {
-					out = append(out, hookCommand{where: fmt.Sprintf("line %d: %s", v.Line, at), command: v.Value})
-					continue
-				}
-				walk(v, joinPath(at, k))
-			}
-		case yaml.SequenceNode:
-			for i, c := range n.Content {
-				walk(c, fmt.Sprintf("%s[%d]", at, i))
-			}
-		}
-	}
-	walk(root, "")
-	return out, extends, nil
-}
-
-func joinPath(at, key string) string {
-	if at == "" {
-		return key
-	}
-	return at + "." + key
-}
-
-// preCommitEntries returns the entry of every hook of a pre-commit
-// configuration's local repositories.
-func preCommitEntries(data []byte) ([]hookCommand, error) {
-	var cfg struct {
-		Repos []struct {
-			Repo  string `yaml:"repo"`
-			Hooks []struct {
-				ID    string `yaml:"id"`
-				Entry string `yaml:"entry"`
-			} `yaml:"hooks"`
-		} `yaml:"repos"`
-	}
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, err
-	}
-	var out []hookCommand
-	for _, r := range cfg.Repos {
-		if r.Repo != "local" {
-			continue
-		}
-		for _, h := range r.Hooks {
-			if h.Entry != "" {
-				out = append(out, hookCommand{where: "hook " + h.ID, command: h.Entry})
-			}
-		}
-	}
-	return out, nil
-}
-
-// claudeHookCommands returns every command hook of a Claude Code
-// settings file.
-func claudeHookCommands(data []byte) ([]hookCommand, error) {
-	var s struct {
-		Hooks map[string][]struct {
-			Hooks []struct {
-				Type    string `json:"type"`
-				Command string `json:"command"`
-			} `json:"hooks"`
-		} `json:"hooks"`
-	}
-	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, err
-	}
-	events := make([]string, 0, len(s.Hooks))
-	for e := range s.Hooks {
-		events = append(events, e)
-	}
-	slices.Sort(events)
-	var out []hookCommand
-	for _, e := range events {
-		for _, entry := range s.Hooks[e] {
-			for _, h := range entry.Hooks {
-				if h.Type == "command" && h.Command != "" {
-					out = append(out, hookCommand{where: "hooks." + e, command: h.Command})
 				}
 			}
 		}
 	}
-	return out, nil
+	res := failIf(broken)
+
+	if env.Repo.HasFile(claudeSettingsFile) {
+		s, sres, ok := env.readClaudeSettings("")
+		if !ok {
+			return calls, Merge(res, sres)
+		}
+		for _, event := range slices.Sorted(maps.Keys(s.Events)) {
+			for _, entry := range s.Events[event] {
+				calls = append(calls, callsVibe(claudeSettingsFile, "hooks."+event, entry.calls())...)
+			}
+		}
+	}
+	return calls, res
 }
 
 // ciVibeCalls reads every CI step of every parsed workflow, except the
