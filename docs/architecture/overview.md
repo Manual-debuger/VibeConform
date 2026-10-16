@@ -252,7 +252,9 @@ internal/contract                    the old audit: manifest, standard,
 - **Shell parsing.** "Called" means a simple command in the shell parse
   tree, so `internal/contract` depends on `mvdan.cc/sh/v3/syntax` (ADR
   0026). `internal/contract/shell.go` is the only file that imports it;
-  every check sees the package's own `Command` and `Word`.
+  every check sees the package's own `Command` and `Word`. Its other
+  third-party imports are ones `vibe` already had: `gopkg.in/yaml.v3`,
+  and `github.com/tailscale/hujson` for Renovate's JSON5 files.
 - **Read-only, tracked files only.** Checks read the working-tree content
   of files `git ls-files` lists and never write. Execution checks and
   probes are not built yet (#102–#104, #106); the registry already holds
