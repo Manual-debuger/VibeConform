@@ -1,6 +1,7 @@
 # Spec 0052: Contract audit, static checks (Phase 1)
 
-Status: accepted (2026-10-16). Spec issue #114. Tickets #98, #99, #100, #101 (milestone "Contract v1 ·
+Status: accepted (2026-10-16), amended during implementation (2026-10-16;
+each amendment is marked). Spec issue #114. Tickets #98, #99, #100, #101 (milestone "Contract v1 ·
 Phase 1: Static checks"). Builds on spec 0051 (contract v1.0.0) and
 ADR 0025. "Qn" refers to the grilling questions the issues cite. Where
 this spec and spec 0051 disagree, spec 0051 wins, and the disagreement
@@ -182,7 +183,8 @@ engine from the configuration it reads.
 - **`--explain <ID>`** reads no repository and no configuration. It
   prints the rule's ID, level, category, rule sentence, check kinds,
   source, rationale, the check as spec 0051 states it, when the rule is
-  not applicable, and whether it can be waived. An unknown ID is exit 1
+  not applicable, and whether it can be waived. The rationale is defined
+  under "Rule registry and results". An unknown ID is exit 1
   and lists the valid IDs. Combined with any other audit flag it is an
   error.
 - **Contract versions.** This vibe implements contract 1.0.0. A
@@ -235,6 +237,10 @@ engine from the configuration it reads.
   level, category, rule sentence, its check parts (static, execution,
   probe), source, rationale, an applicability decision and a check
   function per part. `--explain` and the report read only the registry.
+- **Rationale** (amended during implementation, approved 2026-10-16):
+  spec 0051 has no rationale column. A rule's rationale is its Source
+  from spec 0051, followed by the introduction of its category where
+  spec 0051 has one (H, C and A). No other text is written for it.
 - **Results** per rule: `pass`, `fail`, `not applicable`, `waived`,
   `cannot decide`, `not run`.
   - Not applicable, then waived, are decided first and stop the check.
@@ -442,6 +448,9 @@ Local guardrail adjustments
 Verdict: cannot decide. 10 rules did not run (--static); 1 MUST rule already fails.
 ```
 
+- The sample is illustrative. Category long names follow spec 0051's
+  headings, so R is "Removability and repository hygiene" (amended
+  during implementation, approved 2026-10-16).
 - The category line counts results; a failed MUST rule is in capitals.
   Sections with nothing in them print "(none)". Failures are listed
   MUST first, then by rule ID.
@@ -504,7 +513,10 @@ Verdict: cannot decide. 10 rules did not run (--static); 1 MUST rule already fai
   and prints the text report. It passes when the JSON shows no MUST rule
   with `fail` or `undecided`; `not_run` is expected under `--static`.
   The ticket says "a job in the conformance workflow"; a separate file
-  keeps the generated workflow unchanged for adopters.
+  keeps the generated workflow unchanged for adopters. The file is
+  `.github/workflows/contract-audit.yml`, workflow "Contract", job
+  "Contract / audit (static)" (amended during implementation, approved
+  2026-10-16).
 - **Static MUST failures to fix.** A static run today would fail
   these. Managed files change through their module templates and
   `vibe sync`; other files are edited directly.
@@ -523,7 +535,12 @@ Verdict: cannot decide. 10 rules did not run (--static); 1 MUST rule already fai
     are pinned to the versions `ci.yml` already uses.
   - C-03: `codeql.yml` and `release.yml` move their write scopes from
     top level to the job that needs them.
-  - C-04 and R-01 are satisfied by the new job.
+  - C-04 is satisfied by the new job.
+  - R-01 (amended during implementation, approved 2026-10-16; the new
+    job alone does not satisfy it): `examples.yml`'s monorepo-gitlab job
+    ran a bare `vibe sync`. It now calls the binary it built from source
+    by path, `"$RUNNER_TEMP/bin/vibe" sync`, which is not a call of
+    `vibe`.
 - **SHOULD results stay as they are.** The expected SHOULD failures
   (H-02, C-05, A-06, D-03, R-02) are listed in the record below, not
   waived to look clean.
