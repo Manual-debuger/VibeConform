@@ -121,9 +121,13 @@ func runExplain(cmd *cobra.Command, f auditFlags) error {
 	if len(others) > 0 {
 		return fmt.Errorf("--explain reads no repository and no configuration; drop %s", strings.Join(others, ", "))
 	}
-	if _, ok := contract.LookupRule(f.explain); !ok {
+	rule, ok := contract.LookupRule(f.explain)
+	if !ok {
 		return fmt.Errorf("--explain: %q is not a rule of contract %s; rules: %s",
 			f.explain, contract.Implemented, strings.Join(contract.RuleIDs(), " "))
 	}
-	return fmt.Errorf("--explain %s: not implemented in this vibe (#99)", f.explain)
+	if err := writeExplain(cmd.OutOrStdout(), rule); err != nil {
+		return fmt.Errorf("--explain: %w", err)
+	}
+	return nil
 }

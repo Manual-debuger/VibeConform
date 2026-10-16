@@ -202,10 +202,9 @@ func TestAuditExplain(t *testing.T) {
 	t.Run("reads no configuration", func(t *testing.T) {
 		// Run where no vibe.yaml exists: --explain must not look for one.
 		r := runVibeAudit(t, "--explain", "C-02")
-		assertExit(t, r, 1)
+		assertExit(t, r, 0)
 		if strings.Contains(r.stderr, "vibe.yaml") {
 			t.Errorf("--explain read a configuration:\n%s", r.stderr)
 		}
-		assertStderr(t, r, "not implemented")
 	})
 }
