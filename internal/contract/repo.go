@@ -168,7 +168,7 @@ func gitOutput(ctx context.Context, dir string, args ...string) ([]byte, error) 
 	out, err := cmd.Output()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil && !errors.Is(err, ctxErr) {
-			err = fmt.Errorf("%w (%v)", ctxErr, err)
+			err = fmt.Errorf("%w (%w)", ctxErr, err)
 		}
 		return nil, &gitError{args: args, dir: dir, stderr: strings.TrimSpace(stderr.String()), err: err}
 	}
