@@ -102,15 +102,105 @@ func describeEntrypoint(env *Env, name string) string {
 	return name + " (" + strings.Join(trimmed, "; ") + ")"
 }
 
-func checkA01(_ *Env) PartResult { return notImplementedYet() }
+// guardedTools are the tools A-01 requires a PreToolUse hook for.
+var guardedTools = []string{"Bash", "PowerShell", "Write", "Edit", "MultiEdit"}
+
+// checkA01: for each of Bash, PowerShell, Write, Edit and MultiEdit, a
+// PreToolUse entry with a command hook matches it.
+func checkA01(env *Env) PartResult {
+	s, res, ok := env.readClaudeSettings("add a PreToolUse hook with matcher " +
+		strings.Join(guardedTools, "|") + " that runs the guard")
+	if !ok {
+		return res
+	}
+	var unguarded []string
+	for _, tool := range guardedTools {
+		if len(s.matching(eventPreToolUse, tool)) == 0 {
+			unguarded = append(unguarded, tool)
+		}
+	}
+	if len(unguarded) == 0 {
+		return Pass()
+	}
+	fix := "add " + joinWords(unguarded, "and") + " to the matcher of the hook that runs the guard"
+	if len(s.commandEntries(eventPreToolUse)) == 0 {
+		fix = "add a PreToolUse hook with matcher " + strings.Join(guardedTools, "|") + " that runs the guard"
+	}
+	return Fail(Finding{
+		File:    claudeSettingsFile,
+		Message: "no PreToolUse command hook matches " + joinWords(unguarded, "and"),
+		Fix:     fix,
+	})
+}
 
 func checkA04(_ *Env) PartResult { return notImplementedYet() }
 
-func checkA05(_ *Env) PartResult { return notImplementedYet() }
+// checkA05 (static part): a Stop hook calls verify-fast.
+func checkA05(env *Env) PartResult {
+	verifyFast, missing := env.Entrypoint(EntrypointVerifyFast)
+	if missing != nil {
+		return Fail(*missing)
+	}
+	run := quoteCommands(env.EntrypointSource(EntrypointVerifyFast))
+	s, res, ok := env.readClaudeSettings("add a Stop hook that runs " + run)
+	if !ok {
+		return res
+	}
+	var cmds []Command
+	for _, h := range s.commandEntries(eventStop) {
+		cmds = append(cmds, h.calls()...)
+	}
+	if Called(verifyFast, cmds) {
+		return Pass()
+	}
+	return Fail(Finding{
+		File:    claudeSettingsFile,
+		Message: "no Stop hook calls " + describeEntrypoint(env, EntrypointVerifyFast),
+		Fix:     "make a Stop hook run " + run + " as a command of its own",
+	})
+}
 
-func checkA06(_ *Env) PartResult { return notImplementedYet() }
+// checkA06: a PostToolUse entry that matches both Write and Edit calls
+// fmt.
+func checkA06(env *Env) PartResult {
+	format, missing := env.Entrypoint(EntrypointFmt)
+	if missing != nil {
+		return Fail(*missing)
+	}
+	fix := "add a PostToolUse hook with matcher Write|Edit that runs " + quoteCommands(env.EntrypointSource(EntrypointFmt))
+	s, res, ok := env.readClaudeSettings(fix)
+	if !ok {
+		return res
+	}
+	for _, h := range s.matching(eventPostToolUse, "Write", "Edit") {
+		if Called(format, h.calls()) {
+			return Pass()
+		}
+	}
+	return Fail(Finding{
+		File:    claudeSettingsFile,
+		Message: "no PostToolUse hook that matches Write and Edit calls " + describeEntrypoint(env, EntrypointFmt),
+		Fix:     fix,
+	})
+}
 
-func checkA07(_ *Env) PartResult { return notImplementedYet() }
+// checkA07 (static part): a SessionStart entry with a command hook
+// exists.
+func checkA07(env *Env) PartResult {
+	const fix = "add a SessionStart hook that runs a command which prints facts for the agent and changes no file"
+	s, res, ok := env.readClaudeSettings(fix)
+	if !ok {
+		return res
+	}
+	if len(s.commandEntries(eventSessionStart)) > 0 {
+		return Pass()
+	}
+	return Fail(Finding{
+		File:    claudeSettingsFile,
+		Message: "has no SessionStart command hook",
+		Fix:     fix,
+	})
+}
 
 func checkD02(_ *Env) PartResult { return notImplementedYet() }
 

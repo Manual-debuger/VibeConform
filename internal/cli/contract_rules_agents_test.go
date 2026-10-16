@@ -1,6 +1,9 @@
 package cli
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The rules that read hook managers, Claude Code settings, the guard
 // policy and update bots (spec 0052, "Recognition rules"). Each case is
@@ -188,5 +191,184 @@ repos:
 			findings: []string{"vibe.yaml: ", "V-04"}},
 		{name: "one of two entrypoints missing is enough", want: "pass",
 			edits: []fixtureEdit{entrypoints("  verify: task verify\n  verify-fast: task verify:fast\n  fmt-check: task fmt:check\n")}},
+	})
+}
+
+// settings is a .claude/settings.json with the given hooks object body.
+func settings(hooks string) fixtureEdit {
+	return withFile(".claude/settings.json", `{"hooks": {`+hooks+`}}`)
+}
+
+// hookEntry is one hooks.<Event>[] entry: a matcher (omitted when "-")
+// and one command hook.
+func hookEntry(matcher, command string) string {
+	m := `"matcher": "` + matcher + `", `
+	if matcher == "-" {
+		m = ""
+	}
+	return `{` + m + `"hooks": [{"type": "command", "command": "` + command + `"}]}`
+}
+
+const (
+	settingsFile    = ".claude/settings.json"
+	baseSessionHook = `"SessionStart": [{"hooks": [{"type": "command", "command": "task -x hook:context"}]}]`
+	basePreHook     = `"PreToolUse": [{"matcher": "Bash|PowerShell|Write|Edit|MultiEdit", "hooks": [{"type": "command", "command": "task -x hook:guard"}]}]`
+	baseStopHook    = `"Stop": [{"hooks": [{"type": "command", "command": "task verify:fast"}]}]`
+)
+
+// partCase is ruleCase for a rule with several parts: want is the result
+// of one part.
+type partCase struct {
+	name     string
+	edits    []fixtureEdit
+	want     string
+	findings []string
+}
+
+// runPartCases runs --static cases for one part of a rule. A failing part
+// fails the rule; a passing static part leaves it not run (its other
+// parts did not run).
+func runPartCases(t *testing.T, id, part string, cases []partCase) {
+	t.Helper()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rep, _ := auditJSON(t, contractFixture(t, tc.edits...), "--static")
+			r := rep.rule(t, id)
+			got := ""
+			for _, p := range r.Parts {
+				if p.Check == part {
+					got = p.Result
+				}
+			}
+			if got != tc.want {
+				t.Errorf("%s %s part = %q, want %s\nfindings:\n%s", id, part, got, tc.want, r.findingText())
+			}
+			if tc.want == "fail" && r.Result != "fail" {
+				t.Errorf("%s = %s, want fail", id, r.Result)
+			}
+			text := r.findingText()
+			for _, f := range tc.findings {
+				if !strings.Contains(text, f) {
+					t.Errorf("%s findings missing %q\nfindings:\n%s", id, f, text)
+				}
+			}
+		})
+	}
+}
+
+// A-01: PreToolUse hooks match each of Bash, PowerShell, Write, Edit and
+// MultiEdit. A matcher is missing, empty, * or an anchored regular
+// expression.
+func TestRuleA01(t *testing.T) {
+	pre := func(entries ...string) fixtureEdit {
+		return settings(`"PreToolUse": [` + strings.Join(entries, ", ") + `]`)
+	}
+	const guard = "task -x hook:guard"
+	runRuleCases(t, "A-01", []ruleCase{
+		{name: "baseline", want: "pass"},
+		{name: "no matcher matches every tool", want: "pass", edits: []fixtureEdit{pre(hookEntry("-", guard))}},
+		{name: "empty matcher", want: "pass", edits: []fixtureEdit{pre(hookEntry("", guard))}},
+		{name: "star matcher", want: "pass", edits: []fixtureEdit{pre(hookEntry("*", guard))}},
+		{name: "a regular expression", want: "pass", edits: []fixtureEdit{pre(hookEntry("Bash|PowerShell|(Multi)?Edit|Wr.*", guard))}},
+		{name: "one entry per tool", want: "pass", edits: []fixtureEdit{pre(
+			hookEntry("Bash", guard), hookEntry("PowerShell", guard), hookEntry("Write", guard),
+			hookEntry("Edit", guard), hookEntry("MultiEdit", guard))}},
+		{name: "Write|Edit does not cover MultiEdit", want: "fail",
+			edits: []fixtureEdit{pre(hookEntry("Bash|PowerShell|Write|Edit", guard))},
+			findings: []string{settingsFile + ": no PreToolUse command hook matches MultiEdit",
+				"Fix: add MultiEdit to the matcher of the hook that runs the guard"}},
+		{name: "a prefix is not a match", want: "fail",
+			edits:    []fixtureEdit{pre(hookEntry("Bas|PowerShel|Writ|Edit|MultiEdit", guard))},
+			findings: []string{"matches Bash, PowerShell and Write"}},
+		{name: "an entry without a command hook", want: "fail",
+			edits:    []fixtureEdit{pre(`{"matcher": "*", "hooks": [{"type": "prompt", "prompt": "is this safe?"}]}`)},
+			findings: []string{"matches Bash, PowerShell, Write, Edit and MultiEdit"}},
+		{name: "no PreToolUse hook", want: "fail",
+			edits:    []fixtureEdit{settings(baseStopHook)},
+			findings: []string{settingsFile + ": no PreToolUse command hook matches"}},
+		{name: "settings.json missing", want: "fail",
+			edits:    []fixtureEdit{withoutFile(settingsFile)},
+			findings: []string{settingsFile + ": ", "create " + settingsFile}},
+		{name: "settings.json untracked", want: "fail",
+			edits: []fixtureEdit{withoutFile(settingsFile), withUntracked(settingsFile, `{"hooks": {`+basePreHook+`}}`)}},
+		{name: "settings.local.json is never read", want: "fail", edits: []fixtureEdit{
+			withoutFile(settingsFile), withFile(".claude/settings.local.json", `{"hooks": {`+basePreHook+`}}`)},
+			findings: []string{settingsFile + ": "}},
+		{name: "settings.json does not parse", want: "fail",
+			edits:    []fixtureEdit{withFile(settingsFile, `{"hooks": `)},
+			findings: []string{settingsFile + ": does not parse"}},
+		{name: "hooks of the wrong shape", want: "fail",
+			edits:    []fixtureEdit{withFile(settingsFile, `{"hooks": {"PreToolUse": {"matcher": "*"}}}`)},
+			findings: []string{settingsFile + ": does not parse", "hooks.PreToolUse"}},
+	})
+}
+
+// A-05 (static part): a Stop hook calls verify-fast.
+func TestRuleA05Static(t *testing.T) {
+	runPartCases(t, "A-05", "static", []partCase{
+		{name: "baseline, inside a list with redirection", want: "pass"},
+		{name: "plain", want: "pass", edits: []fixtureEdit{settings(baseStopHook)}},
+		{name: "a wrapper task is not verify-fast", want: "fail",
+			edits: []fixtureEdit{settings(`"Stop": [` + hookEntry("-", "task -x hook:done") + `]`)},
+			findings: []string{settingsFile + ": no Stop hook calls verify-fast (task verify:fast)",
+				"Fix: make a Stop hook run `task verify:fast`"}},
+		{name: "sh -c is not parsed again", want: "fail",
+			edits:    []fixtureEdit{settings(`"Stop": [` + hookEntry("-", `sh -c 'task verify:fast'`) + `]`)},
+			findings: []string{"no Stop hook calls verify-fast"}},
+		{name: "no Stop hook", want: "fail",
+			edits:    []fixtureEdit{settings(basePreHook)},
+			findings: []string{"no Stop hook calls verify-fast"}},
+		{name: "settings.json missing", want: "fail",
+			edits:    []fixtureEdit{withoutFile(settingsFile)},
+			findings: []string{settingsFile + ": ", "create " + settingsFile}},
+		{name: "settings.json does not parse", want: "fail",
+			edits:    []fixtureEdit{withFile(settingsFile, `[`)},
+			findings: []string{settingsFile + ": does not parse"}},
+		{name: "verify-fast missing points at V-04", want: "fail",
+			edits:    []fixtureEdit{entrypoints("  verify: task verify\n  fmt: task fmt\n  fmt-check: task fmt:check\n")},
+			findings: []string{"vibe.yaml: ", "V-04"}},
+	})
+}
+
+// A-06: a PostToolUse hook that matches Write and Edit calls fmt.
+func TestRuleA06(t *testing.T) {
+	post := func(entries ...string) fixtureEdit {
+		return settings(`"PostToolUse": [` + strings.Join(entries, ", ") + `]`)
+	}
+	runRuleCases(t, "A-06", []ruleCase{
+		{name: "baseline", want: "pass"},
+		{name: "no matcher", want: "pass", edits: []fixtureEdit{post(hookEntry("-", "task fmt"))}},
+		{name: "Write|Edit", want: "pass", edits: []fixtureEdit{post(hookEntry("Write|Edit", "task fmt || true"))}},
+		{name: "a formatter that is not fmt", want: "fail",
+			edits: []fixtureEdit{post(hookEntry("Write|Edit|MultiEdit", "task -x hook:format"))},
+			findings: []string{settingsFile + ": no PostToolUse hook that matches Write and Edit calls fmt (task fmt)",
+				"Fix: add a PostToolUse hook with matcher Write|Edit that runs `task fmt`"}},
+		{name: "Write only", want: "fail", edits: []fixtureEdit{post(hookEntry("Write", "task fmt"))},
+			findings: []string{"no PostToolUse hook that matches Write and Edit"}},
+		{name: "Write and Edit in separate entries", want: "fail",
+			edits:    []fixtureEdit{post(hookEntry("Write", "task fmt"), hookEntry("Edit", "task fmt"))},
+			findings: []string{"no PostToolUse hook that matches Write and Edit"}},
+		{name: "no PostToolUse hook", want: "fail", edits: []fixtureEdit{settings(basePreHook)},
+			findings: []string{"no PostToolUse hook"}},
+		{name: "settings.json missing", want: "fail", edits: []fixtureEdit{withoutFile(settingsFile)},
+			findings: []string{settingsFile + ": "}},
+		{name: "fmt missing points at V-04", want: "fail",
+			edits:    []fixtureEdit{entrypoints("  verify: task verify\n  verify-fast: task verify:fast\n  fmt-check: task fmt:check\n")},
+			findings: []string{"vibe.yaml: ", "V-04"}},
+	})
+}
+
+// A-07 (static part): a SessionStart hook exists.
+func TestRuleA07Static(t *testing.T) {
+	runPartCases(t, "A-07", "static", []partCase{
+		{name: "baseline", want: "pass"},
+		{name: "any matcher", want: "pass", edits: []fixtureEdit{settings(baseSessionHook)}},
+		{name: "no SessionStart hook", want: "fail", edits: []fixtureEdit{settings(basePreHook + ", " + baseStopHook)},
+			findings: []string{settingsFile + ": has no SessionStart command hook", "Fix: add a SessionStart hook"}},
+		{name: "a SessionStart entry with no command hook", want: "fail",
+			edits:    []fixtureEdit{settings(`"SessionStart": [{"hooks": []}]`)},
+			findings: []string{"has no SessionStart command hook"}},
+		{name: "settings.json missing", want: "fail", edits: []fixtureEdit{withoutFile(settingsFile)},
+			findings: []string{settingsFile + ": "}},
 	})
 }
