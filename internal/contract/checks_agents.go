@@ -42,9 +42,9 @@ func checkH02(env *Env) PartResult {
 	cmds := map[string][]Command{}
 	for _, m := range ms {
 		broken = append(broken, m.Broken...)
-		broken = append(broken, m.ScriptBroken...)
 		for _, h := range gitHooks {
-			cmds[h] = append(cmds[h], m.Commands[h]...)
+			broken = append(broken, m.ScriptBroken[h]...)
+			cmds[h] = append(cmds[h], m.commands(h)...)
 		}
 	}
 	if len(broken) > 0 {

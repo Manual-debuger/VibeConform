@@ -7,6 +7,11 @@ import (
 
 // NewRootCmd constructs the root "vibe" command with all subcommands attached.
 func NewRootCmd(version string) *cobra.Command {
+	return newRootCmd(version, contractSeams{})
+}
+
+// newRootCmd is NewRootCmd with the contract audit's test seams.
+func newRootCmd(version string, seams contractSeams) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "vibe",
 		Short:         "VibeConform: desired-state repository control plane",
@@ -18,7 +23,7 @@ func NewRootCmd(version string) *cobra.Command {
 
 	root.AddCommand(
 		newInitCmd(),
-		newAuditCmd(),
+		newAuditCmd(seams),
 		newDiffCmd(),
 		newSyncCmd(),
 		newCheckCmd(),

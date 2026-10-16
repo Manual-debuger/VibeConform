@@ -9,15 +9,22 @@ import (
 // Env is what a check reads: the configuration, the tracked files, and
 // the models built from them, each built once per audit. A check never
 // writes.
+//
+// The audit runs its checks one after another, on one goroutine, and Env
+// relies on that: its caches are plain fields with no locking. A check
+// must not hand Env to another goroutine.
 type Env struct {
 	ctx    context.Context
 	Config *Config
 	Repo   *Repo
 
-	files       map[string]fileEntry
-	entrypoints map[string]*entrypointState
-	workflows   *Workflows
-	notes       []string
+	files          map[string]fileEntry
+	entrypoints    map[string]*entrypointState
+	workflows      *Workflows
+	defaultBranch  string
+	hookMgrs       *[]*hookManager
+	claudeSettings *parsedClaudeSettings
+	notes          []string
 }
 
 type fileEntry struct {

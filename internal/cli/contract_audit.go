@@ -21,6 +21,20 @@ type auditFlags struct {
 	static   bool
 	json     bool
 	explain  string
+
+	// seams are not flags: tests set them through newRootCmd.
+	seams contractSeams
+}
+
+// contractSeams are the contract audit's test seams. The zero value is
+// the real audit: the registry's rules, and no one watching the reports.
+type contractSeams struct {
+	// rules is the rule list the contract audit runs. Nil means the
+	// registry; tests stand in for parts this vibe does not implement yet.
+	rules []contract.Rule
+	// seen, when set, sees every report the contract audit prints; tests
+	// check every report with it.
+	seen func(*contract.Report)
 }
 
 // dispatchAudit picks the audit from the configuration it reads: a
@@ -77,14 +91,6 @@ func v1FlagError(f auditFlags, label string) error {
 		"%s is version 1 (a top-level standard key)", strings.Join(used, ", "), label)
 }
 
-// contractRules is the rule list the contract audit runs. Nil means the
-// registry; tests stand in for parts this vibe does not implement yet.
-var contractRules []contract.Rule
-
-// contractReportSeen, when set, sees every report the contract audit
-// prints. It is nil outside tests; tests check every report with it.
-var contractReportSeen func(*contract.Report)
-
 // runContractAudit runs the contract audit on a version 2 configuration,
 // prints the report and returns the error that sets the exit code. An
 // invalid configuration prints no report.
@@ -102,9 +108,9 @@ func runContractAudit(cmd *cobra.Command, f auditFlags, label string, data []byt
 		return err
 	}
 
-	rep := contract.Audit(ctx, cfg, repo, contract.Options{Static: f.static, Rules: contractRules})
-	if contractReportSeen != nil {
-		contractReportSeen(rep)
+	rep := contract.Audit(ctx, cfg, repo, contract.Options{Static: f.static, Rules: f.seams.rules})
+	if f.seams.seen != nil {
+		f.seams.seen(rep)
 	}
 	write := writeContractText
 	if f.json {

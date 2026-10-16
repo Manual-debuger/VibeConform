@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 )
 
 // The contract audit's tests run through one seam, the vibe audit command
@@ -143,8 +145,14 @@ type auditResult struct {
 // runVibeAudit runs vibe audit in-process with args after "audit".
 func runVibeAudit(t *testing.T, args ...string) auditResult {
 	t.Helper()
-	defer watchReports(t)()
-	root := NewRootCmd("test")
+	return runVibeAuditRules(t, nil, args...)
+}
+
+// runVibeAuditRules runs vibe audit with rules in place of the registry
+// (nil for the registry). Every report it prints is watched.
+func runVibeAuditRules(t *testing.T, rules []contract.Rule, args ...string) auditResult {
+	t.Helper()
+	root := newRootCmd("test", contractSeams{rules: rules, seen: watchReports(t)})
 	var out, errOut bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&errOut)

@@ -9,8 +9,8 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/state"
 )
 
-func newAuditCmd() *cobra.Command {
-	var f auditFlags
+func newAuditCmd(seams contractSeams) *cobra.Command {
+	f := auditFlags{seams: seams}
 
 	cmd := &cobra.Command{
 		Use:   "audit",

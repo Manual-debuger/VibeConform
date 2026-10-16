@@ -50,7 +50,13 @@ type jsonRule struct {
 // auditJSON runs vibe audit --json on a fixture and decodes the report.
 func auditJSON(t *testing.T, dir string, args ...string) (jsonReport, auditResult) {
 	t.Helper()
-	r := runVibeAudit(t, append([]string{"--repo-root", dir, "--json"}, args...)...)
+	return auditJSONRules(t, nil, dir, args...)
+}
+
+// auditJSONRules is auditJSON with rules in place of the registry.
+func auditJSONRules(t *testing.T, rules []contract.Rule, dir string, args ...string) (jsonReport, auditResult) {
+	t.Helper()
+	r := runVibeAuditRules(t, rules, append([]string{"--repo-root", dir, "--json"}, args...)...)
 	var rep jsonReport
 	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
 		t.Fatalf("--json printed no JSON report: %v\nstdout:\n%s\nstderr:\n%s", err, r.stdout, r.stderr)
@@ -93,13 +99,11 @@ func assertRule(t *testing.T, rep jsonReport, id, want string, findings ...strin
 	}
 }
 
-// standIn makes the listed rules decide every part, execution and probe
-// included, as result, for one test. Phase 1 implements no execution or
-// probe part, so only stand-ins can show the verdicts conformant and not
-// conformant through the seam.
-func standIn(t *testing.T, result contract.Result, ids ...string) {
-	t.Helper()
-	rules := contractRules
+// standIn returns rules (nil for the registry) with the listed rules
+// deciding every part, execution and probe included, as result. Phase 1
+// implements no execution or probe part, so only stand-ins can show the
+// verdicts conformant and not conformant through the seam.
+func standIn(rules []contract.Rule, result contract.Result, ids ...string) []contract.Rule {
 	if rules == nil {
 		rules = contract.Rules()
 	}
@@ -115,8 +119,7 @@ func standIn(t *testing.T, result contract.Result, ids ...string) {
 			}
 		}
 	}
-	contractRules = rules
-	t.Cleanup(func() { contractRules = nil })
+	return rules
 }
 
 // mustRules lists every MUST rule except those named.
@@ -141,8 +144,8 @@ func waiverConfig(rule, until string) fixtureEdit {
 
 func TestContractAuditVerdicts(t *testing.T) {
 	t.Run("conformant exits 0", func(t *testing.T) {
-		standIn(t, contract.ResultPass, mustRules("V-04")...)
-		rep, r := auditJSON(t, contractFixture(t))
+		rules := standIn(nil, contract.ResultPass, mustRules("V-04")...)
+		rep, r := auditJSONRules(t, rules, contractFixture(t))
 		assertExit(t, r, 0)
 		if rep.Verdict != "conformant" || rep.Reason != "" {
 			t.Errorf("verdict = %s (%q), want conformant", rep.Verdict, rep.Reason)
@@ -152,22 +155,22 @@ func TestContractAuditVerdicts(t *testing.T) {
 		}
 	})
 	t.Run("a failed SHOULD rule does not change it", func(t *testing.T) {
-		standIn(t, contract.ResultPass, mustRules("V-04")...)
-		rep, r := auditJSON(t, contractFixture(t, withoutFile(".github/pull_request_template.md")))
+		rules := standIn(nil, contract.ResultPass, mustRules("V-04")...)
+		rep, r := auditJSONRules(t, rules, contractFixture(t, withoutFile(".github/pull_request_template.md")))
 		assertExit(t, r, 0)
 		assertRule(t, rep, "R-03", "fail")
 	})
 	t.Run("an undecided SHOULD rule does not change it", func(t *testing.T) {
-		standIn(t, contract.ResultPass, mustRules("V-04")...)
-		standIn(t, contract.ResultUndecided, "H-01")
-		rep, r := auditJSON(t, contractFixture(t))
+		rules := standIn(nil, contract.ResultPass, mustRules("V-04")...)
+		rules = standIn(rules, contract.ResultUndecided, "H-01")
+		rep, r := auditJSONRules(t, rules, contractFixture(t))
 		assertExit(t, r, 0)
 		assertRule(t, rep, "H-01", "undecided")
 	})
 	t.Run("a failed MUST rule exits 2", func(t *testing.T) {
-		standIn(t, contract.ResultPass, mustRules("V-04")...)
+		rules := standIn(nil, contract.ResultPass, mustRules("V-04")...)
 		dir := contractFixture(t, entrypoints("  verify: task verify\n  verify-fast: task verify:fast\n  fmt: task fmt\n"))
-		rep, r := auditJSON(t, dir)
+		rep, r := auditJSONRules(t, rules, dir)
 		assertExit(t, r, 2)
 		assertStderr(t, r, "not conformant: 1 MUST rule fails")
 		if rep.Verdict != "not_conformant" {
@@ -198,8 +201,8 @@ func TestContractAuditVerdicts(t *testing.T) {
 		}
 	})
 	t.Run("--static never reaches a verdict", func(t *testing.T) {
-		standIn(t, contract.ResultPass, ruleIDs("", "V-04", "R-02", "R-03")...)
-		rep, r := auditJSON(t, contractFixture(t), "--static")
+		rules := standIn(nil, contract.ResultPass, ruleIDs("", "V-04", "R-02", "R-03")...)
+		rep, r := auditJSONRules(t, rules, contractFixture(t), "--static")
 		assertExit(t, r, 1)
 		if !rep.StaticOnly || rep.Verdict != "undecided" || !strings.Contains(rep.Reason, "10 rules did not run (--static)") {
 			t.Errorf("static_only %v, verdict %s (%q); want undecided, 10 rules did not run", rep.StaticOnly, rep.Verdict, rep.Reason)

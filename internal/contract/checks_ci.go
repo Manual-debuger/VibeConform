@@ -362,9 +362,8 @@ func checkD03(env *Env) PartResult {
 // commands are read; a workflow that does not parse fails it.
 func checkR01(env *Env) PartResult {
 	calls := entrypointVibeCalls(env)
-	hookCalls, broken := hookVibeCalls(env)
+	hookCalls, res := hookVibeCalls(env)
 	calls = append(calls, hookCalls...)
-	res := failIf(broken)
 	if parsed, ciRes, ok := ciRead(env); ok {
 		res = Merge(res, ciRes)
 		// With verify missing (V-04 fails), any vibe audit job of a pull

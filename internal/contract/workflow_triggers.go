@@ -185,16 +185,22 @@ func globMatch(pattern, s string) bool {
 	return err == nil && re.MatchString(s)
 }
 
-// defaultBranch is the branch C-01 and C-04 read the triggers for: the
-// target of refs/remotes/origin/HEAD, or else main or master: the one
-// more of the workflows' pull_request and push triggers count for, main
-// on a tie. In that case the report says which it assumed.
+// defaultBranch is the branch C-01, C-04 and R-01 read the triggers for:
+// the target of refs/remotes/origin/HEAD (read once, by OpenRepo), or
+// else main or master: the one more of the workflows' pull_request and
+// push triggers count for, main on a tie. In that case the report says
+// which it assumed. parsed is ciRead's list, the same for every rule, so
+// the answer is decided once per audit.
 func defaultBranch(env *Env, parsed []*Workflow) string {
-	out, err := gitOutput(env.Context(), env.Repo.Root(), "symbolic-ref", "-q", "refs/remotes/origin/HEAD")
-	if err == nil {
-		if b, ok := strings.CutPrefix(strings.TrimSpace(string(out)), "refs/remotes/origin/"); ok && b != "" {
-			return b
-		}
+	if env.defaultBranch == "" {
+		env.defaultBranch = decideDefaultBranch(env, parsed)
+	}
+	return env.defaultBranch
+}
+
+func decideDefaultBranch(env *Env, parsed []*Workflow) string {
+	if b := env.Repo.originHead; b != "" {
+		return b
 	}
 	branch, best := fallbackBranches[0], -1
 	for _, b := range fallbackBranches {

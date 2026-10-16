@@ -12,7 +12,7 @@ import (
 //
 // The check walks every failing fixture there is, because it runs on
 // every report a contract audit test produces: runVibeAudit installs it
-// through the contractReportSeen hook, and every fixture test reaches the
+// as the audit command's seen seam, and every fixture test reaches the
 // audit through runVibeAudit (auditJSON and runRuleCases included). A
 // new rule's failing cases are checked as soon as they exist, with no
 // list to keep. The check reads the report model, not the JSON, because
@@ -23,18 +23,17 @@ import (
 // reportsWatched counts the reports watchReports has checked.
 var reportsWatched int
 
-// watchReports makes every contract audit report printed during one
-// runVibeAudit call checked for failures without a file or a fix.
-func watchReports(t *testing.T) func() {
+// watchReports returns the seam that checks every contract audit report
+// one runVibeAudit call prints for failures without a file or a fix.
+func watchReports(t *testing.T) func(*contract.Report) {
 	t.Helper()
-	contractReportSeen = func(rep *contract.Report) {
+	return func(rep *contract.Report) {
 		t.Helper()
 		reportsWatched++
 		for _, p := range failureProblems(rep) {
 			t.Errorf("a failure must name a file and a fix: %s", p)
 		}
 	}
-	return func() { contractReportSeen = nil }
 }
 
 // failureProblems lists the failed parts in a report that have no
