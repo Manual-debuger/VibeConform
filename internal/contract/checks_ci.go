@@ -20,10 +20,10 @@ import (
 // Actions. When ok is false the rule's result is res: no GitHub CI. When
 // ok is true, res holds a failure for each workflow that does not parse
 // (or passes), and the rule merges its own result into it.
-func ciRead(env *Env) (parsed []*Workflow, ws *Workflows, res PartResult, ok bool) {
-	ws, res, ok = env.GitHubCI()
+func ciRead(env *Env) (parsed []*Workflow, res PartResult, ok bool) {
+	ws, res, ok := env.GitHubCI()
 	if !ok {
-		return nil, ws, res, false
+		return nil, res, false
 	}
 	var broken []Finding
 	for _, wf := range ws.Files {
@@ -34,15 +34,15 @@ func ciRead(env *Env) (parsed []*Workflow, ws *Workflows, res PartResult, ok boo
 		parsed = append(parsed, wf)
 	}
 	if len(broken) > 0 {
-		return parsed, ws, Fail(broken...), true
+		return parsed, Fail(broken...), true
 	}
-	return parsed, ws, Pass(), true
+	return parsed, Pass(), true
 }
 
 // checkC03: every workflow has top-level permissions of read-all, {} or a
 // map whose every value is read or none.
 func checkC03(env *Env) PartResult {
-	parsed, _, res, ok := ciRead(env)
+	parsed, res, ok := ciRead(env)
 	if !ok {
 		return res
 	}
@@ -106,7 +106,7 @@ func checkC01(env *Env) PartResult {
 	if missing != nil {
 		return Fail(*missing)
 	}
-	parsed, _, res, ok := ciRead(env)
+	parsed, res, ok := ciRead(env)
 	if !ok {
 		return res
 	}
@@ -152,7 +152,7 @@ var pinnedRef = regexp.MustCompile(`@[0-9a-fA-F]{40}$`)
 // path ends in @ and 40 hexadecimal characters, and no word of a run:
 // step ends in @latest, in every workflow.
 func checkC02(env *Env) PartResult {
-	parsed, _, res, ok := ciRead(env)
+	parsed, res, ok := ciRead(env)
 	if !ok {
 		return res
 	}
@@ -196,7 +196,7 @@ func checkC04(env *Env) PartResult {
 	if missing != nil {
 		return Fail(*missing)
 	}
-	parsed, _, res, ok := ciRead(env)
+	parsed, res, ok := ciRead(env)
 	if !ok {
 		return res
 	}
@@ -256,9 +256,105 @@ func runsAudit(j *Job) bool {
 	return false
 }
 
-func checkC05(_ *Env) PartResult { return notImplementedYet() }
+// checkC05: each verify command is called by a job that runs on a Linux
+// runner and by one that runs on a Windows runner, after matrix
+// expansion, in any workflow. The rule is not applicable without windows
+// in platforms; the registry decides that before it runs.
+func checkC05(env *Env) PartResult {
+	verify, missing := env.Entrypoint(EntrypointVerify)
+	if missing != nil {
+		return Fail(*missing)
+	}
+	parsed, res, ok := ciRead(env)
+	if !ok {
+		return res
+	}
+	var findings []Finding
+	for _, c := range verify {
+		var platforms, unknown, where []string
+		file := workflowDir + "/"
+		for _, wf := range parsed {
+			for _, j := range wf.Jobs {
+				if !CallsAny(j.Commands(), c) {
+					continue
+				}
+				if len(where) == 0 {
+					file = wf.File
+				}
+				where = append(where, wf.File+" job "+j.ID)
+				ps, us := runnerPlatforms(j)
+				for _, p := range ps {
+					if !slices.Contains(platforms, p) {
+						platforms = append(platforms, p)
+					}
+				}
+				unknown = append(unknown, us...)
+			}
+		}
+		if len(where) == 0 {
+			findings = append(findings, Finding{File: file,
+				Message: fmt.Sprintf("no workflow step calls the verify command `%s`, so it runs on no runner", c),
+				Fix:     fmt.Sprintf("call `%s` in a job that runs on ubuntu-latest and windows-latest (a matrix over os)", c)})
+			continue
+		}
+		var lacking []string
+		for _, p := range []string{PlatformLinux, PlatformWindows} {
+			if !slices.Contains(platforms, p) {
+				lacking = append(lacking, platformName(p))
+			}
+		}
+		if len(lacking) == 0 {
+			continue
+		}
+		msg := fmt.Sprintf("the verify command `%s` runs on no %s runner (called in %s)",
+			c, joinWords(lacking, "or"), strings.Join(where, ", "))
+		if len(unknown) > 0 {
+			msg += "; runners of unknown platform: " + strings.Join(unknown, "; ")
+		}
+		findings = append(findings, Finding{File: file, Message: msg,
+			Fix: fmt.Sprintf("run `%s` on %s too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}",
+				c, joinWords(lacking, "and"))})
+	}
+	return Merge(res, failIf(findings))
+}
 
-func checkD03(_ *Env) PartResult { return notImplementedYet() }
+func platformName(p string) string {
+	switch p {
+	case PlatformLinux:
+		return "Linux"
+	case PlatformWindows:
+		return "Windows"
+	}
+	return "macOS"
+}
+
+// scanners are the first words, or first two words, of the commands D-03
+// recognizes as vulnerability scanners.
+var scanners = [][]string{
+	{"govulncheck"}, {"pip-audit"}, {"osv-scanner"}, {"trivy"}, {"pnpm", "audit"}, {"npm", "audit"},
+}
+
+// checkD03: some workflow step runs a recognized scanner.
+func checkD03(env *Env) PartResult {
+	parsed, res, ok := ciRead(env)
+	if !ok {
+		return res
+	}
+	for _, wf := range parsed {
+		for _, j := range wf.Jobs {
+			for _, c := range j.Commands() {
+				for _, s := range scanners {
+					if c.HasPrefix(s...) {
+						return res
+					}
+				}
+			}
+		}
+	}
+	return Merge(res, Fail(Finding{File: workflowDir + "/",
+		Message: "no workflow step runs a recognized vulnerability scanner (govulncheck, pip-audit, pnpm audit, npm audit, osv-scanner or trivy)",
+		Fix:     "add a CI step that runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python or pnpm audit for TypeScript"}))
+}
 
 // checkR01 is R-01's static part: no entrypoint, hook command or CI step
 // has a simple command whose first word is vibe, except in a job that
@@ -269,7 +365,7 @@ func checkR01(env *Env) PartResult {
 	hookCalls, broken := hookVibeCalls(env)
 	calls = append(calls, hookCalls...)
 	res := failIf(broken)
-	if parsed, _, ciRes, ok := ciRead(env); ok {
+	if parsed, ciRes, ok := ciRead(env); ok {
 		res = Merge(res, ciRes)
 		// With verify missing (V-04 fails), any vibe audit job of a pull
 		// request workflow is the audit job.
@@ -284,8 +380,3 @@ func checkR01(env *Env) PartResult {
 	}
 	return Merge(res, failIf(findings))
 }
-
-var (
-	_ = slices.Contains[[]string]
-	_ = strings.Contains
-)

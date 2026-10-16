@@ -408,3 +408,103 @@ func runStaticPartCases(t *testing.T, id string, cases []ruleCase) {
 		})
 	}
 }
+
+// matrixJob is a job that runs task verify on runs-on ${{ matrix.os }}
+// with the given strategy.matrix body.
+func matrixJob(matrix string) string {
+	return "  v:\n    strategy:\n      matrix:\n" + matrix +
+		"    runs-on: ${{ matrix.os }}\n    steps:\n      - run: task verify\n"
+}
+
+// C-05: the steps that call verify run on a Linux and on a Windows runner.
+func TestRuleC05(t *testing.T) {
+	ubuntu, windows := ciVerifyJob("l", "ubuntu-22.04"), ciVerifyJob("w", "windows-2022")
+	runRuleCases(t, "C-05", []ruleCase{
+		{name: "baseline matrix", want: "pass"},
+		{name: "two jobs", want: "pass", edits: []fixtureEdit{ciWith(ciPRAndPush, ubuntu+windows)}},
+		{name: "label lists", want: "pass", edits: []fixtureEdit{ciWith(ciPRAndPush,
+			ciVerifyJob("l", "[self-hosted, linux, x64]")+ciVerifyJob("w", "[self-hosted, windows]"))}},
+		{name: "a runner group with labels", want: "pass", edits: []fixtureEdit{ciWith(ciPRAndPush,
+			ubuntu+ciVerifyJob("w", "\n      group: big\n      labels: [windows-latest]"))}},
+		{name: "matrix include adds Windows", want: "pass", edits: []fixtureEdit{ciWith(ciPRAndPush,
+			matrixJob("        os: [ubuntu-latest]\n        include:\n          - os: windows-latest\n"))}},
+		{name: "matrix of includes only", want: "pass", edits: []fixtureEdit{ciWith(ciPRAndPush,
+			matrixJob("        include:\n          - os: ubuntu-latest\n          - os: windows-latest\n"))}},
+		{name: "matrix exclude removes one combination only", want: "pass", edits: []fixtureEdit{ciWith(ciPRAndPush,
+			matrixJob("        os: [ubuntu-latest, windows-latest]\n        go: ['1.24', '1.25']\n        exclude:\n          - os: windows-latest\n            go: '1.24'\n"))}},
+		{name: "matrix exclude removes Windows", want: "fail", edits: []fixtureEdit{ciWith(ciPRAndPush,
+			matrixJob("        os: [ubuntu-latest, windows-latest]\n        exclude:\n          - os: windows-latest\n"))},
+			findings: []string{ciFile + ": ", "`task verify`", "Windows"}},
+		{name: "matrix include merged into a combination", want: "pass", edits: []fixtureEdit{ciWith(ciPRAndPush,
+			matrixJob("        os: [ubuntu-latest, windows-latest]\n        include:\n          - os: windows-latest\n            shell: pwsh\n"))}},
+		{name: "an expression that is not one matrix value", want: "fail", edits: []fixtureEdit{ciWith(ciPRAndPush,
+			"  v:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, windows-latest]\n"+
+				"    runs-on: ${{ matrix.runner || matrix.os }}\n    steps:\n      - run: task verify\n")},
+			findings: []string{"unknown platform"}},
+		{name: "a matrix from an expression", want: "fail", edits: []fixtureEdit{ciWith(ciPRAndPush,
+			"  v:\n    strategy:\n      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}\n"+
+				"    runs-on: ${{ matrix.os }}\n    steps:\n      - run: task verify\n")},
+			findings: []string{"unknown platform", "${{ matrix.os }}"}},
+		{name: "runs-on from an input", want: "fail", edits: []fixtureEdit{ciWith(ciPRAndPush,
+			ubuntu+ciVerifyJob("w", "${{ inputs.os }}"))},
+			findings: []string{"Windows", "${{ inputs.os }}"}},
+		{name: "Linux only", want: "fail", edits: []fixtureEdit{ciWith(ciPRAndPush, ubuntu)},
+			findings: []string{ciFile + ": ", "no Windows runner", "windows-latest"}},
+		{name: "macOS and Windows", want: "fail", edits: []fixtureEdit{ciWith(ciPRAndPush,
+			ciVerifyJob("m", "macos-14")+windows)}, findings: []string{"no Linux runner"}},
+		{name: "list verify, one command on Linux only", want: "fail", edits: []fixtureEdit{listVerify,
+			ciWith(ciPRAndPush, "  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: task lint\n"+
+				"  test:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, windows-latest]\n"+
+				"    runs-on: ${{ matrix.os }}\n    steps:\n      - run: task test\n")},
+			findings: []string{"`task lint`"}},
+		{name: "in a local reusable workflow", want: "pass", edits: []fixtureEdit{
+			ciWith(ciPRAndPush, "  call:\n    uses: ./.github/workflows/reusable.yml\n"),
+			withFile(".github/workflows/reusable.yml", ciWorkflow("on: workflow_call\n", ubuntu+windows))}},
+		{name: "verify called nowhere", want: "fail",
+			edits:    []fixtureEdit{ciWith(ciPRAndPush, ciJob("x", "ubuntu-latest", "echo hi"))},
+			findings: []string{".github/workflows/: ", "no workflow step calls"}},
+		{name: "not applicable without windows", want: "not_applicable",
+			edits: []fixtureEdit{withFile("vibe.yaml", configWith(section{"platforms", "platforms: [linux]\n"})),
+				ciWith(ciPRAndPush, ubuntu)}},
+		{name: "verify missing points at V-04", want: "fail", edits: []fixtureEdit{noVerify},
+			findings: []string{"vibe.yaml: ", "V-04"}},
+		{name: "a workflow that does not parse", want: "fail",
+			edits:    []fixtureEdit{withFile(".github/workflows/broken.yml", "on: push\njobs:\n  x: 3\n")},
+			findings: []string{".github/workflows/broken.yml: ", "job x must be a map"}},
+		{name: "another CI provider", want: "undecided", edits: []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile),
+			withFile(".circleci/config.yml", "version: 2.1\n")}, findings: []string{".circleci/config.yml: "}},
+	})
+}
+
+// D-03: some workflow runs a recognized vulnerability scanner.
+func TestRuleD03(t *testing.T) {
+	scan := func(script string) fixtureEdit {
+		return withFile(ciFile, ciWorkflow(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("scan", "ubuntu-latest", script)))
+	}
+	runRuleCases(t, "D-03", []ruleCase{
+		{name: "baseline govulncheck", want: "pass"},
+		{name: "pip-audit", want: "pass", edits: []fixtureEdit{scan("pip-audit -r requirements.txt")}},
+		{name: "osv-scanner", want: "pass", edits: []fixtureEdit{scan("osv-scanner scan -r .")}},
+		{name: "trivy", want: "pass", edits: []fixtureEdit{scan("trivy fs .")}},
+		{name: "pnpm audit", want: "pass", edits: []fixtureEdit{scan("pnpm audit --prod")}},
+		{name: "npm audit inside a list", want: "pass", edits: []fixtureEdit{scan("npm ci && npm audit")}},
+		{name: "in a scheduled workflow", want: "pass", edits: []fixtureEdit{
+			scan("echo no scanner"),
+			withFile(".github/workflows/nightly.yml", ciWorkflow("on:\n  schedule:\n    - cron: '0 3 * * *'\n",
+				ciJob("scan", "ubuntu-latest", "govulncheck ./...")))}},
+		{name: "a scanner run through another command", want: "fail", edits: []fixtureEdit{scan("uv run pip-audit")}},
+		{name: "installing a scanner is not running it", want: "fail",
+			edits: []fixtureEdit{scan("go install golang.org/x/vuln/cmd/govulncheck@v1.1.4")}},
+		{name: "a scanner action is not recognized", want: "fail", edits: []fixtureEdit{withFile(ciFile, ciWorkflow(ciPRAndPush,
+			ciVerifyJob("v", "ubuntu-latest")+"  scan:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: golang/govulncheck-action@08eba0b27e820071cde6df949e0beb9ba4906955\n"))}},
+		{name: "no scanner", want: "fail", edits: []fixtureEdit{scan("echo no scanner")},
+			findings: []string{".github/workflows/: ", "govulncheck"}},
+		{name: "a workflow that does not parse", want: "fail",
+			edits:    []fixtureEdit{withFile(".github/workflows/broken.yml", "on: push\njobs:\n  x:\n    steps:\n      - run: [a]\n")},
+			findings: []string{".github/workflows/broken.yml: ", "run must be a string"}},
+		{name: "no CI", want: "fail", edits: []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile)},
+			findings: []string{".github/workflows/: ", "no CI configuration"}},
+		{name: "another CI provider", want: "undecided", edits: []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile),
+			withFile(".buildkite/pipeline.yml", "steps: []\n")}, findings: []string{".buildkite/: "}},
+	})
+}
