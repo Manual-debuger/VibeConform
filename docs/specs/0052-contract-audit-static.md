@@ -1,6 +1,6 @@
 # Spec 0052: Contract audit, static checks (Phase 1)
 
-Status: draft. Spec issue #114. Tickets #98, #99, #100, #101 (milestone "Contract v1 ·
+Status: accepted (2026-10-16). Spec issue #114. Tickets #98, #99, #100, #101 (milestone "Contract v1 ·
 Phase 1: Static checks"). Builds on spec 0051 (contract v1.0.0) and
 ADR 0025. "Qn" refers to the grilling questions the issues cite. Where
 this spec and spec 0051 disagree, spec 0051 wins, and the disagreement
