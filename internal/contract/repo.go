@@ -24,6 +24,30 @@ var ErrNotWorkTree = errors.New("not inside a Git work tree")
 type Repo struct {
 	root  string
 	files []string // slash separated, relative to root, sorted
+	// originHead is the branch refs/remotes/origin/HEAD points at, or ""
+	// when the clone has none.
+	originHead string
+}
+
+// originHead reads the branch refs/remotes/origin/HEAD points at. A clone
+// without it (git symbolic-ref -q exits 1 and says nothing) gives "", for
+// the fallback the CI rules assume (spec 0052, "Default branch"). Any
+// other git failure is an error: the audit cannot tell the default
+// branch, and assuming one would hide that.
+func originHead(ctx context.Context, root string) (string, error) {
+	out, err := gitOutput(ctx, root, "symbolic-ref", "-q", "refs/remotes/origin/HEAD")
+	if err != nil {
+		var ge *gitError
+		if errors.As(err, &ge) && ge.exitCode() == 1 && ge.stderr == "" {
+			return "", nil
+		}
+		return "", err
+	}
+	// A target outside refs/remotes/origin/ names no branch of origin.
+	if b, ok := strings.CutPrefix(strings.TrimSpace(string(out)), "refs/remotes/origin/"); ok {
+		return b, nil
+	}
+	return "", nil
 }
 
 // OpenRepo lists the tracked files of the Git work tree whose top level is
@@ -34,12 +58,21 @@ func OpenRepo(ctx context.Context, root string) (*Repo, error) {
 	}
 
 	inside, err := gitOutput(ctx, root, "rev-parse", "--is-inside-work-tree")
-	if err != nil || strings.TrimSpace(string(inside)) != "true" {
+	switch {
+	case notARepository(err):
+		return nil, fmt.Errorf("cannot decide: %s is %w; the audit reads tracked files only", root, ErrNotWorkTree)
+	case err != nil:
+		// Inside a work tree git can still refuse, as it does a repository
+		// with dubious ownership or a broken configuration: that is a tool
+		// error, with git's own message.
+		return nil, fmt.Errorf("cannot decide: %w", err)
+	case strings.TrimSpace(string(inside)) != "true":
+		// Inside .git, or a bare repository.
 		return nil, fmt.Errorf("cannot decide: %s is %w; the audit reads tracked files only", root, ErrNotWorkTree)
 	}
 	prefix, err := gitOutput(ctx, root, "rev-parse", "--show-prefix")
 	if err != nil {
-		return nil, fmt.Errorf("cannot decide: %s: %w", root, err)
+		return nil, fmt.Errorf("cannot decide: %w", err)
 	}
 	if p := strings.TrimSpace(string(prefix)); p != "" {
 		return nil, fmt.Errorf("cannot decide: %s is not the top level of its Git work tree (it is %s inside it); "+
@@ -48,18 +81,23 @@ func OpenRepo(ctx context.Context, root string) (*Repo, error) {
 
 	tracked, err := gitOutput(ctx, root, "ls-files", "-z")
 	if err != nil {
-		return nil, fmt.Errorf("cannot decide: git ls-files: %w", err)
+		return nil, fmt.Errorf("cannot decide: %w", err)
 	}
 	deleted, err := gitOutput(ctx, root, "ls-files", "-z", "--deleted")
 	if err != nil {
-		return nil, fmt.Errorf("cannot decide: git ls-files --deleted: %w", err)
+		return nil, fmt.Errorf("cannot decide: %w", err)
 	}
 	gone := map[string]bool{}
 	for _, p := range splitNUL(deleted) {
 		gone[p] = true
 	}
 
-	r := &Repo{root: root}
+	head, err := originHead(ctx, root)
+	if err != nil {
+		return nil, fmt.Errorf("cannot decide: %w", err)
+	}
+
+	r := &Repo{root: root, originHead: head}
 	for _, p := range splitNUL(tracked) {
 		if !gone[p] {
 			r.files = append(r.files, p)
@@ -118,19 +156,61 @@ func (r *Repo) FilesUnder(dir string) []string {
 	return out
 }
 
+// gitOutput runs git in dir and returns its standard output. Git runs
+// with LC_ALL=C, so its messages are the untranslated ones notARepository
+// reads. A failure is a *gitError.
 func gitOutput(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- every caller passes literal git arguments; no path is passed as an argument
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return nil, fmt.Errorf("%w: %s", err, msg)
+		if ctxErr := ctx.Err(); ctxErr != nil && !errors.Is(err, ctxErr) {
+			err = fmt.Errorf("%w (%v)", ctxErr, err)
 		}
-		return nil, err
+		return nil, &gitError{args: args, dir: dir, stderr: strings.TrimSpace(stderr.String()), err: err}
 	}
 	return out, nil
+}
+
+// gitError is a git command that failed: what ran, where, how it ended,
+// and what git said on stderr.
+type gitError struct {
+	args   []string
+	dir    string
+	stderr string
+	// err is how the run ended: an *exec.ExitError, an error starting git,
+	// or the context's error when the context ended the run.
+	err error
+}
+
+func (e *gitError) Error() string {
+	msg := fmt.Sprintf("git %s (in %s): %v", strings.Join(e.args, " "), e.dir, e.err)
+	if e.stderr != "" {
+		msg += ": " + e.stderr
+	}
+	return msg
+}
+
+func (e *gitError) Unwrap() error { return e.err }
+
+// exitCode returns git's exit code, or -1 when git did not exit on its
+// own.
+func (e *gitError) exitCode() int {
+	var exit *exec.ExitError
+	if errors.As(e.err, &exit) {
+		return exit.ExitCode()
+	}
+	return -1
+}
+
+// notARepository reports whether err is git saying that its directory is
+// not in a Git repository.
+func notARepository(err error) bool {
+	var ge *gitError
+	return errors.As(err, &ge) && strings.Contains(ge.stderr, "not a git repository")
 }
 
 func splitNUL(b []byte) []string {

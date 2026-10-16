@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"slices"
 	"strings"
 )
@@ -37,16 +36,13 @@ type guardPolicy struct {
 // result is A-04's: fail when it is not tracked or does not parse as a
 // JSON object, cannot decide when it cannot be read.
 func (e *Env) readGuardPolicy() (p *guardPolicy, result PartResult, ok bool) {
-	data, err := e.ReadFile(guardPolicyFile)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return nil, Fail(Finding{
-			File:    guardPolicyFile,
-			Message: "is not tracked, so the guard has no committed policy",
-			Fix:     "create " + guardPolicyFile + " as the guard's version 2 policy, with any exceptions listed under exceptions",
-		}), false
-	case err != nil:
-		return nil, Undecided(Finding{File: guardPolicyFile, Message: fmt.Sprintf("cannot be read: %v", err), Fix: "make the file readable"}), false
+	data, res, ok := readDocument(e, guardPolicyFile, Finding{
+		File:    guardPolicyFile,
+		Message: "is not tracked, so the guard has no committed policy",
+		Fix:     "create " + guardPolicyFile + " as the guard's version 2 policy, with any exceptions listed under exceptions",
+	})
+	if !ok {
+		return nil, res, false
 	}
 	top, err := jsonObject(data)
 	if err != nil {

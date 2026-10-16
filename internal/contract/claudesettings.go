@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"maps"
 	"regexp"
 	"slices"
@@ -72,22 +71,28 @@ func (h claudeHookEntry) calls() []Command {
 // tracked (with missingFix) or does not parse, cannot decide when it
 // cannot be read.
 func (e *Env) readClaudeSettings(missingFix string) (s *claudeSettings, result PartResult, ok bool) {
-	data, err := e.ReadFile(claudeSettingsFile)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return nil, Fail(Finding{
-			File:    claudeSettingsFile,
-			Message: "is not tracked, so Claude Code runs no hooks of this repository",
-			Fix:     "create " + claudeSettingsFile + " and " + missingFix,
-		}), false
-	case err != nil:
-		return nil, Undecided(Finding{File: claudeSettingsFile, Message: fmt.Sprintf("cannot be read: %v", err), Fix: "make the file readable"}), false
+	data, res, ok := readDocument(e, claudeSettingsFile, Finding{
+		File:    claudeSettingsFile,
+		Message: "is not tracked, so Claude Code runs no hooks of this repository",
+		Fix:     "create " + claudeSettingsFile + " and " + missingFix,
+	})
+	if !ok {
+		return nil, res, false
 	}
-	s, err = parseClaudeSettings(data)
-	if err != nil {
+	if e.claudeSettings == nil {
+		s, err := parseClaudeSettings(data)
+		e.claudeSettings = &parsedClaudeSettings{s, err}
+	}
+	if err := e.claudeSettings.err; err != nil {
 		return nil, Fail(ParseFailure(claudeSettingsFile, err)), false
 	}
-	return s, Pass(), true
+	return e.claudeSettings.settings, Pass(), true
+}
+
+// parsedClaudeSettings is .claude/settings.json parsed, once per audit.
+type parsedClaudeSettings struct {
+	settings *claudeSettings
+	err      error
 }
 
 func parseClaudeSettings(data []byte) (*claudeSettings, error) {

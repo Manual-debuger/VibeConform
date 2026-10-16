@@ -59,6 +59,52 @@ func TestContractAuditOutsideWorkTree(t *testing.T) {
 	assertStderr(t, r, "not inside a Git work tree")
 }
 
+// A git failure inside a work tree is a tool error that says what git
+// said, not "not inside a Git work tree" (regression: a broken
+// .git/config, like a dubious-ownership refusal, read as ErrNotWorkTree).
+func TestContractAuditGitFailureIsNotNotWorkTree(t *testing.T) {
+	dir := contractFixture(t)
+	cfg := filepath.Join(dir, ".git", "config")
+	f, err := os.OpenFile(cfg, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("[broken\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	r := runVibeAudit(t, "--repo-root", dir)
+	assertExit(t, r, 1)
+	assertStderr(t, r, "git rev-parse --is-inside-work-tree", "bad config")
+	if strings.Contains(r.stderr, "not inside a Git work tree") {
+		t.Errorf("a git failure was reported as not a work tree:\n%s", r.stderr)
+	}
+}
+
+// A clone with no refs/remotes/origin/HEAD falls back to main or master
+// with a note; a git failure reading it is a tool error, not that
+// fallback (regression: every error read as "no origin/HEAD").
+func TestContractAuditOriginHEADGitFailure(t *testing.T) {
+	dir := contractFixture(t)
+	ref := filepath.Join(dir, ".git", "refs", "remotes", "origin", "HEAD")
+	if err := os.MkdirAll(filepath.Dir(ref), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ref, []byte("garbage\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := runVibeAudit(t, "--repo-root", dir, "--static")
+	assertExit(t, r, 1)
+	assertStderr(t, r, "git symbolic-ref", "refs/remotes/origin/HEAD")
+	if strings.Contains(r.stdout, "assume the default branch") {
+		t.Errorf("a git failure fell back to an assumed default branch:\n%s", r.stdout)
+	}
+}
+
 func TestContractAuditRepoRootMustBeTopLevel(t *testing.T) {
 	dir := contractFixture(t, withFile("sub/vibe.yaml", "contract: 1.0.0\n"))
 	r := runVibeAudit(t, "--repo-root", filepath.Join(dir, "sub"))
