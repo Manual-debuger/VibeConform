@@ -47,6 +47,6 @@ jobs:
           jq -e '.schema == 1' "$RUNNER_TEMP/contract.json" > /dev/null
           bad=$(jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "undecided")) | .id' "$RUNNER_TEMP/contract.json")
           if [ -n "$bad" ]; then
-            echo "MUST rules that fail or cannot be decided:" $bad
+            echo "MUST rules that fail or cannot be decided: $bad"
             exit 1
           fi
