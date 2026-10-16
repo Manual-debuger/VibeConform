@@ -375,14 +375,25 @@ func stopCommand(t *testing.T) string {
 
 // hookShells are the POSIX shells a Stop hook command is run through here:
 // Claude Code runs hook commands in sh or bash on Linux, and in Git Bash on
-// Windows. Each one on PATH is tried, and at least one must be.
+// Windows. Each one on PATH is tried, and at least one must be. On Windows
+// bash is taken from next to Git's sh, because the bash.exe PATH finds
+// first may be WSL's, which runs the command in Linux.
 func hookShells(t *testing.T) []string {
 	t.Helper()
 	var shells []string
-	for _, name := range []string{"sh", "bash"} {
-		if path, err := exec.LookPath(name); err == nil {
-			shells = append(shells, path)
-		}
+	sh, err := exec.LookPath("sh")
+	if err == nil {
+		shells = append(shells, sh)
+	}
+	bash, err := exec.LookPath("bash")
+	if runtime.GOOS == "windows" && sh != "" {
+		bash = filepath.Join(filepath.Dir(sh), "bash.exe")
+		_, err = os.Stat(bash)
+	} else if runtime.GOOS == "windows" {
+		err = errors.New("no Git sh")
+	}
+	if err == nil {
+		shells = append(shells, bash)
 	}
 	if len(shells) == 0 {
 		if os.Getenv("VIBE_HOOKS_E2E") != "" {
