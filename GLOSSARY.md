@@ -18,8 +18,8 @@ a check. An ID is never reused once published.
 _Avoid_: requirement, criterion, standard
 
 **Level**:
-How much a rule counts: a failed MUST rule makes the repository
-non-compliant; a failed SHOULD rule is only reported.
+How much a rule counts: a failed MUST rule makes the repository not
+conformant; a failed SHOULD rule is only reported.
 _Avoid_: severity, tier, grade
 
 **Check**:

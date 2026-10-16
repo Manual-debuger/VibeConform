@@ -118,6 +118,19 @@ against the repository's actual files and exits non-zero if any of them is
 not what the standard says it should be. Safe to run in CI — see
 `docs/specs/0009-vibe-audit-v2.md`.
 
+Since spec 0052, `vibe audit` runs one of two audits, and the
+configuration it reads picks which:
+
+- a top-level `standard:` key (a version 1 `vibe.yaml`) runs the audit
+  this section describes, exactly as before;
+- a top-level `contract:` key (a version 2 `vibe.yaml`, see "`vibe.yaml`
+  version 2" below) runs the contract audit, which checks the rules of
+  contract 1.0.0 (spec 0051). See "`vibe audit` on a contract" below.
+
+A file with both keys, or with neither, is an error that names the two
+(exit `1`). `vibe diff`, `vibe sync` and `vibe init` read version 1
+only.
+
 ```bash
 vibe audit
 ```
@@ -161,6 +174,11 @@ either one; only the first is anyone's mistake.
 |---------------|---------|-----------------------------------|
 | `--repo-root` | `.`     | Directory to read `vibe.yaml` and check files under |
 
+`--config`, `--static`, `--json` and `--explain` belong to the contract
+audit. With a version 1 `vibe.yaml`, `--config`, `--static` and `--json`
+are an error (exit `1`) that says the flag needs a version 2
+configuration.
+
 **What each line means:**
 
 | Line | Meaning | Conformant? |
@@ -182,7 +200,8 @@ either one; only the first is anyone's mistake.
 | `1` | could not answer: `vibe.yaml` missing/unreadable, unregistered `(standard, version)`, malformed `.vibe/state.yaml`, an I/O failure, or a `vibe` older than the one that last synced this repository |
 
 The split is the point of the command in CI. A `2` or a `3` is fixed by
-running `vibe sync`; a `1` means the check itself could not run.
+running `vibe sync`; a `1` means the check itself could not run. Exit `3`
+exists only here: the contract audit exits `0`, `1` or `2`.
 
 `3` is separate from `2` so a `conformance` job can decide for itself
 whether being behind the standard should fail the build. It is non-zero by
@@ -225,6 +244,225 @@ as correct. `sync` refuses outright for the same reason; see below.
 - `audit`, `diff`, and `sync` share one decision engine, so they never
   disagree about a resource — they only differ in whether they judge,
   describe, or apply.
+
+### `vibe audit` on a contract
+
+With a version 2 configuration (a top-level `contract:` key), `vibe
+audit` checks the repository against the rules of the contract version
+it declares: 25 rules in contract 1.0.0, in six categories (spec 0051,
+spec 0052). Each rule ends as `pass`, `fail`, `not applicable`, `waived`,
+`cannot decide` or `not run`. This vibe implements the static checks;
+execution checks and probes are not built yet, so a full run reports
+them as "cannot decide" with the issue that adds them (#102–#104, #106),
+and `--static` reports them as "not run".
+
+```bash
+vibe audit --static
+vibe audit --static --config vibe.v2.yaml   # this repository, until #111
+vibe audit --explain C-02
+```
+
+**Flags:**
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--repo-root` | `.` | Repository to check. Its `vibe.yaml` is the configuration unless `--config` names another |
+| `--config <path>` | `vibe.yaml` at `--repo-root` | Configuration file to read instead. The path is relative to the current directory, not to `--repo-root`. It must be a version 2 file |
+| `--static` | off | Run only the static checks. Fast, runs nothing, and never reaches a verdict: execution and probe parts are `not run`, so the exit code is always `1` |
+| `--json` | off | Print the report as JSON on stdout, nothing else on stdout |
+| `--explain <ID>` | | Explain one rule, such as `C-02`, and read nothing else |
+
+`--explain` reads no repository and no configuration, so it works
+anywhere, and combining it with any other audit flag is an error. It
+prints what the rule registry holds: ID and rule sentence, level,
+category, check kinds, source, when the rule is not applicable, whether
+it can be waived, the rationale and the check as spec 0051 states it.
+The rationale is spec 0051's source for the rule, plus the category's
+introduction where spec 0051 has one (H, C and A). An unknown ID is exit
+`1` and lists the valid IDs.
+
+```
+$ vibe audit --explain C-02
+C-02: Toolchains and actions are pinned
+
+  Level:           MUST
+  Category:        C, CI
+  Checks:          static
+  Source:          spec 0044
+  Not applicable:  never; the rule always applies
+  Waivable:        no, a MUST rule cannot be waived
+
+Rationale:
+  Source: spec 0044. Contract v1 supports GitHub Actions only (Q19). If the
+  repository has CI configuration for another provider and no
+  `.github/workflows/`, the C rules cannot be decided.
+
+Check:
+  Static, across every workflow (not only generated ones): every `uses:`
+  other than a local path is pinned to a full 40-character commit SHA, and
+  no `run:` step contains a command word ending in `@latest`
+```
+
+**The text report.** A header, one line per category counting its
+results (a failed MUST rule counts as `FAIL`, a failed SHOULD rule as
+`fail`), then the sections Failed, Waived, Not applicable, Cannot decide,
+Not run (`--static` only), Guard exceptions and Local guardrail
+adjustments, any notes, and the verdict. An empty section prints
+`(none)`. Failures are listed MUST first, then by rule ID, and every
+finding names the file to change or create and the direction of the
+fix. On a repository whose only failures are two SHOULD rules, for
+example (long lines shortened):
+
+```
+vibe audit: contract 1.0.0 (vibe v0.12.0), static checks only
+
+  V  Verification entrypoints              1 pass, 3 not run
+  H  Local Git hooks                       2 pass
+  C  CI                                    4 pass, 1 fail
+  A  Agent guardrails                      3 pass, 5 not run
+  D  Dependencies and supply chain         1 pass, 1 fail, 1 not run
+  R  Removability and repository hygiene   2 pass, 1 not run
+
+Failed
+  C-05  SHOULD  Tests run on Linux and Windows
+        .github/workflows/ci.yml: the verify command `task lint` runs on no Windows runner (…)
+        Fix: run `task lint` on Windows too, such as with a matrix over os: […]
+  D-03  SHOULD  CI scans for known vulnerabilities
+        .github/workflows/: no workflow step runs a recognized vulnerability scanner (…)
+        Fix: add a CI step that runs the scanner for the component's language, such as govulncheck ./... for Go, …
+
+Waived
+  (none)
+
+Not applicable
+  (none)
+
+Cannot decide
+  (none)
+
+Not run (--static)
+  V-01 V-02 V-03 A-02 A-03 A-05 (probe) A-07 (execution) A-08 D-01 R-01 (execution)
+
+Guard exceptions
+  (none)
+
+Local guardrail adjustments
+  (none)
+
+Note: the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is main
+
+Verdict: cannot decide. 10 rules did not run (--static).
+```
+
+The verdict line is `Verdict: conformant`, `Verdict: not conformant` or
+`Verdict: cannot decide. <reason>`. When the configuration declares a
+newer PATCH, such as `1.0.3`, the header says
+`contract 1.0.0 (declared 1.0.3; vibe …)`.
+
+**What is listed.** Not-applicable rules, waivers (in force, expired, or
+unused because the rule is not applicable), every exception in
+`.claude/hooks/policy.json`, and every exception and extra rule in a
+tracked `.claude/hooks/policy.local.json`, so that every loosening shows
+in one report. `.claude/settings.local.json` is never read.
+
+**Exit codes:**
+
+| Code | Meaning |
+|---|---|
+| `0` | conformant: every MUST rule passed or is not applicable |
+| `2` | not conformant: a MUST rule failed, and every other MUST rule was decided |
+| `1` | cannot decide: a MUST rule could not be decided or did not run (always the case with `--static`). Also an invalid configuration, both or neither of `contract` and `standard`, an unsupported contract version, an unknown `--explain` ID, a directory that is not a Git work tree, or any other tool error |
+
+A failed MUST rule beside an undecided one is `1`, not `2`: there is no
+verdict until every MUST rule is decided, and the reason says how many
+MUST rules already fail. SHOULD results never change the exit code.
+There is no exit `3`. After a report, the reason also goes to stderr
+(`Error: not conformant: 1 MUST rule fails`,
+`Error: cannot decide: …`). A configuration error goes to stderr with no
+report:
+
+```
+Error: vibe.yaml: waivers[0].until: "2026-13-01" is not a date YYYY-MM-DD
+Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements contract 1.0.0, and the configuration declares 1.1.0
+```
+
+**Contract versions.** This vibe implements contract 1.0.0. A declared
+version must be `X.Y.Z`. A newer PATCH (`1.0.n`) is audited as 1.0.0,
+since a PATCH changes no verdict, and the report shows both versions.
+Another MAJOR, or a MINOR above 0, is "cannot decide; upgrade vibe"
+(exit `1`).
+
+**JSON.** `--json` prints one object. `schema` versions this shape,
+separately from the contract; it is `1`.
+
+```json
+{
+  "schema": 1,
+  "vibe": "v0.12.0",
+  "contract": {"declared": "1.0.0", "audited": "1.0.0"},
+  "static_only": true,
+  "verdict": "undecided",
+  "reason": "10 rules did not run (--static)",
+  "summary": {
+    "MUST":   {"pass": 7, "fail": 0, "not_applicable": 0, "waived": 0, "undecided": 0, "not_run": 9},
+    "SHOULD": {"pass": 6, "fail": 2, "not_applicable": 0, "waived": 0, "undecided": 0, "not_run": 1}
+  },
+  "rules": [
+    {"id": "C-05", "level": "SHOULD", "category": "C",
+     "title": "Tests run on Linux and Windows",
+     "result": "fail",
+     "parts": [{"check": "static", "result": "fail"}],
+     "findings": [{"file": ".github/workflows/ci.yml", "message": "…", "fix": "…"}],
+     "waiver": null}
+  ],
+  "guard_exceptions": [{"rule": "…", "match": "…", "reason": "…"}],
+  "local_adjustments": [{"file": "…", "kind": "exception", "rule": "…", "pattern": "…", "reason": "…"}]
+}
+```
+
+- Result tokens, in `result`, `parts[].result` and `summary`: `pass`,
+  `fail`, `not_applicable`, `waived`, `undecided`, `not_run`. `summary`
+  has every token for both levels.
+- Verdict tokens: `conformant`, `not_conformant`, `undecided`.
+- `rules` lists all 25 rules in ID order. `parts[].check` is `static`,
+  `execution` or `probe`.
+- `waiver` is `null`, or `{"reason", "until", "expired"}`. A rule with a
+  waiver and result `not_applicable` has an unused waiver.
+- `local_adjustments[].kind` is `exception` or `rule` (an extra rule).
+
+Since `--static` always exits `1`, a CI job that runs it judges the JSON
+instead. This repository's `Contract / audit (static)` job
+(`.github/workflows/contract-audit.yml`) fails when a MUST rule is
+`fail` or `undecided`:
+
+```bash
+vibe audit --static --json --config vibe.v2.yaml > contract.json || true
+jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "undecided")) | .id' contract.json
+```
+
+**Behavior to know:**
+
+- Read-only, like the old audit: it never writes a file.
+- **Tracked files only.** The static checks read the working-tree
+  content of the files `git ls-files` lists. An untracked file counts as
+  absent, so a local file cannot make a repository look conformant.
+- A file a rule needs that does not parse fails that rule, and the
+  finding names the file and the parse error.
+- **Not applicable** in contract 1.0.0: C-05 when `platforms` has no
+  `windows`; every A rule when `agents` has no `claude`; R-02 when
+  `agents` is empty, and R-02's `CLAUDE.md` half when `agents` has no
+  `claude`.
+- Commands are parsed as POSIX shell (ADR 0026). A command is "called"
+  when a simple command anywhere in a hook, CI `run:` step or entrypoint
+  has exactly its words, after quote removal. A string passed to
+  `sh -c` is not parsed again.
+- Only GitHub Actions workflows are read. With none and another
+  provider's file tracked (`.gitlab-ci.yml` and others), the C rules and
+  D-03 are "cannot decide"; with no CI configuration at all, they fail.
+  Without `refs/remotes/origin/HEAD`, the CI rules assume `main` or
+  `master` is the default branch and say so in a note.
+- The recognition rules (hook managers, update bots, scanners, runners,
+  trigger filters) are in spec 0052, "Recognition rules".
 
 ### `vibe diff`
 
@@ -2495,6 +2733,93 @@ the code; it does not relax a check for hand-written files): a repository either
 conforms to its standard as written or it does not.
 Editing `vibe.yaml` by hand is safe and expected — `init` only exists to
 create the first one.
+
+That is version 1, the schema `init`, `diff`, `sync` and the old audit
+read. Version 2, below, is read only by `vibe audit`.
+
+## `vibe.yaml` version 2
+
+A configuration with a top-level `contract:` key is version 2 (spec 0051,
+"`vibe.yaml`"; spec 0052). It declares properties of the repository, not
+a standard to generate, and `vibe audit` checks the repository against
+it. Nothing writes it yet: `vibe init` still writes version 1 (#112).
+This repository keeps its version 1 `vibe.yaml` for the old audit and
+commits its version 2 configuration as `vibe.v2.yaml`, which #111 will
+rename:
+
+```yaml
+contract: 1.0.0
+platforms: [linux, windows]
+agents: [claude, codex]
+# No components: one Go component at the root, found from go.mod.
+entrypoints:
+  verify:
+    - task fmt:check
+    - task typecheck
+    - task lint
+    - task test
+    - task mod:verify
+    - task security
+    - task workflows:lint
+  verify-fast: task verify:fast
+  fmt: task fmt
+  fmt-check: task fmt:check
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| `contract` | yes | The contract version, `X.Y.Z`, such as `1.0.0` |
+| `platforms` | yes | Non-empty list of distinct values from `linux`, `windows`, `macos` |
+| `agents` | yes | List of distinct values from `claude`, `codex`; may be empty (`[]`). Contract 1.0.0 has no Codex rules |
+| `components` | no | List of `{path, language}`; `language` is `go`, `python` or `typescript` |
+| `entrypoints` | yes | `verify`, `verify-fast`, `fmt`, `fmt-check`; `setup` is optional |
+| `waivers` | no | List of `{rule, reason, until}` |
+
+**Validation.** Decoding is strict: an unknown key at any level is an
+error, so a typo cannot silently turn a rule off. Every invalid
+configuration exits `1` with no report, and the error names the file,
+the field path and the reason, for the first error in document order:
+
+```
+Error: vibe.yaml: entrypoints.verify[2]: must be a command string
+Error: vibe.yaml: waivers[0].rule: C-02 is a MUST rule; only SHOULD rules can be waived
+Error: vibe.yaml: integrations: the version 2 schema has no integrations field; agents go in agents; editors and repository intelligence moved into the setup skill
+```
+
+The version 1 fields (`standard`, `version`, `integrations`,
+`development`, `policy`, `ci`) are rejected the same way, each with a
+pointer to where its content went. With `--config`, errors name the file
+as you gave it.
+
+- **Components.** When `components` is omitted, the tracked manifests
+  at the root decide: exactly one of `go.mod`, `pyproject.toml`,
+  `package.json` gives the language of one component at `.`. None, or
+  more than one, is an error that names `components` and the manifests
+  found. A declared `path` is a clean, relative, forward-slash directory
+  with tracked files (`.` is the root); paths are distinct and do not
+  nest.
+- **Entrypoints.** Each value is one command or a list of commands. A
+  list is "called" only when each of its commands is called, so a CI
+  that splits verification across jobs declares `verify` as the list of
+  what each job runs. Each command must be exactly one simple command
+  (words, optionally after `VAR=value` assignments, with no `&&`, `;`,
+  pipes or redirections); write a list instead. A missing, empty or
+  compound required entrypoint is not a configuration error: V-04 fails,
+  and the rest of the report still runs.
+- **Waivers.** `rule` must be a rule ID of contract 1.0.0 and a SHOULD
+  rule: a MUST rule cannot be waived. `reason` must be non-empty after
+  trimming. `until` is a date, `YYYY-MM-DD`, and the waiver is in force
+  through the end of that day in UTC. At most one waiver per rule. An
+  expired waiver is ignored: the rule is checked, and the report marks
+  it "waiver expired". A waiver for a rule that is not applicable is
+  reported as unused.
+
+```yaml
+waivers:
+  - rule: C-05
+    reason: the Windows runners are not set up yet
+    until: 2026-12-31
+```
 
 ## `.vibe/state.yaml`
 
