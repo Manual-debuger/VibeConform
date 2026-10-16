@@ -1,0 +1,8 @@
+pre-commit:
+  commands:
+    format:
+      run: task fmt:check
+pre-push:
+  commands:
+    verify:
+      run: task verify:fast
