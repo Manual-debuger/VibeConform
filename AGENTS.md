@@ -10,10 +10,12 @@ Don't include yourself as contributor in commits.
    before changing package boundaries or the module/resource model, and
    `docs/architecture/principles.md` before changing what a module
    generates.
-2. Here the plan is committed too, under `docs/plans/`, following:
-   requirement → spec → implementation plan → repository impact analysis
-   → implementation → tests → verification → documentation sync. The
-   user approves the spec and the plan as separate steps.
+2. Write the spec with `/to-spec`. Commit it under `docs/specs/` and
+   publish it in the issue tracker, which links to the file. Its
+   "Implementation Decisions" section serves as the plan, so new work
+   has no separate `docs/plans/` file. The user approves the spec once.
+   Then implement with `/implement-spec`: one integration branch and one
+   PR per spec, with tests, verification and a documentation sync.
 3. Preserve the dependency direction documented in
    `docs/architecture/overview.md` (e.g. `internal/module` depends on
    `internal/resource`, not the reverse).
