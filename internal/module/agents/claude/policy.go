@@ -44,14 +44,26 @@ type Rule struct {
 // docs/specs/0021-agent-hooks-task-interface.md.
 type Policy struct {
 	// Version is the policy.json layout, bumped only if an interpreter would
-	// misread the new shape.
+	// misread the new shape. Version 2 adds Exceptions (spec 0052).
 	Version int `json:"version"`
 	// Tools maps each field to the tool_name values whose calls carry it.
-	// MultiEdit is listed because Claude Code's matchers are regular
-	// expressions: "Write|Edit" also routes MultiEdit calls to the guard,
-	// and the bash hook they replace checked those too.
+	// MultiEdit is listed because the settings route its calls to the guard
+	// too, and the bash hook the guard replaced checked them.
 	Tools map[Field][]string `json:"tools"`
 	Rules []Rule             `json:"rules"`
+	// Exceptions are the contract's guard exceptions, which rule A-04 lists
+	// (spec 0051). VibeConform generates none, and the guards refuse every
+	// call while the list has anything in it, until #105 makes them apply
+	// it. A repository's own exceptions go in policy.local.json (spec 0050).
+	Exceptions []Exception `json:"exceptions"`
+}
+
+// Exception lifts the guard rule Rule for the values Match matches in
+// full, for Reason.
+type Exception struct {
+	Rule   string `json:"rule"`
+	Match  string `json:"match"`
+	Reason string `json:"reason"`
 }
 
 // commandRule builds a command rule, whose parsed and raw patterns are
@@ -201,7 +213,8 @@ const escape = " Ask the user to run it themselves (in Claude Code: ! <command>)
 // Changing what is blocked is a policy decision, not a refactor: keep it
 // out of commits that only move code (spec 0021, non-goals).
 var policy = Policy{
-	Version: 1,
+	Version:    2,
+	Exceptions: []Exception{},
 	Tools: map[Field][]string{
 		FieldCommand:  {"Bash", "PowerShell"},
 		FieldFilePath: {"Edit", "MultiEdit", "Write"},

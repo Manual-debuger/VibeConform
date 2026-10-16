@@ -23,6 +23,11 @@ type corpusCase struct {
 	// policy.local.json (spec 0050). Neither means no local file.
 	Local     json.RawMessage `json:"local"`
 	LocalText *string         `json:"local_text"`
+	// Policy replaces top-level keys of the generated policy.json for the
+	// case; a null value removes the key. Absent means the generated file.
+	Policy map[string]json.RawMessage `json:"policy"`
+	// Stderr is text a deny must print, such as where to look.
+	Stderr string `json:"stderr"`
 }
 
 func loadCorpus(t *testing.T) []corpusCase {
@@ -62,6 +67,42 @@ func (c corpusCase) localFile() []byte {
 	return c.Local
 }
 
+// writePolicy replaces the policy file at path with the case's variant of
+// it for the duration of the subtest, and puts the original back after.
+func writePolicy(t *testing.T, path string, keys map[string]json.RawMessage) {
+	t.Helper()
+	if keys == nil {
+		return
+	}
+	original, err := os.ReadFile(path) // #nosec G304 -- a path the calling test fixed
+	if err != nil {
+		t.Fatal(err)
+	}
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(original, &top); err != nil {
+		t.Fatalf("%s: %v", path, err)
+	}
+	for k, v := range keys {
+		if string(v) == "null" {
+			delete(top, k)
+			continue
+		}
+		top[k] = v
+	}
+	variant, err := json.Marshal(top)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, variant, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.WriteFile(path, original, 0o600); err != nil {
+			t.Errorf("restoring %s: %v", path, err)
+		}
+	})
+}
+
 // writeLocal writes the case's local file to path for the duration of the
 // subtest. It refuses to replace a file that is already there: the
 // end-to-end run writes into a real repository.
@@ -91,12 +132,14 @@ func (c corpusCase) input() []byte {
 }
 
 // runCorpus feeds every case to the command and checks the exit code:
-// 2 with a reason on stderr for deny, 0 with no output for allow. local is
-// where the guard looks for policy.local.json, relative to dir.
-func runCorpus(t *testing.T, dir, local string, argv ...string) {
+// 2 with a reason on stderr for deny, 0 with no output for allow. policy is
+// the policy file the guard reads, and local where it looks for
+// policy.local.json, both relative to dir.
+func runCorpus(t *testing.T, dir, policy, local string, argv ...string) {
 	t.Helper()
 	for _, tc := range loadCorpus(t) {
 		t.Run(tc.Name, func(t *testing.T) {
+			writePolicy(t, filepath.Join(dir, filepath.FromSlash(policy)), tc.Policy)
 			writeLocal(t, filepath.Join(dir, filepath.FromSlash(local)), tc.localFile())
 			// #nosec G204 -- argv is fixed by the calling test, never user input
 			cmd := exec.Command(argv[0], argv[1:]...)
@@ -121,6 +164,9 @@ func runCorpus(t *testing.T, dir, local string, argv ...string) {
 				}
 				if stderr.Len() == 0 {
 					t.Error("denied with nothing on stderr; the agent would show no reason")
+				}
+				if !strings.Contains(stderr.String(), tc.Stderr) {
+					t.Errorf("stderr does not say %q: %s", tc.Stderr, stderr.String())
 				}
 			case "allow":
 				if code != 0 {
@@ -190,7 +236,7 @@ func TestGuardCorpusGo(t *testing.T) {
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building guard.go: %v\n%s", err, out)
 	}
-	runCorpus(t, dir, "policy.local.json", bin, "policy.json")
+	runCorpus(t, dir, "policy.json", "policy.local.json", bin, "policy.json")
 }
 
 // TestGoRunReportsGuardDenyAsOne pins why every hook:guard command ends in
@@ -221,14 +267,14 @@ func TestGoRunReportsGuardDenyAsOne(t *testing.T) {
 // TestGuardCorpusNode runs the prod-ts guard when node is installed.
 func TestGuardCorpusNode(t *testing.T) {
 	node := requireTool(t, "node")
-	runCorpus(t, guardDir(t), "policy.local.json", node, guardTemplate(t, "tsrepotooling", "guard.mjs"), "policy.json")
+	runCorpus(t, guardDir(t), "policy.json", "policy.local.json", node, guardTemplate(t, "tsrepotooling", "guard.mjs"), "policy.json")
 }
 
 // TestGuardCorpusPython runs the prod-py guard when uv is installed, the
 // same way hook:guard does.
 func TestGuardCorpusPython(t *testing.T) {
 	uv := requireTool(t, "uv")
-	runCorpus(t, guardDir(t), "policy.local.json", uv, "run", "--no-project", "python",
+	runCorpus(t, guardDir(t), "policy.json", "policy.local.json", uv, "run", "--no-project", "python",
 		guardTemplate(t, "pyrepotooling", "guard.py"), "policy.json")
 }
 
@@ -295,5 +341,5 @@ func TestGuardCorpusEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VIBE_GUARD_E2E_DIR is set but task is not on PATH: %v", err)
 	}
-	runCorpus(t, dir, ".claude/hooks/policy.local.json", task, "-x", "hook:guard")
+	runCorpus(t, dir, ".claude/hooks/policy.json", ".claude/hooks/policy.local.json", task, "-x", "hook:guard")
 }
