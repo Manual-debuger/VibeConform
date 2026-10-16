@@ -73,29 +73,30 @@ func TestHookTasksShape(t *testing.T) {
 					t.Errorf("%s is not silent; Task would echo the script into the agent's hook output", name)
 				}
 			}
-			// Both exit 2 on failure, the one code both agents act on. -s
-			// keeps Task's own command echo out; 1>&2 moves the tools'
-			// output (go test prints failures on stdout) to stderr, which is
-			// what an agent shows the model on exit 2.
+			// hook:check exits 2 on failure, the one code both agents act
+			// on. -s keeps Task's own command echo out; 1>&2 moves the
+			// tools' output (go test prints failures on stdout) to stderr,
+			// which is what an agent shows the model on exit 2.
 			//
-			// hook:done is the gate, so it runs all of verify:fast.
-			// hook:check runs the same steps except fmt:check: agents run
-			// every hook matching an event in parallel, so it starts while
-			// hook:format may still be rewriting the file, and a format
-			// check then would fail on a race, not on the code.
+			// hook:check runs verify:fast's steps except fmt:check: agents
+			// run every hook matching an event in parallel, so it starts
+			// while hook:format may still be rewriting the file, and a
+			// format check then would fail on a race, not on the code.
 			var checkSteps []string
 			for _, step := range verifyFastSteps[path] {
 				if step != "fmt:check" {
 					checkSteps = append(checkSteps, step)
 				}
 			}
-			for name, want := range map[string]string{
-				"hook:check": "task -s " + strings.Join(checkSteps, " ") + " 1>&2 || exit 2",
-				"hook:done":  "task -s verify:fast 1>&2 || exit 2",
-			} {
-				if script := hookScript(t, tf, name); !strings.Contains(script, want) {
-					t.Errorf("%s does not run %q:\n%s", name, want, script)
-				}
+			want := "task -s " + strings.Join(checkSteps, " ") + " 1>&2 || exit 2"
+			if script := hookScript(t, tf, "hook:check"); !strings.Contains(script, want) {
+				t.Errorf("hook:check does not run %q:\n%s", want, script)
+			}
+			// The Stop hook runs verify:fast itself and hook:done only when
+			// it failed (TestHookStopBlocksOnce), so hook:done must not run
+			// it a second time.
+			if script := hookScript(t, tf, "hook:done"); strings.Contains(script, "verify:fast 1>&2") {
+				t.Errorf("hook:done runs verify:fast again:\n%s", script)
 			}
 		})
 	}
@@ -339,47 +340,117 @@ func loadStopCorpus(t *testing.T) []stopCase {
 	return c.Cases
 }
 
-// TestHookDoneBlocksOnce runs each template's hook:done through Task against
-// a verify:fast stub. A failing check blocks the stop (exit 2, reason on
-// stderr), except when stop_hook_active says this stop was already blocked
-// once: then it is let through (exit 0), still saying why (spec 0023 4.4).
-// A passing check never blocks. Nothing goes to stdout in any case, since
-// agents parse stdout on exit 0.
-func TestHookDoneBlocksOnce(t *testing.T) {
-	task := taskOnPath(t)
-	for _, path := range repoToolingTaskfiles {
-		for _, passing := range []bool{false, true} {
-			dir := t.TempDir()
-			stub := map[string]any{"cmds": []string{"echo 'verify:fast failed: TestAdd' && exit 1"}}
-			if passing {
-				stub = map[string]any{"cmds": []string{"echo ok"}}
-			}
-			hookTaskfile(t, dir, path, "hook:done", map[string]any{"verify:fast": stub})
+// stopCommand returns the command the Claude settings template runs when the
+// agent ends its turn.
+func stopCommand(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("agents", "claude", "templates", "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatal(err)
+	}
+	stop := settings.Hooks["Stop"]
+	if len(stop) != 1 || len(stop[0].Hooks) != 1 {
+		t.Fatalf("settings.json should have one Stop hook, has %+v", stop)
+	}
+	return stop[0].Hooks[0].Command
+}
 
-			for _, tc := range loadStopCorpus(t) {
-				t.Run(fmt.Sprintf("%s/passing=%v/%s", path, passing, tc.Name), func(t *testing.T) {
-					code, stdout, stderr := runTask(t, task, dir, "hook:done", tc.Stdin)
-					want := 0
-					if !passing && !tc.Active {
-						want = 2
-					}
-					if code != want {
-						t.Errorf("exit %d, want %d; stderr: %s", code, want, stderr)
-					}
-					if !passing && !strings.Contains(stderr, "verify:fast failed") {
-						t.Errorf("stderr does not carry the failure; the model would see no reason:\n%s", stderr)
-					}
-					// Only on exit 0, as in the guard corpus: agents read
-					// stdout then. On exit 2 they block regardless, and
-					// under GitHub Actions Task prints an "::error" annotation
-					// to stdout whenever a task fails.
-					if code == 0 && stdout != "" {
-						t.Errorf("stdout = %q; agents parse stdout on exit 0", stdout)
-					}
-				})
+// hookShells are the POSIX shells a Stop hook command is run through here:
+// Claude Code runs hook commands in sh or bash on Linux, and in Git Bash on
+// Windows. Each one on PATH is tried, and at least one must be.
+func hookShells(t *testing.T) []string {
+	t.Helper()
+	var shells []string
+	for _, name := range []string{"sh", "bash"} {
+		if path, err := exec.LookPath(name); err == nil {
+			shells = append(shells, path)
+		}
+	}
+	if len(shells) == 0 {
+		if os.Getenv("VIBE_HOOKS_E2E") != "" {
+			t.Fatal("VIBE_HOOKS_E2E is set but neither sh nor bash is on PATH")
+		}
+		t.Skip("neither sh nor bash on PATH; the hook-guard workflow runs this in CI")
+	}
+	return shells
+}
+
+// TestHookStopBlocksOnce runs the settings' Stop command, in each POSIX
+// shell on PATH, against each template's hook:done and a verify:fast stub.
+// A failing check blocks the stop (exit 2, reason on stderr), except when
+// stop_hook_active says this stop was already blocked once: then it is let
+// through (exit 0), still saying why (spec 0023 4.4). A passing check never
+// blocks. Nothing goes to stdout in any case, since agents parse stdout on
+// exit 0. The stub reads its stdin, as a tool may: the payload must still
+// reach hook:done.
+func TestHookStopBlocksOnce(t *testing.T) {
+	taskOnPath(t)
+	command := stopCommand(t)
+	for _, sh := range hookShells(t) {
+		for _, path := range repoToolingTaskfiles {
+			for _, passing := range []bool{false, true} {
+				dir := t.TempDir()
+				stub := map[string]any{"cmds": []string{"cat >/dev/null; echo 'verify:fast failed: TestAdd' && exit 1"}}
+				if passing {
+					stub = map[string]any{"cmds": []string{"cat >/dev/null; echo ok"}}
+				}
+				hookTaskfile(t, dir, path, "hook:done", map[string]any{"verify:fast": stub})
+
+				for _, tc := range loadStopCorpus(t) {
+					t.Run(fmt.Sprintf("%s/%s/passing=%v/%s", filepath.Base(sh), path, passing, tc.Name), func(t *testing.T) {
+						code, stdout, stderr := runShell(t, sh, dir, command, tc.Stdin)
+						want := 0
+						if !passing && !tc.Active {
+							want = 2
+						}
+						if code != want {
+							t.Errorf("exit %d, want %d; stderr: %s", code, want, stderr)
+						}
+						if !passing && !strings.Contains(stderr, "verify:fast failed") {
+							t.Errorf("stderr does not carry the failure; the model would see no reason:\n%s", stderr)
+						}
+						// Only on exit 0, as in the guard corpus: agents read
+						// stdout then. On exit 2 they block regardless, and
+						// under GitHub Actions Task prints an "::error" annotation
+						// to stdout whenever a task fails.
+						if code == 0 && stdout != "" {
+							t.Errorf("stdout = %q; agents parse stdout on exit 0", stdout)
+						}
+					})
+				}
 			}
 		}
 	}
+}
+
+// runShell runs command through `sh -c` in dir, as Claude Code runs a hook
+// command, and returns the exit code and output.
+func runShell(t *testing.T, sh, dir, command, stdin string) (code int, stdout, stderr string) {
+	t.Helper()
+	// #nosec G204 -- sh and command are fixed by the calling test
+	cmd := exec.Command(sh, "-c", command)
+	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(stdin)
+	var out, errOut bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errOut
+	if err := cmd.Run(); err != nil {
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) {
+			t.Fatalf("running %s -c %q: %v", sh, command, err)
+		}
+		code = exit.ExitCode()
+	}
+	return code, out.String(), errOut.String()
 }
 
 // gitRepo creates a git repository with one commit in dir.
