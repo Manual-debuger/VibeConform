@@ -81,6 +81,10 @@ func v1FlagError(f auditFlags, label string) error {
 // registry; tests stand in for parts this vibe does not implement yet.
 var contractRules []contract.Rule
 
+// contractReportSeen, when set, sees every report the contract audit
+// prints. It is nil outside tests; tests check every report with it.
+var contractReportSeen func(*contract.Report)
+
 // runContractAudit runs the contract audit on a version 2 configuration,
 // prints the report and returns the error that sets the exit code. An
 // invalid configuration prints no report.
@@ -99,6 +103,9 @@ func runContractAudit(cmd *cobra.Command, f auditFlags, label string, data []byt
 	}
 
 	rep := contract.Audit(ctx, cfg, repo, contract.Options{Static: f.static, Rules: contractRules})
+	if contractReportSeen != nil {
+		contractReportSeen(rep)
+	}
 	write := writeContractText
 	if f.json {
 		write = writeContractJSON
@@ -121,9 +128,13 @@ func runExplain(cmd *cobra.Command, f auditFlags) error {
 	if len(others) > 0 {
 		return fmt.Errorf("--explain reads no repository and no configuration; drop %s", strings.Join(others, ", "))
 	}
-	if _, ok := contract.LookupRule(f.explain); !ok {
+	rule, ok := contract.LookupRule(f.explain)
+	if !ok {
 		return fmt.Errorf("--explain: %q is not a rule of contract %s; rules: %s",
 			f.explain, contract.Implemented, strings.Join(contract.RuleIDs(), " "))
 	}
-	return fmt.Errorf("--explain %s: not implemented in this vibe (#99)", f.explain)
+	if err := writeExplain(cmd.OutOrStdout(), rule); err != nil {
+		return fmt.Errorf("--explain: %w", err)
+	}
+	return nil
 }

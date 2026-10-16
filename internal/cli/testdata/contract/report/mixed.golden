@@ -1,0 +1,80 @@
+vibe audit: contract 1.0.0 (vibe test)
+
+  V  Verification entrypoints              1 FAIL, 3 cannot decide
+  H  Local Git hooks                       2 cannot decide
+  C  CI                                    1 not applicable, 4 cannot decide
+  A  Agent guardrails                      8 cannot decide
+  D  Dependencies and supply chain         3 cannot decide
+  R  Removability and repository hygiene   1 fail, 1 waived, 1 cannot decide
+
+Failed
+  V-04  MUST    The entrypoints are declared and used
+        vibe.yaml: entrypoints.fmt is not declared
+        Fix: declare entrypoints.fmt as the command that runs it, such as task fmt
+  R-02  SHOULD  Agents are told the verification entrypoints
+        AGENTS.md: does not name the verify command "task verify"
+        Fix: tell agents in AGENTS.md to run `task verify`
+
+Waived
+  C-05  SHOULD  waiver unused (not applicable) until 2999-12-31: one platform for now
+  R-02  SHOULD  waiver expired 2000-01-01: rewriting AGENTS.md (checked: fail)
+  R-03  SHOULD  until 2999-12-31: templates move to the org repository
+
+Not applicable
+  C-05  SHOULD  platforms does not include windows
+
+Cannot decide
+  V-01  MUST    `verify` covers formatting, static analysis and tests
+        the execution check is not implemented in this vibe; #104 adds it
+        the probe check is not implemented in this vibe; #104 adds it
+  V-02  MUST    `verify-fast` catches the same defects
+        the probe check is not implemented in this vibe; #104 adds it
+  V-03  MUST    `fmt-check` writes no file
+        the execution check is not implemented in this vibe; #102 adds it
+  H-01  SHOULD  Hook configuration is committed and installs with one command
+        not implemented yet
+  H-02  SHOULD  pre-commit checks formatting; pre-push runs verification
+        not implemented yet
+  C-01  MUST    CI runs `verify` on pull requests and on pushes to the default branch
+        not implemented yet
+  C-02  MUST    Toolchains and actions are pinned
+        not implemented yet
+  C-03  MUST    Workflow permissions default to read
+        not implemented yet
+  C-04  MUST    The audit runs in its own job
+        not implemented yet
+  A-01  MUST    Shell commands and file edits pass through the guard
+        not implemented yet
+  A-02  MUST    The guard refuses the baseline unless an exception says otherwise
+        the probe check is not implemented in this vibe; #103 adds it
+  A-03  MUST    The guard fails closed
+        the probe check is not implemented in this vibe; #103 adds it
+  A-04  MUST    The guard is loosened only through listed exceptions
+        not implemented yet
+  A-05  MUST    The agent's turn ends with `verify-fast`
+        not implemented yet
+        the probe check is not implemented in this vibe; #104 adds it
+  A-06  SHOULD  Edited files are formatted
+        not implemented yet
+  A-07  SHOULD  Session start injects facts and changes nothing
+        not implemented yet
+        the execution check is not implemented in this vibe; #102 adds it
+  A-08  MUST    An agent changes guardrail settings only after a person unlocks them
+        the probe check is not implemented in this vibe; #106 adds it
+  D-01  MUST    Lockfiles are committed and match the declared dependencies
+        the execution check is not implemented in this vibe; #102 adds it
+  D-02  SHOULD  An update bot covers dependencies and actions, without automerge
+        not implemented yet
+  D-03  SHOULD  CI scans for known vulnerabilities
+        not implemented yet
+  R-01  MUST    Everything but the audit works without vibe
+        not implemented yet
+        the execution check is not implemented in this vibe; #102 adds it
+
+Guard exceptions
+  (none)
+
+Local guardrail adjustments
+  (none)
+
+Verdict: cannot decide. 21 rules cannot be decided; 1 MUST rule already fails.
