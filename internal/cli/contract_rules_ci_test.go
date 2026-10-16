@@ -219,3 +219,192 @@ func TestRuleC01DefaultBranch(t *testing.T) {
 		}
 	})
 }
+
+// C-02: every uses: but a local path is pinned to a 40-character commit
+// SHA, and no run: step has a word ending in @latest. Every workflow
+// counts, whatever its triggers.
+func TestRuleC02(t *testing.T) {
+	extra := func(jobs string) fixtureEdit {
+		return withFile(".github/workflows/extra.yml", ciWorkflow("on: workflow_dispatch\n", jobs))
+	}
+	step := func(uses string) fixtureEdit {
+		return extra("  x:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: " + uses + "\n")
+	}
+	run := func(script string) fixtureEdit { return extra(ciJob("x", "ubuntu-latest", script)) }
+	const sha = "@08eba0b27e820071cde6df949e0beb9ba4906955"
+	runRuleCases(t, "C-02", []ruleCase{
+		{name: "baseline", want: "pass"},
+		{name: "local action", want: "pass", edits: []fixtureEdit{step("./.github/actions/setup")}},
+		{name: "action in a subdirectory, pinned", want: "pass", edits: []fixtureEdit{step("github/codeql-action/init" + sha)}},
+		{name: "upper-case SHA", want: "pass", edits: []fixtureEdit{step("actions/setup-go@08EBA0B27E820071CDE6DF949E0BEB9BA4906955")}},
+		{name: "local reusable workflow", want: "pass",
+			edits: []fixtureEdit{extra("  call:\n    uses: ./.github/workflows/ci.yml\n")}},
+		{name: "a version tag", want: "fail", edits: []fixtureEdit{step("actions/setup-go@v5")},
+			findings: []string{".github/workflows/extra.yml: ", "actions/setup-go@v5", "line ", "40-character"}},
+		{name: "a short SHA", want: "fail", edits: []fixtureEdit{step("actions/setup-go@08eba0b")}},
+		{name: "no ref", want: "fail", edits: []fixtureEdit{step("actions/setup-go")}},
+		{name: "a docker reference", want: "fail", edits: []fixtureEdit{step("docker://alpine:3.20")},
+			findings: []string{"docker://alpine:3.20"}},
+		{name: "a remote reusable workflow by tag", want: "fail",
+			edits:    []fixtureEdit{extra("  call:\n    uses: octo/ci/.github/workflows/verify.yml@v1\n")},
+			findings: []string{".github/workflows/extra.yml: ", "job call", "octo/ci/.github/workflows/verify.yml@v1"}},
+		{name: "a remote reusable workflow pinned", want: "pass",
+			edits: []fixtureEdit{extra("  call:\n    uses: octo/ci/.github/workflows/verify.yml" + sha + "\n")}},
+		{name: "a pinned go install", want: "pass", edits: []fixtureEdit{run("go install golang.org/x/tools/cmd/goimports@v0.30.0")}},
+		{name: "go install @latest", want: "fail", edits: []fixtureEdit{run("go install golang.org/x/tools/cmd/goimports@latest")},
+			findings: []string{".github/workflows/extra.yml: ", "goimports@latest", "pin"}},
+		{name: "@latest quoted, in a list", want: "fail",
+			edits: []fixtureEdit{run("|\n          npm ci && npx 'prettier@latest' --check .")}},
+		{name: "@latest in a step that does not parse", want: "fail",
+			edits:    []fixtureEdit{run("npx prettier@latest 'unclosed")},
+			findings: []string{"prettier@latest"}},
+		{name: "@latest inside a word is not a version", want: "pass", edits: []fixtureEdit{run("echo user@latest.example")}},
+		{name: "a GitHub expression version is not @latest", want: "pass",
+			edits: []fixtureEdit{run("go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}")}},
+		{name: "a workflow that does not parse", want: "fail",
+			edits:    []fixtureEdit{withFile(".github/workflows/broken.yml", "on: push\njobs:\n  x:\n    steps: {}\n")},
+			findings: []string{".github/workflows/broken.yml: ", "steps must be a list"}},
+		{name: "no CI", want: "fail", edits: []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile)}},
+	})
+}
+
+// auditWith replaces audit.yml with a workflow of the given on: block and
+// jobs.
+func auditWith(on, jobs string) fixtureEdit {
+	return withFile(auditFile, ciWorkflow(on, jobs))
+}
+
+// C-04: a job triggered on pull requests runs vibe audit and calls no
+// verify command.
+func TestRuleC04(t *testing.T) {
+	runRuleCases(t, "C-04", []ruleCase{
+		{name: "baseline", want: "pass"},
+		{name: "vibe audit after building vibe, in one step", want: "pass", edits: []fixtureEdit{
+			auditWith(ciPRAndPush, ciJob("audit", "ubuntu-latest", "go build -o \"$HOME/bin/vibe\" ./cmd/vibe && vibe audit --json"))}},
+		{name: "vibe audit with leading assignments", want: "pass", edits: []fixtureEdit{
+			auditWith(ciPRAndPush, ciJob("audit", "ubuntu-latest", "NO_COLOR=1 vibe audit"))}},
+		{name: "only pull requests", want: "pass", edits: []fixtureEdit{
+			auditWith("on: pull_request\n", ciJob("audit", "ubuntu-latest", "vibe audit"))}},
+		{name: "in a local reusable workflow", want: "pass", edits: []fixtureEdit{
+			auditWith(ciPRAndPush, "  call:\n    uses: ./.github/workflows/contract.yml\n"),
+			withFile(".github/workflows/contract.yml", ciWorkflow("on: workflow_call\n", ciJob("audit", "ubuntu-latest", "vibe audit")))}},
+		{name: "beside a verify step in other jobs", want: "pass", edits: []fixtureEdit{
+			auditWith(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("audit", "ubuntu-latest", "vibe audit"))}},
+		{name: "the audit job also calls verify", want: "fail", edits: []fixtureEdit{
+			auditWith(ciPRAndPush, ciJob("audit", "ubuntu-latest", "vibe audit", "task verify"))},
+			findings: []string{auditFile + ": ", "job audit", "`task verify`", "own"}},
+		{name: "the audit job calls one command of a list verify", want: "fail", edits: []fixtureEdit{listVerify,
+			ciWith(ciPRAndPush, ciJob("lint", "ubuntu-latest", "task lint")+ciJob("test", "ubuntu-latest", "task test")),
+			auditWith(ciPRAndPush, ciJob("audit", "ubuntu-latest", "vibe audit", "task test"))},
+			findings: []string{"`task test`"}},
+		{name: "no audit job", want: "fail", edits: []fixtureEdit{withoutFile(auditFile)},
+			findings: []string{".github/workflows/: ", "vibe audit", "pull_request"}},
+		{name: "the audit job runs only on push", want: "fail", edits: []fixtureEdit{
+			auditWith("on: push\n", ciJob("audit", "ubuntu-latest", "vibe audit"))}},
+		{name: "a paths filter makes it not count", want: "fail", edits: []fixtureEdit{
+			auditWith("on:\n  pull_request:\n    paths: ['vibe.yaml']\n", ciJob("audit", "ubuntu-latest", "vibe audit"))}},
+		{name: "vibe without audit", want: "fail", edits: []fixtureEdit{
+			auditWith(ciPRAndPush, ciJob("audit", "ubuntu-latest", "vibe doctor"))}},
+		{name: "vibe audit by path is not vibe audit", want: "fail", edits: []fixtureEdit{
+			auditWith(ciPRAndPush, ciJob("audit", "ubuntu-latest", "./bin/vibe audit"))}},
+		{name: "verify missing points at V-04", want: "fail", edits: []fixtureEdit{noVerify},
+			findings: []string{"vibe.yaml: ", "V-04"}},
+		{name: "another CI provider", want: "undecided", edits: []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile),
+			withFile("Jenkinsfile", "pipeline {}\n")}, findings: []string{"Jenkinsfile: "}},
+	})
+}
+
+// R-01 (static part): no entrypoint, hook command or CI step calls vibe,
+// except the C-04 audit job.
+func TestRuleR01(t *testing.T) {
+	const others = "  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n"
+	runStaticPartCases(t, "R-01", []ruleCase{
+		{name: "baseline", want: "pass"},
+		{name: "vibe by path is not a call of vibe", want: "pass", edits: []fixtureEdit{
+			ciWith(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("sync", "ubuntu-latest", "|\n          \"$RUNNER_TEMP/bin/vibe\" sync"))}},
+		{name: "a verify entrypoint that calls vibe", want: "fail",
+			edits:    []fixtureEdit{entrypoints("  verify: vibe verify\n" + others)},
+			findings: []string{"vibe.yaml: ", "entrypoints.verify", "`vibe verify`"}},
+		{name: "a setup entrypoint that calls vibe", want: "fail",
+			edits:    []fixtureEdit{entrypoints("  verify: task verify\n  setup: vibe sync\n" + others)},
+			findings: []string{"vibe.yaml: ", "entrypoints.setup"}},
+		{name: "a CI step outside the audit job", want: "fail", edits: []fixtureEdit{
+			ciWith(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("sync", "ubuntu-latest", "vibe sync && git diff --exit-code"))},
+			findings: []string{ciFile + ": ", "job sync", "`vibe sync`", "line "}},
+		{name: "vibe audit in a job that also calls verify", want: "fail", edits: []fixtureEdit{
+			auditWith(ciPRAndPush, ciJob("audit", "ubuntu-latest", "vibe audit", "task verify"))},
+			findings: []string{auditFile + ": ", "`vibe audit`"}},
+		{name: "vibe audit in a push-only workflow", want: "fail", edits: []fixtureEdit{
+			auditWith("on: push\n", ciJob("audit", "ubuntu-latest", "vibe audit"))}},
+		{name: "other vibe commands in the audit job", want: "pass", edits: []fixtureEdit{
+			auditWith(ciPRAndPush, ciJob("audit", "ubuntu-latest", "vibe doctor", "vibe audit"))}},
+		{name: "the audit job in a local reusable workflow", want: "pass", edits: []fixtureEdit{
+			auditWith(ciPRAndPush, "  call:\n    uses: ./.github/workflows/contract.yml\n"),
+			withFile(".github/workflows/contract.yml", ciWorkflow("on: workflow_call\n", ciJob("audit", "ubuntu-latest", "vibe audit")))}},
+		{name: "a lefthook command", want: "fail",
+			edits:    []fixtureEdit{withFile("lefthook.yml", "pre-commit:\n  commands:\n    sync:\n      run: vibe sync\n")},
+			findings: []string{"lefthook.yml: ", "pre-commit.commands.sync", "`vibe sync`"}},
+		{name: "a lefthook job in a group", want: "fail",
+			edits:    []fixtureEdit{withFile(".lefthook.yml", "pre-push:\n  jobs:\n    - group:\n        jobs:\n          - run: task lint && vibe audit\n")},
+			findings: []string{".lefthook.yml: ", "vibe audit"}},
+		{name: "a lefthook file it extends", want: "fail", edits: []fixtureEdit{
+			withFile("lefthook.yml", "extends:\n  - hooks/extra.yml\npre-commit:\n  commands:\n    fmt:\n      run: task fmt:check\n"),
+			withFile("hooks/extra.yml", "pre-push:\n  commands:\n    s:\n      run: vibe sync\n")},
+			findings: []string{"hooks/extra.yml: "}},
+		{name: "an untracked lefthook file it extends", want: "pass", edits: []fixtureEdit{
+			withFile("lefthook.yml", "extends:\n  - lefthook.local.yml\npre-commit:\n  commands:\n    fmt:\n      run: task fmt:check\n"),
+			withUntracked("lefthook.local.yml", "pre-push:\n  commands:\n    s:\n      run: vibe sync\n")}},
+		{name: "lefthook commands without vibe", want: "pass",
+			edits: []fixtureEdit{withFile("lefthook.yml", "pre-commit:\n  commands:\n    fmt:\n      run: task fmt:check {staged_files}\n")}},
+		{name: "a pre-commit local hook", want: "fail", edits: []fixtureEdit{withFile(".pre-commit-config.yaml",
+			"repos:\n  - repo: local\n    hooks:\n      - id: sync\n        name: sync\n        entry: vibe sync\n        language: system\n")},
+			findings: []string{".pre-commit-config.yaml: ", "hook sync"}},
+		{name: "a husky script", want: "fail",
+			edits:    []fixtureEdit{withFile(".husky/pre-push", "task verify\nvibe audit\n")},
+			findings: []string{".husky/pre-push: "}},
+		{name: "a Claude Code hook", want: "fail", edits: []fixtureEdit{withFile(".claude/settings.json",
+			`{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "vibe sync"}]}]}}`)},
+			findings: []string{".claude/settings.json: ", "hooks.Stop"}},
+		{name: "a Claude Code settings file that does not parse", want: "fail",
+			edits:    []fixtureEdit{withFile(".claude/settings.json", `{"hooks": `)},
+			findings: []string{".claude/settings.json: ", "does not parse"}},
+		{name: "a lefthook file that does not parse", want: "fail",
+			edits:    []fixtureEdit{withFile("lefthook.yml", "pre-commit: [\n")},
+			findings: []string{"lefthook.yml: ", "does not parse"}},
+		{name: "a workflow that does not parse", want: "fail",
+			edits:    []fixtureEdit{withFile(".github/workflows/broken.yml", "on: [\n")},
+			findings: []string{".github/workflows/broken.yml: ", "does not parse"}},
+		{name: "no CI: entrypoints and hooks still read", want: "pass",
+			edits: []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile)}},
+		{name: "no CI, a hook calls vibe", want: "fail", edits: []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile),
+			withFile(".husky/pre-commit", "vibe sync\n")}},
+	})
+}
+
+// runStaticPartCases is runRuleCases for a rule with a static part and
+// other parts: under --static the others are not run, so want is the
+// static part's result, and the findings are the rule's.
+func runStaticPartCases(t *testing.T, id string, cases []ruleCase) {
+	t.Helper()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rep, _ := auditJSON(t, contractFixture(t, tc.edits...), "--static")
+			r := rep.rule(t, id)
+			got := ""
+			for _, p := range r.Parts {
+				if p.Check == "static" {
+					got = p.Result
+				}
+			}
+			if got != tc.want {
+				t.Errorf("%s static part = %q, want %s\nfindings:\n%s", id, got, tc.want, r.findingText())
+			}
+			text := r.findingText()
+			for _, f := range tc.findings {
+				if !strings.Contains(text, f) {
+					t.Errorf("%s findings missing %q\nfindings:\n%s", id, f, text)
+				}
+			}
+		})
+	}
+}

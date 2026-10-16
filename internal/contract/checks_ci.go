@@ -2,6 +2,7 @@ package contract
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -144,15 +145,145 @@ func quoteCommandList(cmds []Command) string {
 	return joinWords(q, "and")
 }
 
-func checkC02(_ *Env) PartResult { return notImplementedYet() }
+// pinnedRef is a uses: reference pinned to a full commit SHA.
+var pinnedRef = regexp.MustCompile(`@[0-9a-fA-F]{40}$`)
 
-func checkC04(_ *Env) PartResult { return notImplementedYet() }
+// checkC02: every job-level and step-level uses: that is not a local ./
+// path ends in @ and 40 hexadecimal characters, and no word of a run:
+// step ends in @latest, in every workflow.
+func checkC02(env *Env) PartResult {
+	parsed, _, res, ok := ciRead(env)
+	if !ok {
+		return res
+	}
+	const pinFix = "pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)"
+	var findings []Finding
+	for _, wf := range parsed {
+		for _, j := range wf.Jobs {
+			if j.Uses != "" && !strings.HasPrefix(j.Uses, "./") && !pinnedRef.MatchString(j.Uses) {
+				findings = append(findings, Finding{File: wf.File,
+					Message: fmt.Sprintf("line %d: job %s uses %s, which is not pinned to a commit SHA", j.UsesLine, j.ID, j.Uses),
+					Fix:     pinFix})
+			}
+			for _, s := range j.Steps {
+				if s.Uses != "" && !strings.HasPrefix(s.Uses, "./") && !pinnedRef.MatchString(s.Uses) {
+					findings = append(findings, Finding{File: wf.File,
+						Message: fmt.Sprintf("line %d: job %s, step %d uses %s, which is not pinned to a commit SHA", s.Line, j.ID, s.Index+1, s.Uses),
+						Fix:     pinFix})
+				}
+				if !s.HasRun {
+					continue
+				}
+				for _, w := range s.Run.Words() {
+					if strings.HasSuffix(w, "@latest") {
+						w = strings.ReplaceAll(w, expansionMark, "$…")
+						findings = append(findings, Finding{File: wf.File,
+							Message: fmt.Sprintf("line %d: job %s, step %d runs %s, which is not pinned", s.Line, j.ID, s.Index+1, w),
+							Fix:     "pin " + strings.TrimSuffix(w, "@latest") + " to a version (@v1.2.3) instead of @latest"})
+					}
+				}
+			}
+		}
+	}
+	return Merge(res, failIf(findings))
+}
+
+// checkC04: a job of a workflow that counts for pull requests (reusable
+// workflows followed) has a step whose simple command starts with the
+// words vibe audit, and none of its steps calls a verify command.
+func checkC04(env *Env) PartResult {
+	verify, missing := env.Entrypoint(EntrypointVerify)
+	if missing != nil {
+		return Fail(*missing)
+	}
+	parsed, _, res, ok := ciRead(env)
+	if !ok {
+		return res
+	}
+	branch := defaultBranch(env, parsed)
+	if len(auditJobs(parsed, branch, verify)) > 0 {
+		return res
+	}
+	var findings []Finding
+	for _, j := range jobsTriggered(parsed, eventPullRequest, branch) {
+		if !runsAudit(j.job) {
+			continue
+		}
+		for _, c := range verify {
+			if CallsAny(j.job.Commands(), c) {
+				findings = append(findings, Finding{File: j.wf.File,
+					Message: fmt.Sprintf("%s runs vibe audit and also calls the verify command `%s`", j.where(), c),
+					Fix:     "run vibe audit in a job of its own that does not call verify"})
+			}
+		}
+	}
+	if len(findings) == 0 {
+		findings = append(findings, Finding{File: workflowDir + "/",
+			Message: "no job of a workflow that runs on pull requests runs vibe audit" + triggerHint,
+			Fix:     "add a job, triggered on pull_request, whose step runs vibe audit (any arguments) and that does not call verify"})
+	}
+	return Merge(res, Fail(findings...))
+}
+
+// auditJobs returns the jobs that satisfy C-04: run by a workflow that
+// counts for pull requests, with a step that runs vibe audit and no step
+// that calls a verify command.
+func auditJobs(parsed []*Workflow, branch string, verify []Command) []ciJob {
+	var out []ciJob
+	for _, j := range jobsTriggered(parsed, eventPullRequest, branch) {
+		if !runsAudit(j.job) {
+			continue
+		}
+		calls := false
+		for _, c := range verify {
+			calls = calls || CallsAny(j.job.Commands(), c)
+		}
+		if !calls {
+			out = append(out, j)
+		}
+	}
+	return out
+}
+
+// runsAudit reports whether a job has a simple command that starts with
+// the words vibe audit.
+func runsAudit(j *Job) bool {
+	for _, c := range j.Commands() {
+		if c.HasPrefix("vibe", "audit") {
+			return true
+		}
+	}
+	return false
+}
 
 func checkC05(_ *Env) PartResult { return notImplementedYet() }
 
 func checkD03(_ *Env) PartResult { return notImplementedYet() }
 
-func checkR01(_ *Env) PartResult { return notImplementedYet() }
+// checkR01 is R-01's static part: no entrypoint, hook command or CI step
+// has a simple command whose first word is vibe, except in a job that
+// satisfies C-04. Without GitHub workflows only the entrypoints and hook
+// commands are read; a workflow that does not parse fails it.
+func checkR01(env *Env) PartResult {
+	calls := entrypointVibeCalls(env)
+	hookCalls, broken := hookVibeCalls(env)
+	calls = append(calls, hookCalls...)
+	res := failIf(broken)
+	if parsed, _, ciRes, ok := ciRead(env); ok {
+		res = Merge(res, ciRes)
+		// With verify missing (V-04 fails), any vibe audit job of a pull
+		// request workflow is the audit job.
+		verify, _ := env.Entrypoint(EntrypointVerify)
+		calls = append(calls, ciVibeCalls(parsed, auditJobs(parsed, defaultBranch(env, parsed), verify))...)
+	}
+	var findings []Finding
+	for _, c := range calls {
+		findings = append(findings, Finding{File: c.file,
+			Message: fmt.Sprintf("%s: `%s` calls vibe, so it does not work without vibe", c.where, c.cmd),
+			Fix:     "call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe"})
+	}
+	return Merge(res, failIf(findings))
+}
 
 var (
 	_ = slices.Contains[[]string]
