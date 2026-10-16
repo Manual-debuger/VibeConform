@@ -643,6 +643,73 @@ Verdict: cannot decide. 10 rules did not run (--static); 1 MUST rule already fai
   trigger filters with `paths` make a workflow not count; the default
   branch falls back to `main` or `master`.
 
+## Side by side
+
+The old and new audits on this repository, as recorded on 2026-10-16
+for #101 and for #111's cutover.
+
+- **Old audit** (`vibe audit`, v1 `vibe.yaml`): 22 resources checked,
+  0 drifted, 0 out of date, 0 conflicts, conformant, exit 0.
+- **New audit** (`vibe audit --static --config vibe.v2.yaml`): no MUST
+  rule fails or is undecided; "Verdict: cannot decide. 10 rules did not
+  run (--static)", exit 1. Five SHOULD rules fail.
+
+### Before the #101 fixes
+
+At 08b0433 the old audit said conformant while a static run of the new
+audit would have failed seven MUST rules. The old audit compares
+managed files with their templates, so a property the templates lack,
+or a file it does not manage, is invisible to it.
+
+| Rule | New audit | Why the old audit did not see it |
+|---|---|---|
+| A-01 | No PreToolUse hook matched `MultiEdit` | The template had the same matcher |
+| A-04 | `policy.json` was version 1 | The template rendered version 1 |
+| A-05 | The Stop hook ran `task -x hook:done`, not `task verify:fast` | The template had the same command |
+| C-02 | `@latest` installs in `examples.yml` and `hook-guard.yml` | Neither workflow is managed |
+| C-03 | Write scopes at top level in `codeql.yml` and `release.yml` | Neither workflow is managed |
+| C-04 | No job ran `vibe audit`; `conformance.yml` runs `task audit` | The old audit has no such rule |
+| R-01 | `examples.yml` ran a bare `vibe sync` | Not managed; no such rule |
+
+All seven pass now. A-01, A-04 and A-05 changed through the templates and
+`vibe sync`, so the old audit still reports no drift.
+
+### Rules that fail now (SHOULD)
+
+The old audit reports every file named here as in sync with its
+template, or does not read it. These are recommendations the templates
+do not meet, and they are left as they are (see "This repository").
+
+| Rule | New audit | Why |
+|---|---|---|
+| H-02 | `lefthook.yml`: pre-commit calls neither `task fmt:check` nor `task fmt`; pre-push calls neither `task verify:fast` nor `task verify` | The hooks run the tools directly (`gofmt -l`, `golangci-lint run`, `go test ./...`), which is not "calling" an entrypoint |
+| C-05 | `task lint`, `task mod:verify`, `task security` and `task workflows:lint` run on no Windows runner | `ci.yml` runs only `typecheck` and `test` on a Windows matrix; `fmt:check` reaches Windows through `examples.yml` |
+| A-06 | No PostToolUse hook that matches `Write` and `Edit` calls `task fmt` | The generated hook runs `task -x hook:format` |
+| D-03 | No workflow step runs a recognized scanner | `govulncheck` runs inside `task security`; the step's first word is `task`, and recognition reads only the step |
+| R-02 | `AGENTS.md` names none of the seven `verify` commands | It names `task verify`, which is not this repository's `verify` entrypoint (a list of seven tasks) |
+
+### Rules not run (`--static`)
+
+MUST: V-01, V-02, V-03, A-02, A-03, A-05 (probe), A-08, D-01, R-01
+(execution). SHOULD: A-07 (execution). They give no verdict until
+#102–#104 and #106. The old audit's nearest equivalents are that the
+guard files and the verification tasks match their templates; it never
+runs them.
+
+### Managed files
+
+No managed file's old-audit state differs: all 22 resources are in
+sync. The new audit does not read `.vibe/state.yaml` or template
+hashes. What #111's cutover changes:
+
+- A hand edit to a managed file that keeps every property passes the
+  new audit; the old audit reports it as drift (exit 2).
+- Files the old audit never read are judged: every workflow,
+  `AGENTS.md`, the pull request template and the update bot
+  configuration.
+- A property the templates lack fails the new audit even when every
+  managed file is in sync, as the seven MUST failures above did.
+
 ## Acceptance Criteria
 
 1. `vibe audit` on a v2 configuration runs the new engine, and on a v1
