@@ -3,6 +3,7 @@ package pyrepotooling
 import (
 	"bytes"
 	"context"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -93,6 +94,30 @@ func TestTemplatesAreLF(t *testing.T) {
 		if bytes.Contains(content, []byte("\r")) {
 			t.Errorf("%s contains CR bytes; the working copy it was embedded from is CRLF", name)
 		}
+	}
+}
+
+// TestGuardTemplateIsRuffFormatted: vibe sync writes guard.py into every
+// Python repository, whose fmt:check runs ruff format at the standard's line
+// length of 100 (ruff.base.toml). An unformatted template fails that check
+// in each of them. The test skips when neither ruff nor uvx is installed.
+func TestGuardTemplateIsRuffFormatted(t *testing.T) {
+	var argv []string
+	if path, err := exec.LookPath("ruff"); err == nil {
+		argv = []string{path}
+	} else if path, err := exec.LookPath("uvx"); err == nil {
+		argv = []string{path, "ruff"}
+	} else {
+		t.Skip("neither ruff nor uvx is installed")
+	}
+	argv = append(argv, "format", "--isolated", "--line-length", "100", "--target-version", "py312", "--diff", "--stdin-filename", "guard.py", "-")
+
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin = bytes.NewReader(guard)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("ruff format --diff: %v\n%s%s\nThe template is not ruff-format clean; run ruff format at line length 100 on templates/guard.py, rebuild and vibe sync", err, stdout.String(), stderr.String())
 	}
 }
 
