@@ -133,8 +133,6 @@ func checkA01(env *Env) PartResult {
 	})
 }
 
-func checkA04(_ *Env) PartResult { return notImplementedYet() }
-
 // checkA05 (static part): a Stop hook calls verify-fast.
 func checkA05(env *Env) PartResult {
 	verifyFast, missing := env.Entrypoint(EntrypointVerifyFast)
@@ -203,9 +201,3 @@ func checkA07(env *Env) PartResult {
 }
 
 func checkD02(_ *Env) PartResult { return notImplementedYet() }
-
-// guardListings returns what the report lists for review: the guard
-// policy's exceptions (A-04) and the exceptions and extra rules of a
-// tracked .claude/hooks/policy.local.json (spec 0050). It reads, and
-// decides nothing.
-func guardListings(_ *Env) ([]GuardException, []LocalAdjustment) { return nil, nil }

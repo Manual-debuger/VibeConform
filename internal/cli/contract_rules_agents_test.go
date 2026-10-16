@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -355,6 +357,143 @@ func TestRuleA06(t *testing.T) {
 		{name: "fmt missing points at V-04", want: "fail",
 			edits:    []fixtureEdit{entrypoints("  verify: task verify\n  verify-fast: task verify:fast\n  fmt-check: task fmt:check\n")},
 			findings: []string{"vibe.yaml: ", "V-04"}},
+	})
+}
+
+const (
+	policyFile      = ".claude/hooks/policy.json"
+	localPolicyFile = ".claude/hooks/policy.local.json"
+)
+
+// policy is a guard policy.json with the given version and exceptions
+// (JSON list body).
+func policy(version, exceptions string) fixtureEdit {
+	return withFile(policyFile, `{"version": `+version+`, "rules": [], "exceptions": [`+exceptions+`]}`)
+}
+
+// A-04: policy.json is valid version 2; every exception names a guard
+// rule ID and has a non-empty match and reason.
+func TestRuleA04(t *testing.T) {
+	runRuleCases(t, "A-04", []ruleCase{
+		{name: "baseline", want: "pass"},
+		{name: "exceptions omitted", want: "pass", edits: []fixtureEdit{withFile(policyFile, `{"version": 2}`)}},
+		{name: "valid exceptions", want: "pass", edits: []fixtureEdit{policy("2",
+			`{"rule": "git-push-force", "match": "^git push --force origin feat/", "reason": "rebasing feature branches"},
+			 {"rule": "guardrail-settings", "match": "x", "reason": "y", "note": "other keys are the guard's"}`)}},
+		{name: "version 1", want: "fail", edits: []fixtureEdit{policy("1", "")},
+			findings: []string{policyFile + ": has version 1; contract 1.0.0 needs version 2", "Fix: "}},
+		{name: "no version", want: "fail", edits: []fixtureEdit{withFile(policyFile, `{"rules": []}`)},
+			findings: []string{policyFile + ": has no version"}},
+		{name: "version is a string", want: "fail", edits: []fixtureEdit{policy(`"2"`, "")},
+			findings: []string{policyFile + ": has version \"2\""}},
+		{name: "missing", want: "fail", edits: []fixtureEdit{withoutFile(policyFile)},
+			findings: []string{policyFile + ": ", "create " + policyFile}},
+		{name: "untracked", want: "fail",
+			edits: []fixtureEdit{withoutFile(policyFile), withUntracked(policyFile, `{"version": 2}`)}},
+		{name: "does not parse", want: "fail", edits: []fixtureEdit{withFile(policyFile, `{"version": 2,`)},
+			findings: []string{policyFile + ": does not parse"}},
+		{name: "not an object", want: "fail", edits: []fixtureEdit{withFile(policyFile, `[]`)},
+			findings: []string{policyFile + ": does not parse", "object"}},
+		{name: "exceptions not a list", want: "fail", edits: []fixtureEdit{withFile(policyFile, `{"version": 2, "exceptions": {}}`)},
+			findings: []string{policyFile + ": exceptions is not a list"}},
+		{name: "exception not an object", want: "fail", edits: []fixtureEdit{policy("2", `"rm-rf"`)},
+			findings: []string{policyFile + ": exceptions[0] is not an object"}},
+		{name: "unknown guard rule", want: "fail", edits: []fixtureEdit{policy("2",
+			`{"rule": "git-reset-hard", "match": "a", "reason": "b"}, {"rule": "no-such-rule", "match": "a", "reason": "b"}`)},
+			findings: []string{policyFile + `: exceptions[1].rule "no-such-rule" is not a guard rule ID`, "git-reset-hard"}},
+		{name: "empty match", want: "fail", edits: []fixtureEdit{policy("2", `{"rule": "rm-rf", "match": "", "reason": "b"}`)},
+			findings: []string{policyFile + ": exceptions[0].match is empty"}},
+		{name: "blank reason", want: "fail", edits: []fixtureEdit{policy("2", `{"rule": "rm-rf", "match": "a", "reason": "  "}`)},
+			findings: []string{policyFile + ": exceptions[0].reason is empty"}},
+		{name: "no reason", want: "fail", edits: []fixtureEdit{policy("2", `{"rule": "rm-rf", "match": "a"}`)},
+			findings: []string{"exceptions[0].reason is empty"}},
+		{name: "a policy.local.json is not judged", want: "pass",
+			edits: []fixtureEdit{withFile(localPolicyFile, `{"version": 7, "exceptions": [{"rule": "x"}]}`)}},
+	})
+}
+
+// listingsReport is the part of the --json report that lists the guard's
+// loosenings.
+type listingsReport struct {
+	GuardExceptions []struct {
+		Rule   string `json:"rule"`
+		Match  string `json:"match"`
+		Reason string `json:"reason"`
+	} `json:"guard_exceptions"`
+	LocalAdjustments []struct {
+		File    string `json:"file"`
+		Kind    string `json:"kind"`
+		Rule    string `json:"rule"`
+		Pattern string `json:"pattern"`
+		Reason  string `json:"reason"`
+	} `json:"local_adjustments"`
+}
+
+func auditListings(t *testing.T, edits ...fixtureEdit) (listingsReport, auditResult) {
+	t.Helper()
+	r := runVibeAudit(t, "--repo-root", contractFixture(t, edits...), "--json", "--static")
+	var rep listingsReport
+	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
+		t.Fatalf("--json printed no JSON report: %v\n%s", err, r.stdout)
+	}
+	return rep, r
+}
+
+// The report lists every guard exception and every local guardrail
+// adjustment (spec 0052, "Guard policy", "Local guardrail adjustments").
+func TestContractGuardListings(t *testing.T) {
+	t.Run("none", func(t *testing.T) {
+		rep, _ := auditListings(t)
+		if len(rep.GuardExceptions) != 0 || len(rep.LocalAdjustments) != 0 {
+			t.Errorf("listings = %+v, want none", rep)
+		}
+	})
+	t.Run("every guard exception, in order", func(t *testing.T) {
+		rep, _ := auditListings(t, policy("2",
+			`{"rule": "git-push-force", "match": "^git push --force origin feat/", "reason": "rebasing"},
+			 {"rule": "secret-file", "match": "\\.env\\.example$", "reason": "a template"}`))
+		got := fmt.Sprintf("%+v", rep.GuardExceptions)
+		want := `[{Rule:git-push-force Match:^git push --force origin feat/ Reason:rebasing} {Rule:secret-file Match:\.env\.example$ Reason:a template}]`
+		if got != want {
+			t.Errorf("guard_exceptions = %s\nwant %s", got, want)
+		}
+	})
+	t.Run("an invalid exception is listed too", func(t *testing.T) {
+		rep, _ := auditListings(t, policy("1", `{"rule": "nope", "match": "x"}`))
+		if len(rep.GuardExceptions) != 1 || rep.GuardExceptions[0].Rule != "nope" || rep.GuardExceptions[0].Match != "x" {
+			t.Errorf("guard_exceptions = %+v, want the one exception", rep.GuardExceptions)
+		}
+	})
+	t.Run("policy.local.json exceptions and extra rules", func(t *testing.T) {
+		rep, _ := auditListings(t, withFile(localPolicyFile, `{
+  "version": 1,
+  "rules": [{"id": "no-curl", "field": "command", "pattern": "curl ", "message": "no network"}],
+  "exceptions": [
+    {"rule": "git-push-force", "pattern": "^git push --force origin feat/", "reason": "rebasing feature branches"},
+    {"rule": "rm-rf", "pattern": "^rm -r build$"}
+  ]
+}`))
+		got := fmt.Sprintf("%+v", rep.LocalAdjustments)
+		want := "[{File:" + localPolicyFile + " Kind:exception Rule:git-push-force Pattern:^git push --force origin feat/ Reason:rebasing feature branches}" +
+			" {File:" + localPolicyFile + " Kind:exception Rule:rm-rf Pattern:^rm -r build$ Reason:}" +
+			" {File:" + localPolicyFile + " Kind:rule Rule:no-curl Pattern:curl  Reason:}]"
+		if got != want {
+			t.Errorf("local_adjustments = %s\nwant %s", got, want)
+		}
+	})
+	t.Run("an untracked policy.local.json is not listed", func(t *testing.T) {
+		rep, _ := auditListings(t, withUntracked(localPolicyFile,
+			`{"version": 1, "exceptions": [{"rule": "rm-rf", "pattern": "x"}]}`))
+		if len(rep.LocalAdjustments) != 0 {
+			t.Errorf("local_adjustments = %+v, want none", rep.LocalAdjustments)
+		}
+	})
+	t.Run("a policy.local.json that does not parse is noted", func(t *testing.T) {
+		dir := contractFixture(t, withFile(localPolicyFile, `{"version": 1,`))
+		r := runVibeAudit(t, "--repo-root", dir, "--static")
+		if !strings.Contains(r.stdout, localPolicyFile+" does not parse") {
+			t.Errorf("text report does not note the unreadable policy.local.json:\n%s", r.stdout)
+		}
 	})
 }
 

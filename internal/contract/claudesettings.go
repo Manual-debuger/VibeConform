@@ -91,12 +91,9 @@ func (e *Env) readClaudeSettings(missingFix string) (s *claudeSettings, result P
 }
 
 func parseClaudeSettings(data []byte) (*claudeSettings, error) {
-	var top map[string]json.RawMessage
-	if err := json.Unmarshal(data, &top); err != nil {
+	top, err := jsonObject(data)
+	if err != nil {
 		return nil, err
-	}
-	if top == nil {
-		return nil, errors.New("the top level must be an object")
 	}
 	s := &claudeSettings{Events: map[string][]claudeHookEntry{}}
 	raw, ok := top["hooks"]
