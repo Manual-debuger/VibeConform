@@ -71,17 +71,18 @@ func jsonObject(data []byte) (map[string]json.RawMessage, error) {
 	return top, nil
 }
 
-// exceptions returns the policy's exceptions list. present is false when
-// the policy has none; err is set when exceptions is not a list.
-func (p *guardPolicy) exceptions() (list []json.RawMessage, present bool, err error) {
+// exceptions returns the policy's exceptions list, which is optional. The
+// error is set when exceptions is not a list.
+func (p *guardPolicy) exceptions() ([]json.RawMessage, error) {
 	raw, ok := p.top["exceptions"]
 	if !ok {
-		return nil, false, nil
+		return nil, nil
 	}
+	var list []json.RawMessage
 	if err := json.Unmarshal(raw, &list); err != nil || string(raw) == "null" {
-		return nil, true, errors.New("exceptions is not a list")
+		return nil, errors.New("exceptions is not a list")
 	}
-	return list, true, nil
+	return list, nil
 }
 
 // checkA04: policy.json is a JSON object with version 2. exceptions is
@@ -105,7 +106,7 @@ func checkA04(env *Env) PartResult {
 		fail(fmt.Sprintf("has version %s; contract %s needs version 2", strings.TrimSpace(string(raw)), Implemented), versionFix)
 	}
 
-	list, _, err := p.exceptions()
+	list, err := p.exceptions()
 	if err != nil {
 		fail(err.Error(), "make exceptions a list of objects with rule, match and reason")
 	}
@@ -163,7 +164,7 @@ func guardExceptions(env *Env) []GuardException {
 	if err != nil {
 		return nil
 	}
-	list, _, err := (&guardPolicy{top: top}).exceptions()
+	list, err := (&guardPolicy{top: top}).exceptions()
 	if err != nil {
 		return nil
 	}

@@ -429,27 +429,27 @@ type listingsReport struct {
 	} `json:"local_adjustments"`
 }
 
-func auditListings(t *testing.T, edits ...fixtureEdit) (listingsReport, auditResult) {
+func auditListings(t *testing.T, edits ...fixtureEdit) listingsReport {
 	t.Helper()
 	r := runVibeAudit(t, "--repo-root", contractFixture(t, edits...), "--json", "--static")
 	var rep listingsReport
 	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
 		t.Fatalf("--json printed no JSON report: %v\n%s", err, r.stdout)
 	}
-	return rep, r
+	return rep
 }
 
 // The report lists every guard exception and every local guardrail
 // adjustment (spec 0052, "Guard policy", "Local guardrail adjustments").
 func TestContractGuardListings(t *testing.T) {
 	t.Run("none", func(t *testing.T) {
-		rep, _ := auditListings(t)
+		rep := auditListings(t)
 		if len(rep.GuardExceptions) != 0 || len(rep.LocalAdjustments) != 0 {
 			t.Errorf("listings = %+v, want none", rep)
 		}
 	})
 	t.Run("every guard exception, in order", func(t *testing.T) {
-		rep, _ := auditListings(t, policy("2",
+		rep := auditListings(t, policy("2",
 			`{"rule": "git-push-force", "match": "^git push --force origin feat/", "reason": "rebasing"},
 			 {"rule": "secret-file", "match": "\\.env\\.example$", "reason": "a template"}`))
 		got := fmt.Sprintf("%+v", rep.GuardExceptions)
@@ -459,13 +459,13 @@ func TestContractGuardListings(t *testing.T) {
 		}
 	})
 	t.Run("an invalid exception is listed too", func(t *testing.T) {
-		rep, _ := auditListings(t, policy("1", `{"rule": "nope", "match": "x"}`))
+		rep := auditListings(t, policy("1", `{"rule": "nope", "match": "x"}`))
 		if len(rep.GuardExceptions) != 1 || rep.GuardExceptions[0].Rule != "nope" || rep.GuardExceptions[0].Match != "x" {
 			t.Errorf("guard_exceptions = %+v, want the one exception", rep.GuardExceptions)
 		}
 	})
 	t.Run("policy.local.json exceptions and extra rules", func(t *testing.T) {
-		rep, _ := auditListings(t, withFile(localPolicyFile, `{
+		rep := auditListings(t, withFile(localPolicyFile, `{
   "version": 1,
   "rules": [{"id": "no-curl", "field": "command", "pattern": "curl ", "message": "no network"}],
   "exceptions": [
@@ -482,7 +482,7 @@ func TestContractGuardListings(t *testing.T) {
 		}
 	})
 	t.Run("an untracked policy.local.json is not listed", func(t *testing.T) {
-		rep, _ := auditListings(t, withUntracked(localPolicyFile,
+		rep := auditListings(t, withUntracked(localPolicyFile,
 			`{"version": 1, "exceptions": [{"rule": "rm-rf", "pattern": "x"}]}`))
 		if len(rep.LocalAdjustments) != 0 {
 			t.Errorf("local_adjustments = %+v, want none", rep.LocalAdjustments)
@@ -494,6 +494,134 @@ func TestContractGuardListings(t *testing.T) {
 		if !strings.Contains(r.stdout, localPolicyFile+" does not parse") {
 			t.Errorf("text report does not note the unreadable policy.local.json:\n%s", r.stdout)
 		}
+	})
+}
+
+const dependabotFile = ".github/dependabot.yml"
+
+// dependabot is a dependabot.yml with the given updates entries, each
+// "ecosystem directory-key directory-value".
+func dependabot(entries ...string) fixtureEdit {
+	var b strings.Builder
+	b.WriteString("version: 2\nupdates:\n")
+	for _, e := range entries {
+		f := strings.SplitN(e, " ", 3)
+		b.WriteString("  - package-ecosystem: " + f[0] + "\n    " + f[1] + ": " + f[2] + "\n    schedule:\n      interval: weekly\n")
+	}
+	return withFile(dependabotFile, b.String())
+}
+
+// monorepo declares a Go component at apps/api, a TypeScript one at
+// web and a Python one at tools/py.
+func monorepo() []fixtureEdit {
+	return []fixtureEdit{
+		withFile("vibe.yaml", configWith(section{"components", "components:\n" +
+			"  - {path: apps/api, language: go}\n  - {path: web, language: typescript}\n  - {path: tools/py, language: python}\n"})),
+		withFile("apps/api/go.mod", "module example.com/api\n"),
+		withFile("web/package.json", "{}\n"),
+		withFile("tools/py/pyproject.toml", "[project]\nname = \"py\"\n"),
+	}
+}
+
+func renovate(file, content string) []fixtureEdit {
+	return []fixtureEdit{withoutFile(dependabotFile), withFile(file, content)}
+}
+
+func edits(groups ...[]fixtureEdit) []fixtureEdit {
+	var out []fixtureEdit
+	for _, g := range groups {
+		out = append(out, g...)
+	}
+	return out
+}
+
+const automergeWorkflow = `name: automerge
+on: pull_request
+permissions: {}
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
+`
+
+// D-02: Dependabot or Renovate covers each component's ecosystem and
+// github-actions, and enables no automerge.
+func TestRuleD02(t *testing.T) {
+	runRuleCases(t, "D-02", []ruleCase{
+		{name: "baseline dependabot", want: "pass"},
+		{name: "dependabot.yaml", want: "pass", edits: []fixtureEdit{
+			withoutFile(dependabotFile), withFile(".github/dependabot.yaml", "version: 2\nupdates:\n"+
+				"  - {package-ecosystem: gomod, directory: /}\n  - {package-ecosystem: github-actions, directory: /}\n")}},
+		{name: "monorepo, directories and globs", want: "pass", edits: append(monorepo(), dependabot(
+			"gomod directories [\"/apps/*\"]", "npm directory /web/", "uv directories [\"/**\"]", "github-actions directory /"))},
+		{name: "monorepo, a component left out", want: "fail", edits: append(monorepo(), dependabot(
+			"gomod directories [\"/apps/*\"]", "pip directory /tools", "npm directory /web", "github-actions directory /")),
+			findings: []string{dependabotFile + ": no updates entry for pip or uv covers component tools/py",
+				"Fix: add an updates entry with package-ecosystem: pip and directory: /tools/py"}},
+		{name: "a glob in directory is not expanded", want: "fail",
+			edits:    []fixtureEdit{dependabot("gomod directory /*", "github-actions directory /")},
+			findings: []string{"no updates entry for gomod covers component ."}},
+		{name: "wrong ecosystem", want: "fail",
+			edits:    []fixtureEdit{dependabot("npm directory /", "github-actions directory /")},
+			findings: []string{dependabotFile + ": no updates entry for gomod covers component .", "directory: /"}},
+		{name: "no github-actions", want: "fail",
+			edits: []fixtureEdit{dependabot("gomod directory /")},
+			findings: []string{dependabotFile + ": no updates entry has package-ecosystem github-actions",
+				"Fix: add an updates entry with package-ecosystem: github-actions and directory: /"}},
+		{name: "a workflow automerges", want: "fail",
+			edits: []fixtureEdit{withFile(".github/workflows/automerge.yml", automergeWorkflow)},
+			findings: []string{".github/workflows/automerge.yml: job merge runs gh pr merge --auto",
+				"Fix: remove --auto"}},
+		{name: "gh pr merge without --auto", want: "pass",
+			edits: []fixtureEdit{withFile(".github/workflows/automerge.yml", strings.ReplaceAll(automergeWorkflow, "--auto ", ""))}},
+		{name: "no update bot", want: "fail", edits: []fixtureEdit{withoutFile(dependabotFile)},
+			findings: []string{dependabotFile + ": no update bot (Dependabot or Renovate)", "Fix: add " + dependabotFile}},
+		{name: "untracked dependabot.yml", want: "fail",
+			edits: []fixtureEdit{withoutFile(dependabotFile), withUntracked(dependabotFile, "version: 2\nupdates: []\n")}},
+		{name: "dependabot.yml does not parse", want: "fail",
+			edits:    []fixtureEdit{withFile(dependabotFile, "updates: [\n")},
+			findings: []string{dependabotFile + ": does not parse"}},
+		{name: "updates is not a list", want: "fail",
+			edits:    []fixtureEdit{withFile(dependabotFile, "version: 2\nupdates: {}\n")},
+			findings: []string{dependabotFile + ": does not parse", "updates"}},
+
+		{name: "renovate.json", want: "pass", edits: renovate("renovate.json", `{"extends": ["config:recommended"]}`)},
+		{name: ".github/renovate.json", want: "pass", edits: renovate(".github/renovate.json", `{}`)},
+		{name: ".renovaterc", want: "pass", edits: renovate(".renovaterc", `{}`)},
+		{name: ".renovaterc.json", want: "pass", edits: renovate(".renovaterc.json", `{}`)},
+		{name: "renovate.json5 with comments and trailing commas", want: "pass", edits: renovate("renovate.json5",
+			"{\n  // dependencies are reviewed\n  \"enabledManagers\": [\"gomod\", \"github-actions\",],\n}\n")},
+		{name: "renovate.json5 beyond JWCC cannot be decided", want: "undecided", edits: renovate(".github/renovate.json5",
+			"{ enabledManagers: ['gomod'] }\n"),
+			findings: []string{".github/renovate.json5: "}},
+		{name: "renovate.json does not parse", want: "fail", edits: renovate("renovate.json", `{"extends": [`),
+			findings: []string{"renovate.json: does not parse"}},
+		{name: "package.json renovate key", want: "pass", edits: edits(
+			renovate("package.json", `{"name": "x", "renovate": {"extends": ["config:recommended"]}}`),
+			[]fixtureEdit{withFile("vibe.yaml", configWith(section{"components", "components:\n  - {path: ., language: go}\n"}))})},
+		{name: "package.json without a renovate key", want: "fail", edits: edits(
+			renovate("package.json", `{"name": "x"}`),
+			[]fixtureEdit{withFile("vibe.yaml", configWith(section{"components", "components:\n  - {path: ., language: go}\n"}))}),
+			findings: []string{"no update bot"}},
+		{name: "renovate enabledManagers covers the monorepo", want: "pass", edits: edits(monorepo(),
+			renovate("renovate.json", `{"enabledManagers": ["gomod", "npm", "pep621", "github-actions"]}`))},
+		{name: "renovate enabledManagers leaves out a component", want: "fail",
+			edits: renovate("renovate.json", `{"enabledManagers": ["npm", "github-actions"]}`),
+			findings: []string{"renovate.json: enabledManagers leaves out gomod, which component . needs",
+				"Fix: add gomod to enabledManagers"}},
+		{name: "renovate enabledManagers leaves out github-actions", want: "fail",
+			edits:    renovate("renovate.json", `{"enabledManagers": ["gomod"]}`),
+			findings: []string{"renovate.json: enabledManagers leaves out github-actions"}},
+		{name: "renovate automerge in a package rule", want: "fail",
+			edits: renovate("renovate.json", `{"packageRules": [{"matchUpdateTypes": ["patch"], "automerge": true}]}`),
+			findings: []string{"renovate.json: enables automerge (packageRules[0].automerge)",
+				"Fix: remove"}},
+		{name: "renovate automerge false", want: "pass",
+			edits: renovate("renovate.json", `{"automerge": false}`)},
+		{name: "renovate automerge preset", want: "fail",
+			edits:    renovate("renovate.json", `{"extends": ["config:recommended", ":automergeMinor"]}`),
+			findings: []string{`renovate.json: extends the automerge preset ":automergeMinor"`}},
 	})
 }
 

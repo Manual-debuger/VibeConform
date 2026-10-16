@@ -199,5 +199,3 @@ func checkA07(env *Env) PartResult {
 		Fix:     fix,
 	})
 }
-
-func checkD02(_ *Env) PartResult { return notImplementedYet() }
