@@ -7,9 +7,17 @@ import (
 	"testing"
 )
 
-// engineStub is what the new engine says after a valid configuration
-// until the rule engine exists (#99 replaces it).
-const engineStub = "rule engine not implemented (#99)"
+// reportHeader starts the contract audit's report: a valid configuration
+// reached the rule engine.
+const reportHeader = "vibe audit: contract 1.0.0"
+
+// assertReport checks that the contract audit printed its report.
+func assertReport(t *testing.T, r auditResult) {
+	t.Helper()
+	if !strings.HasPrefix(r.stdout, reportHeader) {
+		t.Errorf("no contract audit report on stdout\nstdout:\n%s\nstderr:\n%s", r.stdout, r.stderr)
+	}
+}
 
 func assertStderr(t *testing.T, r auditResult, want ...string) {
 	t.Helper()
@@ -31,7 +39,8 @@ func TestContractAuditValidConfigReachesEngine(t *testing.T) {
 	dir := contractFixture(t)
 	r := runVibeAudit(t, "--repo-root", dir)
 	assertExit(t, r, 1)
-	assertStderr(t, r, "cannot decide", engineStub)
+	assertReport(t, r)
+	assertStderr(t, r, "cannot decide")
 	if strings.Contains(r.stderr, "vibe.yaml:") {
 		t.Errorf("valid baseline reported a configuration error:\n%s", r.stderr)
 	}
@@ -137,7 +146,7 @@ func TestAuditConfigSelectsV2Beside(t *testing.T) {
 
 	r := runVibeAudit(t, "--repo-root", dir, "--config", filepath.Join(dir, "vibe.v2.yaml"))
 	assertExit(t, r, 1)
-	assertStderr(t, r, engineStub)
+	assertReport(t, r)
 }
 
 func TestAuditConfigErrorsNameTheConfigFile(t *testing.T) {

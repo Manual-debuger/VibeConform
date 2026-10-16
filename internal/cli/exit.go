@@ -3,6 +3,8 @@ package cli
 import (
 	"errors"
 	"fmt"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 )
 
 // Process exit codes. These are part of the CLI's contract with CI: a
@@ -64,6 +66,16 @@ func (e *staleBinaryError) Error() string {
 func ExitCode(err error) int {
 	if err == nil {
 		return exitOK
+	}
+
+	// The contract audit has no exit 3: not conformant is 2, and cannot
+	// decide is 1 like any other error (spec 0052, "Exit codes").
+	var cv *contractVerdictError
+	if errors.As(err, &cv) {
+		if cv.verdict == contract.VerdictNotConformant {
+			return exitNonConformant
+		}
+		return exitError
 	}
 
 	var nc *nonConformantError
