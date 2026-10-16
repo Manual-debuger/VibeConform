@@ -1,0 +1,8 @@
+contract: 1.0.0
+platforms: [linux, windows]
+agents: [claude]
+entrypoints:
+  verify: task verify
+  verify-fast: task verify:fast
+  fmt: task fmt
+  fmt-check: task fmt:check
