@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -19,6 +20,24 @@ import (
 
 // baselineFixture is the tree every contract fixture starts from.
 var baselineFixture = filepath.Join("testdata", "contract", "baseline")
+
+// fixtureDotClaude is the name testdata uses for a fixture's .claude
+// directory. The agent guard refuses edits of any path ending in
+// .claude/hooks/policy.json, including fixtures, so testdata keeps them
+// under dot-claude/ and the copy renames it.
+const fixtureDotClaude = "dot-claude"
+
+// fixturePath maps a path in testdata (OS separators) to the path in the
+// fixture: every dot-claude component becomes .claude.
+func fixturePath(rel string) string {
+	parts := strings.Split(rel, string(filepath.Separator))
+	for i, p := range parts {
+		if p == fixtureDotClaude {
+			parts[i] = ".claude"
+		}
+	}
+	return filepath.Join(parts...)
+}
 
 // fixtureEdit changes a fixture before or after git add.
 type fixtureEdit struct {
@@ -59,7 +78,7 @@ func contractFixture(t *testing.T, edits ...fixtureEdit) string {
 		if err != nil {
 			return err
 		}
-		dst := filepath.Join(dir, rel)
+		dst := filepath.Join(dir, fixturePath(rel))
 		if d.IsDir() {
 			return os.MkdirAll(dst, 0o755)
 		}
@@ -131,4 +150,14 @@ func runVibeAudit(t *testing.T, args ...string) auditResult {
 	root.SetArgs(append([]string{"audit"}, args...))
 	err := root.Execute()
 	return auditResult{stdout: out.String(), stderr: errOut.String(), code: ExitCode(err)}
+}
+
+func TestFixturePathMapsDotClaude(t *testing.T) {
+	in := filepath.Join("dot-claude", "hooks", "policy.json")
+	if got, want := fixturePath(in), filepath.Join(".claude", "hooks", "policy.json"); got != want {
+		t.Errorf("fixturePath(%q) = %q, want %q", in, got, want)
+	}
+	if got := fixturePath("AGENTS.md"); got != "AGENTS.md" {
+		t.Errorf("fixturePath changed a plain path: %q", got)
+	}
 }
