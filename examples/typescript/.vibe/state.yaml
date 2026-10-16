@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.10.1-alpha.1.0.20261015083647-bad56bce517a
+vibe_version: v0.11.0-alpha.1.0.20261016072813-f397362be119
 standard: prod-ts/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
@@ -13,13 +13,13 @@ resources:
       sha256: a12815be5dd837f16ef67099a647ec207d494f5066329ddcf4a0a495ca52fedb
     - path: .claude/hooks/guard.mjs
       ownership: generated
-      sha256: 680724a46b64227cea335677472abce0daea53cac362d6b3672e7ac356fa001e
+      sha256: c2a99328a93e588750492325d4bf75e9a5d5b171535559d7335e744bdd71df07
     - path: .claude/hooks/policy.json
       ownership: generated
-      sha256: d80fc8060d140a1ee7928ac280ad7fd23a2e23988b0d45dbef1c16476c0872e6
+      sha256: 7100219083e830d4ad20fea998cbe421e1125d694be3c92694acde96ce1d0d54
     - path: .claude/settings.json
       ownership: generated
-      sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
+      sha256: 3504a64df5ce098a0e58b938e643816c0d9f75bcbf0906cd95da72e1833dc354
     - path: .claude/skills/vibeconform/SKILL.md
       ownership: generated
       sha256: ef4035cbb88e18f16fd688dbae1d1448d0a87933784b32e71b794f6caff79aca
@@ -82,7 +82,7 @@ resources:
       sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     - path: Taskfile.yml
       ownership: generated
-      sha256: 951582b09871e3e08088afb0677a8531b42eb78b0e52be198b117a964772070a
+      sha256: e5c7153a26d92cc010487e04d22e74b4fb35f35ab5581ce949b6bc7fc2feb92d
     - path: eslint.base.config.js
       ownership: generated
       sha256: 65567117c90f56996c174bd642be3845ecb564399ea34b71309e22dc6a66dcd3

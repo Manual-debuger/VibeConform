@@ -12,9 +12,10 @@ on:
   schedule:
     - cron: "0 0 * * 1"
 
+# Read-only by default; the job that uploads results widens it (contract
+# rule C-03, spec 0052).
 permissions:
   contents: read
-  security-events: write
 
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}
@@ -24,6 +25,11 @@ jobs:
   analyze:
     name: analyze
     runs-on: ubuntu-latest
+    # Job permissions replace the top-level ones, so contents: read is
+    # repeated here. security-events: write uploads the analysis.
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

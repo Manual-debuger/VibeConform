@@ -162,7 +162,7 @@ func TestGraphUpdateSkipsWithoutGraphify(t *testing.T) {
 	}
 
 	t.Setenv("PATH", filepath.Dir(task))
-	code, stdout, stderr := runTask(t, task, dir, "graph:update", "")
+	code, stdout, stderr := runTask(t, task, dir, "graph:update")
 	if code != 0 {
 		t.Fatalf("exit %d; a missing graphify must not fail the Git hook. stderr: %s", code, stderr)
 	}

@@ -14,7 +14,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|PowerShell|Write|Edit",
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "task -x hook:done",
+            "command": "task verify:fast 1>&2 </dev/null || task -x hook:done",
             "timeout": 600
           }
         ]

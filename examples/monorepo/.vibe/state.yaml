@@ -1,16 +1,16 @@
 schema: 4
-vibe_version: v0.10.1-alpha.1.0.20261015083647-bad56bce517a
+vibe_version: v0.11.0-alpha.1.0.20261016072813-f397362be119
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go
       ownership: generated
-      sha256: e7961955812ae4abb343ce09ccbc2d241c7cc28bc68dd9736aecaaa3029b5b9b
+      sha256: 3e4be900995dfc06998414e0867b15872ee405d713352bb80c59127557b64c1a
     - path: .claude/hooks/policy.json
       ownership: generated
-      sha256: d80fc8060d140a1ee7928ac280ad7fd23a2e23988b0d45dbef1c16476c0872e6
+      sha256: 7100219083e830d4ad20fea998cbe421e1125d694be3c92694acde96ce1d0d54
     - path: .claude/settings.json
       ownership: generated
-      sha256: ae5bd90f2b04fd00b1737065a0b27e2f9f3a21d12f930550bdcaff6d53b5a697
+      sha256: 3504a64df5ce098a0e58b938e643816c0d9f75bcbf0906cd95da72e1833dc354
     - path: .claude/skills/vibeconform/SKILL.md
       ownership: generated
       sha256: 1e38ab1b7ce221f418e5cfadb6bb3eacf4b882392106edc167956dfc141218fa
@@ -79,7 +79,7 @@ resources:
       sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     - path: Taskfile.yml
       ownership: generated
-      sha256: 04b5189cee59dfd97ec0227aec09f7286384a0b8a8ae93c1b15c72a2dce69ac4
+      sha256: 5e550f2e2b6dea1e1647c9b601756a0a0dcf992408c3e46d302d4f27f8553520
     - path: apps/web/.prettierignore
       section_id: generated
       ownership: managed-section

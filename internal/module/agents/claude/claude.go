@@ -50,8 +50,18 @@ const (
 	FormatCommand = "task -x hook:format"
 	// CheckCommand runs after each file edit, in the background.
 	CheckCommand = "task -x hook:check"
-	// DoneCommand runs when the agent ends its turn, as a gate.
+	// DoneCommand decides, after verify:fast failed at the end of a turn,
+	// whether the stop is blocked (exit 2) or, the second time, let through.
 	DoneCommand = "task -x hook:done"
+	// StopCommand runs when the agent ends its turn, as a gate. It calls
+	// verify:fast itself, as a simple command, so the contract audit sees
+	// the Stop hook call it (rule A-05, spec 0052); Task without -x is
+	// enough there, since only failure matters. 1>&2 moves the tools'
+	// output to stderr, which is what Claude Code shows the model on exit
+	// 2. </dev/null keeps every tool off the hook payload, which hook:done
+	// reads for stop_hook_active. The syntax is POSIX: Claude Code runs hook
+	// commands in sh or bash on Linux and in Git Bash on Windows.
+	StopCommand = "task verify:fast 1>&2 </dev/null || " + DoneCommand
 )
 
 //go:embed templates/settings.json

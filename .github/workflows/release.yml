@@ -5,13 +5,18 @@ on:
     tags:
       - "v*"
 
+# Read-only by default; the job that publishes the release widens it
+# (contract rule C-03, spec 0052).
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   goreleaser:
     name: GoReleaser
     runs-on: ubuntu-latest
+    # contents: write creates the GitHub release and uploads its assets.
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
