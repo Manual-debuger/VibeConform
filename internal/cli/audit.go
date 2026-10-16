@@ -10,17 +10,25 @@ import (
 )
 
 func newAuditCmd() *cobra.Command {
-	var repoRoot string
+	var f auditFlags
 
 	cmd := &cobra.Command{
 		Use:   "audit",
 		Short: "Read-only compliance and drift check against the desired standard",
-		Args:  cobra.NoArgs,
+		Long: "Read-only check of the repository.\n\n" +
+			"A configuration with a top-level contract key (vibe.yaml version 2)\n" +
+			"runs the contract audit; one with a top-level standard key runs the\n" +
+			"old drift audit against the standard's templates.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAudit(cmd, repoRoot)
+			return dispatchAudit(cmd, f)
 		},
 	}
-	cmd.Flags().StringVar(&repoRoot, "repo-root", ".", "repository root to audit")
+	cmd.Flags().StringVar(&f.repoRoot, "repo-root", ".", "repository root to audit")
+	cmd.Flags().StringVar(&f.config, "config", "", "configuration file to read instead of vibe.yaml at the repository root; must be version 2 (contract:)")
+	cmd.Flags().BoolVar(&f.static, "static", false, "contract audit: run only the static checks; never reaches a verdict")
+	cmd.Flags().BoolVar(&f.json, "json", false, "contract audit: print the report as JSON")
+	cmd.Flags().StringVar(&f.explain, "explain", "", "contract audit: explain the rule with this ID and read nothing else")
 
 	return cmd
 }
