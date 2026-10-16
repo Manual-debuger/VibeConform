@@ -33,10 +33,24 @@ function loadPolicy(path) {
   } catch (err) {
     throw new Error(`reading policy ${path}: ${err.message}`, { cause: err })
   }
-  if (policy.version !== 1) {
+  if (policy === null || typeof policy !== 'object' || ![1, 2].includes(policy.version)) {
     throw new Error(
-      `policy ${path} has version ${policy.version}; this guard understands version 1`,
+      `policy ${path} has version ${policy?.version}; this guard understands versions 1 and 2`,
     )
+  }
+  // The contract audit reads a version 2 policy's exceptions (spec 0052).
+  // This guard does not apply them yet, so a list with anything in it is an
+  // error rather than an exception silently not honoured.
+  if (policy.version === 2 && 'exceptions' in policy) {
+    if (!Array.isArray(policy.exceptions)) {
+      throw new Error(`policy ${path}: exceptions is not a list`)
+    }
+    if (policy.exceptions.length > 0) {
+      throw new Error(
+        `policy ${path}: lists exceptions, which this guard does not apply yet; ` +
+          `put each exception in ${LOCAL_NAME} next to it instead (spec 0050)`,
+      )
+    }
   }
   return policy
 }
