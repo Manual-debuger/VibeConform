@@ -2,6 +2,9 @@
 
 ## Status
 
+Superseded by ADR 0025 (2026-10-16). The code still follows this ADR
+until #112 removes the template-sync model.
+
 Accepted (model only; reconciler not yet implemented).
 
 ## Context

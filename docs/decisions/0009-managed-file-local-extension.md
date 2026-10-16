@@ -2,6 +2,9 @@
 
 ## Status
 
+Superseded by ADR 0025 (2026-10-16). The code still follows this ADR
+until #112 removes the template-sync model.
+
 Accepted. Implemented by the `includes:` block in all three repo-tooling
 `Taskfile.yml` templates, per
 `docs/specs/0018-prod-go-audit-portability.md`.

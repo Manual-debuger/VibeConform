@@ -1,25 +1,80 @@
 # VibeConform
 
-VibeConform generates and audits a repository's tooling (tasks, hooks, CI,
-lint and agent configuration) from versioned standards, so the repository
-stays conformant over time.
+VibeConform checks that a repository's tooling (tasks, hooks, CI and agent
+guardrails) has the properties a versioned contract requires. A setup
+skill gives the repository those properties; the audit only verifies them.
 
 ## Language
 
-**Standard**:
-A named, versioned bundle of modules that defines a repository's tooling,
-such as `prod-go/v1` or `prod-mono/v1`.
-_Avoid_: profile, preset, template set
+**Contract**:
+The versioned list of rules an adopting repository must satisfy. It names
+properties a repository must have, never the files or tools that provide
+them.
+_Avoid_: floor, standard, policy
+
+**Rule**:
+One property in the contract, with a stable ID such as `A-02`, a level and
+a check. An ID is never reused once published.
+_Avoid_: requirement, criterion, standard
+
+**Level**:
+How much a rule counts: a failed MUST rule makes the repository
+non-compliant; a failed SHOULD rule is only reported.
+_Avoid_: severity, tier, grade
+
+**Check**:
+How the audit decides a rule: static (reads configuration), execution
+(runs a command and inspects its result) or probe.
+_Avoid_: test (alone), validation
+
+**Probe**:
+A check that feeds a known input, such as a guard corpus case or a planted
+defect, and verifies how the repository reacts.
+_Avoid_: mutation test, smoke test, canary
+
+**Guard corpus**:
+The fixed set of tool calls that any agent guard must refuse or allow.
+It belongs to the contract and is versioned with it.
+_Avoid_: test cases, fixtures
+
+**Entrypoint**:
+A named command that an adopting repository declares (verify, verify-fast,
+fmt, fmt-check) and that CI, hooks and probes call.
+_Avoid_: task, target, script
+
+**Conformant**:
+The verdict for an adopting repository with no failed MUST rule under the
+contract version it declares.
+_Avoid_: compliant, passing, green
+
+**Waiver**:
+An adopting repository's statement, with a reason and an expiry date, that
+it knowingly does not satisfy one SHOULD rule.
+_Avoid_: exemption, suppression, ignore
+
+**Not applicable**:
+The state of a rule that does not apply to an adopting repository because
+of what the repository declares, such as a Linux-only platform. It is
+reported, not checked.
+_Avoid_: skipped, waived
 
 **Adopting repository**:
-A repository that VibeConform manages under a standard. "Adopter" is an
-acceptable short form.
+A repository that declares a contract version and is checked against it.
+"Adopter" is an acceptable short form.
 _Avoid_: adapter, target repository, downstream repository
 
 **Component**:
-One single-language project inside a `prod-mono` repository, named by
-its id and laid out as the matching single-language standard.
+One single-language project inside an adopting repository, named by its
+path and language. A single-language repository is one component at its
+root.
 _Avoid_: package, workspace, sub-project
+
+**Setup skill**:
+The agent skill that gives an adopting repository the properties the
+contract requires, and runs the audit until it passes.
+_Avoid_: installer, generator, template
+
+## Agent guardrails
 
 **Agent guard**:
 The check that runs before an agent's shell command or file edit and
@@ -28,28 +83,33 @@ It stops common accidents. It is not a security boundary, and it does not
 refuse every command with the same effect.
 _Avoid_: sandbox, firewall, policy engine
 
-**Floor**:
-The part of a repository's tooling that decides what the gate runs and
-whether its result counts. No seam can change it.
-_Avoid_: lock, locked rule, contract
-
 **Guard exception**:
 An adopting repository's statement that one agent guard rule lets one
-named command through. Every other rule still applies to it.
+named command through. Every other rule still applies to it. It is the
+only way to loosen the guard.
 _Avoid_: allow rule, whitelist, override
 
-**Base config**:
-The managed half of a lint or compiler configuration, which the
-repository's own configuration under the tool's usual name extends.
-_Avoid_: managed config (alone), vendor config, default config
+**Unlock**:
+A person's time-limited permission for an agent to change the agent
+guardrail settings. An agent cannot grant it to itself.
+_Avoid_: override, bypass, escape
 
 ## CI
 
-**CI floor**:
-The floor's part in a generated CI job: what the job runs and whether
-its result counts. VibeConform owns it; an adopting repository cannot
-change it.
-_Avoid_: hardening, contract (alone)
+**Required check**:
+A CI job whose name stays stable so that branch protection can require
+it: the gate and the conformance audit. Other job names may change.
+_Avoid_: status check (alone), gate job (for conformance)
+
+## Retired terms
+
+Terms of the template-sync model. They stay in use until that model is
+removed, then leave this glossary.
+
+**Standard**:
+A named, versioned bundle of modules that defines a repository's tooling,
+such as `prod-go/v1` or `prod-mono/v1`. Replaced by the contract.
+_Avoid_: profile, preset, template set
 
 **Seam**:
 A documented place where an adopting repository changes generated
@@ -57,7 +117,7 @@ behaviour without editing a managed file, such as a local extension file
 or a CI/CD variable.
 _Avoid_: hook, override, escape hatch
 
-**Required check**:
-A CI job whose name VibeConform keeps stable so that branch protection can
-require it: the gate and the conformance audit. Other job names may change.
-_Avoid_: status check (alone), gate job (for conformance)
+**Base config**:
+The managed half of a lint or compiler configuration, which the
+repository's own configuration under the tool's usual name extends.
+_Avoid_: managed config (alone), vendor config, default config
