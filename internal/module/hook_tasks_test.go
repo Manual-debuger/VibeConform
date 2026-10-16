@@ -297,11 +297,19 @@ func hookTaskfile(t *testing.T, dir, path, hook string, stubs map[string]any) {
 	}
 }
 
-// runTask runs `task -x <name>` in dir and returns the exit code and output.
-func runTask(t *testing.T, task, dir, name, stdin string) (code int, stdout, stderr string) {
+// runTask runs `task -x <name>` in dir, with nothing on stdin, and returns
+// the exit code and output.
+func runTask(t *testing.T, task, dir, name string) (code int, stdout, stderr string) {
 	t.Helper()
-	// #nosec G204 -- task and name are fixed by the calling test
-	cmd := exec.Command(task, "-x", name)
+	return runCommand(t, dir, "", task, "-x", name)
+}
+
+// runCommand runs argv in dir with stdin and returns the exit code and
+// output.
+func runCommand(t *testing.T, dir, stdin string, argv ...string) (code int, stdout, stderr string) {
+	t.Helper()
+	// #nosec G204 -- argv is fixed by the calling test
+	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(stdin)
 	var out, errOut bytes.Buffer
@@ -309,7 +317,7 @@ func runTask(t *testing.T, task, dir, name, stdin string) (code int, stdout, std
 	if err := cmd.Run(); err != nil {
 		var exit *exec.ExitError
 		if !errors.As(err, &exit) {
-			t.Fatalf("running task %s: %v", name, err)
+			t.Fatalf("running %q: %v", argv, err)
 		}
 		code = exit.ExitCode()
 	}
@@ -408,7 +416,7 @@ func TestHookStopBlocksOnce(t *testing.T) {
 
 				for _, tc := range loadStopCorpus(t) {
 					t.Run(fmt.Sprintf("%s/%s/passing=%v/%s", filepath.Base(sh), path, passing, tc.Name), func(t *testing.T) {
-						code, stdout, stderr := runShell(t, sh, dir, command, tc.Stdin)
+						code, stdout, stderr := runCommand(t, dir, tc.Stdin, sh, "-c", command) // as Claude Code runs a hook command
 						want := 0
 						if !passing && !tc.Active {
 							want = 2
@@ -431,26 +439,6 @@ func TestHookStopBlocksOnce(t *testing.T) {
 			}
 		}
 	}
-}
-
-// runShell runs command through `sh -c` in dir, as Claude Code runs a hook
-// command, and returns the exit code and output.
-func runShell(t *testing.T, sh, dir, command, stdin string) (code int, stdout, stderr string) {
-	t.Helper()
-	// #nosec G204 -- sh and command are fixed by the calling test
-	cmd := exec.Command(sh, "-c", command)
-	cmd.Dir = dir
-	cmd.Stdin = strings.NewReader(stdin)
-	var out, errOut bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errOut
-	if err := cmd.Run(); err != nil {
-		var exit *exec.ExitError
-		if !errors.As(err, &exit) {
-			t.Fatalf("running %s -c %q: %v", sh, command, err)
-		}
-		code = exit.ExitCode()
-	}
-	return code, out.String(), errOut.String()
 }
 
 // gitRepo creates a git repository with one commit in dir.
@@ -496,7 +484,7 @@ func TestHookContextOutput(t *testing.T) {
 				}
 			}
 
-			code, stdout, stderr := runTask(t, task, dir, "hook:context", "")
+			code, stdout, stderr := runTask(t, task, dir, "hook:context")
 			if code != 0 {
 				t.Fatalf("exit %d; session start must never fail. stderr: %s", code, stderr)
 			}
@@ -551,7 +539,7 @@ func TestHookContextLinkedWorktree(t *testing.T) {
 				t.Fatalf("git worktree add: %v\n%s", err, out)
 			}
 
-			code, stdout, stderr := runTask(t, task, side, "hook:context", "")
+			code, stdout, stderr := runTask(t, task, side, "hook:context")
 			if code != 0 {
 				t.Fatalf("exit %d; stderr: %s", code, stderr)
 			}
@@ -592,7 +580,7 @@ func TestHookContextWithoutRuntimes(t *testing.T) {
 			}
 
 			t.Setenv("PATH", path)
-			code, stdout, stderr := runTask(t, task, dir, "hook:context", "")
+			code, stdout, stderr := runTask(t, task, dir, "hook:context")
 			if code != 0 {
 				t.Fatalf("exit %d; session start must never fail. stderr: %s\nstdout: %s", code, stderr, stdout)
 			}
@@ -629,7 +617,7 @@ func TestHookContextOutsideGit(t *testing.T) {
 			hookTaskfile(t, dir, path, "hook:context", nil)
 			// Stop git from finding a repository above the temp directory.
 			t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
-			code, stdout, stderr := runTask(t, task, dir, "hook:context", "")
+			code, stdout, stderr := runTask(t, task, dir, "hook:context")
 			if code != 0 {
 				t.Fatalf("exit %d; stderr: %s", code, stderr)
 			}
@@ -665,7 +653,7 @@ func TestHookFormatGo(t *testing.T) {
 	}
 	gitRepo(t, dir)
 
-	if code, _, stderr := runTask(t, task, dir, "hook:format", ""); code != 0 {
+	if code, _, stderr := runTask(t, task, dir, "hook:format"); code != 0 {
 		t.Fatalf("clean tree: exit %d; stderr: %s", code, stderr)
 	}
 
@@ -673,7 +661,7 @@ func TestHookFormatGo(t *testing.T) {
 	if err := os.WriteFile(file, []byte("package scratch\nimport \"fmt\"\nfunc  F(a,b int) int {return a+b}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, stdout, stderr := runTask(t, task, dir, "hook:format", "")
+	code, stdout, stderr := runTask(t, task, dir, "hook:format")
 	if code != 0 {
 		t.Fatalf("exit %d; stderr: %s", code, stderr)
 	}
@@ -691,7 +679,7 @@ func TestHookFormatGo(t *testing.T) {
 	if err := os.WriteFile(file, []byte("package scratch\nfunc F( {\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if code, _, stderr := runTask(t, task, dir, "hook:format", ""); code != 2 || stderr == "" {
+	if code, _, stderr := runTask(t, task, dir, "hook:format"); code != 2 || stderr == "" {
 		t.Errorf("syntax error: exit %d with stderr %q, want 2 with the error", code, stderr)
 	}
 
@@ -711,7 +699,7 @@ func TestHookFormatGo(t *testing.T) {
 		if err := os.WriteFile(file, []byte("package scratch\nfunc  F() {}\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if code, _, stderr := runTask(t, task, dir, "hook:format", ""); code != 0 {
+		if code, _, stderr := runTask(t, task, dir, "hook:format"); code != 0 {
 			t.Fatalf("exit %d; stderr: %s", code, stderr)
 		}
 		got, err := os.ReadFile(file)
@@ -757,7 +745,7 @@ func TestHookFormatEndToEnd(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Remove(file) })
 
-	code, stdout, stderr := runTask(t, task, dir, "hook:format", "")
+	code, stdout, stderr := runTask(t, task, dir, "hook:format")
 	if code != 0 {
 		t.Fatalf("exit %d; stderr: %s", code, stderr)
 	}
