@@ -426,12 +426,13 @@ func TestRuleR01Execution(t *testing.T) {
 		t.Parallel()
 		rep := auditProbe(t, probeFixture(t, sessionStartHooks("startup", "vibe audit --static")))
 		assertExecution(t, rep, "A-07", "fail", "exited 127", "vibe is not available during the R-01 probe")
-		assertExecution(t, rep, "R-01", "undecided", `the SessionStart hook ran "vibe audit --static"`)
+		// The fixture has no guard, so R-01's A-02 half fails as well.
+		assertExecution(t, rep, "R-01", "fail", `the SessionStart hook ran "vibe audit --static"`)
 	})
-	t.Run("with Claude Code the A-02 half waits for A-02", func(t *testing.T) {
+	t.Run("with Claude Code and no guard the A-02 deny cases fail R-01", func(t *testing.T) {
 		t.Parallel()
 		rep := auditProbe(t, probeFixture(t))
-		assertExecution(t, rep, "R-01", "undecided", "A-02's probe did not run")
+		assertExecution(t, rep, "R-01", "fail", "no PreToolUse hook matches Bash, so its")
 	})
 	t.Run("a verify that runs too long cannot decide", func(t *testing.T) {
 		t.Parallel()

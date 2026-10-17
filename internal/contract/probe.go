@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -70,6 +71,9 @@ type probeSession struct {
 	// guardDeny is A-02's verdict on its deny cases, as R-01's execution
 	// part reads it. A-02 (#103) sets it; nil means A-02 did not run.
 	guardDeny *PartResult
+	// progressMu orders the progress lines of runs that happen
+	// concurrently (A-02 and A-03 feed corpus cases in parallel).
+	progressMu sync.Mutex
 }
 
 // startProbeSession builds the probe copy and runs setup. A failure is
@@ -313,6 +317,8 @@ func (s *probeSession) precondition(env *Env) *Finding {
 // progress writes a progress line before a run.
 func (s *probeSession) progress(label string) {
 	if s.opts.Progress != nil {
+		s.progressMu.Lock()
+		defer s.progressMu.Unlock()
 		_, _ = fmt.Fprintf(s.opts.Progress, "vibe audit: %s\n", label)
 	}
 }
@@ -389,6 +395,14 @@ func (s *probeSession) HookPayload(event string, fields map[string]any) []byte {
 // timeout, or zero for DefaultHookTimeout. Without bash, the outcome is
 // undecided.
 func (s *probeSession) RunHook(label, command string, limit time.Duration, payload []byte, o RunOpts) runOutcome {
+	out := s.runHook(label, command, limit, payload, o)
+	s.recordShimCalls(&out)
+	return out
+}
+
+// runHook is RunHook without recording the shim's calls, so that runs
+// can happen concurrently. The caller records the calls afterwards.
+func (s *probeSession) runHook(label, command string, limit time.Duration, payload []byte, o RunOpts) runOutcome {
 	out := runOutcome{Label: label, Command: command, File: claudeSettingsFile}
 	if s.bashErr != nil {
 		out.Undecided = s.bashErr.Error()
@@ -404,7 +418,6 @@ func (s *probeSession) RunHook(label, command string, limit time.Duration, paylo
 	out.ExitCode, out.Output, out.Undecided = execute(s.ctx, process{
 		argv: []string{s.bash, "-c", command}, dir: s.dir(o), env: s.env(o), stdin: payload, limit: limit,
 	})
-	s.recordShimCalls(&out)
 	return out
 }
 

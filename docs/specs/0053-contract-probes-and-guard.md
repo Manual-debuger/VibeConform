@@ -402,6 +402,18 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
      `{` (invalid JSON). It is restored afterwards.
 
   A failure names the situation and each case that was not refused.
+- **How A-02 and A-03 run the corpus** (decided during implementation
+  of #103, 2026-10-17). One hook run is a bash and a guard process,
+  about 0.2 seconds on Windows, so one case after another A-02 and
+  A-03 would take minutes. Within each part, the cases with the same
+  unlock state run concurrently, at most eight at a time; the unlock
+  states run one after another, because the marker is one file, and
+  the parts still run one after another. The R-01 shim calls made
+  during these runs are listed under "the PreToolUse hooks during
+  A-02" (or A-03), not under one case. The deny cases whose tool no
+  hook matches are reported in one finding per tool, which names every
+  such case; A-03 reports one finding per situation, which names every
+  case it did not refuse with every hook's exit code.
 - **A-08** (#106). The corpus's A-08 cases, all with guard rule ID
   `guardrail-settings`, run in their unlock states, and the Stop hook
   is checked:
@@ -867,6 +879,17 @@ runner or the guard's matcher directly.
   The old Go guard runs through `go run`. The Python and Node guards run
   when their runtimes are present, with the same tool gate. Each
   asserts its exact list of missed new cases, as decided above.
+
+  Seam deviation (decided during implementation of #103, 2026-10-17):
+  each of these fixtures runs hundreds of hook processes, and with them
+  `internal/cli`'s tests passed `go test`'s ten-minute default. They
+  therefore live in `internal/contract` (`guardprobe_test.go`, package
+  `contract_test`), which has a budget of its own, and call
+  `contract.Audit`, the engine `vibe audit` runs, with only the rules
+  each needs. What the command adds, the findings in `--json`,
+  `guard_exception_uses` and the text report's listing under each
+  exception, is tested through the `vibe audit` seam in `internal/cli`
+  with fixtures that run no hook.
 - **R-01.** A fixture whose `verify` calls `vibe` fails R-01's execution
   part and lists the shim call. The same fixture without that call
   passes.

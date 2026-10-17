@@ -416,6 +416,7 @@ separately from the contract; it is `1`.
      "waiver": null}
   ],
   "guard_exceptions": [{"rule": "…", "match": "…", "reason": "…"}],
+  "guard_exception_uses": [{"rule": "…", "match": "…", "case": "…"}],
   "local_adjustments": [{"file": "…", "kind": "exception", "rule": "…", "pattern": "…", "reason": "…"}]
 }
 ```
@@ -429,6 +430,10 @@ separately from the contract; it is `1`.
 - `waiver` is `null`, or `{"reason", "until", "expired"}`. A rule with a
   waiver and result `not_applicable` has an unused waiver.
 - `local_adjustments[].kind` is `exception` or `rule` (an extra rule).
+- `guard_exception_uses` lists each guard corpus case that an exception
+  of `policy.json` let through in A-02's probe (spec 0053). It is a new
+  key; `schema` stays `1`. The text report lists the same cases under
+  each exception ("let through: …").
 
 Since `--static` always exits `1`, a CI job that runs it judges the JSON
 instead. This repository's `Contract / audit (static)` job

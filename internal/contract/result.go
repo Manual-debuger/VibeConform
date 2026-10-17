@@ -171,9 +171,12 @@ type Report struct {
 	// FailingMust counts the MUST rules that fail.
 	FailingMust int
 	// Rules holds all 25 rules in report order.
-	Rules            []RuleResult
-	GuardExceptions  []GuardException
-	LocalAdjustments []LocalAdjustment
+	Rules           []RuleResult
+	GuardExceptions []GuardException
+	// GuardExceptionUses are the corpus cases each exception let through
+	// (A-02), in corpus order.
+	GuardExceptionUses []GuardExceptionUse
+	LocalAdjustments   []LocalAdjustment
 	// Notes are facts the audit assumed, such as the default branch.
 	Notes []string
 }

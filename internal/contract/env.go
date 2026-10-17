@@ -28,6 +28,8 @@ type Env struct {
 	// probe is the probe copy while the execution and probe parts run,
 	// and nil otherwise.
 	probe *probeSession
+	// guardUses are the corpus cases guard exceptions let through (A-02).
+	guardUses []GuardExceptionUse
 }
 
 type fileEntry struct {
