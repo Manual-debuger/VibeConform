@@ -151,7 +151,7 @@ func (g *Guard) decideCommand(t gr.Target) Decision {
 				continue
 			}
 			f := Finding{Rule: r.id, Why: r.why, Command: c}
-			if e := g.exception(r.id, func(e gr.Exception) bool { return e.MatchesCommand(*c) }); e != nil {
+			if e := g.exception(r.id, func(e gr.Exception) bool { return e.MatchesCommand(*c) }); e != nil && !r.fixed {
 				f.Exception = e
 				d.Lifted = append(d.Lifted, f)
 				continue
@@ -182,11 +182,11 @@ func (g *Guard) decideCommand(t gr.Target) Decision {
 func (g *Guard) decidePath(t gr.Target) Decision {
 	var d Decision
 	for _, r := range pathRules {
-		if !r.match(t.Path) {
+		if !r.match(g, t.Path) {
 			continue
 		}
 		f := Finding{Rule: r.id, Why: r.why, Path: t.Path}
-		if e := g.exception(r.id, func(e gr.Exception) bool { return e.MatchesPath(t.Path, g.Repo.Root) }); e != nil {
+		if e := g.exception(r.id, func(e gr.Exception) bool { return e.MatchesPath(t.Path, g.Repo.Root) }); e != nil && !r.fixed {
 			f.Exception = e
 			d.Lifted = append(d.Lifted, f)
 			continue

@@ -123,6 +123,21 @@ func TestParseGuardCorpusRejects(t *testing.T) {
 	}
 }
 
+// TestParseGuardCorpusGuardrailSettingsOnCommands: guardrail-settings is
+// a path rule, but A-08's self-unlock cases are commands (spec 0053,
+// "A-08"): a Bash or PowerShell call that runs vibe unlock or writes the
+// marker is refused under it.
+func TestParseGuardCorpusGuardrailSettingsOnCommands(t *testing.T) {
+	_, err := parseGuardCorpus([]byte(`{"cases": [
+		{"name": "a", "want": "deny", "rule": "guardrail-settings",
+		 "payload": {"tool_name": "Bash", "tool_input": {"command": "vibe unlock"}}},
+		{"name": "b", "want": "deny", "rule": "guardrail-settings",
+		 "payload": {"tool_name": "PowerShell", "tool_input": {"command": "vibe unlock"}}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestParseGuardCorpusDefaultsUnlock(t *testing.T) {
 	cases, err := parseGuardCorpus([]byte(`{"cases": [
 		{"name": "a", "want": "deny", "rule": "guardrail-settings", "unlock": "expired",

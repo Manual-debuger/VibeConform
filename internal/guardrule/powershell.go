@@ -275,6 +275,16 @@ func (p *psParser) expression() error {
 		case r == '=':
 			p.i++
 			return p.element(false)
+		case r == '>' || (r == '*' || r >= '1' && r <= '6') && p.peek(1) == '>':
+			// The expression's output goes to a file: a redirect-only
+			// command, as "> f" is in Bash.
+			c := Command{Shell: ShellPowerShell}
+			if _, err := p.redirect(&c); err != nil {
+				return err
+			}
+			if len(c.Redirects) > 0 {
+				p.out = append(p.out, c)
+			}
 		default:
 			p.i++
 		}

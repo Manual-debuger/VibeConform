@@ -28,6 +28,7 @@ func newRootCmd(version string, seams contractSeams) *cobra.Command {
 		newSyncCmd(),
 		newCheckCmd(),
 		newDoctorCmd(),
+		newUnlockCmd(),
 	)
 
 	return root
