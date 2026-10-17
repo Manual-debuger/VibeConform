@@ -189,10 +189,11 @@ func TestContractAuditVerdicts(t *testing.T) {
 		}
 		assertRule(t, rep, "V-01", "undecided", "not implemented in this vibe", "#104")
 		assertRule(t, rep, "A-08", "undecided", "#106")
-		assertRule(t, rep, "R-01", "undecided", "#102")
+		assertRule(t, rep, "R-01", "undecided", "`task` is not installed on this machine")
 	})
 	t.Run("a failed MUST rule beside an undecided one exits 1", func(t *testing.T) {
-		dir := contractFixture(t, entrypoints("  verify: task verify\n  verify-fast: task verify:fast\n  fmt: task fmt\n"))
+		// Without fmt V-04 fails; fmt-check, which V-03 needs, stays.
+		dir := contractFixture(t, entrypoints("  verify: task verify\n  verify-fast: task verify:fast\n  fmt-check: task fmt:check\n"))
 		rep, r := auditJSON(t, dir)
 		assertExit(t, r, 1)
 		assertRule(t, rep, "V-04", "fail")

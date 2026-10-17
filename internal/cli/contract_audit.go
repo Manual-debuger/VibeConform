@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -21,6 +23,11 @@ type auditFlags struct {
 	static   bool
 	json     bool
 	explain  string
+	// probeTimeout limits each entrypoint run; keepProbeCopy keeps the
+	// probe copy (spec 0053, "Report and CLI").
+	probeTimeout    time.Duration
+	probeTimeoutSet bool
+	keepProbeCopy   bool
 
 	// seams are not flags: tests set them through newRootCmd.
 	seams contractSeams
@@ -35,6 +42,9 @@ type contractSeams struct {
 	// seen, when set, sees every report the contract audit prints; tests
 	// check every report with it.
 	seen func(*contract.Report)
+	// probeEnv is the environment the probe runs inherit; nil means this
+	// process's. Tests narrow PATH with it.
+	probeEnv []string
 }
 
 // dispatchAudit picks the audit from the configuration it reads: a
@@ -84,6 +94,12 @@ func v1FlagError(f auditFlags, label string) error {
 	if f.json {
 		used = append(used, "--json")
 	}
+	if f.probeTimeoutSet {
+		used = append(used, "--probe-timeout")
+	}
+	if f.keepProbeCopy {
+		used = append(used, "--keep-probe-copy")
+	}
 	if len(used) == 0 {
 		return nil
 	}
@@ -95,10 +111,17 @@ func v1FlagError(f auditFlags, label string) error {
 // prints the report and returns the error that sets the exit code. An
 // invalid configuration prints no report.
 func runContractAudit(cmd *cobra.Command, f auditFlags, label string, data []byte) error {
+	if f.probeTimeout <= 0 {
+		return fmt.Errorf("--probe-timeout must be a positive duration, such as 30m; got %s", f.probeTimeout)
+	}
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	// An interrupt ends the runs in the probe copy, and the copy is still
+	// deleted.
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	defer stop()
 	repo, err := contract.OpenRepo(ctx, f.repoRoot)
 	if err != nil {
 		return err
@@ -108,7 +131,16 @@ func runContractAudit(cmd *cobra.Command, f auditFlags, label string, data []byt
 		return err
 	}
 
-	rep := contract.Audit(ctx, cfg, repo, contract.Options{Static: f.static, Rules: f.seams.rules})
+	probe := contract.ProbeOptions{
+		Timeout:  f.probeTimeout,
+		KeepCopy: f.keepProbeCopy,
+		Stderr:   cmd.ErrOrStderr(),
+		Env:      f.seams.probeEnv,
+	}
+	if !f.json {
+		probe.Progress = cmd.ErrOrStderr()
+	}
+	rep := contract.Audit(ctx, cfg, repo, contract.Options{Static: f.static, Rules: f.seams.rules, Probe: probe})
 	if f.seams.seen != nil {
 		f.seams.seen(rep)
 	}
@@ -126,7 +158,7 @@ func runContractAudit(cmd *cobra.Command, f auditFlags, label string, data []byt
 // configuration, so any other audit flag is an error.
 func runExplain(cmd *cobra.Command, f auditFlags) error {
 	var others []string
-	for _, name := range []string{"repo-root", "config", "static", "json"} {
+	for _, name := range []string{"repo-root", "config", "static", "json", "probe-timeout", "keep-probe-copy"} {
 		if cmd.Flags().Changed(name) {
 			others = append(others, "--"+name)
 		}

@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 
 	"github.com/Manual-debuger/VibeConform/internal/cli"
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -45,6 +46,11 @@ func resolveVersion(ldflags string) string {
 }
 
 func main() {
+	// The contract audit's R-01 probe runs a copy of this executable as
+	// the vibe shim (spec 0053).
+	if code, ok := contract.RunAsShim(); ok {
+		os.Exit(code)
+	}
 	root := cli.NewRootCmd(resolveVersion(version))
 	// Exit code carries meaning: 2 means "audited, not conformant" and 3
 	// "audited, merely out of date", which CI needs to tell apart from 1,

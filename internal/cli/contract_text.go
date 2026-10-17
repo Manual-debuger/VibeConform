@@ -142,6 +142,9 @@ func writeRuleBlock(b *strings.Builder, rr contract.RuleResult, result contract.
 			if f.File != "" {
 				line = f.File + ": " + line
 			}
+			// A run's output follows its message on lines of its own,
+			// indented below the finding.
+			line = strings.ReplaceAll(line, "\n", "\n          | ")
 			fmt.Fprintf(b, "        %s\n", line)
 			if f.Fix != "" {
 				fmt.Fprintf(b, "        Fix: %s\n", f.Fix)

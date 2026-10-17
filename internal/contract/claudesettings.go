@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 // Claude Code settings as the A rules see them (spec 0052, "Recognition
@@ -36,6 +37,9 @@ type claudeHookEntry struct {
 	Matcher string
 	// Commands holds one command hook's command string each.
 	Commands []string
+	// Timeouts holds each command hook's own timeout, beside Commands;
+	// zero when it sets none.
+	Timeouts []time.Duration
 }
 
 // matches reports whether the entry's matcher matches a tool. A matcher
@@ -150,6 +154,11 @@ func parseHookEntry(raw json.RawMessage, at string) (claudeHookEntry, error) {
 		}
 		if c, ok := hook["command"].(string); ok && strings.TrimSpace(c) != "" {
 			h.Commands = append(h.Commands, c)
+			var limit time.Duration
+			if secs, ok := hook["timeout"].(float64); ok && secs > 0 {
+				limit = time.Duration(secs * float64(time.Second))
+			}
+			h.Timeouts = append(h.Timeouts, limit)
 		}
 	}
 	return h, nil
