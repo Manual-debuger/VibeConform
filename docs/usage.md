@@ -251,10 +251,10 @@ With a version 2 configuration (a top-level `contract:` key), `vibe
 audit` checks the repository against the rules of the contract version
 it declares: 25 rules in contract 1.0.0, in six categories (spec 0051,
 spec 0052). Each rule ends as `pass`, `fail`, `not applicable`, `waived`,
-`cannot decide` or `not run`. This vibe implements the static checks;
-execution checks and probes are not built yet, so a full run reports
-them as "cannot decide" with the issue that adds them (#102–#104, #106),
-and `--static` reports them as "not run".
+`cannot decide` or `not run`. A full run decides every part of every
+rule: the static checks, then the execution checks and probes in a
+temporary probe copy (spec 0053). `--static` reports the execution and
+probe parts as "not run".
 
 ```bash
 vibe audit --static

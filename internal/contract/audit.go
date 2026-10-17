@@ -3,7 +3,6 @@ package contract
 import (
 	"cmp"
 	"context"
-	"fmt"
 	"slices"
 	"time"
 )
@@ -92,11 +91,6 @@ func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, st
 		switch {
 		case staticOnly && part.Kind != Static:
 			po.Result = ResultNotRun
-		case part.Run == nil:
-			po.Result = ResultUndecided
-			po.Findings = []Finding{{
-				Message: fmt.Sprintf("the %s check is not implemented in this vibe; #%d adds it", part.Kind, part.Issue),
-			}}
 		case part.Kind == Static:
 			po.Result, po.Findings = decided(part.Run(env))
 		default:
