@@ -393,8 +393,15 @@ beyond spec 0051.
     decide`), or the `renovate` key of a root `package.json`. Coverage
     holds unless `enabledManagers` leaves out a component's manager or
     `github-actions`. Automerge is enabled by any `automerge: true`, or
-    by an `extends` preset whose name contains "automerge". Other
-    presets are not resolved.
+    by an `extends` preset whose name contains "automerge", except
+    Renovate's built-in presets that do not enable it:
+    `:automergeDisabled` (sets `automerge: false`), `:automergeBranch`,
+    `:automergePr` and `:automergeRequireAllStatusChecks` (they only
+    choose how automerge works), each also as `default:<name>`. A
+    third-party preset of the same name still counts (amended during
+    implementation, approved 2026-10-17: the name match alone failed a
+    repository that turns automerge off). Other presets are not
+    resolved.
 - **R-01 (static part)**: no entrypoint, hook command or CI step calls
   `vibe` (a simple command whose first word is `vibe`), except in a job
   that satisfies C-04. #99 does not list it, but it is static, so this

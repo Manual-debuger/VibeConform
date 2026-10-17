@@ -386,8 +386,9 @@ func readRenovateFile(env *Env, rf renovateFile) (map[string]any, *PartResult) {
 // judgeRenovate decides coverage and automerge for a Renovate
 // configuration. Coverage holds unless enabledManagers leaves out a
 // component's manager or github-actions. Automerge is any automerge:
-// true, or an extends preset whose name contains "automerge". Other
-// presets are not resolved.
+// true, or an extends preset whose name contains "automerge", except
+// Renovate's built-in presets that do not enable it (renovateNotAutomerge).
+// Other presets are not resolved.
 func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) {
 	if raw, ok := cfg["enabledManagers"].([]any); ok {
 		var enabled []string
@@ -423,6 +424,22 @@ func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) {
 	})
 }
 
+// renovateNotAutomerge lists Renovate's built-in presets whose names
+// contain "automerge" but that do not enable it: :automergeDisabled sets
+// automerge to false, and the others only choose how automerge works.
+// ":x" is short for "default:x". A third-party preset of the same name is
+// not one of these and still counts.
+var renovateNotAutomerge = map[string]bool{
+	":automergeDisabled":                      true,
+	"default:automergeDisabled":               true,
+	":automergeBranch":                        true,
+	"default:automergeBranch":                 true,
+	":automergePr":                            true,
+	"default:automergePr":                     true,
+	":automergeRequireAllStatusChecks":        true,
+	"default:automergeRequireAllStatusChecks": true,
+}
+
 // walkRenovate calls found for every place in a Renovate configuration
 // that enables automerge, in a stable order.
 func walkRenovate(v any, at string, found func(at, why string)) {
@@ -439,7 +456,7 @@ func walkRenovate(v any, at string, found func(at, why string)) {
 			case k == "extends":
 				presets, _ := x[k].([]any)
 				for i, p := range presets {
-					if s, ok := p.(string); ok && strings.Contains(strings.ToLower(s), "automerge") {
+					if s, ok := p.(string); ok && strings.Contains(strings.ToLower(s), "automerge") && !renovateNotAutomerge[s] {
 						found(fmt.Sprintf("%s[%d]", sub, i), fmt.Sprintf("extends the automerge preset %q", s))
 					}
 				}

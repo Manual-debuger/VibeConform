@@ -622,6 +622,19 @@ func TestRuleD02(t *testing.T) {
 		{name: "renovate automerge preset", want: "fail",
 			edits:    renovate("renovate.json", `{"extends": ["config:recommended", ":automergeMinor"]}`),
 			findings: []string{`renovate.json: extends the automerge preset ":automergeMinor"`}},
+		{name: "renovate preset that turns automerge off", want: "pass",
+			edits: renovate("renovate.json", `{"extends": ["config:recommended", ":automergeDisabled"]}`)},
+		{name: "renovate presets that only choose how automerge works", want: "pass",
+			edits: renovate("renovate.json", `{"extends": [":automergeBranch", "default:automergePr", ":automergeRequireAllStatusChecks"]}`)},
+		{name: "renovate automerge off beside automerge true still fails", want: "fail",
+			edits:    renovate("renovate.json", `{"extends": [":automergeDisabled"], "packageRules": [{"automerge": true}]}`),
+			findings: []string{"renovate.json: enables automerge (packageRules[0].automerge)"}},
+		{name: "renovate default: spelling of an enabling preset", want: "fail",
+			edits:    renovate("renovate.json", `{"extends": ["default:automergeAll"]}`),
+			findings: []string{`renovate.json: extends the automerge preset "default:automergeAll"`}},
+		{name: "renovate third-party automerge preset counts", want: "fail",
+			edits:    renovate("renovate.json", `{"extends": ["github>acme/renovate-config:automergeDisabled"]}`),
+			findings: []string{`extends the automerge preset "github>acme/renovate-config:automergeDisabled"`}},
 	})
 }
 
