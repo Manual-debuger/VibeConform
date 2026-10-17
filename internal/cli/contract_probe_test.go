@@ -270,7 +270,11 @@ func TestContractAuditNeverWrites(t *testing.T) {
 	)
 	tmp := setTempDir(t)
 	before := treeHash(t, dir)
-	auditProbe(t, dir)
+	// The whole registry, the planted defects of V-01 and V-02 included.
+	r := runVibeAuditSeams(t, contractSeams{}, "--repo-root", dir, "--json")
+	if !strings.Contains(r.stdout, `"V-01"`) {
+		t.Fatalf("the audit printed no report:\n%s\n%s", r.stdout, r.stderr)
+	}
 	after := treeHash(t, dir)
 	if len(before) != len(after) {
 		t.Errorf("file count changed: %d before, %d after", len(before), len(after))

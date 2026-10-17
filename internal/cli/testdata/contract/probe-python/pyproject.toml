@@ -1,0 +1,13 @@
+[project]
+name = "probe"
+version = "0.0.0"
+requires-python = ">=3.10"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
