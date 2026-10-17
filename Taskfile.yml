@@ -77,21 +77,10 @@ tasks:
     cmds:
       - actionlint
 
-  # Called by Claude Code and Codex, not by people: .claude/settings.json
-  # and .codex/hooks.json run "task -x hook:guard" before every shell
-  # command and file edit. No desc, so it stays out of task --list. The -x
-  # in that command matters: without it Task reports the guard's deny
-  # (exit 2) as 201, and both agents treat 201 as allow. The name is
-  # reserved like every task here. See
-  # docs/specs/0021-agent-hooks-task-interface.md.
-  #
-  # "|| exit 2" turns any failure inside the task into a deny rather than
-  # an allow: go run reports a program's exit 2 as 1, and a missing or
-  # broken runtime would otherwise let every tool call through.
-  hook:guard:
-    silent: true
-    cmds:
-      - go run .claude/hooks/guard.go .claude/hooks/policy.json || exit 2
+  # Called by Claude Code, not by people. The PreToolUse guard is vibe-guard
+  # (policy.agent_guard in vibe.yaml), which .claude/settings.json runs
+  # directly, so there is no hook:guard task. See
+  # docs/specs/0053-contract-probes-and-guard.md.
 
   # The other agent hooks (spec 0023). Like hook:guard, agents call these
   # through "task -x hook:<name>", and none has a desc. Exit 2 is the one

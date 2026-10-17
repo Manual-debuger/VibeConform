@@ -67,13 +67,17 @@ the work is done. Both use the language tools only and never need
 
 ## The agent guard
 
-With Claude Code, `task -x hook:guard` runs before every shell command
-and file edit. It refuses a few destructive commands (`rm -rf`,
-`git reset --hard`, `git push --force` and their other spellings) and
-edits to files that look like secrets. It stops accidents. It is not a
-security boundary and does not replace Claude Code's permission rules
-or sandbox. When it refuses a command you need, ask the user to run it
-with `! <command>`.
+With Claude Code, `vibe-guard hook` runs before every shell command
+and file edit (`policy.agent_guard: vibe-guard` in `vibe.yaml`). It
+refuses destructive commands (`rm -rf`, `git reset --hard`,
+`git push --force` and their other spellings), edits to files that look
+like secrets, and edits of `.claude/settings.json`, `.claude/hooks/` and
+its policy. `vibe-guard explain '<command>'` says why. It stops
+accidents. It is not a security boundary and does not replace Claude
+Code's permission rules or sandbox. When it refuses a command you need,
+ask the user to run it with `! <command>`. To change settings or hooks,
+ask the user to run `vibe unlock` in their own terminal; the next Stop
+locks again. Never run `vibe unlock` yourself: it is refused.
 
 ## `vibe.yaml`
 

@@ -2,6 +2,7 @@ standard: prod-go
 version: v1
 policy:
   line_endings: lf
+  agent_guard: vibe-guard
 development:
   workflow: plan-triggered-sdd
   docs_layout: standard
