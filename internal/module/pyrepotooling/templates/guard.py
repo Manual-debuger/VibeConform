@@ -37,9 +37,23 @@ def load_policy(path: str) -> dict:
             policy = json.load(f)
     except (OSError, ValueError) as err:
         raise ValueError(f"reading policy {path}: {err}") from err
-    if not isinstance(policy, dict) or policy.get("version") != 1:
-        version = policy.get("version") if isinstance(policy, dict) else None
-        raise ValueError(f"policy {path} has version {version}; this guard understands version 1")
+    version = policy.get("version") if isinstance(policy, dict) else None
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError(
+            f"policy {path} has version {version}; this guard understands versions 1 and 2"
+        )
+    if version == 2 and "exceptions" in policy:
+        # The contract audit reads this list (spec 0052). This guard does
+        # not apply it yet, so a list with anything in it is an error rather
+        # than an exception silently not honoured.
+        exceptions = policy["exceptions"]
+        if not isinstance(exceptions, list):
+            raise ValueError(f"policy {path}: exceptions is not a list")
+        if exceptions:
+            raise ValueError(
+                f"policy {path}: lists exceptions, which this guard does not apply yet; "
+                f"put each exception in {LOCAL_NAME} next to it instead (spec 0050)"
+            )
     return policy
 
 

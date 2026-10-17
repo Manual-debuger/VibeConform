@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "tools": {
     "command": ["Bash", "PowerShell"],
     "file_path": ["Edit", "MultiEdit", "Write"]
@@ -68,5 +68,6 @@
       "raw": "\"file_path\"\\s*:\\s*\"([^\"]*[/\\\\])?\\.claude[/\\\\]+hooks[/\\\\]+policy(\\.local)?\\.json\"",
       "message": "Blocked: the guard's policy files are the user's to change, an exception above all. Ask the user to edit it themselves (in Claude Code: ! <command>, or their editor)."
     }
-  ]
+  ],
+  "exceptions": []
 }

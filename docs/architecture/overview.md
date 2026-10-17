@@ -221,6 +221,45 @@ Adopted from [Cruft](https://github.com/cruft/cruft):
 - `vibe diff` — human-readable reconciliation preview.
 - `vibe sync` — performs the reconciliation.
 
+## Contract audit
+
+ADR 0025 replaces the template-sync model with a versioned contract of
+rules about properties of a repository (spec 0051). Since spec 0052 the
+static half of that audit exists, in `internal/contract`, beside the
+reconcile code rather than inside it:
+
+```text
+                 vibe audit (internal/cli)
+          reads the configuration's top-level key
+        contract: ↓                          ↓ standard:
+internal/contract                    the old audit: manifest, standard,
+  vibe.yaml version 2                module, resource, reconcile, state
+  the 25 rules of contract 1.0.0
+  static checks of tracked files
+  report model (plain data)
+```
+
+- **Dispatch.** `vibe audit` reads the configuration once and picks the
+  engine from its top-level key: `contract` runs the contract audit,
+  `standard` the old audit, unchanged. Both or neither is an error. `diff`,
+  `sync` and `init` still speak only the old schema.
+- **Dependency direction.** `internal/contract` imports none of the old
+  packages (`reconcile`, `state`, `resource`, `standard`, `module`,
+  `manifest`), so #112 can delete them without touching it.
+  `internal/contract/imports_test.go` enforces that. The CLI imports
+  `internal/contract`, never the reverse, and renders its report model as
+  text or JSON (`internal/cli/contract_*.go`).
+- **Shell parsing.** "Called" means a simple command in the shell parse
+  tree, so `internal/contract` depends on `mvdan.cc/sh/v3/syntax` (ADR
+  0026). `internal/contract/shell.go` is the only file that imports it;
+  every check sees the package's own `Command` and `Word`. Its other
+  third-party imports are ones `vibe` already had: `gopkg.in/yaml.v3`,
+  and `github.com/tailscale/hujson` for Renovate's JSON5 files.
+- **Read-only, tracked files only.** Checks read the working-tree content
+  of files `git ls-files` lists and never write. Execution checks and
+  probes are not built yet (#102–#104, #106); the registry already holds
+  their rules and reports them as not run or not decided.
+
 ## Affected-component graph
 
 Adopted from [Nx](https://nx.dev/):
@@ -322,7 +361,8 @@ internal/
   textregion/               # marker-delimited sections of text files; imports nothing from internal/ (spec 0029)
   atomicfile/               # temp-file + rename writes
   doctor/                   # vibe doctor checks; imports nothing from internal/ (spec 0028)
-  cli/                      # command tree; audit/diff/sync share one plan walk
+  contract/                 # contract audit: vibe.yaml v2, rule registry, static checks; imports none of the old packages (spec 0052)
+  cli/                      # command tree; audit/diff/sync share one plan walk; vibe audit dispatches to contract/
 ```
 
 Since M2, `examples/typescript` and `examples/python` hold real repositories

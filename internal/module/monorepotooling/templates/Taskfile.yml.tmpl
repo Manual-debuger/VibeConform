@@ -179,7 +179,10 @@ tasks:
     cmds:
       - task -s[[range .Components]] [[.ID]]:typecheck [[.ID]]:lint [[.ID]]:test[[end]] 1>&2 || exit 2
 
-  # When the agent ends its turn: the same checks, as a gate. A failure
+  # When the agent ends its turn: the same checks, as a gate. The settings'
+  # Stop hook calls verify:fast itself, so the contract audit sees it
+  # (rule A-05), and runs this only when verify:fast fails:
+  # "task verify:fast 1>&2 </dev/null || task -x hook:done". The failure
   # blocks the stop once. If the agent stops again with the checks still
   # failing (stop_hook_active), the stop goes through, with the failure
   # printed, rather than looping forever on something it can't fix.
@@ -189,12 +192,12 @@ tasks:
       - |
         case "$(cat)" in
           *'"stop_hook_active":true'*|*'"stop_hook_active": true'*)
-            task -s verify:fast 1>&2 && exit 0
             echo "hook:done: verify:fast still fails; this stop was already blocked once, so it goes through." >&2
             exit 0
             ;;
         esac
-        task -s verify:fast 1>&2 || exit 2
+        echo "hook:done: verify:fast fails; fix it before ending the turn." >&2
+        exit 2
 
   verify:
 [[- if .GitHub]]

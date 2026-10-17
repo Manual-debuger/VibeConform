@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -20,6 +21,9 @@ import (
 // read as a Claude Code / Codex style {"hooks": {event: [{hooks: [...]}]}}
 // document.
 var agentConfigs = []string{".claude/settings.json", ".codex/hooks.json"}
+
+// redirection matches a shell redirection word such as 1>&2 or </dev/null.
+var redirection = regexp.MustCompile(`^[0-9]*(<|>|>>|>&|<&)\S*$`)
 
 // TestAgentConfigWiring checks the one dependency between modules that the
 // module model cannot express (spec 0021). claude-config's settings run
@@ -81,19 +85,29 @@ func TestAgentConfigWiring(t *testing.T) {
 				t.Fatalf("parsing Taskfile.yml: %v", err)
 			}
 
-			// Every hook an agent module runs must name a task this
+			// Every hook an agent module runs must name tasks this
 			// standard's Taskfile defines (spec 0023 extends this from
-			// hook:guard to every event).
+			// hook:guard to every event). A command is one Task call, or
+			// several joined by "||", as the Stop hook's verify:fast and
+			// hook:done (spec 0052); a hook:* task is called with -x.
 			for module, paths := range configs {
 				for _, config := range paths {
 					for _, command := range configCommands(t, resources[config]) {
-						name, ok := strings.CutPrefix(command, "task -x ")
-						if !ok {
-							t.Errorf("%s: %s runs %q, which is not a task -x command", module, config, command)
-							continue
-						}
-						if _, ok := tf.Tasks[name]; !ok {
-							t.Errorf("%s: %s runs %q, but Taskfile.yml defines no %s", module, config, command, name)
+						for call := range strings.SplitSeq(command, " || ") {
+							words := slices.DeleteFunc(strings.Fields(call), redirection.MatchString)
+							var name string
+							switch {
+							case len(words) == 3 && words[0] == "task" && words[1] == "-x":
+								name = words[2]
+							case len(words) == 2 && words[0] == "task" && !strings.HasPrefix(words[1], "hook:"):
+								name = words[1]
+							default:
+								t.Errorf("%s: %s runs %q, which is not a task -x hook:<name> command", module, config, call)
+								continue
+							}
+							if _, ok := tf.Tasks[name]; !ok {
+								t.Errorf("%s: %s runs %q, but Taskfile.yml defines no %s", module, config, command, name)
+							}
 						}
 					}
 				}

@@ -1,0 +1,52 @@
+name: Contract
+
+# The contract audit (spec 0052) beside the old one in conformance.yml. It
+# is repository-owned, not generated, so adopters do not receive it, and it
+# is not a required check until #111 makes it one.
+#
+# `vibe audit --static` never reaches a verdict (exit 1): execution checks
+# and probes do not run. The job passes when no MUST rule failed or could
+# not be decided; MUST rules that did not run are expected.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.0"
+
+jobs:
+  audit:
+    name: Contract / audit (static)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Build vibe from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: vibe audit --static
+        run: vibe audit --static --config vibe.v2.yaml || true
+      - name: No MUST rule fails or is undecided
+        run: |
+          vibe audit --static --json --config vibe.v2.yaml > "$RUNNER_TEMP/contract.json" || true
+          jq -e '.schema == 1' "$RUNNER_TEMP/contract.json" > /dev/null
+          bad=$(jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "undecided")) | .id' "$RUNNER_TEMP/contract.json")
+          if [ -n "$bad" ]; then
+            echo "MUST rules that fail or cannot be decided: $bad"
+            exit 1
+          fi
