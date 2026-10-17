@@ -173,6 +173,11 @@ func execution(check string, issue int) Part {
 	return Part{Kind: Execution, Check: check, Issue: issue}
 }
 
+// executionRun is an execution part this vibe implements.
+func executionRun(check string, run CheckFunc) Part {
+	return Part{Kind: Execution, Check: check, Run: run}
+}
+
 func probe(check string, issue int) Part {
 	return Part{Kind: Probe, Check: check, Issue: issue}
 }
@@ -233,8 +238,8 @@ var rules = []Rule{
 			"`git status --porcelain` lists only the planted file, with its content unchanged",
 		Source: "spec 0011",
 		Parts: []Part{
-			execution("in the probe copy with the unformatted-file defect planted, after `fmt-check` runs, "+
-				"`git status --porcelain` lists only the planted file, with its content unchanged", 102),
+			executionRun("in the probe copy with the unformatted-file defect planted, after `fmt-check` runs, "+
+				"`git status --porcelain` lists only the planted file, with its content unchanged", checkV03),
 		},
 	},
 	{
@@ -398,9 +403,9 @@ var rules = []Rule{
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
 			static("a SessionStart hook exists.", checkA07),
-			// Spec 0052, "Further Notes": A-07's execution part has no
-			// ticket yet and belongs with #102's execution checks.
-			execution("running it in the probe copy exits 0, and `git status --porcelain` stays empty.", 102),
+			// Spec 0052, "Further Notes": A-07's execution part belongs
+			// with #102's execution checks.
+			executionRun("running it in the probe copy exits 0, and `git status --porcelain` stays empty.", checkA07Execution),
 		},
 		applies: needsClaude,
 	},
@@ -431,11 +436,11 @@ var rules = []Rule{
 			"lockfile fails.",
 		Source: "specs 0010, 0020",
 		Parts: []Part{
-			execution("per component, by the lockfile found. For `go.sum`: run `go mod tidy`, then "+
+			executionRun("per component, by the lockfile found. For `go.sum`: run `go mod tidy`, then "+
 				"`git diff --exit-code go.mod go.sum`. For `uv.lock`: `uv lock --check`. For `poetry.lock`: "+
 				"`poetry check --lock`. For `pnpm-lock.yaml`: `pnpm install --frozen-lockfile --lockfile-only`. "+
 				"For `package-lock.json`: `npm ci --dry-run`. A component with dependencies and no recognized "+
-				"lockfile fails.", 102),
+				"lockfile fails.", checkD01),
 		},
 	},
 	{
@@ -469,8 +474,8 @@ var rules = []Rule{
 		Source: "principle 3, spec 0017",
 		Parts: []Part{
 			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04.", checkR01),
-			execution("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
-				"are still refused.", 102),
+			executionRun("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
+				"are still refused.", checkR01Execution),
 		},
 	},
 	{

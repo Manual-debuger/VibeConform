@@ -10,10 +10,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/state"
 )
 
 func TestMain(m *testing.M) {
+	// The full audit's R-01 shim is a copy of the running executable,
+	// which here is this test binary.
+	if code, ok := contract.RunAsShim(); ok {
+		os.Exit(code)
+	}
 	// The suite plans repositories in t.TempDir(), which is not a git work
 	// tree, so the real check would only ever warn. Tests of the check
 	// itself call gitCheckIgnored directly or install their own stub.
