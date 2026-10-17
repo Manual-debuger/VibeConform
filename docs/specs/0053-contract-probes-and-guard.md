@@ -402,6 +402,18 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
      `{` (invalid JSON). It is restored afterwards.
 
   A failure names the situation and each case that was not refused.
+- **How A-02 and A-03 run the corpus** (decided during implementation
+  of #103, 2026-10-17). One hook run is a bash and a guard process,
+  about 0.2 seconds on Windows, so one case after another A-02 and
+  A-03 would take minutes. Within each part, the cases with the same
+  unlock state run concurrently, at most eight at a time; the unlock
+  states run one after another, because the marker is one file, and
+  the parts still run one after another. The R-01 shim calls made
+  during these runs are listed under "the PreToolUse hooks during
+  A-02" (or A-03), not under one case. The deny cases whose tool no
+  hook matches are reported in one finding per tool, which names every
+  such case; A-03 reports one finding per situation, which names every
+  case it did not refuse with every hook's exit code.
 - **A-08** (#106). The corpus's A-08 cases, all with guard rule ID
   `guardrail-settings`, run in their unlock states, and the Stop hook
   is checked:
