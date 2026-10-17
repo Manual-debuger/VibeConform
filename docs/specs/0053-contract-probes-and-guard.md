@@ -451,6 +451,43 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   cases (101 deny, 61 allow); the old corpus has 172 since Phase 1
   added policy-version cases. The derived corpus's counts are recorded
   here before merge.
+
+  **Derived counts.** The corpus is `internal/contract/guard_corpus.json`.
+  Derived from the old corpus's 172 cases, it has 117 cases: 75 deny
+  and 42 allow. Dropped: 33 with a `local`, `local_text` or `policy`
+  override, 13 marked "known limitation" (12 allow and 1 deny), 6 with
+  raw `stdin`, 2 for `SomeNewTool`, and 1 more (see below). By guard
+  rule ID (a test keeps this table equal to the corpus; #105 and #106
+  update it when they add cases):
+
+  | Guard rule ID | Deny cases |
+  |---|---|
+  | `rm-rf` | 13 |
+  | `remove-item-recurse-force` | 13 |
+  | `git-reset-hard` | 7 |
+  | `git-clean-fd` | 7 |
+  | `git-push-force` | 6 |
+  | `git-branch-force-delete` | 7 |
+  | `git-discard-worktree` | 13 |
+  | `secret-file` | 6 |
+  | `guard-policy-file` | 3 |
+  | `guardrail-settings` | 0 |
+
+  Decisions made in the derivation:
+  - The one deny case marked "known limitation" (`gh issue create
+    --body 'never run git reset --hard here'`) is dropped with the
+    others. It recorded that the old regex refuses a pattern quoted
+    inside an argument. Keeping it would force a shell-parsing guard to
+    refuse a harmless command.
+  - "known tool missing its field falls back to raw matching" (a `Bash`
+    payload with `script` instead of `command`) is dropped. It tests
+    one guard's input handling, as the `stdin` cases do: `vibe-guard`
+    refuses it under `payload-error`, which is not a contract ID, so no
+    contract rule ID fits it.
+  - A payload keeps only `tool_name` and `tool_input`; the audit adds
+    the other PreToolUse fields. The "Codex-shaped" cases therefore
+    lose their Codex fields but keep their names, as every kept case
+    does, so that they can be traced to the old corpus.
 - **#105 adds** variant spellings the shell parser makes refusable. At
   least: separate and reordered flags (`rm -r -f`, `rm -f -r`,
   `rm --recursive --force`, `git push origin main -f`), quoting
@@ -489,6 +526,23 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   this is that decision.
 - An exception lifts only its own rule. A command that another rule
   also refuses stays refused.
+- **The command decomposition lives in `internal/guardrule` too**, not
+  in `internal/guard` as "Parsing" below implies (decided during
+  implementation, 2026-10-17). Exception matching needs the simple
+  commands and their words, and the audit and `vibe-guard` must find
+  the same ones, so the Bash parsing (`syntax.LangBash`), the
+  PowerShell tokenizer, wrapper stripping, nested parsing to depth 8
+  and the unknown-word reading are in `guardrule`, which therefore
+  imports `mvdan.cc/sh/v3/syntax` (ADR 0025, decision 8; already a
+  dependency). The baseline rules themselves stay in `internal/guard`.
+  How an exception matches a command, in detail: the match is parsed
+  in the command's language as one simple command with no expansion;
+  its first word compares with the command name as a program name (last
+  path element, lower-cased, without `.exe`) and, in PowerShell, also
+  with aliases resolved; the other words compare after quote removal,
+  in PowerShell without case; a word of the command that holds an
+  expansion never matches. For the audit, an exception matches a corpus
+  case when it matches some simple command of the case's command.
 
 ### `vibe-guard` (#105)
 
