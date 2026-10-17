@@ -170,105 +170,71 @@ func TestRuleV01OtherLanguages(t *testing.T) {
 // program's exit code, so the command turns a failure into exit 2.
 func stopHook(step string) string { return goHook(step) + " || exit 2" }
 
-// V-01: verify passes in the probe copy and fails with each planted
-// defect in each component.
-func TestRuleV01(t *testing.T) {
+// The passing and the no-tests cases of V-01, V-02 and A-05 share one
+// audit each: every audit runs verify or verify-fast several times.
+func TestDefectProbes(t *testing.T) {
 	t.Parallel()
-	t.Run("a verify that catches every defect passes", func(t *testing.T) {
+	t.Run("entrypoints and a Stop hook that catch every defect pass", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t), "V-01")
+		rep := auditProbeRules(t, probeFixture(t, stopHooks(stopHook("stop"))), "V-01", "V-02", "A-05")
 		assertPart(t, rep, "V-01", "execution", "pass")
 		assertPart(t, rep, "V-01", "probe", "pass")
+		assertPart(t, rep, "V-02", "probe", "pass")
+		assertPart(t, rep, "A-05", "probe", "pass")
 	})
-	t.Run("verify without the test step fails and names test", func(t *testing.T) {
+	t.Run("a component without tests fails V-01 and leaves V-02 and A-05 undecided", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t,
-			withEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci typecheck]\n")), "V-01")
+		rep := auditProbeRules(t, probeFixture(t, stopHooks(stopHook("stop")), withoutFile("calc/calc_test.go")),
+			"V-01", "V-02", "A-05")
+		assertPart(t, rep, "V-01", "execution", "pass")
+		assertPart(t, rep, "V-01", "probe", "fail", "component . has no tests", "_test.go")
+		assertPart(t, rep, "V-02", "probe", "undecided", "component . has no tests")
+		assertPart(t, rep, "A-05", "probe", "undecided", "no component has tests")
+	})
+}
+
+// The failing cases of V-01, V-02 and A-05. Each audit holds one case of
+// each rule, since every audit runs verify and verify-fast several
+// times; the rules read different entrypoints and hooks, so the cases do
+// not mix.
+func TestDefectProbeFailures(t *testing.T) {
+	t.Parallel()
+	t.Run("verify and verify-fast without the test step, and a Stop hook that never blocks", func(t *testing.T) {
+		t.Parallel()
+		rep := auditProbeRules(t, probeFixture(t, stopHooks(goHook("ok")), withEntrypoints(
+			"  verify: [go run ./ci fmt-check, go run ./ci typecheck]\n"+
+				"  verify-fast: [go run ./ci fmt-check, go run ./ci typecheck]\n")),
+			"V-01", "V-02", "A-05")
+		// #104's done-when: V-01 names "test".
 		assertPart(t, rep, "V-01", "execution", "pass")
 		assertPart(t, rep, "V-01", "probe", "fail", "vibe.yaml", "component .", missed("test"), "calc/vibe_probe_test.go")
 		refuteMissed(t, rep, "format", "static analysis")
+		assertPart(t, rep, "V-02", "probe", "fail", "vibe.yaml", "verify-fast", missed("test"))
+		assertPart(t, rep, "A-05", "probe", "fail", ".claude/settings.json", "no Stop hook exited 2", "calc/vibe_probe_test.go")
 	})
-	t.Run("verify without vet fails and names static analysis", func(t *testing.T) {
+	t.Run("verify without vet, a verify-fast that always fails, and a Stop hook that blocks a continued turn", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t,
-			withEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci test]\n")), "V-01")
+		rep := auditProbeRules(t, probeFixture(t, stopHooks(stopHook("stop-always")), withEntrypoints(
+			"  verify: [go run ./ci fmt-check, go run ./ci test]\n"+
+				"  verify-fast: go run ./ci fail\n")),
+			"V-01", "V-02", "A-05")
 		assertPart(t, rep, "V-01", "probe", "fail", missed("static analysis"), "calc/vibe_probe_static_analysis_test.go")
 		refuteMissed(t, rep, "format", "test")
+		assertPart(t, rep, "V-02", "probe", "undecided", "verify-fast fails without a planted defect")
+		assertPart(t, rep, "A-05", "probe", "fail", ".claude/settings.json", "stop_hook_active true", "exited 2")
 	})
-	t.Run("verify without fmt-check fails and names format", func(t *testing.T) {
+	t.Run("verify without fmt-check, and no Stop hook", func(t *testing.T) {
 		t.Parallel()
 		rep := auditProbeRules(t, probeFixture(t,
-			withEntrypoints("  verify: [go run ./ci typecheck, go run ./ci test]\n")), "V-01")
+			withEntrypoints("  verify: [go run ./ci typecheck, go run ./ci test]\n")), "V-01", "A-05")
 		assertPart(t, rep, "V-01", "probe", "fail", missed("format"), "calc/vibe_probe_format_test.go")
 		refuteMissed(t, rep, "static analysis", "test")
+		assertPart(t, rep, "A-05", "probe", "fail", ".claude/settings.json", "has no Stop hook")
 	})
-	t.Run("a component without tests fails", func(t *testing.T) {
-		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t, withoutFile("calc/calc_test.go")), "V-01")
-		assertPart(t, rep, "V-01", "execution", "pass")
-		assertPart(t, rep, "V-01", "probe", "fail", "component . has no tests", "_test.go")
-	})
-	t.Run("a verify that fails without a defect leaves the probe undecided", func(t *testing.T) {
+	t.Run("a verify that fails without a defect leaves V-01's probe undecided", func(t *testing.T) {
 		t.Parallel()
 		rep := auditProbeRules(t, probeFixture(t, withEntrypoints("  verify: go run ./ci fail\n")), "V-01")
 		assertPart(t, rep, "V-01", "execution", "fail", "exited 1", "failing on purpose")
 		assertPart(t, rep, "V-01", "probe", "undecided", "fails without a planted defect")
-	})
-}
-
-// V-02: verify-fast fails with each planted defect in each component.
-func TestRuleV02(t *testing.T) {
-	t.Parallel()
-	t.Run("a verify-fast that catches every defect passes", func(t *testing.T) {
-		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t), "V-02")
-		assertPart(t, rep, "V-02", "probe", "pass")
-	})
-	t.Run("a verify-fast that misses a defect fails and names it", func(t *testing.T) {
-		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t,
-			withEntrypoints("  verify-fast: [go run ./ci fmt-check, go run ./ci typecheck]\n")), "V-02")
-		assertPart(t, rep, "V-02", "probe", "fail", "vibe.yaml", "verify-fast", missed("test"))
-	})
-	t.Run("a verify-fast that always fails cannot decide", func(t *testing.T) {
-		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t, withEntrypoints("  verify-fast: go run ./ci fail\n")), "V-02")
-		assertPart(t, rep, "V-02", "probe", "undecided", "verify-fast fails without a planted defect")
-	})
-	t.Run("a component without tests cannot decide", func(t *testing.T) {
-		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t, withoutFile("calc/calc_test.go")), "V-02")
-		assertPart(t, rep, "V-02", "probe", "undecided", "component . has no tests")
-	})
-}
-
-// A-05, probe part: with a failing test planted, a Stop hook blocks the
-// turn, and lets a continued turn end.
-func TestRuleA05Probe(t *testing.T) {
-	t.Parallel()
-	t.Run("a Stop hook that blocks once passes", func(t *testing.T) {
-		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t, stopHooks(stopHook("stop"))), "A-05")
-		assertPart(t, rep, "A-05", "probe", "pass")
-	})
-	t.Run("a Stop hook that never blocks fails", func(t *testing.T) {
-		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t, stopHooks(goHook("ok"))), "A-05")
-		assertPart(t, rep, "A-05", "probe", "fail", ".claude/settings.json", "no Stop hook exited 2", "calc/vibe_probe_test.go")
-	})
-	t.Run("a Stop hook that blocks a continued turn fails", func(t *testing.T) {
-		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t, stopHooks(stopHook("stop-always"))), "A-05")
-		assertPart(t, rep, "A-05", "probe", "fail", ".claude/settings.json", "stop_hook_active true", "exited 2")
-	})
-	t.Run("no Stop hook fails", func(t *testing.T) {
-		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t), "A-05")
-		assertPart(t, rep, "A-05", "probe", "fail", ".claude/settings.json", "has no Stop hook")
-	})
-	t.Run("no component with tests cannot decide", func(t *testing.T) {
-		t.Parallel()
-		rep := auditProbeRules(t, probeFixture(t, stopHooks(stopHook("stop")), withoutFile("calc/calc_test.go")), "A-05")
-		assertPart(t, rep, "A-05", "probe", "undecided", "no component has tests")
 	})
 }
