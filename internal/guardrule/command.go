@@ -267,8 +267,19 @@ func scriptOf(shell Shell, words []Word) string {
 	for i, w := range words {
 		parts[i] = strings.ReplaceAll(w.Text, ExpansionMark, mark)
 	}
-	return strings.Join(parts, " ")
+	script := strings.Join(parts, " ")
+	if shell == ShellPowerShell && strings.HasPrefix(script, psUnknown) {
+		// A PowerShell statement that starts with a variable is an
+		// expression, not a command. The unknown text can be any
+		// command, so it is invoked: & $x, a command whose name is
+		// dynamic.
+		script = psUnknownCommand + script[len(psUnknown):]
+	}
+	return script
 }
+
+// psUnknownCommand is a PowerShell command whose name is not known.
+const psUnknownCommand = "& " + psUnknown
 
 var posixShells = []string{"bash", "sh", "zsh", "dash", "ksh", "ash", "mksh"}
 
@@ -367,7 +378,7 @@ func powerShellScript(name string, args []Word) (nestedScript, bool) {
 			}
 			return commandArgs(args[i+1:], label)
 		case p == "e" || p == "ec" || (len(p) >= 2 && abbreviates(p, "encodedcommand")):
-			return nestedScript{ShellPowerShell, psUnknown, label}, true
+			return nestedScript{ShellPowerShell, psUnknownCommand, label}, true
 		case p == "f" || (len(p) >= 2 && abbreviates(p, "file")):
 			return nestedScript{}, false
 		case psTakesArg(p):
