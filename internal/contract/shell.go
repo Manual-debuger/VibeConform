@@ -158,6 +158,41 @@ func ParseSimpleCommand(src string) (Command, error) {
 	return commandOf(call), nil
 }
 
+// commandAssignments returns the leading assignments of a simple command
+// as NAME=value. A value with an expansion, an array or an append needs a
+// shell, and why says so.
+func commandAssignments(src string) (assigns []string, why string) {
+	f, err := parseShell(src)
+	if err != nil || len(f.Stmts) != 1 {
+		return nil, "it is not one simple command"
+	}
+	call, ok := f.Stmts[0].Cmd.(*syntax.CallExpr)
+	if !ok {
+		return nil, "it is not one simple command"
+	}
+	for _, a := range call.Assigns {
+		if a.Append || a.Array != nil || a.Index != nil || a.Name == nil {
+			return nil, fmt.Sprintf("the assignment to %s is not NAME=value", assignName(a))
+		}
+		val := Word{Literal: true}
+		if a.Value != nil {
+			val = wordOf(a.Value)
+		}
+		if !val.Literal {
+			return nil, fmt.Sprintf("the assignment to %s holds a parameter expansion or command substitution", a.Name.Value)
+		}
+		assigns = append(assigns, a.Name.Value+"="+val.Text)
+	}
+	return assigns, ""
+}
+
+func assignName(a *syntax.Assign) string {
+	if a.Name == nil {
+		return "a variable"
+	}
+	return a.Name.Value
+}
+
 func describeCommand(cmd syntax.Command) string {
 	switch c := cmd.(type) {
 	case *syntax.BinaryCmd:

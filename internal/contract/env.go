@@ -25,6 +25,9 @@ type Env struct {
 	hookMgrs       *[]*hookManager
 	claudeSettings *parsedClaudeSettings
 	notes          []string
+	// probe is the probe copy while the execution and probe parts run,
+	// and nil otherwise.
+	probe *probeSession
 }
 
 type fileEntry struct {
