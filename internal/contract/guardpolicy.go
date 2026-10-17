@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
+
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
 // The guard policy as A-04 and the report see it (spec 0052,
@@ -17,13 +18,6 @@ const (
 	// 0050). The report lists them; no rule judges them in Phase 1.
 	localPolicyFile = ".claude/hooks/policy.local.json"
 )
-
-// guardRuleIDs are the baseline guard rules of contract 1.0.0 (spec 0051,
-// "The guard corpus"). A guard exception must name one of them.
-var guardRuleIDs = []string{
-	"rm-rf", "remove-item-recurse-force", "git-reset-hard", "git-clean-fd", "git-push-force",
-	"git-branch-force-delete", "git-discard-worktree", "secret-file", "guard-policy-file", "guardrail-settings",
-}
 
 // guardPolicy is policy.json read as A-04 reads it: an object whose
 // version and exceptions are the contract's, and whose other keys are
@@ -114,9 +108,9 @@ func checkA04(env *Env) PartResult {
 			continue
 		}
 		rule, _ := ex["rule"].(string)
-		if !slices.Contains(guardRuleIDs, rule) {
+		if !guardrule.IsContractID(rule) {
 			fail(fmt.Sprintf("%s.rule %s is not a guard rule ID", at, jsonText(ex["rule"])),
-				"name one of the guard rule IDs: "+strings.Join(guardRuleIDs, ", "))
+				"name one of the guard rule IDs: "+strings.Join(guardrule.IDs, ", "))
 		}
 		if m, _ := ex["match"].(string); m == "" {
 			fail(at+".match is empty", "set match to what the exception lets through")
