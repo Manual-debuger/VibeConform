@@ -166,10 +166,20 @@ func runVibeAuditRules(t *testing.T, rules []contract.Rule, args ...string) audi
 }
 
 // runVibeAuditProbe runs vibe audit with the probe runs in this
-// process's environment, so they find the tools installed here.
+// process's environment, so they find the tools installed here. It runs
+// every rule but V-01 and V-02: their defect probes run verify and
+// verify-fast seven times each, which would multiply the time of every
+// probe test. contract_defects_test.go tests them, and
+// TestContractAuditNeverWrites runs the whole registry.
 func runVibeAuditProbe(t *testing.T, args ...string) auditResult {
 	t.Helper()
-	return runVibeAuditSeams(t, contractSeams{}, args...)
+	var rules []contract.Rule
+	for _, r := range contract.Rules() {
+		if r.ID != "V-01" && r.ID != "V-02" {
+			rules = append(rules, r)
+		}
+	}
+	return runVibeAuditSeams(t, contractSeams{rules: rules}, args...)
 }
 
 // emptyProbeEnv is this process's environment with PATH set to an empty

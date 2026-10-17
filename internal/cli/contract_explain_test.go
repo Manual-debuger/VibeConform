@@ -77,6 +77,44 @@ func TestAuditExplainContent(t *testing.T) {
 	}
 }
 
+// --explain V-01 and V-02 print the planted defect samples exactly
+// (spec 0053, "Planted defects"), so that a probe can be reproduced by
+// hand.
+func TestAuditExplainDefectSamples(t *testing.T) {
+	for _, id := range []string{"V-01", "V-02"} {
+		t.Run(id, func(t *testing.T) {
+			r := runVibeAudit(t, "--explain", id)
+			assertExit(t, r, 0)
+			for _, want := range []string{
+				"Planted defects:",
+				"Go, format: vibe_probe_format_test.go",
+				"Go, static analysis: vibe_probe_static_analysis_test.go",
+				"Go, test: vibe_probe_test.go",
+				"Python, format: vibe_probe_format.py",
+				"Python, static analysis: vibe_probe_static_analysis.py",
+				"Python, test: vibe_probe_test.py",
+				"TypeScript, format: vibe_probe_format.ts",
+				"TypeScript, static analysis: vibe_probe_static_analysis.ts",
+				"TypeScript, test: vibe_probe.test.ts",
+				"    // Planted by vibe audit: a test that fails (the test defect).\n" +
+					"\n" +
+					"    package {{package}}\n" +
+					"\n" +
+					"    import \"testing\"\n" +
+					"\n" +
+					"    func TestVibeProbe(t *testing.T) { t.Fatal(\"planted by vibe audit: this test fails\") }\n",
+				"    # Planted by vibe audit: a reference to an undefined name (the static-analysis defect).\n" +
+					"    def vibe_probe() -> int:\n" +
+					"        return vibe_probe_undefined_name\n",
+			} {
+				if !strings.Contains(r.stdout, want) {
+					t.Errorf("--explain %s does not show %q:\n%s", id, want, r.stdout)
+				}
+			}
+		})
+	}
+}
+
 // --explain A-02 and A-03 print the guard corpus's counts by guard rule
 // ID (spec 0053, "Report and CLI"). The expected counts are taken from
 // the corpus data.

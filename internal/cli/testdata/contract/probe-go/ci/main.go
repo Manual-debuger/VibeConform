@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"go/format"
 	"io/fs"
@@ -28,7 +29,10 @@ func main() {
 	case "typecheck":
 		os.Exit(run("go", "vet", "./..."))
 	case "test":
-		os.Exit(run("go", "test", "./..."))
+		// go test runs part of go vet by itself, printf included; the
+		// fixture turns that off so that typecheck alone catches the
+		// static-analysis defect and a verify without it misses it.
+		os.Exit(run("go", "test", "-vet=off", "./..."))
 	case "ok":
 		fmt.Println("ok")
 	case "fail":
@@ -38,6 +42,10 @@ func main() {
 		time.Sleep(10 * time.Minute)
 	case "call-vibe":
 		os.Exit(run("vibe", "version"))
+	case "stop":
+		os.Exit(stop(true))
+	case "stop-always":
+		os.Exit(stop(false))
 	case "session-start":
 		fmt.Println("facts: this is the probe fixture")
 	case "session-start-write":
@@ -103,6 +111,27 @@ func run(name string, args ...string) int {
 			return exit.ExitCode()
 		}
 		return 1
+	}
+	return 0
+}
+
+// stop is a Stop hook: it runs the verify-fast steps and exits 2 when one
+// fails. With honorActive, a payload with stop_hook_active true exits 0
+// at once.
+func stop(honorActive bool) int {
+	var payload struct {
+		StopHookActive bool `json:"stop_hook_active"`
+	}
+	if err := json.NewDecoder(os.Stdin).Decode(&payload); err != nil {
+		fmt.Fprintln(os.Stderr, "no Stop payload:", err)
+		return 1
+	}
+	if honorActive && payload.StopHookActive {
+		return 0
+	}
+	if formatFiles(false) != 0 || run("go", "vet", "./...") != 0 || run("go", "test", "-vet=off", "./...") != 0 {
+		fmt.Fprintln(os.Stderr, "verify-fast failed")
+		return 2
 	}
 	return 0
 }

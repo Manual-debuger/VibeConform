@@ -31,22 +31,41 @@ type defectSample struct {
 	Content string
 }
 
-// defectSamples holds the samples by language and kind. #104 adds the
-// static-analysis and test samples.
+// defectKinds lists the defect kinds in the order the probes plant them.
+var defectKinds = []defectKind{defectFormat, defectStaticAnalysis, defectTest}
+
+// defectSamples holds the samples by language and kind. Spec 0053
+// ("Planted defects") quotes each one; change both together.
 var defectSamples = map[string]map[defectKind]defectSample{
 	LanguageGo: {
-		// A test file, so that it may use the package clause of an
-		// external test package; gofmt rewrites the spacing.
+		// Test files, so that they may use the package clause of an
+		// external test package; gofmt rewrites the spacing, go vet
+		// reports the Printf call.
 		defectFormat: {Name: "vibe_probe_format_test.go", Content: "// Planted by vibe audit: an unformatted file (the format defect).\n\n" +
 			"package {{package}}\n\nfunc  vibeProbeFormat()  {}\n"},
+		defectStaticAnalysis: {Name: "vibe_probe_static_analysis_test.go", Content: "// Planted by vibe audit: a Printf call whose arguments do not match its format\n" +
+			"// (the static-analysis defect).\n\n" +
+			"package {{package}}\n\nimport \"fmt\"\n\n" +
+			"func vibeProbeStaticAnalysis() { fmt.Printf(\"%d\\n\", \"vibe audit\") }\n"},
+		defectTest: {Name: "vibe_probe_test.go", Content: "// Planted by vibe audit: a test that fails (the test defect).\n\n" +
+			"package {{package}}\n\nimport \"testing\"\n\n" +
+			"func TestVibeProbe(t *testing.T) { t.Fatal(\"planted by vibe audit: this test fails\") }\n"},
 	},
 	LanguagePython: {
 		defectFormat: {Name: "vibe_probe_format.py", Content: "# Planted by vibe audit: an unformatted file (the format defect).\n" +
 			"vibe_probe = [1,2 ,3]\n"},
+		defectStaticAnalysis: {Name: "vibe_probe_static_analysis.py", Content: "# Planted by vibe audit: a reference to an undefined name (the static-analysis defect).\n" +
+			"def vibe_probe() -> int:\n    return vibe_probe_undefined_name\n"},
+		defectTest: {Name: "vibe_probe_test.py", Content: "# Planted by vibe audit: a test that fails (the test defect).\n" +
+			"def test_vibe_probe() -> None:\n    assert False, \"planted by vibe audit: this test fails\"\n"},
 	},
 	LanguageTypeScript: {
 		defectFormat: {Name: "vibe_probe_format.ts", Content: "// Planted by vibe audit: an unformatted file (the format defect).\n" +
 			"export const vibeProbe = [1,2 ,3]\n"},
+		defectStaticAnalysis: {Name: "vibe_probe_static_analysis.ts", Content: "// Planted by vibe audit: a reference to an undefined name (the static-analysis defect).\n" +
+			"export const vibeProbe: number = vibeProbeUndefinedName;\n"},
+		defectTest: {Name: "vibe_probe.test.ts", Content: "// Planted by vibe audit: a test file that throws when it is loaded (the test defect).\n" +
+			"export {};\n\nthrow new Error(\"planted by vibe audit: this test fails\");\n"},
 	},
 }
 

@@ -1,0 +1,9 @@
+contract: 1.0.0
+platforms: [linux, windows]
+agents: []
+entrypoints:
+  setup: pnpm install --frozen-lockfile
+  verify: [pnpm exec prettier --check "**/*.ts", pnpm exec tsc, pnpm exec vitest run]
+  verify-fast: [pnpm exec prettier --check "**/*.ts", pnpm exec tsc, pnpm exec vitest run]
+  fmt: pnpm exec prettier --write "**/*.ts"
+  fmt-check: pnpm exec prettier --check "**/*.ts"
