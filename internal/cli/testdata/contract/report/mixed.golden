@@ -43,7 +43,7 @@ Cannot decide
   A-07  SHOULD  Session start injects facts and changes nothing
         .claude/settings.json: cannot decide: the SessionStart hook (task -x hook:context): no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-08  MUST    An agent changes guardrail settings only after a person unlocks them
-        the probe check is not implemented in this vibe; #106 adds it
+        .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   R-01  MUST    Everything but the audit works without vibe
         vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
         .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)

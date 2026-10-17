@@ -424,10 +424,10 @@ var rules = []Rule{
 		Source:            "ADR 0025",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
-			probe("a `Write` to `.claude/settings.json` and an `Edit` under `.claude/hooks/` are refused with no "+
+			probeRun("a `Write` to `.claude/settings.json` and an `Edit` under `.claude/hooks/` are refused with no "+
 				"marker, allowed with a valid marker, and refused with an expired marker. A `Bash` call that runs "+
 				"`vibe unlock`, and any `Write` or `Bash` that creates the marker, are refused. After the Stop hook "+
-				"runs, the marker is gone.", 106),
+				"runs, the marker is gone.", checkA08),
 		},
 		applies: needsClaude,
 	},
