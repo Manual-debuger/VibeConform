@@ -128,6 +128,11 @@ func TestRedirectTargets(t *testing.T) {
 	expect(t, guardrule.ShellBash, "> f", " >f")
 	expect(t, guardrule.ShellPowerShell, "Get-Date > .git/vibe-unlock", "Get-Date >.git/vibe-unlock")
 	expect(t, guardrule.ShellPowerShell, "Get-Date 2>&1 | Out-File x", "Get-Date", "Out-File x")
+	// An expression's output redirected to a file writes the file too:
+	// a redirect-only command, as in Bash.
+	expect(t, guardrule.ShellPowerShell, `'x' > .git\vibe-unlock`, ` >.git\vibe-unlock`)
+	expect(t, guardrule.ShellPowerShell, `$t >> f; 1 *> g`, ` >f`, ` >g`)
+	expect(t, guardrule.ShellPowerShell, `(Get-Date) 2>&1`, `Get-Date`)
 }
 
 func TestWrappersAreStripped(t *testing.T) {

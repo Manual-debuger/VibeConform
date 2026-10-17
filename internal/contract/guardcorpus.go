@@ -126,6 +126,8 @@ func checkGuardCase(c GuardCase, seen map[string]bool) error {
 		return errors.New("a deny case has no rule")
 	case !guardrule.IsContractID(c.Rule):
 		return fmt.Errorf("rule %q is not a guard rule ID", c.Rule)
+	case c.Rule == guardrule.GuardrailSettings:
+		// A file edit of the settings, or a command that unlocks (A-08).
 	case guardrule.IsPathRule(c.Rule) != guardrule.IsEditTool(tool):
 		return fmt.Errorf("rule %s does not apply to %s calls", c.Rule, tool)
 	}

@@ -26,46 +26,67 @@ type commandRule struct {
 	why string
 	// match reports whether the rule refuses the simple command.
 	match func(c gr.Command) bool
+	// fixed rules are refused even when an exception matches.
+	fixed bool
 }
 
 type pathRule struct {
-	id    string
-	why   string
-	match func(p string) bool
+	id  string
+	why string
+	// match reports whether the rule refuses an edit of p in g's
+	// repository.
+	match func(g *Guard, p string) bool
+	// fixed rules are refused even when an exception matches.
+	fixed bool
 }
 
 const askUser = "; ask the user to run it themselves (in Claude Code: ! <command>)"
 
 var (
-	rmRF = commandRule{gr.RmRf, "rm with -r and -f deletes a directory tree without asking" + askUser, matchRmRF}
+	rmRF = commandRule{gr.RmRf, "rm with -r and -f deletes a directory tree without asking" + askUser, matchRmRF, false}
 
 	removeItemRF = commandRule{gr.RemoveItemRecurseForce,
-		"Remove-Item with -Recurse and -Force deletes a directory tree without asking" + askUser, matchRemoveItemRF}
+		"Remove-Item with -Recurse and -Force deletes a directory tree without asking" + askUser, matchRemoveItemRF, false}
 
 	gitResetHard = commandRule{gr.GitResetHard, "git reset --hard discards uncommitted work" + askUser,
-		gitRule("reset", matchResetHard)}
+		gitRule("reset", matchResetHard), false}
 
 	gitCleanFD = commandRule{gr.GitCleanFD, "git clean with -f and -d deletes untracked files and directories" + askUser,
-		gitRule("clean", matchCleanFD)}
+		gitRule("clean", matchCleanFD), false}
 
 	gitPushForce = commandRule{gr.GitPushForce,
 		"git push --force (or -f, or a +refspec) can overwrite remote history; --force-with-lease is allowed" + askUser,
-		gitRule("push", matchPushForce)}
+		gitRule("push", matchPushForce), false}
 
 	gitBranchForceDelete = commandRule{gr.GitBranchForceDelete,
 		"git branch -D (or --delete --force) deletes a branch that may not be merged" + askUser,
-		gitRule("branch", matchBranchForceDelete)}
+		gitRule("branch", matchBranchForceDelete), false}
 
 	gitDiscardWorktree = commandRule{gr.GitDiscardWorktree,
 		"git restore . (or git checkout -- .) discards uncommitted changes in the whole working tree" + askUser,
-		matchDiscardWorktree}
+		matchDiscardWorktree, false}
 
 	secretFile = pathRule{gr.SecretFile,
-		"this looks like a secret or credential file; ask the user to edit it themselves", matchSecretFile}
+		"this looks like a secret or credential file; ask the user to edit it themselves",
+		func(_ *Guard, p string) bool { return matchSecretFile(p) }, false}
 
 	guardPolicyFile = pathRule{gr.GuardPolicyFile,
 		"the guard's policy files are the user's to change, an exception above all; ask the user to edit it themselves",
-		matchGuardPolicyFile}
+		func(_ *Guard, p string) bool { return matchGuardPolicyFile(p) }, false}
+
+	guardrailSettings = pathRule{gr.GuardrailSettings,
+		".claude/settings.json and .claude/hooks/ change only after the user unlocks them; " +
+			"ask the user to run vibe unlock in their own terminal",
+		func(g *Guard, p string) bool { return matchGuardrailSettings(p) && !g.unlocked() }, false}
+
+	unlockMarker = pathRule{gr.GuardrailSettings,
+		"only the user unlocks the guardrail settings, with vibe unlock in their own terminal; the unlock marker is theirs to write",
+		func(g *Guard, p string) bool { return g.isMarker(p) }, true}
+
+	// selfUnlock refuses a command that runs vibe unlock or names the
+	// unlock marker, whatever the marker says (A-08).
+	selfUnlock = commandRule{gr.GuardrailSettings,
+		"only the user unlocks the guardrail settings, with vibe unlock in their own terminal", matchSelfUnlock, true}
 )
 
 // commandRules lists the command rules in the order a command is checked
@@ -73,7 +94,7 @@ var (
 // the rm program elsewhere, so a PowerShell rm is read both ways, as
 // Remove-Item first.
 var commandRules = []commandRule{
-	rmRF, removeItemRF, gitResetHard, gitCleanFD, gitPushForce, gitBranchForceDelete, gitDiscardWorktree,
+	rmRF, removeItemRF, gitResetHard, gitCleanFD, gitPushForce, gitBranchForceDelete, gitDiscardWorktree, selfUnlock,
 }
 
 func commandRulesFor(shell gr.Shell) []commandRule {
@@ -89,7 +110,9 @@ func commandRulesFor(shell gr.Shell) []commandRule {
 	return out
 }
 
-var pathRules = []pathRule{secretFile, guardPolicyFile}
+// pathRules are checked in order: guard-policy-file comes before
+// guardrail-settings, so an unlock never opens policy.json.
+var pathRules = []pathRule{secretFile, guardPolicyFile, unlockMarker, guardrailSettings}
 
 // posixArgs is a POSIX-style argument list read by getopt's conventions:
 // short options cluster (-rf), long options may be abbreviated and carry

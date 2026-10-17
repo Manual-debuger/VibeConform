@@ -568,9 +568,10 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   override, 13 marked "known limitation" (12 allow and 1 deny), 6 with
   raw `stdin`, 2 for `SomeNewTool`, and 1 more (see below). #105 then
   added 108 cases, named "variant (#105): …" and "near miss (#105): …":
-  89 deny and 19 allow. The corpus now has 225 cases: 164 deny and 61
-  allow. By guard rule ID (a test keeps this table equal to the corpus;
-  #106 updates it when it adds cases):
+  89 deny and 19 allow. #106 added 38 cases, named "A-08 (#106): …",
+  "unlock (#106): …" and "near miss (#106): …": 31 deny and 7 allow.
+  The corpus now has 263 cases: 195 deny and 68 allow. By guard rule ID
+  (a test keeps this table equal to the corpus):
 
   | Guard rule ID | Deny cases |
   |---|---|
@@ -582,8 +583,8 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   | `git-branch-force-delete` | 13 |
   | `git-discard-worktree` | 22 |
   | `secret-file` | 6 |
-  | `guard-policy-file` | 3 |
-  | `guardrail-settings` | 0 |
+  | `guard-policy-file` | 5 |
+  | `guardrail-settings` | 29 |
 
   Decisions made in the derivation:
   - The one deny case marked "known limitation" (`gh issue create
@@ -600,6 +601,15 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     the other PreToolUse fields. The "Codex-shaped" cases therefore
     lose their Codex fields but keep their names, as every kept case
     does, so that they can be traced to the old corpus.
+  - "guard policy: a backup next to it is allowed" (a `Write` of
+    `.claude/hooks/policy.local.json.bak`) is a path under
+    `.claude/hooks/`, which `guardrail-settings` refuses without an
+    unlock. #106 gives it `unlock: valid`, so it still tests that
+    `guard-policy-file` does not refuse the backup.
+  - `guardrail-settings` is a path rule for exceptions, but its deny
+    cases may be `Bash` or `PowerShell` calls: A-08's self-unlock cases
+    (`vibe unlock`, a command that writes the marker) are refused under
+    it. The corpus accepts that rule on every tool.
 - **#105 adds** variant spellings the shell parser makes refusable. At
   least: separate and reordered flags (`rm -r -f`, `rm -f -r`,
   `rm --recursive --force`, `git push origin main -f`), quoting
@@ -754,6 +764,26 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   - a command that names `vibe-unlock` as a word or inside a word, such
     as a redirection target, `touch`, `cp`, `mv`, `tee`, `Set-Content`
     or `Out-File`.
+
+  Decided while building it (#106):
+  - These three always-refused cases are refused under
+    `guardrail-settings`, and no exception lifts them: an exception
+    for `guardrail-settings` lifts only edits of settings and hooks.
+    (The audit's A-08 counts no exception at all.)
+  - A `vibe` whose first word after its flags holds an expansion
+    (`vibe $cmd`) may be `vibe unlock`, so it is refused too. `go run
+    …/cmd/vibe unlock` is not recognised.
+  - The marker's name and the `.git` element are compared without
+    case. A path is the marker when its last element is `vibe-unlock`
+    and an element above it is `.git`, or when its directory is the
+    Git directory or the common Git directory (a bare common directory
+    such as `repo.git`).
+  - The guard's settings and hooks match is case-insensitive, as
+    `guard-policy-file` is: `.claude/settings.json` and any path with
+    an element after `.claude/hooks/`, anywhere in the path.
+  - A PowerShell expression redirected to a file (`'x' > f`) is a
+    redirect-only command in `internal/guardrule`, as `> f` is in Bash.
+    Before, the PowerShell tokenizer skipped it.
 - **`policy.json` version 2.** The contract reads only `version` and
   `exceptions` (spec 0051). `vibe-guard` also reads:
   - `mode`: `enforce` (the default) or `observe`;
@@ -805,7 +835,9 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   at `--repo-root`. The file holds one line: the expiry, in RFC 3339
   UTC (spec 0051). The command prints the expiry and that the agent's
   next Stop will lock again. Running it again replaces the expiry. To
-  lock early, run `vibe-guard relock`.
+  lock early, run `vibe-guard relock`. An N out of range, or a
+  `--repo-root` where `git rev-parse` fails, is an error and writes
+  nothing. The expiry is written to the second.
 - The marker lives in the common Git directory, so every linked
   worktree of the repository shares one unlock.
 - `vibe unlock` is meant for a person's own terminal. A `Bash` or
