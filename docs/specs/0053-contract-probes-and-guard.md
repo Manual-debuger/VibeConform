@@ -1,7 +1,7 @@
 # Spec 0053: Contract audit, probes and the reference guard (Phase 2)
 
 Status: draft (2026-10-17). Tickets #102, #103, #104, #105, #106
-(milestone "Contract v1 · Phase 2: Probes and guard"). Builds on spec
+(milestone "Contract v1 · Phase 2: Probes and guard"), spec issue #116. Builds on spec
 0051 (contract v1.0.0), spec 0052 (Phase 1, static checks), ADR 0025 and
 ADR 0026. "Qn" refers to the grilling questions the tickets cite. Where
 this spec and spec 0051 disagree, spec 0051 wins, and the disagreement
