@@ -178,6 +178,11 @@ func probe(check string, issue int) Part {
 	return Part{Kind: Probe, Check: check, Issue: issue}
 }
 
+// probeRun is a probe part this vibe implements.
+func probeRun(check string, run CheckFunc) Part {
+	return Part{Kind: Probe, Check: check, Run: run}
+}
+
 func needsWindows(cfg *Config) (bool, string) {
 	if slices.Contains(cfg.Platforms, PlatformWindows) {
 		return true, ""
@@ -336,9 +341,9 @@ var rules = []Rule{
 		Source:            "specs 0012, 0047",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
-			probe("every corpus case is fed to every PreToolUse hook command that matches its tool. A deny case "+
+			probeRun("every corpus case is fed to every PreToolUse hook command that matches its tool. A deny case "+
 				"is satisfied as described under \"Guard policy and exceptions\". Every allow case must be allowed. "+
-				"A hook \"refuses\" by exiting 2.", 103),
+				"A hook \"refuses\" by exiting 2.", checkA02),
 		},
 		applies: needsClaude,
 	},
@@ -350,8 +355,8 @@ var rules = []Rule{
 		Source:            "spec 0021",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
-			probe("every deny case is still refused in two situations: with `PATH` reduced to the operating "+
-				"system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON", 103),
+			probeRun("every deny case is still refused in two situations: with `PATH` reduced to the operating "+
+				"system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON", checkA03),
 		},
 		applies: needsClaude,
 	},

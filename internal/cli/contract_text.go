@@ -43,6 +43,11 @@ func writeContractText(w io.Writer, rep *contract.Report, vibeVersion string) er
 	}
 	writeSection(&b, "Guard exceptions", rep.GuardExceptions, func(g contract.GuardException) {
 		fmt.Fprintf(&b, "  %s \"%s\"%s\n", g.Rule, g.Match, reasonSuffix(g.Reason))
+		for _, u := range rep.GuardExceptionUses {
+			if u.Rule == g.Rule && u.Match == g.Match {
+				fmt.Fprintf(&b, "    let through: %s\n", u.Case)
+			}
+		}
 	})
 	writeSection(&b, "Local guardrail adjustments", rep.LocalAdjustments, func(l contract.LocalAdjustment) {
 		kind := l.Kind

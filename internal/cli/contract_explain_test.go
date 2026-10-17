@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
 // --explain prints what the registry knows about one rule (spec 0052,
@@ -110,5 +112,41 @@ func TestAuditExplainDefectSamples(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// --explain A-02 and A-03 print the guard corpus's counts by guard rule
+// ID (spec 0053, "Report and CLI"). The expected counts are taken from
+// the corpus data.
+func TestAuditExplainGuardCorpusCounts(t *testing.T) {
+	deny, allow := 0, 0
+	byRule := map[string]int{}
+	for _, c := range contract.GuardCorpus() {
+		if c.Want == contract.WantDeny {
+			deny++
+			byRule[c.Rule]++
+		} else {
+			allow++
+		}
+	}
+	for _, id := range []string{"A-02", "A-03"} {
+		t.Run(id, func(t *testing.T) {
+			r := runVibeAudit(t, "--explain", id)
+			assertExit(t, r, 0)
+			want := []string{fmt.Sprintf("\nGuard corpus:\n  %d cases: %d deny and %d allow. Deny cases by guard rule ID:\n",
+				deny+allow, deny, allow)}
+			for _, rule := range guardrule.IDs {
+				want = append(want, fmt.Sprintf("\n  %-26s %3d\n", rule, byRule[rule]))
+			}
+			for _, w := range want {
+				if !strings.Contains(r.stdout, w) {
+					t.Errorf("--explain %s lacks %q:\n%s", id, w, r.stdout)
+				}
+			}
+		})
+	}
+	r := runVibeAudit(t, "--explain", "A-04")
+	if strings.Contains(r.stdout, "Guard corpus") {
+		t.Errorf("--explain A-04 prints the corpus:\n%s", r.stdout)
 	}
 }

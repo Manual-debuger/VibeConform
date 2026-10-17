@@ -43,16 +43,18 @@ func verdictError(rep *contract.Report) error {
 const contractJSONSchema = 1
 
 type jsonContractReport struct {
-	Schema           int                            `json:"schema"`
-	Vibe             string                         `json:"vibe"`
-	Contract         jsonContractVersions           `json:"contract"`
-	StaticOnly       bool                           `json:"static_only"`
-	Verdict          contract.Verdict               `json:"verdict"`
-	Reason           string                         `json:"reason"`
-	Summary          map[contract.Level]jsonSummary `json:"summary"`
-	Rules            []jsonContractRule             `json:"rules"`
-	GuardExceptions  []jsonGuardException           `json:"guard_exceptions"`
-	LocalAdjustments []jsonLocalAdjustment          `json:"local_adjustments"`
+	Schema          int                            `json:"schema"`
+	Vibe            string                         `json:"vibe"`
+	Contract        jsonContractVersions           `json:"contract"`
+	StaticOnly      bool                           `json:"static_only"`
+	Verdict         contract.Verdict               `json:"verdict"`
+	Reason          string                         `json:"reason"`
+	Summary         map[contract.Level]jsonSummary `json:"summary"`
+	Rules           []jsonContractRule             `json:"rules"`
+	GuardExceptions []jsonGuardException           `json:"guard_exceptions"`
+	// GuardExceptionUses is new in spec 0053; a new key keeps schema 1.
+	GuardExceptionUses []jsonGuardExceptionUse `json:"guard_exception_uses"`
+	LocalAdjustments   []jsonLocalAdjustment   `json:"local_adjustments"`
 }
 
 type jsonContractVersions struct {
@@ -98,6 +100,12 @@ type jsonGuardException struct {
 	Reason string `json:"reason"`
 }
 
+type jsonGuardExceptionUse struct {
+	Rule  string `json:"rule"`
+	Match string `json:"match"`
+	Case  string `json:"case"`
+}
+
 type jsonLocalAdjustment struct {
 	File    string `json:"file"`
 	Kind    string `json:"kind"`
@@ -108,16 +116,17 @@ type jsonLocalAdjustment struct {
 
 func writeContractJSON(w io.Writer, rep *contract.Report, vibeVersion string) error {
 	out := jsonContractReport{
-		Schema:           contractJSONSchema,
-		Vibe:             vibeVersion,
-		Contract:         jsonContractVersions{Declared: rep.Contract.Declared, Audited: rep.Contract.Audited},
-		StaticOnly:       rep.Static,
-		Verdict:          rep.Verdict,
-		Reason:           rep.Reason,
-		Summary:          map[contract.Level]jsonSummary{},
-		Rules:            []jsonContractRule{},
-		GuardExceptions:  []jsonGuardException{},
-		LocalAdjustments: []jsonLocalAdjustment{},
+		Schema:             contractJSONSchema,
+		Vibe:               vibeVersion,
+		Contract:           jsonContractVersions{Declared: rep.Contract.Declared, Audited: rep.Contract.Audited},
+		StaticOnly:         rep.Static,
+		Verdict:            rep.Verdict,
+		Reason:             rep.Reason,
+		Summary:            map[contract.Level]jsonSummary{},
+		Rules:              []jsonContractRule{},
+		GuardExceptions:    []jsonGuardException{},
+		GuardExceptionUses: []jsonGuardExceptionUse{},
+		LocalAdjustments:   []jsonLocalAdjustment{},
 	}
 	for _, level := range []contract.Level{contract.Must, contract.Should} {
 		s := jsonSummary{}
@@ -144,6 +153,9 @@ func writeContractJSON(w io.Writer, rep *contract.Report, vibeVersion string) er
 	}
 	for _, g := range rep.GuardExceptions {
 		out.GuardExceptions = append(out.GuardExceptions, jsonGuardException(g))
+	}
+	for _, u := range rep.GuardExceptionUses {
+		out.GuardExceptionUses = append(out.GuardExceptionUses, jsonGuardExceptionUse(u))
 	}
 	for _, l := range rep.LocalAdjustments {
 		out.LocalAdjustments = append(out.LocalAdjustments, jsonLocalAdjustment(l))

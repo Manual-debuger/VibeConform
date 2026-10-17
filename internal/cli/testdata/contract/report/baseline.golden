@@ -25,9 +25,9 @@ Cannot decide
   V-03  MUST    `fmt-check` writes no file
         vibe.yaml: cannot decide: fmt-check with the format defect in . (task fmt:check): `task` is not installed on this machine
   A-02  MUST    The guard refuses the baseline unless an exception says otherwise
-        the probe check is not implemented in this vibe; #103 adds it
+        .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-03  MUST    The guard fails closed
-        the probe check is not implemented in this vibe; #103 adds it
+        .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-05  MUST    The agent's turn ends with `verify-fast`
         cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-07  SHOULD  Session start injects facts and changes nothing
@@ -36,7 +36,7 @@ Cannot decide
         the probe check is not implemented in this vibe; #106 adds it
   R-01  MUST    Everything but the audit works without vibe
         vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
-        cannot decide whether the A-02 deny cases are refused without vibe: A-02's probe did not run
+        .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
 
 Guard exceptions
   (none)

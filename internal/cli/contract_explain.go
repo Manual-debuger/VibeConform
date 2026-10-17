@@ -49,9 +49,22 @@ func writeExplain(w io.Writer, rule contract.Rule) error {
 	if details := contract.RuleDetails(rule.ID); details != "" {
 		b.WriteString("\n" + details)
 	}
+	if rule.ID == "A-02" || rule.ID == "A-03" {
+		writeGuardCorpusCounts(&b)
+	}
 
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// writeGuardCorpusCounts prints the guard corpus's counts by guard rule
+// ID, for A-02 and A-03 (spec 0053, "Report and CLI").
+func writeGuardCorpusCounts(b *strings.Builder) {
+	byRule, deny, allow := contract.GuardCorpusCounts()
+	fmt.Fprintf(b, "\nGuard corpus:\n  %d cases: %d deny and %d allow. Deny cases by guard rule ID:\n", deny+allow, deny, allow)
+	for _, c := range byRule {
+		fmt.Fprintf(b, "  %-26s %3d\n", c.Rule, c.Deny)
+	}
 }
 
 // writeWrapped writes text word-wrapped at explainWidth: the first line
