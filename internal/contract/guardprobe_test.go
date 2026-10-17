@@ -376,7 +376,10 @@ func TestGuardProbesOldGuards(t *testing.T) {
 	}
 	slices.Sort(missed)
 
-	policy, err := os.ReadFile(filepath.Join("..", "..", ".claude", "hooks", "policy.json"))
+	// The old guards' policy as the runtime guard renders it. This
+	// repository's own policy.json is vibe-guard's since it opted in
+	// (policy.agent_guard, spec 0053); the examples keep the runtime guard.
+	policy, err := os.ReadFile(filepath.Join("..", "..", "examples", "typescript", ".claude", "hooks", "policy.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
