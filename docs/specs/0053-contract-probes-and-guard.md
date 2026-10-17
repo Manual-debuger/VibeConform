@@ -879,6 +879,17 @@ runner or the guard's matcher directly.
   The old Go guard runs through `go run`. The Python and Node guards run
   when their runtimes are present, with the same tool gate. Each
   asserts its exact list of missed new cases, as decided above.
+
+  Seam deviation (decided during implementation of #103, 2026-10-17):
+  each of these fixtures runs hundreds of hook processes, and with them
+  `internal/cli`'s tests passed `go test`'s ten-minute default. They
+  therefore live in `internal/contract` (`guardprobe_test.go`, package
+  `contract_test`), which has a budget of its own, and call
+  `contract.Audit`, the engine `vibe audit` runs, with only the rules
+  each needs. What the command adds, the findings in `--json`,
+  `guard_exception_uses` and the text report's listing under each
+  exception, is tested through the `vibe audit` seam in `internal/cli`
+  with fixtures that run no hook.
 - **R-01.** A fixture whose `verify` calls `vibe` fails R-01's execution
   part and lists the shim call. The same fixture without that call
   passes.
