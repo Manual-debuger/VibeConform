@@ -169,10 +169,6 @@ func static(check string, run CheckFunc) Part {
 	return Part{Kind: Static, Check: check, Run: run}
 }
 
-func execution(check string, issue int) Part {
-	return Part{Kind: Execution, Check: check, Issue: issue}
-}
-
 // executionRun is an execution part this vibe implements.
 func executionRun(check string, run CheckFunc) Part {
 	return Part{Kind: Execution, Check: check, Run: run}
@@ -222,9 +218,9 @@ var rules = []Rule{
 			"that did not make it fail.",
 		Source: "spec 0011, principle 2",
 		Parts: []Part{
-			execution("in the probe copy, `verify` exits 0.", 104),
-			probe("With each planted defect in each component, it exits non-zero. The report names each defect "+
-				"kind (format, static analysis, test) that did not make it fail.", 104),
+			executionRun("in the probe copy, `verify` exits 0.", checkV01Execution),
+			{Kind: Probe, Check: "With each planted defect in each component, it exits non-zero. The report names each defect " +
+				"kind (format, static analysis, test) that did not make it fail.", Run: checkV01Probe},
 		},
 	},
 	{
@@ -233,7 +229,7 @@ var rules = []Rule{
 		Check:  "Probe: with each planted defect in each component, `verify-fast` exits non-zero. The contract does not measure speed.",
 		Source: "spec 0023",
 		Parts: []Part{
-			probe("with each planted defect in each component, `verify-fast` exits non-zero. The contract does not measure speed.", 104),
+			{Kind: Probe, Check: "with each planted defect in each component, `verify-fast` exits non-zero. The contract does not measure speed.", Run: checkV02Probe},
 		},
 	},
 	{
@@ -386,8 +382,8 @@ var rules = []Rule{
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
 			static("a Stop hook calls `verify-fast`.", checkA05),
-			probe("with a planted defect, the Stop hook exits 2 for a payload with `stop_hook_active: false`, "+
-				"and exits 0 for one with `stop_hook_active: true`", 104),
+			{Kind: Probe, Check: "with a planted defect, the Stop hook exits 2 for a payload with `stop_hook_active: false`, " +
+				"and exits 0 for one with `stop_hook_active: true`", Run: checkA05Probe},
 		},
 		applies: needsClaude,
 	},

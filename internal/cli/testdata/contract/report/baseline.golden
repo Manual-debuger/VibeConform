@@ -18,18 +18,18 @@ Not applicable
 
 Cannot decide
   V-01  MUST    `verify` covers formatting, static analysis and tests
-        the execution check is not implemented in this vibe; #104 adds it
-        the probe check is not implemented in this vibe; #104 adds it
+        vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
+        vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
   V-02  MUST    `verify-fast` catches the same defects
-        the probe check is not implemented in this vibe; #104 adds it
+        vibe.yaml: cannot decide: verify-fast (task verify:fast): `task` is not installed on this machine
   V-03  MUST    `fmt-check` writes no file
-        cannot decide: nowhere to plant the format defect: component . has no tests
+        vibe.yaml: cannot decide: fmt-check with the format defect in . (task fmt:check): `task` is not installed on this machine
   A-02  MUST    The guard refuses the baseline unless an exception says otherwise
         .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-03  MUST    The guard fails closed
         .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-05  MUST    The agent's turn ends with `verify-fast`
-        the probe check is not implemented in this vibe; #104 adds it
+        cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-07  SHOULD  Session start injects facts and changes nothing
         .claude/settings.json: cannot decide: the SessionStart hook (task -x hook:context): no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-08  MUST    An agent changes guardrail settings only after a person unlocks them

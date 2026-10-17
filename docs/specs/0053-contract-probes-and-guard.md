@@ -293,6 +293,112 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     reports that as a failed file.
   - Every sample names itself as planted by `vibe audit` in a comment,
     and its file name starts with `vibe_probe`.
+- **The samples of contract 1.0.0** (fixed in #104; `vibe audit
+  --explain V-01` prints the same text). In the Go samples,
+  `{{package}}` is the name in the package clause of the `_test.go`
+  file the placement rule found. The Go samples are `_test.go` files, so
+  that an external test package (`package x_test`) still builds.
+
+  | Language | Kind | File |
+  |---|---|---|
+  | Go | format | `vibe_probe_format_test.go` |
+  | Go | static analysis | `vibe_probe_static_analysis_test.go` |
+  | Go | test | `vibe_probe_test.go` |
+  | Python | format | `vibe_probe_format.py` |
+  | Python | static analysis | `vibe_probe_static_analysis.py` |
+  | Python | test | `vibe_probe_test.py` |
+  | TypeScript | format | `vibe_probe_format.ts` |
+  | TypeScript | static analysis | `vibe_probe_static_analysis.ts` |
+  | TypeScript | test | `vibe_probe.test.ts` |
+
+  `vibe_probe_format_test.go`:
+
+  ```go
+  // Planted by vibe audit: an unformatted file (the format defect).
+
+  package {{package}}
+
+  func  vibeProbeFormat()  {}
+  ```
+
+  `vibe_probe_static_analysis_test.go`:
+
+  ```go
+  // Planted by vibe audit: a Printf call whose arguments do not match its format
+  // (the static-analysis defect).
+
+  package {{package}}
+
+  import "fmt"
+
+  func vibeProbeStaticAnalysis() { fmt.Printf("%d\n", "vibe audit") }
+  ```
+
+  `vibe_probe_test.go`:
+
+  ```go
+  // Planted by vibe audit: a test that fails (the test defect).
+
+  package {{package}}
+
+  import "testing"
+
+  func TestVibeProbe(t *testing.T) { t.Fatal("planted by vibe audit: this test fails") }
+  ```
+
+  `vibe_probe_format.py`:
+
+  ```python
+  # Planted by vibe audit: an unformatted file (the format defect).
+  vibe_probe = [1,2 ,3]
+  ```
+
+  `vibe_probe_static_analysis.py`:
+
+  ```python
+  # Planted by vibe audit: a reference to an undefined name (the static-analysis defect).
+  def vibe_probe() -> int:
+      return vibe_probe_undefined_name
+  ```
+
+  `vibe_probe_test.py` (pytest collects `*_test.py` by default, and the
+  name starts with `vibe_probe`):
+
+  ```python
+  # Planted by vibe audit: a test that fails (the test defect).
+  def test_vibe_probe() -> None:
+      assert False, "planted by vibe audit: this test fails"
+  ```
+
+  `vibe_probe_format.ts`:
+
+  ```ts
+  // Planted by vibe audit: an unformatted file (the format defect).
+  export const vibeProbe = [1,2 ,3]
+  ```
+
+  `vibe_probe_static_analysis.ts`:
+
+  ```ts
+  // Planted by vibe audit: a reference to an undefined name (the static-analysis defect).
+  export const vibeProbe: number = vibeProbeUndefinedName;
+  ```
+
+  `vibe_probe.test.ts`:
+
+  ```ts
+  // Planted by vibe audit: a test file that throws when it is loaded (the test defect).
+  export {};
+
+  throw new Error("planted by vibe audit: this test fails");
+  ```
+
+  Each sample carries only its own defect: the static-analysis and test
+  samples are formatted, and the format sample type-checks. `go test`
+  runs part of `go vet` by itself, `printf` included, so a Go `verify`
+  whose `go test` keeps that default also catches the static-analysis
+  sample. The Go probe fixture's `test` step runs `go test -vet=off`, so
+  that the variant without `typecheck` misses it.
 - **Placement** (spec 0051, Q17). Each defect file goes into the first
   directory, in sorted path order, inside the component that qualifies
   (Go: holds a `_test.go` file; Python: holds a `test_*.py` or
@@ -312,7 +418,9 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   planted, `verify` exits non-zero. A failure names the component and
   each defect kind that did not make `verify` fail. When the baseline
   `verify` fails, the probe part is `cannot decide`: a defect that
-  "made it fail" would prove nothing.
+  "made it fail" would prove nothing. A component with no tests fails
+  the probe part whatever the baseline does, since that finding needs
+  no run.
 - **V-02** (#104). Probe: for each component and each defect kind,
   `verify-fast` exits non-zero. Precondition: `verify-fast` exits 0 in
   the reset copy. If it does not, V-02 is `cannot decide`, with the
@@ -330,7 +438,9 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   payload with `stop_hook_active: false`. At least one must exit 2.
   Then each gets the same payload with `stop_hook_active: true`, and
   every one must exit 0. With no component that has tests, the part is
-  `cannot decide`.
+  `cannot decide`. With no Stop hook, it fails, as the static part does:
+  no hook exits 2. Each run starts from a reset copy with the defect
+  planted again.
 - **A-07, execution part** (#102; spec 0052 noted it had no ticket).
   Every SessionStart hook whose matcher matches `startup` runs once in
   the reset copy. Each must exit 0, and `git status --porcelain` must

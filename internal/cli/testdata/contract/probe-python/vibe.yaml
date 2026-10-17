@@ -1,0 +1,9 @@
+contract: 1.0.0
+platforms: [linux, windows]
+agents: []
+entrypoints:
+  setup: uv sync --locked
+  verify: [uv run --locked ruff format --check ., uv run --locked ruff check ., uv run --locked pytest -q -p no:cacheprovider]
+  verify-fast: [uv run --locked ruff format --check ., uv run --locked ruff check ., uv run --locked pytest -q -p no:cacheprovider]
+  fmt: uv run --locked ruff format .
+  fmt-check: uv run --locked ruff format --check .
