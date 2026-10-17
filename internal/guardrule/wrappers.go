@@ -6,8 +6,9 @@ import (
 
 // Wrappers run another command given as their arguments (spec 0053,
 // "Parsing"): sudo, env with its assignments, command, builtin, exec,
-// nohup, time, nice and xargs. find -exec is handled apart, since find
-// is also a command of its own.
+// nohup, time, nice and xargs; and, beyond the spec's list, timeout and
+// stdbuf. find -exec is handled apart, since find is also a command of
+// its own.
 
 // unwrap returns the command a wrapper runs, and the wrapper's label.
 // ok is false when c is no wrapper, or a wrapper that runs nothing.
@@ -48,6 +49,13 @@ func unwrap(c Command) (inner Command, label string, ok bool) {
 		rest = skipOptions(args, options{withArg: "fo", long: []string{"--format", "--output"}})
 	case "nice":
 		rest = skipOptions(args, options{withArg: "n", long: []string{"--adjustment"}})
+	case "timeout":
+		rest = skipOptions(args, options{withArg: "sk", long: []string{"--signal", "--kill-after"}})
+		if len(rest) > 0 {
+			rest = rest[1:] // the duration
+		}
+	case "stdbuf":
+		rest = skipOptions(args, options{withArg: "ioe", long: []string{"--input", "--output", "--error"}})
 	case "xargs":
 		return unwrapXargs(c)
 	default:

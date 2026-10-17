@@ -456,19 +456,21 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   Derived from the old corpus's 172 cases, it has 117 cases: 75 deny
   and 42 allow. Dropped: 33 with a `local`, `local_text` or `policy`
   override, 13 marked "known limitation" (12 allow and 1 deny), 6 with
-  raw `stdin`, 2 for `SomeNewTool`, and 1 more (see below). By guard
-  rule ID (a test keeps this table equal to the corpus; #105 and #106
-  update it when they add cases):
+  raw `stdin`, 2 for `SomeNewTool`, and 1 more (see below). #105 then
+  added 108 cases, named "variant (#105): …" and "near miss (#105): …":
+  89 deny and 19 allow. The corpus now has 225 cases: 164 deny and 61
+  allow. By guard rule ID (a test keeps this table equal to the corpus;
+  #106 updates it when it adds cases):
 
   | Guard rule ID | Deny cases |
   |---|---|
-  | `rm-rf` | 13 |
-  | `remove-item-recurse-force` | 13 |
-  | `git-reset-hard` | 7 |
-  | `git-clean-fd` | 7 |
-  | `git-push-force` | 6 |
-  | `git-branch-force-delete` | 7 |
-  | `git-discard-worktree` | 13 |
+  | `rm-rf` | 52 |
+  | `remove-item-recurse-force` | 29 |
+  | `git-reset-hard` | 14 |
+  | `git-clean-fd` | 13 |
+  | `git-push-force` | 12 |
+  | `git-branch-force-delete` | 13 |
+  | `git-discard-worktree` | 22 |
   | `secret-file` | 6 |
   | `guard-policy-file` | 3 |
   | `guardrail-settings` | 0 |
@@ -605,6 +607,25 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     the match out. A quoted expansion is one word and is treated as an
     operand. An expansion in the command name refuses under
     `dynamic-command`, a guard-internal ID.
+  - **Decided during implementation (#105, 2026-10-17).** A quoted
+    expansion is never a flag, but where a rule reads an operand's
+    value (a `+refspec` for `git-push-force`, a whole-tree pathspec for
+    `git-discard-worktree`) it counts as matching unless its known text
+    rules the match out: `git push origin "$ref"` is refused,
+    `git push origin "feature-$n"` is not. A POSIX shell given no `-c`
+    string, no script file and no here-document (`curl … | bash`) runs
+    a script the guard cannot see, and is refused under
+    `dynamic-command`; `bash script.sh` is allowed, as before.
+    `timeout` and `stdbuf` are stripped as wrappers too. Still not
+    read: `cmd /c`, `Start-Process`, `watch`, shell aliases, and glob
+    expansion into flag-like file names. A missing `policy.json` is
+    the default policy (enforce, no rules, no exceptions); an
+    unreadable or invalid one refuses every call that reaches the
+    guard, other tools included. Observe mode applies to payload and
+    parse errors too; a policy error is always refused, since its mode
+    cannot be read. `ask` rules still ask in observe mode. The refusal
+    line adds `--tool <tool>` to the explain command for every tool
+    other than `Bash`.
 - **Tools.** `Bash` and `PowerShell` are commands. `Write`, `Edit`,
   `MultiEdit` and `NotebookEdit` (`notebook_path`) are file edits. Any
   other tool is allowed, because the settings' matcher decides what
