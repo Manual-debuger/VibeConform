@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
@@ -286,17 +287,17 @@ func TestClaudeMatcherCoversCommandsAndEdits(t *testing.T) {
 func TestTemplatesMatchLiveFiles(t *testing.T) {
 	repoRoot := filepath.Join("..", "..", "..", "..")
 
-	policyJSON, err := renderPolicy(policy)
-	if err != nil {
-		t.Fatalf("renderPolicy: %v", err)
-	}
+	// This repository selects policy.agent_guard vibe-guard (spec 0053), so
+	// its live files are that rendering of the templates.
+	// TestAgentGuardRuntimeUnchanged pins the default's.
+	live := resolveContents(t, agentGuard(module.AgentGuardVibeGuard))
 
 	for _, tc := range []struct {
 		live     string
 		embedded []byte
 	}{
-		{filepath.Join(".claude", "settings.json"), settings},
-		{filepath.Join(".claude", "hooks", "policy.json"), policyJSON},
+		{filepath.Join(".claude", "settings.json"), live[SettingsPath]},
+		{filepath.Join(".claude", "hooks", "policy.json"), live[".claude/hooks/policy.json"]},
 	} {
 		t.Run(tc.live, func(t *testing.T) {
 			live, err := os.ReadFile(filepath.Join(repoRoot, tc.live))

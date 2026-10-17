@@ -259,3 +259,34 @@ func TestResources(t *testing.T) {
 		t.Errorf("nil context: %+v", rs)
 	}
 }
+
+// TestResourcesVibeGuard: with policy.agent_guard vibe-guard (spec 0053)
+// the guard paragraph names vibe-guard and vibe unlock instead of
+// hook:guard; the rest is unchanged and within the word cap.
+func TestResourcesVibeGuard(t *testing.T) {
+	mctx := &module.Context{Profiles: []manifest.Profile{manifest.ProfileGo},
+		Policies: map[string]string{manifest.PolicyAgentGuard: module.AgentGuardVibeGuard}}
+	rs := Resources(".claude/skills", mctx)
+	if len(rs) != 1 {
+		t.Fatalf("Resources = %+v", rs)
+	}
+	got := string(rs[0].Content)
+	if want := strings.Replace(Content(Go), runtimeGuard, vibeGuard, 1); got != want || got == Content(Go) {
+		t.Errorf("content differs\n got: %q\nwant: %q", got, want)
+	}
+	for _, s := range []string{"vibe-guard hook", "vibe unlock"} {
+		if !strings.Contains(got, s) {
+			t.Errorf("content does not mention %s", s)
+		}
+	}
+	if strings.Contains(got, "hook:guard") {
+		t.Error("content still names hook:guard")
+	}
+	if n := len(strings.Fields(got)); n > MaxWords {
+		t.Errorf("%d words, cap %d", n, MaxWords)
+	}
+	mctx.Policies[manifest.PolicyAgentGuard] = module.AgentGuardRuntime
+	if rs := Resources(".claude/skills", mctx); string(rs[0].Content) != Content(Go) {
+		t.Error("agent_guard runtime changed the skill")
+	}
+}
