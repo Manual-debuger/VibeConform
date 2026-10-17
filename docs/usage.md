@@ -251,16 +251,51 @@ With a version 2 configuration (a top-level `contract:` key), `vibe
 audit` checks the repository against the rules of the contract version
 it declares: 25 rules in contract 1.0.0, in six categories (spec 0051,
 spec 0052). Each rule ends as `pass`, `fail`, `not applicable`, `waived`,
-`cannot decide` or `not run`. This vibe implements the static checks;
-execution checks and probes are not built yet, so a full run reports
-them as "cannot decide" with the issue that adds them (#102–#104, #106),
-and `--static` reports them as "not run".
+`cannot decide` or `not run`. Without `--static`, the audit runs every
+static, execution and probe part (spec 0053) and reaches a verdict;
+`--static` runs only the static parts and reports the others as
+"not run".
 
 ```bash
-vibe audit --static
-vibe audit --static --config vibe.v2.yaml   # this repository, until #111
+vibe audit                                  # the full audit
+vibe audit --config vibe.v2.yaml            # this repository, until #111
+vibe audit --static                         # the quick run
 vibe audit --explain C-02
 ```
+
+**The full audit** (spec 0053). After the static parts, the audit makes
+a *probe copy*: a fresh Git repository in the system's temporary
+directory that holds the working-tree content of every tracked file,
+committed once. Every execution and probe part runs there, one after
+another, from a reset copy: `setup`, A-07, V-03, the baseline runs of
+`verify` and `verify-fast`, the *planted defects* of V-01, V-02 and A-05,
+the guard corpus of A-02, A-03 and A-08, D-01 and R-01. The copy is
+deleted at the end, also after a failure or an interrupt, and the
+repository's working tree, index and `.git` never change.
+
+- **How it runs things.** Entrypoints run without a shell, as a program
+  and its arguments found on `PATH`. Hook commands run as Claude Code
+  runs them, `bash -c '<command>'` with the JSON payload on stdin (on
+  Windows, Git for Windows' bash or `CLAUDE_CODE_GIT_BASH_PATH`). Every
+  run has a time limit: the hook's own `timeout` or 60 seconds for hooks,
+  `--probe-timeout` for entrypoints. A run over its limit is killed with
+  its child processes.
+- **Tools.** The audit needs the tools the entrypoints call (`task`, the
+  linters, the test runners) and bash for the hooks. A missing tool, no
+  bash, a timeout or a word with an expansion makes the part `cannot
+  decide`, never `fail`: it is the auditing machine's gap. The A-02 and
+  A-03 probes run whatever the PreToolUse hook runs, so a repository
+  using `vibe-guard` needs it installed.
+- **Time.** A full audit runs `verify` and `verify-fast` once each plus
+  three times per component, the Stop hook three times, and the whole
+  guard corpus through the PreToolUse hook twice. On this repository
+  that is several minutes to an hour, mostly `task test`. `--static`
+  stays the quick local run.
+- **Progress.** In text mode each run prints a line on stderr ("vibe
+  audit: verify with the static-analysis defect in ."). `--json` keeps
+  stdout to the JSON document.
+- `vibe audit --explain V-01` and `V-02` print the defect samples;
+  `--explain A-02` and `A-03` print the guard corpus counts by rule ID.
 
 **Flags:**
 
@@ -270,6 +305,8 @@ vibe audit --explain C-02
 | `--config <path>` | `vibe.yaml` at `--repo-root` | Configuration file to read instead. The path is relative to the current directory, not to `--repo-root`. It must be a version 2 file |
 | `--static` | off | Run only the static checks. Fast, runs nothing, and never reaches a verdict: execution and probe parts are `not run`, so the exit code is always `1` |
 | `--json` | off | Print the report as JSON on stdout, nothing else on stdout |
+| `--probe-timeout <duration>` | `30m` | Time limit of each entrypoint run in the probe copy. It must be positive. An error with a version 1 configuration |
+| `--keep-probe-copy` | off | Keep the probe copy and print its path on stderr, for debugging. An error with a version 1 configuration |
 | `--explain <ID>` | | Explain one rule, such as `C-02`, and read nothing else |
 
 `--explain` reads no repository and no configuration, so it works
@@ -434,6 +471,14 @@ separately from the contract; it is `1`.
   of `policy.json` let through in A-02's probe (spec 0053). It is a new
   key; `schema` stays `1`. The text report lists the same cases under
   each exception ("let through: …").
+
+This repository's `Contract / audit` job
+(`.github/workflows/contract-audit.yml`) runs the full audit on every
+pull request and passes on exit `0`. It builds `vibe` and `vibe-guard`,
+installs the tools the entrypoints call, and sets
+`VIBE_TEST_REQUIRE_TOOLS` so that the tests `verify` runs fail rather
+than skip without uv, pnpm, Python, Node or bash. It is not a required
+check until #111.
 
 Since `--static` always exits `1`, a CI job that runs it judges the JSON
 instead. This repository's `Contract / audit (static)` job
@@ -2494,7 +2539,8 @@ record each of these as an allowed "known limitation".
 **Checking it fires.** No automated check can see an agent's own hook
 dispatch. The manual canary: ask the agent to run
 `git branch -D some-branch-that-does-not-exist`. It should be refused with
-the guard's message, prefixed `[task -x hook:guard]`. Don't assume when an
+the guard's message, prefixed `[task -x hook:guard]` (with `vibe-guard`:
+`vibe-guard: refused by rule git-branch-force-delete`). Don't assume when an
 agent picks up a changed configuration: Claude Code switched to the new
 guard mid-session while this was being built, while other agents or
 versions may only read it at startup. Run the canary in the session you
@@ -2506,6 +2552,159 @@ upgrading `vibe`, `sync` writes the new files, but, as for any resource a
 standard stops resolving, it does **not** delete the old ones. Nothing
 references them any more, so they do nothing; delete them yourself, and
 restart any running agent session.
+
+### `vibe-guard`, the reference guard
+
+`vibe-guard` (spec 0053) is the guard contract 1.0.0's guard probes are
+written against. It parses commands instead of matching text, so the
+respellings in the limitations above (a quoted command name, `eval`,
+flags after many operands, a variable in a flag) are refused. It is a
+separate binary from `vibe`, built from the same module, and it opens no
+network connection: CI runs its tests in a network namespace with no
+interfaces. This repository runs it; for the other standards the
+runtime guards above stay the default until #108 and #112.
+
+**Install** it on `PATH`, from a checkout of this repository or by
+version:
+
+```bash
+go install ./cmd/vibe-guard
+go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@latest
+```
+
+**Opting in** (`prod-go` only, until #111): set `policy.agent_guard:
+vibe-guard` in `vibe.yaml` and run `vibe sync`. The default,
+`runtime` or no key, keeps everything above byte for byte. With
+`vibe-guard`, `.claude/settings.json` runs the reference commands, there
+is no `hook:guard` task and no `.claude/hooks/guard.go`, and
+`.claude/hooks/policy.json` is the version 2 policy below. Install
+`vibe-guard` *before* syncing: from then on, a session without it has
+every tool call refused.
+
+```text
+PreToolUse (Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit):
+  command -v vibe-guard >/dev/null 2>&1 || { echo "vibe-guard is not installed; install it: go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@latest" >&2; exit 2; }; vibe-guard hook
+Stop:
+  vibe-guard relock 2>/dev/null; task verify:fast 1>&2 </dev/null || task -x hook:done
+```
+
+`command -v` is a shell builtin, so a missing `vibe-guard` refuses every
+call with the install line, even with only the system's `PATH`.
+
+**Commands:**
+
+- `vibe-guard hook` reads Claude Code's PreToolUse payload on stdin.
+  Exit `0` allows; exit `2` refuses with one line on stderr,
+  `vibe-guard: refused by rule <id>: <why>. Explain: vibe-guard explain
+  '<command>'`. A rule at level `ask` exits `0` with Claude Code's
+  `permissionDecision: "ask"` JSON on stdout.
+- `vibe-guard explain [--tool <tool>] '<command or path>'` prints the
+  decision, the rule ID, the simple command and words (or the path) that
+  matched, and any exception that applied, and exits as `hook` would. The
+  tool defaults to `Bash`, or `Write` for one word that names an existing
+  path.
+
+  ```console
+  $ vibe-guard explain 'rm -rf /'
+  tool: Bash
+  command: rm -rf /
+  decision: deny
+  rule: rm-rf
+  why: rm with -r and -f deletes a directory tree without asking; …
+    matched simple command (Bash): rm -rf /
+    words: [rm] [-rf] [/]
+  ```
+
+- `vibe-guard relock` deletes the unlock marker; the Stop hook runs it.
+- `vibe-guard version`.
+
+**What it reads.** The repository root is `CLAUDE_PROJECT_DIR`, else the
+payload's `cwd`, walked up to `.git`. Bash commands are parsed as bash,
+PowerShell commands by a small tokenizer (aliases and parameter prefixes
+included). Wrappers (`sudo`, `env`, `xargs`, `find -exec`, `timeout`, …)
+are stripped and `bash -c`, `eval` and `pwsh -c` strings parsed again,
+eight levels deep. It **fails closed**: a command that does not parse
+(`parse-error`), a payload that is not JSON or lacks its field
+(`payload-error`), an invalid `policy.json` (`policy-error`) and a command
+name built from an expansion (`dynamic-command`, also `curl … | bash`)
+are refused. These IDs take no exception.
+
+**`policy.json` version 2.** `vibe-guard` reads only
+`.claude/hooks/policy.json`, never `policy.local.json`:
+
+```json
+{
+  "version": 2,
+  "mode": "enforce",
+  "rules": [
+    {"id": "terraform-destroy", "level": "deny", "reason": "destroys infrastructure",
+     "command": "terraform destroy"},
+    {"id": "migrations", "level": "ask", "tools": ["Write", "Edit"], "reason": "reviewed migrations",
+     "path": "db/migrations/**"}
+  ],
+  "exceptions": [
+    {"rule": "git-clean-fd", "match": "git clean -fdx build/", "reason": "build output"}
+  ]
+}
+```
+
+- `mode`: `enforce` (the default) or `observe`.
+- A rule has an `id` that is none of the guard rule IDs, a `level`
+  (`deny` or `ask`), optional `tools` (default: every tool of its kind),
+  a `reason`, and exactly one of `command` (a word prefix, as exceptions
+  use) or `path` (a glob). A command rule may add `args`, a regular
+  expression some remaining argument must match.
+- An exception names one of the ten contract rule IDs and lifts it for
+  one simple command (`match`, compared word by word, never through an
+  expansion) or one path glob. Every other rule still applies.
+- An unknown key or an invalid value is a policy error, and every call
+  is refused with a message naming the key: a typo cannot switch a rule
+  off.
+
+**The asymmetry.** To tighten, add `deny` or `ask` rules to
+`policy.json`, or another PreToolUse hook to `settings.json`. To loosen,
+there is only an exception in `policy.json`, which `vibe audit` lists
+with every corpus case it lets through. Personal loosening belongs in
+your own `.claude/settings.local.json`, which nobody else gets.
+
+**Observe mode.** With `"mode": "observe"`, every call that would be
+refused is allowed, with `vibe-guard (observe): would refuse by rule
+<id>: …` on stderr and the same line appended to `vibe-guard.log` in the
+common Git directory. It is for trying the guard out: a committed
+`observe` fails the audit's A-02. A policy error is refused even then.
+
+**Settings and hooks are locked** (`guardrail-settings`). An agent's edit
+of `.claude/settings.json` or of anything under `.claude/hooks/` is
+refused unless you unlocked it. `policy.json` stays refused even then.
+Always refused: an agent's `vibe unlock`, and any command or edit that
+names the `vibe-unlock` marker.
+
+### `vibe unlock`
+
+To let an agent change the guardrail settings for a while, run this in
+**your own terminal**, not through the agent:
+
+```console
+$ vibe unlock --minutes 15
+unlocked until 2026-10-17T14:05:00Z (/path/to/repo/.git/vibe-unlock)
+…
+```
+
+- `--minutes N`, 1 to 240 (default 15); `--repo-root` (default `.`).
+  It writes the expiry, RFC 3339 UTC, into `vibe-unlock` in the common
+  Git directory, so every linked worktree shares it. Running it again
+  replaces the expiry.
+- The agent's next Stop locks again (`vibe-guard relock` in the Stop
+  hook). To lock earlier, run `vibe-guard relock` yourself.
+- An agent's `Bash` or `PowerShell` call of `vibe unlock` is refused.
+  Whether Claude Code's `! <command>` passes through the PreToolUse hook
+  is not verified, so use a terminal of your own.
+
+**The canary with `vibe-guard`.** Ask the agent to run `git branch -D
+some-branch-that-does-not-exist`: it should be refused with
+`vibe-guard: refused by rule git-branch-force-delete: …`. Ask it to run
+`vibe unlock`: refused under `guardrail-settings`. After installing or
+upgrading `vibe-guard`, run the canary in the session you rely on.
 
 ### Codex: hooks suspended
 

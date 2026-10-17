@@ -19,6 +19,14 @@ name: Hook guard
 # Node and Python guards where those runtimes happen to be installed. Only
 # this workflow proves each one through Task, and on Windows.
 #
+# This repository itself runs vibe-guard (policy.agent_guard, spec 0053),
+# so the prod-go leg syncs a fresh prod-go repository with the runtime
+# guard and runs the old corpus there. The vibe-guard jobs run the
+# contract corpus through vibe-guard and through the exact PreToolUse
+# command of this repository's .claude/settings.json, on Linux and
+# Windows, and on Linux once more in a network namespace with no
+# interfaces: vibe-guard opens no network connection.
+#
 # Hand-authored rather than a job in ci.yml, for the same reason as
 # examples.yml: ci.yml is a resource shipped to every adopting repository,
 # and a job naming examples/ would leak this repository's layout into it.
@@ -52,12 +60,15 @@ jobs:
         include:
           - standard: prod-go
             dir: .
+            guard_dir: build/hook-guard-prod-go
             lang: go
           - standard: prod-ts
             dir: examples/typescript
+            guard_dir: examples/typescript
             lang: ts
           - standard: prod-py
             dir: examples/python
+            guard_dir: examples/python
             lang: py
     runs-on: ${{ matrix.os }}
     steps:
@@ -88,9 +99,18 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install task
         run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+      # This repository runs vibe-guard, so prod-go's runtime guard is
+      # checked in a repository synced to prod-go's defaults.
+      - name: Sync a prod-go repository with the runtime guard
+        if: matrix.standard == 'prod-go'
+        shell: bash
+        run: |
+          mkdir -p "${{ matrix.guard_dir }}"
+          printf 'standard: prod-go\nversion: v1\n' > "${{ matrix.guard_dir }}/vibe.yaml"
+          go run ./cmd/vibe sync --repo-root "${{ matrix.guard_dir }}"
       - name: Run the corpus through task -x hook:guard
         env:
-          VIBE_GUARD_E2E_DIR: ${{ github.workspace }}/${{ matrix.dir }}
+          VIBE_GUARD_E2E_DIR: ${{ github.workspace }}/${{ matrix.guard_dir }}
         run: go test -count=1 -run TestGuardCorpusEndToEnd -v ./internal/module/agents/claude
       # The formatters hook:format calls: goimports is a PATH tool for
       # prod-go (as in ci.yml); Prettier and Ruff are project dependencies.
@@ -114,15 +134,84 @@ jobs:
           VIBE_HOOKS_E2E_LANG: ${{ matrix.lang }}
         run: go test -count=1 -run "TestHook|TestCommandWords" -v ./internal/module
 
+  # The contract corpus through vibe-guard (spec 0053): internal/guard's
+  # tests run every case through "vibe-guard hook", through the reference
+  # command with and without vibe-guard on PATH, and, with
+  # VIBE_GUARD_SETTINGS_E2E, through the exact PreToolUse command of this
+  # repository's settings and its policy.json. VIBE_TEST_REQUIRE_TOOLS
+  # turns a missing bash into a failure instead of a skip.
+  vibe-guard:
+    name: vibe-guard (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Run the contract corpus through vibe-guard
+        env:
+          VIBE_TEST_REQUIRE_TOOLS: bash
+          VIBE_GUARD_SETTINGS_E2E: "1"
+        run: go test -count=1 -v ./internal/guard
+
+  # The same tests with the network disabled: the test binary and
+  # vibe-guard are built first, then run in a new network namespace with
+  # no interfaces (unshare -rn). Ubuntu restricts unprivileged user
+  # namespaces through AppArmor, so the job lifts that restriction first.
+  vibe-guard-offline:
+    name: vibe-guard (no network)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Build vibe-guard and the guard's test binary
+        run: |
+          mkdir -p "$RUNNER_TEMP/offline"
+          go build -o "$RUNNER_TEMP/offline/vibe-guard" ./cmd/vibe-guard
+          go test -c -o "$RUNNER_TEMP/offline/guard.test" ./internal/guard
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Check that the namespace has no network
+        run: |
+          if unshare -rn bash -c 'exec 3<>/dev/tcp/140.82.112.3/443' 2>/dev/null; then
+            echo "the network namespace can still reach the network"
+            exit 1
+          fi
+          unshare -rn true
+      - name: Run the corpus with the network disabled
+        working-directory: internal/guard
+        run: |
+          unshare -rn env \
+            VIBE_GUARD_BIN="$RUNNER_TEMP/offline/vibe-guard" \
+            VIBE_TEST_REQUIRE_TOOLS=bash \
+            VIBE_GUARD_SETTINGS_E2E=1 \
+            "$RUNNER_TEMP/offline/guard.test" -test.count=1 -test.v
+
   gate:
     name: Hook guard / gate
     if: always()
-    needs: [corpus]
+    needs: [corpus, vibe-guard, vibe-guard-offline]
     runs-on: ubuntu-latest
     steps:
       - name: Require every corpus leg to have succeeded
+        env:
+          CORPUS: ${{ needs.corpus.result }}
+          VIBE_GUARD: ${{ needs.vibe-guard.result }}
+          OFFLINE: ${{ needs.vibe-guard-offline.result }}
         run: |
-          if [ "${{ needs.corpus.result }}" != "success" ]; then
-            echo "A hook-guard corpus leg did not succeed: ${{ needs.corpus.result }}"
-            exit 1
-          fi
+          for result in "$CORPUS" "$VIBE_GUARD" "$OFFLINE"; do
+            if [ "$result" != "success" ]; then
+              echo "A hook-guard leg did not succeed: corpus $CORPUS, vibe-guard $VIBE_GUARD, offline $OFFLINE"
+              exit 1
+            fi
+          done
