@@ -143,6 +143,7 @@ func waiverConfig(rule, until string) fixtureEdit {
 }
 
 func TestContractAuditVerdicts(t *testing.T) {
+	t.Parallel()
 	t.Run("conformant exits 0", func(t *testing.T) {
 		rules := standIn(nil, contract.ResultPass, mustRules("V-04")...)
 		rep, r := auditJSONRules(t, rules, contractFixture(t))
@@ -187,12 +188,13 @@ func TestContractAuditVerdicts(t *testing.T) {
 		if rep.Verdict != "undecided" || rep.StaticOnly {
 			t.Errorf("verdict = %s, static_only %v; want undecided, false", rep.Verdict, rep.StaticOnly)
 		}
-		assertRule(t, rep, "V-01", "undecided", "not implemented in this vibe", "#104")
-		assertRule(t, rep, "A-08", "undecided", "#106")
-		assertRule(t, rep, "R-01", "undecided", "#102")
+		assertRule(t, rep, "V-01", "undecided", "`task` is not installed on this machine")
+		assertRule(t, rep, "A-08", "undecided", "no bash found")
+		assertRule(t, rep, "R-01", "undecided", "`task` is not installed on this machine")
 	})
 	t.Run("a failed MUST rule beside an undecided one exits 1", func(t *testing.T) {
-		dir := contractFixture(t, entrypoints("  verify: task verify\n  verify-fast: task verify:fast\n  fmt: task fmt\n"))
+		// Without fmt V-04 fails; fmt-check, which V-03 needs, stays.
+		dir := contractFixture(t, entrypoints("  verify: task verify\n  verify-fast: task verify:fast\n  fmt-check: task fmt:check\n"))
 		rep, r := auditJSON(t, dir)
 		assertExit(t, r, 1)
 		assertRule(t, rep, "V-04", "fail")
@@ -219,6 +221,7 @@ func TestContractAuditVerdicts(t *testing.T) {
 }
 
 func TestContractAuditApplicabilityAndWaivers(t *testing.T) {
+	t.Parallel()
 	t.Run("C-05 not applicable without windows", func(t *testing.T) {
 		rep, _ := auditJSON(t, contractFixture(t,
 			withFile("vibe.yaml", configWith(section{"platforms", "platforms: [linux]\n"}))), "--static")
@@ -280,6 +283,7 @@ func TestContractAuditApplicabilityAndWaivers(t *testing.T) {
 }
 
 func TestContractAuditTextReport(t *testing.T) {
+	t.Parallel()
 	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--static")
 	assertExit(t, r, 1)
 	if !strings.HasPrefix(r.stdout, "vibe audit: contract 1.0.0 (vibe test), static checks only\n") {
@@ -291,6 +295,7 @@ func TestContractAuditTextReport(t *testing.T) {
 }
 
 func TestContractAuditReportsEveryRule(t *testing.T) {
+	t.Parallel()
 	dir := contractFixture(t)
 	rep, r := auditJSON(t, dir)
 

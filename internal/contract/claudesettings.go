@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 // Claude Code settings as the A rules see them (spec 0052, "Recognition
@@ -34,8 +35,36 @@ type claudeSettings struct {
 type claudeHookEntry struct {
 	// Matcher is the entry's matcher as written; "" when it has none.
 	Matcher string
-	// Commands holds one command hook's command string each.
-	Commands []string
+	// Hooks holds the entry's command hooks, in order.
+	Hooks []commandHook
+}
+
+// commandHook is one command hook of an entry.
+type commandHook struct {
+	// Command is the hook's command string.
+	Command string
+	// Timeout is the hook's own timeout; zero when it sets none.
+	Timeout time.Duration
+}
+
+// settingsHook is one command hook as a probe runs it: its command and
+// timeout, and the entry whose matcher decides which tools reach it.
+type settingsHook struct {
+	entry   claudeHookEntry
+	command string
+	limit   time.Duration
+}
+
+// commandHooks returns every command hook of an event's entries, in
+// order, each with its entry.
+func (s *claudeSettings) commandHooks(event string) []settingsHook {
+	var out []settingsHook
+	for _, entry := range s.commandEntries(event) {
+		for _, h := range entry.Hooks {
+			out = append(out, settingsHook{entry: entry, command: h.Command, limit: h.Timeout})
+		}
+	}
+	return out
 }
 
 // matches reports whether the entry's matcher matches a tool. A matcher
@@ -58,8 +87,8 @@ func (h claudeHookEntry) matches(tool string) bool {
 // command that does not parse as shell calls nothing.
 func (h claudeHookEntry) calls() []Command {
 	var out []Command
-	for _, c := range h.Commands {
-		if cmds, err := ParseCommands(c); err == nil {
+	for _, c := range h.Hooks {
+		if cmds, err := ParseCommands(c.Command); err == nil {
 			out = append(out, cmds...)
 		}
 	}
@@ -149,7 +178,11 @@ func parseHookEntry(raw json.RawMessage, at string) (claudeHookEntry, error) {
 			continue
 		}
 		if c, ok := hook["command"].(string); ok && strings.TrimSpace(c) != "" {
-			h.Commands = append(h.Commands, c)
+			var limit time.Duration
+			if secs, ok := hook["timeout"].(float64); ok && secs > 0 {
+				limit = time.Duration(secs * float64(time.Second))
+			}
+			h.Hooks = append(h.Hooks, commandHook{Command: c, Timeout: limit})
 		}
 	}
 	return h, nil
@@ -159,7 +192,7 @@ func parseHookEntry(raw json.RawMessage, at string) (claudeHookEntry, error) {
 func (s *claudeSettings) commandEntries(event string) []claudeHookEntry {
 	var out []claudeHookEntry
 	for _, h := range s.Events[event] {
-		if len(h.Commands) > 0 {
+		if len(h.Hooks) > 0 {
 			out = append(out, h)
 		}
 	}

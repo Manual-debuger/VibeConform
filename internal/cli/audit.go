@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/reconcile"
 	"github.com/Manual-debuger/VibeConform/internal/state"
 )
@@ -21,6 +22,7 @@ func newAuditCmd(seams contractSeams) *cobra.Command {
 			"old drift audit against the standard's templates.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			f.probeTimeoutSet = cmd.Flags().Changed("probe-timeout")
 			return dispatchAudit(cmd, f)
 		},
 	}
@@ -29,12 +31,16 @@ func newAuditCmd(seams contractSeams) *cobra.Command {
 	cmd.Flags().BoolVar(&f.static, "static", false, "contract audit: run only the static checks; never reaches a verdict")
 	cmd.Flags().BoolVar(&f.json, "json", false, "contract audit: print the report as JSON")
 	cmd.Flags().StringVar(&f.explain, "explain", "", "contract audit: explain the rule with this ID and read nothing else")
+	cmd.Flags().DurationVar(&f.probeTimeout, "probe-timeout", contract.DefaultProbeTimeout,
+		"contract audit: time limit of each entrypoint run in the probe copy")
+	cmd.Flags().BoolVar(&f.keepProbeCopy, "keep-probe-copy", false,
+		"contract audit: keep the probe copy after the audit and print its path on stderr")
 
 	return cmd
 }
 
 func runAudit(cmd *cobra.Command, repoRoot string) error {
-	p, err := buildPlan(repoRoot)
+	p, err := buildPlan(repoRoot, runningVersion(cmd))
 	if err != nil {
 		return fmt.Errorf("audit: %w", err)
 	}

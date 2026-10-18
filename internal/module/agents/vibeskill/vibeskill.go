@@ -144,13 +144,7 @@ const (
 		"\n" +
 		"## The agent guard\n" +
 		"\n" +
-		"With Claude Code, `task -x hook:guard` runs before every shell command\n" +
-		"and file edit. It refuses a few destructive commands (`rm -rf`,\n" +
-		"`git reset --hard`, `git push --force` and their other spellings) and\n" +
-		"edits to files that look like secrets. It stops accidents. It is not a\n" +
-		"security boundary and does not replace Claude Code's permission rules\n" +
-		"or sandbox. When it refuses a command you need, ask the user to run it\n" +
-		"with `! <command>`.\n" +
+		runtimeGuard +
 		"\n" +
 		"## `vibe.yaml`\n" +
 		"\n" +
@@ -273,6 +267,30 @@ func Content(kind Kind) string {
 	return frontMatter + strings.NewReplacer("{standard}", part, "{ciFiles}", ciFiles).Replace(generic)
 }
 
+// runtimeGuard describes the standard's runtime guard; vibeGuard replaces
+// it when policy.agent_guard selects vibe-guard (spec 0053).
+const (
+	runtimeGuard = "With Claude Code, `task -x hook:guard` runs before every shell command\n" +
+		"and file edit. It refuses a few destructive commands (`rm -rf`,\n" +
+		"`git reset --hard`, `git push --force` and their other spellings) and\n" +
+		"edits to files that look like secrets. It stops accidents. It is not a\n" +
+		"security boundary and does not replace Claude Code's permission rules\n" +
+		"or sandbox. When it refuses a command you need, ask the user to run it\n" +
+		"with `! <command>`.\n"
+
+	vibeGuard = "With Claude Code, `vibe-guard hook` runs before every shell command\n" +
+		"and file edit (`policy.agent_guard: vibe-guard` in `vibe.yaml`). It\n" +
+		"refuses destructive commands (`rm -rf`, `git reset --hard`,\n" +
+		"`git push --force` and their other spellings), edits to files that look\n" +
+		"like secrets, and edits of `.claude/settings.json`, `.claude/hooks/` and\n" +
+		"its policy. `vibe-guard explain '<command>'` says why. It stops\n" +
+		"accidents. It is not a security boundary and does not replace Claude\n" +
+		"Code's permission rules or sandbox. When it refuses a command you need,\n" +
+		"ask the user to run it with `! <command>`. To change settings or hooks,\n" +
+		"ask the user to run `vibe unlock` in their own terminal; the next Stop\n" +
+		"locks again. Never run `vibe unlock` yourself: it is refused.\n"
+)
+
 // githubFiles names the conformance workflow among the files to delete.
 // The required check it runs has to go from branch protection too.
 const githubFiles = "- `.github/workflows/conformance.yml`. Also remove `Conformance / audit`\n" +
@@ -286,10 +304,14 @@ func Resources(skillsDir string, mctx *module.Context) []resource.Resource {
 	if !ok {
 		return nil
 	}
+	content := Content(kind)
+	if module.VibeGuard(mctx) {
+		content = strings.Replace(content, runtimeGuard, vibeGuard, 1)
+	}
 	return []resource.Resource{{
 		Path:      skillsDir + "/" + Name + "/SKILL.md",
 		Ownership: resource.Generated,
-		Content:   []byte(Content(kind)),
+		Content:   []byte(content),
 	}}
 }
 

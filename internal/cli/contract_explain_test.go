@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
 // --explain prints what the registry knows about one rule (spec 0052,
@@ -12,6 +14,7 @@ import (
 // kinds, source, rationale, the check as spec 0051 states it, when the
 // rule is not applicable, and whether it can be waived.
 func TestAuditExplainEveryRule(t *testing.T) {
+	t.Parallel()
 	for _, rule := range contract.Rules() {
 		t.Run(rule.ID, func(t *testing.T) {
 			r := runVibeAudit(t, "--explain", rule.ID)
@@ -38,6 +41,7 @@ func TestAuditExplainEveryRule(t *testing.T) {
 
 // The values below are spec 0051's, read from its rule table.
 func TestAuditExplainContent(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		id   string
 		want []string
@@ -72,5 +76,81 @@ func TestAuditExplainContent(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// --explain V-01 and V-02 print the planted defect samples exactly
+// (spec 0053, "Planted defects"), so that a probe can be reproduced by
+// hand.
+func TestAuditExplainDefectSamples(t *testing.T) {
+	t.Parallel()
+	for _, id := range []string{"V-01", "V-02"} {
+		t.Run(id, func(t *testing.T) {
+			r := runVibeAudit(t, "--explain", id)
+			assertExit(t, r, 0)
+			for _, want := range []string{
+				"Planted defects:",
+				"Go, format: vibe_probe_format_test.go",
+				"Go, static analysis: vibe_probe_static_analysis_test.go",
+				"Go, test: vibe_probe_test.go",
+				"Python, format: vibe_probe_format.py",
+				"Python, static analysis: vibe_probe_static_analysis.py",
+				"Python, test: vibe_probe_test.py",
+				"TypeScript, format: vibe_probe_format.ts",
+				"TypeScript, static analysis: vibe_probe_static_analysis.ts",
+				"TypeScript, test: vibe_probe.test.ts",
+				"    // Planted by vibe audit: a test that fails (the test defect).\n" +
+					"\n" +
+					"    package {{package}}\n" +
+					"\n" +
+					"    import \"testing\"\n" +
+					"\n" +
+					"    func TestVibeProbe(t *testing.T) { t.Fatal(\"planted by vibe audit: this test fails\") }\n",
+				"    # Planted by vibe audit: a reference to an undefined name (the static-analysis defect).\n" +
+					"    def vibe_probe() -> int:\n" +
+					"        return vibe_probe_undefined_name\n",
+			} {
+				if !strings.Contains(r.stdout, want) {
+					t.Errorf("--explain %s does not show %q:\n%s", id, want, r.stdout)
+				}
+			}
+		})
+	}
+}
+
+// --explain A-02 and A-03 print the guard corpus's counts by guard rule
+// ID (spec 0053, "Report and CLI"). The expected counts are taken from
+// the corpus data.
+func TestAuditExplainGuardCorpusCounts(t *testing.T) {
+	t.Parallel()
+	deny, allow := 0, 0
+	byRule := map[string]int{}
+	for _, c := range contract.GuardCorpus() {
+		if c.Want == contract.WantDeny {
+			deny++
+			byRule[c.Rule]++
+		} else {
+			allow++
+		}
+	}
+	for _, id := range []string{"A-02", "A-03"} {
+		t.Run(id, func(t *testing.T) {
+			r := runVibeAudit(t, "--explain", id)
+			assertExit(t, r, 0)
+			want := []string{fmt.Sprintf("\nGuard corpus:\n  %d cases: %d deny and %d allow. Deny cases by guard rule ID:\n",
+				deny+allow, deny, allow)}
+			for _, rule := range guardrule.IDs {
+				want = append(want, fmt.Sprintf("\n  %-26s %3d\n", rule, byRule[rule]))
+			}
+			for _, w := range want {
+				if !strings.Contains(r.stdout, w) {
+					t.Errorf("--explain %s lacks %q:\n%s", id, w, r.stdout)
+				}
+			}
+		})
+	}
+	r := runVibeAudit(t, "--explain", "A-04")
+	if strings.Contains(r.stdout, "Guard corpus") {
+		t.Errorf("--explain A-04 prints the corpus:\n%s", r.stdout)
 	}
 }

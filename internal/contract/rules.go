@@ -102,12 +102,8 @@ type Part struct {
 	Kind PartKind
 	// Check is the part's check as spec 0051 states it.
 	Check string
-	// Run decides the part. Nil means this vibe does not implement it
-	// yet: the part cannot be decided, and Issue names the ticket that
-	// adds it.
+	// Run decides the part. Every part of contract 1.0.0 has one.
 	Run CheckFunc
-	// Issue is the GitHub issue that implements a part Run is nil for.
-	Issue int
 }
 
 // Rule is one rule of contract 1.0.0 (spec 0051, "Rules"). The report
@@ -169,12 +165,14 @@ func static(check string, run CheckFunc) Part {
 	return Part{Kind: Static, Check: check, Run: run}
 }
 
-func execution(check string, issue int) Part {
-	return Part{Kind: Execution, Check: check, Issue: issue}
+// executionRun is an execution part this vibe implements.
+func executionRun(check string, run CheckFunc) Part {
+	return Part{Kind: Execution, Check: check, Run: run}
 }
 
-func probe(check string, issue int) Part {
-	return Part{Kind: Probe, Check: check, Issue: issue}
+// probeRun is a probe part this vibe implements.
+func probeRun(check string, run CheckFunc) Part {
+	return Part{Kind: Probe, Check: check, Run: run}
 }
 
 func needsWindows(cfg *Config) (bool, string) {
@@ -212,9 +210,9 @@ var rules = []Rule{
 			"that did not make it fail.",
 		Source: "spec 0011, principle 2",
 		Parts: []Part{
-			execution("in the probe copy, `verify` exits 0.", 104),
-			probe("With each planted defect in each component, it exits non-zero. The report names each defect "+
-				"kind (format, static analysis, test) that did not make it fail.", 104),
+			executionRun("in the probe copy, `verify` exits 0.", checkV01Execution),
+			{Kind: Probe, Check: "With each planted defect in each component, it exits non-zero. The report names each defect " +
+				"kind (format, static analysis, test) that did not make it fail.", Run: checkV01Probe},
 		},
 	},
 	{
@@ -223,7 +221,7 @@ var rules = []Rule{
 		Check:  "Probe: with each planted defect in each component, `verify-fast` exits non-zero. The contract does not measure speed.",
 		Source: "spec 0023",
 		Parts: []Part{
-			probe("with each planted defect in each component, `verify-fast` exits non-zero. The contract does not measure speed.", 104),
+			{Kind: Probe, Check: "with each planted defect in each component, `verify-fast` exits non-zero. The contract does not measure speed.", Run: checkV02Probe},
 		},
 	},
 	{
@@ -233,8 +231,8 @@ var rules = []Rule{
 			"`git status --porcelain` lists only the planted file, with its content unchanged",
 		Source: "spec 0011",
 		Parts: []Part{
-			execution("in the probe copy with the unformatted-file defect planted, after `fmt-check` runs, "+
-				"`git status --porcelain` lists only the planted file, with its content unchanged", 102),
+			executionRun("in the probe copy with the unformatted-file defect planted, after `fmt-check` runs, "+
+				"`git status --porcelain` lists only the planted file, with its content unchanged", checkV03),
 		},
 	},
 	{
@@ -335,9 +333,9 @@ var rules = []Rule{
 		Source:            "specs 0012, 0047",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
-			probe("every corpus case is fed to every PreToolUse hook command that matches its tool. A deny case "+
+			probeRun("every corpus case is fed to every PreToolUse hook command that matches its tool. A deny case "+
 				"is satisfied as described under \"Guard policy and exceptions\". Every allow case must be allowed. "+
-				"A hook \"refuses\" by exiting 2.", 103),
+				"A hook \"refuses\" by exiting 2.", checkA02),
 		},
 		applies: needsClaude,
 	},
@@ -349,8 +347,8 @@ var rules = []Rule{
 		Source:            "spec 0021",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
-			probe("every deny case is still refused in two situations: with `PATH` reduced to the operating "+
-				"system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON", 103),
+			probeRun("every deny case is still refused in two situations: with `PATH` reduced to the operating "+
+				"system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON", checkA03),
 		},
 		applies: needsClaude,
 	},
@@ -376,8 +374,8 @@ var rules = []Rule{
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
 			static("a Stop hook calls `verify-fast`.", checkA05),
-			probe("with a planted defect, the Stop hook exits 2 for a payload with `stop_hook_active: false`, "+
-				"and exits 0 for one with `stop_hook_active: true`", 104),
+			{Kind: Probe, Check: "with a planted defect, the Stop hook exits 2 for a payload with `stop_hook_active: false`, " +
+				"and exits 0 for one with `stop_hook_active: true`", Run: checkA05Probe},
 		},
 		applies: needsClaude,
 	},
@@ -398,9 +396,9 @@ var rules = []Rule{
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
 			static("a SessionStart hook exists.", checkA07),
-			// Spec 0052, "Further Notes": A-07's execution part has no
-			// ticket yet and belongs with #102's execution checks.
-			execution("running it in the probe copy exits 0, and `git status --porcelain` stays empty.", 102),
+			// Spec 0052, "Further Notes": A-07's execution part belongs
+			// with #102's execution checks.
+			executionRun("running it in the probe copy exits 0, and `git status --porcelain` stays empty.", checkA07Execution),
 		},
 		applies: needsClaude,
 	},
@@ -414,10 +412,10 @@ var rules = []Rule{
 		Source:            "ADR 0025",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
-			probe("a `Write` to `.claude/settings.json` and an `Edit` under `.claude/hooks/` are refused with no "+
+			probeRun("a `Write` to `.claude/settings.json` and an `Edit` under `.claude/hooks/` are refused with no "+
 				"marker, allowed with a valid marker, and refused with an expired marker. A `Bash` call that runs "+
 				"`vibe unlock`, and any `Write` or `Bash` that creates the marker, are refused. After the Stop hook "+
-				"runs, the marker is gone.", 106),
+				"runs, the marker is gone.", checkA08),
 		},
 		applies: needsClaude,
 	},
@@ -431,11 +429,11 @@ var rules = []Rule{
 			"lockfile fails.",
 		Source: "specs 0010, 0020",
 		Parts: []Part{
-			execution("per component, by the lockfile found. For `go.sum`: run `go mod tidy`, then "+
+			executionRun("per component, by the lockfile found. For `go.sum`: run `go mod tidy`, then "+
 				"`git diff --exit-code go.mod go.sum`. For `uv.lock`: `uv lock --check`. For `poetry.lock`: "+
 				"`poetry check --lock`. For `pnpm-lock.yaml`: `pnpm install --frozen-lockfile --lockfile-only`. "+
 				"For `package-lock.json`: `npm ci --dry-run`. A component with dependencies and no recognized "+
-				"lockfile fails.", 102),
+				"lockfile fails.", checkD01),
 		},
 	},
 	{
@@ -469,8 +467,8 @@ var rules = []Rule{
 		Source: "principle 3, spec 0017",
 		Parts: []Part{
 			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04.", checkR01),
-			execution("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
-				"are still refused.", 102),
+			executionRun("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
+				"are still refused.", checkR01Execution),
 		},
 	},
 	{

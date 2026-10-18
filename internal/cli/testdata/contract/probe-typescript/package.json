@@ -1,0 +1,10 @@
+{
+  "name": "probe",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "prettier": "3.3.3",
+    "typescript": "5.6.3",
+    "vitest": "2.1.9"
+  }
+}

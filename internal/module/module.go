@@ -47,6 +47,10 @@ type Context struct {
 	// monotooling passes to each component's tooling (spec 0037). Empty
 	// leaves every template unchanged.
 	Generated []string
+	// VibeVersion is the version of the vibe that resolves the modules,
+	// as vibe --version prints it. A module whose output names it (the
+	// vibe-guard install hint, spec 0053) changes with it.
+	VibeVersion string
 }
 
 // GeneratedOf returns the context's generated paths; nil for a nil

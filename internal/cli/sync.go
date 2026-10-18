@@ -64,7 +64,7 @@ type syncCounts struct {
 }
 
 func runSync(cmd *cobra.Command, repoRoot string, allowDowngrade bool) error {
-	p, err := buildPlan(repoRoot)
+	p, err := buildPlan(repoRoot, runningVersion(cmd))
 	if err != nil {
 		return fmt.Errorf("sync: %w", err)
 	}

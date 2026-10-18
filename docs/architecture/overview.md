@@ -255,10 +255,54 @@ internal/contract                    the old audit: manifest, standard,
   every check sees the package's own `Command` and `Word`. Its other
   third-party imports are ones `vibe` already had: `gopkg.in/yaml.v3`,
   and `github.com/tailscale/hujson` for Renovate's JSON5 files.
-- **Read-only, tracked files only.** Checks read the working-tree content
-  of files `git ls-files` lists and never write. Execution checks and
-  probes are not built yet (#102–#104, #106); the registry already holds
-  their rules and reports them as not run or not decided.
+- **Read-only, tracked files only.** Static checks read the working-tree
+  content of files `git ls-files` lists and never write. Since spec 0053,
+  execution checks and probes run in a *probe copy*: a fresh Git
+  repository in the system's temporary directory, holding the same
+  files, reset between runs and deleted at the end. Entrypoints run
+  without a shell, hooks through `bash -c`, each with a time limit.
+
+### The reference guard
+
+Spec 0053 adds the guard the contract's guard probes are written
+against, and the rule IDs both share:
+
+```text
+cmd/vibe     → internal/cli → internal/contract ─┐
+                           └─────────────────────┤ (vibe unlock: the marker)
+cmd/vibe-guard ──────────────→ internal/guard ───┤
+                                                 ↓
+                                        internal/guardrule
+                                 (rule IDs, policy.json v2, the unlock
+                                  marker and policy file names, command
+                                  parsing: mvdan.cc/sh for Bash, a
+                                  PowerShell tokenizer, wrappers)
+```
+
+- **`internal/guardrule`** holds what the audit and the guard must agree
+  on: the ten contract guard rule IDs and the guard-internal ones,
+  `policy.json` version 2 parsing, exception matching, the policy file
+  paths, the unlock marker's name and format (`vibe unlock` writes it,
+  `vibe-guard` reads it, the audit plants it), and the decomposition of a
+  Bash or PowerShell command into simple commands. It imports no
+  `internal/` package.
+- **`internal/guard`** is `vibe-guard`'s logic: the baseline rules, the
+  decision, observe mode, the unlock marker, `hook`, `explain`, `relock`,
+  and the reference hook commands. It imports `internal/guardrule` and
+  nothing from `internal/contract` or the old packages. `cmd/vibe-guard`
+  is a thin `main` over it, a separate binary that opens no network
+  connection.
+- **`internal/contract`** imports `internal/guardrule`, never
+  `internal/guard`: the audit checks a guard as a black box through the
+  hooks in `.claude/settings.json`. Its guard corpus is embedded in
+  `vibe`; `internal/guard`'s tests run the same corpus through
+  `vibe-guard`.
+- The dependency is one way: `internal/contract` → `internal/guardrule`
+  ← `internal/guard`. Neither new package imports the old ones, and
+  tests in each package enforce it. The old `internal/module/agents/claude`
+  imports `internal/guard` for the reference commands when
+  `policy.agent_guard` selects `vibe-guard`, an old-to-new direction #112
+  removes with the module.
 
 ## Affected-component graph
 
@@ -361,9 +405,13 @@ internal/
   textregion/               # marker-delimited sections of text files; imports nothing from internal/ (spec 0029)
   atomicfile/               # temp-file + rename writes
   doctor/                   # vibe doctor checks; imports nothing from internal/ (spec 0028)
-  contract/                 # contract audit: vibe.yaml v2, rule registry, static checks; imports none of the old packages (spec 0052)
-  cli/                      # command tree; audit/diff/sync share one plan walk; vibe audit dispatches to contract/
+  contract/                 # contract audit: vibe.yaml v2, rule registry, static checks, probe copy and probes; imports none of the old packages (spec 0052, 0053)
+  guardrule/                # guard rule IDs, policy.json v2, command parsing shared by the audit and vibe-guard; imports nothing from internal/ (spec 0053)
+  guard/                    # vibe-guard: baseline rules, hook/explain/relock, unlock marker; imports only guardrule (spec 0053)
+  cli/                      # command tree; audit/diff/sync share one plan walk; vibe audit dispatches to contract/; vibe unlock
 ```
+
+and `cmd/vibe-guard`, the reference agent guard's `main` (spec 0053).
 
 Since M2, `examples/typescript` and `examples/python` hold real repositories
 declaring the language standards, synced and committed; since spec 0025,

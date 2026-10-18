@@ -102,8 +102,17 @@ func (claudeModule) Name() string {
 // policy.json's content is computed rather than embedded. It is still
 // deterministic, because renderPolicy is.
 func (claudeModule) Resolve(_ context.Context, mctx *module.Context) ([]resource.Resource, error) {
-	policyJSON, err := renderPolicy(policy)
-	if err != nil {
+	settingsJSON := settings
+	var policyJSON []byte
+	var err error
+	if module.VibeGuard(mctx) {
+		// policy.agent_guard: vibe-guard (spec 0053): the reference hook
+		// commands and an empty version 2 policy.
+		if settingsJSON, err = vibeGuardSettings(mctx.VibeVersion); err != nil {
+			return nil, err
+		}
+		policyJSON = []byte(VibeGuardPolicy)
+	} else if policyJSON, err = renderPolicy(policy); err != nil {
 		return nil, err
 	}
 
@@ -111,7 +120,7 @@ func (claudeModule) Resolve(_ context.Context, mctx *module.Context) ([]resource
 		{
 			Path:      SettingsPath,
 			Ownership: resource.Generated,
-			Content:   settings,
+			Content:   settingsJSON,
 		},
 		{
 			Path:      ".claude/hooks/policy.json",
@@ -137,7 +146,13 @@ func (claudeModule) Resolve(_ context.Context, mctx *module.Context) ([]resource
 // GuardedFiles checks the repository's own guard policy (spec 0050): what
 // would make the guards deny every call, and what cannot do what it says,
 // are conflicts; each exception and extra rule is listed for review.
-func (claudeModule) GuardedFiles(_ *module.Context) []module.GuardedFile {
+//
+// vibe-guard does not read policy.local.json (spec 0053), so with
+// policy.agent_guard vibe-guard there is nothing here to check.
+func (claudeModule) GuardedFiles(mctx *module.Context) []module.GuardedFile {
+	if module.VibeGuard(mctx) {
+		return nil
+	}
 	return []module.GuardedFile{{
 		Path: LocalPolicyPath,
 		Check: func(content []byte) []string {

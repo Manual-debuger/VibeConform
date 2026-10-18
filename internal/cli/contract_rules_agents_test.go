@@ -39,6 +39,7 @@ const preCommitConfig = `repos:
 
 // H-01: a recognized hook manager's configuration is committed.
 func TestRuleH01(t *testing.T) {
+	t.Parallel()
 	runRuleCases(t, "H-01", []ruleCase{
 		{name: "baseline lefthook", want: "pass"},
 		{name: ".lefthook.yml", want: "pass", edits: []fixtureEdit{
@@ -68,6 +69,7 @@ func TestRuleH01(t *testing.T) {
 // H-02: the pre-commit hook calls fmt-check or fmt; the pre-push hook
 // calls verify-fast or verify.
 func TestRuleH02(t *testing.T) {
+	t.Parallel()
 	runRuleCases(t, "H-02", []ruleCase{
 		{name: "baseline", want: "pass"},
 		{name: "fmt and verify", want: "pass", edits: []fixtureEdit{lefthookWith("task fmt", "task verify")}},
@@ -234,6 +236,7 @@ func runPartCases(t *testing.T, id, part string, cases []partCase) {
 	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			rep, _ := auditJSON(t, contractFixture(t, tc.edits...), "--static")
 			r := rep.rule(t, id)
 			got := ""
@@ -262,6 +265,7 @@ func runPartCases(t *testing.T, id, part string, cases []partCase) {
 // MultiEdit. A matcher is missing, empty, * or an anchored regular
 // expression.
 func TestRuleA01(t *testing.T) {
+	t.Parallel()
 	pre := func(entries ...string) fixtureEdit {
 		return settings(`"PreToolUse": [` + strings.Join(entries, ", ") + `]`)
 	}
@@ -307,6 +311,7 @@ func TestRuleA01(t *testing.T) {
 
 // A-05 (static part): a Stop hook calls verify-fast.
 func TestRuleA05Static(t *testing.T) {
+	t.Parallel()
 	runPartCases(t, "A-05", "static", []partCase{
 		{name: "baseline, inside a list with redirection", want: "pass"},
 		{name: "plain", want: "pass", edits: []fixtureEdit{settings(baseStopHook)}},
@@ -334,6 +339,7 @@ func TestRuleA05Static(t *testing.T) {
 
 // A-06: a PostToolUse hook that matches Write and Edit calls fmt.
 func TestRuleA06(t *testing.T) {
+	t.Parallel()
 	post := func(entries ...string) fixtureEdit {
 		return settings(`"PostToolUse": [` + strings.Join(entries, ", ") + `]`)
 	}
@@ -374,6 +380,7 @@ func policy(version, exceptions string) fixtureEdit {
 // A-04: policy.json is valid version 2; every exception names a guard
 // rule ID and has a non-empty match and reason.
 func TestRuleA04(t *testing.T) {
+	t.Parallel()
 	runRuleCases(t, "A-04", []ruleCase{
 		{name: "baseline", want: "pass"},
 		{name: "exceptions omitted", want: "pass", edits: []fixtureEdit{withFile(policyFile, `{"version": 2}`)}},
@@ -442,6 +449,7 @@ func auditListings(t *testing.T, edits ...fixtureEdit) listingsReport {
 // The report lists every guard exception and every local guardrail
 // adjustment (spec 0052, "Guard policy", "Local guardrail adjustments").
 func TestContractGuardListings(t *testing.T) {
+	t.Parallel()
 	t.Run("none", func(t *testing.T) {
 		rep := auditListings(t)
 		if len(rep.GuardExceptions) != 0 || len(rep.LocalAdjustments) != 0 {
@@ -548,6 +556,7 @@ jobs:
 // D-02: Dependabot or Renovate covers each component's ecosystem and
 // github-actions, and enables no automerge.
 func TestRuleD02(t *testing.T) {
+	t.Parallel()
 	runRuleCases(t, "D-02", []ruleCase{
 		{name: "baseline dependabot", want: "pass"},
 		{name: "dependabot.yaml", want: "pass", edits: []fixtureEdit{
@@ -640,6 +649,7 @@ func TestRuleD02(t *testing.T) {
 
 // A-07 (static part): a SessionStart hook exists.
 func TestRuleA07Static(t *testing.T) {
+	t.Parallel()
 	runPartCases(t, "A-07", "static", []partCase{
 		{name: "baseline", want: "pass"},
 		{name: "any matcher", want: "pass", edits: []fixtureEdit{settings(baseSessionHook)}},

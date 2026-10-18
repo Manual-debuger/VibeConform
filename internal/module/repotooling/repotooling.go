@@ -57,8 +57,12 @@ func (repotoolingModule) RequiredTools(_ *module.Context) []module.Tool {
 }
 
 // HookBinaries reports task, which every hook command runs through, and
-// the runtime hook:guard starts.
-func (repotoolingModule) HookBinaries(_ *module.Context) []string {
+// the runtime hook:guard starts, or vibe-guard when policy.agent_guard
+// selects it (spec 0053).
+func (repotoolingModule) HookBinaries(mctx *module.Context) []string {
+	if module.VibeGuard(mctx) {
+		return []string{"task", "vibe-guard"}
+	}
 	return []string{"task", "go"}
 }
 
@@ -73,6 +77,16 @@ func (repotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]res
 	taskfile := taskfile
 	if !hooks {
 		stripped, err := module.StripAgentHooks(taskfile)
+		if err != nil {
+			return nil, err
+		}
+		taskfile = stripped
+	}
+	// With vibe-guard as the agent guard (spec 0053), the settings run it
+	// directly: no hook:guard task and no guard program.
+	vibeGuard := hooks && module.VibeGuard(mctx)
+	if vibeGuard {
+		stripped, err := module.StripGuardTask(taskfile)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +112,7 @@ func (repotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]res
 			Content:   lefthook,
 		},
 	}
-	if !hooks {
+	if !hooks || vibeGuard {
 		return resources, nil
 	}
 	return append(resources, resource.Resource{

@@ -1,0 +1,8 @@
+contract: 1.0.0
+platforms: [linux, windows]
+agents: [claude]
+entrypoints:
+  verify: [go run ./ci fmt-check, go run ./ci typecheck, go run ./ci test]
+  verify-fast: [go run ./ci fmt-check, go run ./ci typecheck, go run ./ci test]
+  fmt: go run ./ci fmt
+  fmt-check: go run ./ci fmt-check

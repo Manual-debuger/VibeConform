@@ -50,22 +50,29 @@ Don't include yourself as contributor in commits.
 
 ## Guardrails
 
-- `.claude/settings.json` runs `task -x hook:guard` before tool calls. It
-  runs `.claude/hooks/guard.go` against `.claude/hooks/policy.json`, which
-  blocks destructive commands (`rm -rf`, `git reset --hard`,
-  `git push --force`, PowerShell's recursive forced `Remove-Item`,
-  `git restore .`, …) in every spelling the tool accepts (spec 0047), in
-  Bash and PowerShell calls, and edits to secret-looking files. When it
-  refuses a command you need, ask the user to run it with `! <command>`;
-  don't look for a spelling it misses. It is not a sandbox. The rules
-  live in `internal/module/agents/claude/policy.go`; change them there, not
-  in the generated `policy.json`. An exception in
-  `.claude/hooks/policy.local.json` (spec 0050) is the user's to grant:
-  the guard refuses your edits of that file, and you don't write it
-  through the shell either.
-- Known gaps (`docs/usage.md`, "The agent guard"): a Taskfile that fails
-  to load turns the guard off. A dangerous pattern quoted inside a command
-  still matches.
+- This repository runs `vibe-guard`, the reference guard (spec 0053;
+  `policy.agent_guard: vibe-guard` in `vibe.yaml`). Install it with
+  `go install ./cmd/vibe-guard`; without it on `PATH` every tool call is
+  refused with the install line. `.claude/settings.json` runs
+  `vibe-guard hook` before each Bash, PowerShell, Write, Edit, MultiEdit
+  and NotebookEdit call. It refuses destructive commands (`rm -rf`,
+  `git reset --hard`, `git push --force`, PowerShell's recursive forced
+  `Remove-Item`, `git restore .`, …) in every spelling it can parse,
+  edits to secret-looking files, commands it cannot parse, and edits of
+  `.claude/settings.json`, `.claude/hooks/` and the guard's policy. When
+  it refuses a command you need, ask the user to run it with
+  `! <command>`; don't look for a spelling it misses. `vibe-guard explain
+  '<command>'` says which rule matched. It is not a sandbox. Its rules are
+  built into `internal/guard`; this repository's own rules and exceptions
+  go in `.claude/hooks/policy.json` (version 2, generated here, so through
+  `internal/module/agents/claude`), which is the user's to change.
+- To change settings or hooks, ask the user to run `vibe unlock` in
+  their own terminal. Never run `vibe unlock` or touch the `vibe-unlock`
+  marker yourself: the guard refuses it. Your next Stop runs
+  `vibe-guard relock` and locks again.
+- Known gaps (`docs/usage.md`, "`vibe-guard`, the reference guard"):
+  `cmd /c`, `Start-Process`, shell aliases and glob expansion into
+  flag-like file names are not read.
 - Codex hooks are suspended (spec 0024, ADR 0011): `.codex/hooks.json` is
   generated with no hooks, so a Codex session here gets no guard and no
   `Stop` gate. Apply the same rules by judgment.
@@ -75,9 +82,10 @@ Don't include yourself as contributor in commits.
   `verify:fast` as a gate when you stop. A stop with failing checks is
   refused once. Their rules live in the repo-tooling `Taskfile.yml`
   templates, not in the generated `Taskfile.yml`.
-- The guard is live in this repository: a Bash command that merely
-  *contains* a denied pattern, even inside a heredoc, is refused. Write such
-  text with a file-editing tool rather than through the shell. After
+- The guard is live in this repository: a Bash command that runs a denied
+  command anywhere, even through `bash -c` or `eval`, is refused, and one
+  that does not parse is refused too. Write such text with a file-editing
+  tool rather than through the shell. After
   changing the guard, check it with the canary in `docs/usage.md` rather
   than assuming when the running agent picked the change up.
 

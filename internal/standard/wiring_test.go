@@ -278,6 +278,66 @@ func TestAgentHooksFollowClaude(t *testing.T) {
 	}
 }
 
+// TestVibeGuardWiring pins spec 0053's opt-in through the standard: prod-go
+// with policy.agent_guard vibe-guard runs vibe-guard directly from the
+// settings, every task the settings still call exists, and neither
+// hook:guard nor guard.go is resolved. The other standards do not offer
+// the key.
+func TestVibeGuardWiring(t *testing.T) {
+	taskCall := regexp.MustCompile(`task (?:-x )?(\S+)`)
+	for k, s := range registry {
+		t.Run(k.name+"/"+k.version, func(t *testing.T) {
+			v := module.AgentGuardVibeGuard
+			m := &manifest.Manifest{Standard: k.name, Version: k.version, Policy: &manifest.Policy{AgentGuard: &v}}
+			if mctx := sampleContext(s); mctx != nil {
+				m.Components = mctx.Components
+			}
+			sel, err := s.Select(m)
+			if k.name != "prod-go" {
+				if err == nil {
+					t.Fatal("offers policy.agent_guard; only prod-go should")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			mctx := &module.Context{Integrations: sel.Integrations, Policies: sel.Policies}
+			resources := map[string]resource.Resource{}
+			for _, mod := range s.ModulesFor(sel) {
+				rs, err := mod.Resolve(context.Background(), mctx)
+				if err != nil {
+					t.Fatalf("resolving %s: %v", mod.Name(), err)
+				}
+				for _, r := range rs {
+					resources[r.Path] = r
+				}
+			}
+			if _, ok := resources[".claude/hooks/guard.go"]; ok {
+				t.Error("resolves .claude/hooks/guard.go")
+			}
+			tasks := taskfileTasks(t, resources["Taskfile.yml"])
+			if _, ok := tasks["hook:guard"]; ok {
+				t.Error("Taskfile.yml defines hook:guard")
+			}
+			commands := configCommands(t, resources[".claude/settings.json"])
+			if !slices.ContainsFunc(commands, func(c string) bool { return strings.HasSuffix(c, "vibe-guard hook") }) {
+				t.Errorf("no settings command runs vibe-guard hook: %q", commands)
+			}
+			for _, command := range commands {
+				if strings.Contains(command, "hook:guard") {
+					t.Errorf("settings run %q", command)
+				}
+				for _, name := range taskCall.FindAllStringSubmatch(command, -1) {
+					if _, ok := tasks[name[1]]; !ok {
+						t.Errorf("settings run %q, but Taskfile.yml defines no %s", command, name[1])
+					}
+				}
+			}
+		})
+	}
+}
+
 func hasHookTasks(tasks map[string]any) bool {
 	for name := range tasks {
 		if strings.HasPrefix(name, "hook:") {

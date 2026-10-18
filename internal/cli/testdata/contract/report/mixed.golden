@@ -4,7 +4,7 @@ vibe audit: contract 1.0.0 (vibe test)
   H  Local Git hooks                       2 pass
   C  CI                                    4 pass, 1 not applicable
   A  Agent guardrails                      2 pass, 1 fail, 5 cannot decide
-  D  Dependencies and supply chain         2 pass, 1 cannot decide
+  D  Dependencies and supply chain         3 pass
   R  Removability and repository hygiene   1 fail, 1 waived, 1 cannot decide
 
 Failed
@@ -28,26 +28,25 @@ Not applicable
 
 Cannot decide
   V-01  MUST    `verify` covers formatting, static analysis and tests
-        the execution check is not implemented in this vibe; #104 adds it
-        the probe check is not implemented in this vibe; #104 adds it
+        vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
+        vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
   V-02  MUST    `verify-fast` catches the same defects
-        the probe check is not implemented in this vibe; #104 adds it
+        vibe.yaml: cannot decide: verify-fast (task verify:fast): `task` is not installed on this machine
   V-03  MUST    `fmt-check` writes no file
-        the execution check is not implemented in this vibe; #102 adds it
+        vibe.yaml: cannot decide: fmt-check with the format defect in . (task fmt:check): `task` is not installed on this machine
   A-02  MUST    The guard refuses the baseline unless an exception says otherwise
-        the probe check is not implemented in this vibe; #103 adds it
+        .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-03  MUST    The guard fails closed
-        the probe check is not implemented in this vibe; #103 adds it
+        .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-05  MUST    The agent's turn ends with `verify-fast`
-        the probe check is not implemented in this vibe; #104 adds it
+        cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-07  SHOULD  Session start injects facts and changes nothing
-        the execution check is not implemented in this vibe; #102 adds it
+        .claude/settings.json: cannot decide: the SessionStart hook (task -x hook:context): no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-08  MUST    An agent changes guardrail settings only after a person unlocks them
-        the probe check is not implemented in this vibe; #106 adds it
-  D-01  MUST    Lockfiles are committed and match the declared dependencies
-        the execution check is not implemented in this vibe; #102 adds it
+        .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   R-01  MUST    Everything but the audit works without vibe
-        the execution check is not implemented in this vibe; #102 adds it
+        vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
+        .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
 
 Guard exceptions
   (none)
@@ -57,4 +56,4 @@ Local guardrail adjustments
 
 Note: the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is main
 
-Verdict: cannot decide. 10 rules cannot be decided; 1 MUST rule already fails.
+Verdict: cannot decide. 9 rules cannot be decided; 1 MUST rule already fails.

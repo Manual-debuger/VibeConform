@@ -63,11 +63,8 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 			if !strings.Contains(strings.ToLower(r.Check), string(p.Kind)) {
 				t.Errorf("%s has a %s part its check does not name", r.ID, p.Kind)
 			}
-			if (p.Kind == Static) != (p.Run != nil) {
-				t.Errorf("%s %s part: Run set = %v", r.ID, p.Kind, p.Run != nil)
-			}
-			if p.Run == nil && p.Issue == 0 {
-				t.Errorf("%s %s part names no issue", r.ID, p.Kind)
+			if p.Run == nil {
+				t.Errorf("%s %s part has no check", r.ID, p.Kind)
 			}
 		}
 		if r.Level == Must {
