@@ -29,7 +29,10 @@ func TestVibeGuardInstallVersion(t *testing.T) {
 	for in, want := range map[string]string{
 		"v0.12.0":         "v0.12.0",
 		"v0.12.0-alpha.1": "v0.12.0-alpha.1",
-		"v0.11.0-alpha.1.0.20261017172609-46246ad76fbf":       "v0.11.0-alpha.1.0.20261017172609-46246ad76fbf",
+		// A pseudo-version changes with every commit of a repository
+		// that builds vibe from source, as this one's Conformance /
+		// audit job does; naming it made that job fail on every commit.
+		"v0.11.0-alpha.1.0.20261017172609-46246ad76fbf":       "latest",
 		"v0.11.0-alpha.1.0.20261017172609-46246ad76fbf+dirty": "latest",
 		"dev":     "latest",
 		"(devel)": "latest",

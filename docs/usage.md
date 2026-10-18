@@ -2573,6 +2573,10 @@ go install ./cmd/vibe-guard
 go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@<version>
 ```
 
+The hook's install hint names the release of `vibe` that wrote the
+settings, or `@latest` when that `vibe` was not a release (a source
+build, a pseudo-version or `dev`).
+
 **Opting in** (`prod-go` only, until #111): set `policy.agent_guard:
 vibe-guard` in `vibe.yaml` and run `vibe sync`. The default,
 `runtime` or no key, keeps everything above byte for byte. With

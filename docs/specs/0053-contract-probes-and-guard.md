@@ -915,11 +915,13 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     reverted on 2026-10-18, by the user's decision.) A version `go
     install` cannot fetch names `@latest` instead: `dev` from an
     unstamped build, `(devel)`, an empty version, or one with build
-    metadata such as `+dirty`. A release and a pseudo-version are named
-    as they are, since `go install` fetches a pushed commit's
-    pseudo-version. The settings therefore change with each `vibe`
-    version that syncs them; `task audit` runs the recorded
-    `vibe_version`, which renders the same hint.
+    metadata such as `+dirty`. A pseudo-version names `@latest` too: `go
+    build` stamps it from the commit, so a repository that builds `vibe`
+    from source (this one's Conformance / audit job does) would render a
+    different hint on every commit and fail its own audit. Naming
+    pseudo-versions did exactly that on this spec's pull request, and
+    was corrected on 2026-10-18. Only a release is named as it is, so
+    the settings change with each release that syncs them.
   - The generated `Taskfile.yml` keeps a four-line comment where
     `hook:guard` was. The vibeconform skill's "agent guard" paragraph
     names `vibe-guard` and `vibe unlock` instead of `hook:guard`.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
 
 	"github.com/Manual-debuger/VibeConform/internal/guard"
@@ -12,13 +13,14 @@ import (
 
 // VibeGuardVersion is the version the PreToolUse command's install hint
 // names for a vibe of version vibeVersion (spec 0053, "The reference hook
-// commands"): the running vibe's own version, so that the guard
-// installed matches the vibe that wrote the settings. A version go
-// install cannot fetch, such as "dev" from an unstamped build or one
-// with build metadata ("+dirty"), names latest instead. A release and a
-// pseudo-version are named as they are.
+// commands"): the running vibe's own version when it is a release, so
+// that the guard installed matches the vibe that wrote the settings.
+// Any other version names latest: "dev" from an unstamped build, one
+// with build metadata ("+dirty"), and a pseudo-version, which go build
+// stamps from the commit and so would change the settings with every
+// commit of a repository that builds vibe from source.
 func VibeGuardVersion(vibeVersion string) string {
-	if semver.IsValid(vibeVersion) && semver.Build(vibeVersion) == "" {
+	if semver.IsValid(vibeVersion) && semver.Build(vibeVersion) == "" && !module.IsPseudoVersion(vibeVersion) {
 		return vibeVersion
 	}
 	return "latest"
