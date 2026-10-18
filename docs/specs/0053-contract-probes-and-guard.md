@@ -1041,7 +1041,12 @@ runner or the guard's matcher directly.
   Code also runs A-02, whose verdict R-01 reads), the configuration
   tests run `--static`, and the rule and configuration case tables run
   their cases in parallel. `TestContractAuditNeverWrites` still runs the
-  whole registry.
+  whole registry. Even so, under `go test ./...` on a loaded machine
+  `internal/cli` took over ten minutes, so the `TestMain` of
+  `internal/cli` and of `internal/contract` raises go test's default
+  `-test.timeout` of ten minutes to 30 minutes for that package. The
+  budget is this repository's own test code; the generated
+  `Taskfile.yml` and `ci.yml` adopters receive are unchanged.
 - **R-01.** A fixture whose `verify` calls `vibe` fails R-01's execution
   part and lists the shim call. The same fixture without that call
   passes.

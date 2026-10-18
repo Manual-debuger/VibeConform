@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"flag"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/state"
@@ -30,7 +32,40 @@ func TestMain(m *testing.M) {
 	for _, v := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"} {
 		_ = os.Unsetenv(v)
 	}
+	raiseDefaultTimeout()
 	os.Exit(m.Run())
+}
+
+// packageTimeout is this package's own test budget. Its probe tests run
+// real tools (go run, bash, git) in probe copies, and under go test ./...
+// on a loaded machine the package passes go test's ten-minute default
+// although no test hangs (spec 0053). The budget lives here, in this
+// repository's own test code, not in the generated Taskfile.yml or
+// ci.yml that adopters receive.
+const packageTimeout = 30 * time.Minute
+
+// TestPackageTimeoutIsRaised: TestMain replaced go test's default
+// timeout, so the alarm the test binary set is not ten minutes.
+func TestPackageTimeoutIsRaised(t *testing.T) {
+	if got := flag.Lookup("test.timeout").Value.String(); got == (10 * time.Minute).String() {
+		t.Errorf("-test.timeout is still go test's default %s", got)
+	}
+}
+
+// raiseDefaultTimeout raises -test.timeout to packageTimeout when it is
+// go test's default of ten minutes (an explicit -timeout 10m looks the
+// same). A shorter or longer -timeout, and 0 (no limit), are kept.
+func raiseDefaultTimeout() {
+	if !flag.Parsed() {
+		flag.Parse()
+	}
+	f := flag.Lookup("test.timeout")
+	if f == nil {
+		return
+	}
+	if d, err := time.ParseDuration(f.Value.String()); err == nil && d == 10*time.Minute {
+		_ = f.Value.Set(packageTimeout.String())
+	}
 }
 
 func writeVibeYAML(t *testing.T, dir, body string) {
