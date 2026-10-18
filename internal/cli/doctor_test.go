@@ -197,7 +197,7 @@ func TestDoctorHookBinaries(t *testing.T) {
 		// Go, TypeScript and Python components: the guard runs on Go.
 		filepath.Join("..", "..", "examples", "monorepo"): {"task", "go"},
 	} {
-		p, err := buildPlan(root)
+		p, err := buildPlan(root, "test")
 		if err != nil {
 			t.Fatal(err)
 		}

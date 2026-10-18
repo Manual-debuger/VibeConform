@@ -269,20 +269,23 @@ against, and the rule IDs both share:
 
 ```text
 cmd/vibe     → internal/cli → internal/contract ─┐
-                           └──→ internal/guard ──┤ (MarkerFile, for vibe unlock)
+                           └─────────────────────┤ (vibe unlock: the marker)
 cmd/vibe-guard ──────────────→ internal/guard ───┤
                                                  ↓
                                         internal/guardrule
-                                 (rule IDs, policy.json v2, command
+                                 (rule IDs, policy.json v2, the unlock
+                                  marker and policy file names, command
                                   parsing: mvdan.cc/sh for Bash, a
                                   PowerShell tokenizer, wrappers)
 ```
 
 - **`internal/guardrule`** holds what the audit and the guard must agree
   on: the ten contract guard rule IDs and the guard-internal ones,
-  `policy.json` version 2 parsing, exception matching, and the
-  decomposition of a Bash or PowerShell command into simple commands. It
-  imports no `internal/` package.
+  `policy.json` version 2 parsing, exception matching, the policy file
+  paths, the unlock marker's name and format (`vibe unlock` writes it,
+  `vibe-guard` reads it, the audit plants it), and the decomposition of a
+  Bash or PowerShell command into simple commands. It imports no
+  `internal/` package.
 - **`internal/guard`** is `vibe-guard`'s logic: the baseline rules, the
   decision, observe mode, the unlock marker, `hook`, `explain`, `relock`,
   and the reference hook commands. It imports `internal/guardrule` and

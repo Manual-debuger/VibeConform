@@ -89,7 +89,13 @@ func ids(list ...string) []string { return list }
 // assertD01 checks the result of D-01's execution part.
 func assertD01(t *testing.T, rep jsonReport, want string, findings ...string) {
 	t.Helper()
-	const id, kind = "D-01", "execution"
+	assertPartJSON(t, rep, "D-01", "execution", want, findings...)
+}
+
+// assertPartJSON checks one part's result in a --json report and that the
+// rule's findings hold each of findings.
+func assertPartJSON(t *testing.T, rep jsonReport, id, kind, want string, findings ...string) {
+	t.Helper()
 	r := rep.rule(t, id)
 	i := slices.IndexFunc(r.Parts, func(p struct {
 		Check  string `json:"check"`

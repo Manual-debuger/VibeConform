@@ -50,6 +50,39 @@ func TestGuardrailSettingsException(t *testing.T) {
 	assertRefused(t, r.hook(t, writePayload(".claude/hooks/policy.json")), "guard-policy-file")
 }
 
+// TestGuardrailSettingsOnlyInTheRepository is a regression test: the
+// rule guards the repository's own .claude/settings.json and
+// .claude/hooks/ (spec 0051), not the same names elsewhere. Before, a
+// path holding .claude/settings.json anywhere was refused, so the agent
+// could not change the person's own ~/.claude/settings.json.
+func TestGuardrailSettingsOnlyInTheRepository(t *testing.T) {
+	r := newRepo(t, enforcePolicy)
+	home := t.TempDir()
+	for _, p := range []string{
+		filepath.Join(home, ".claude", "settings.json"),
+		filepath.Join(home, ".claude", "hooks", "pre.sh"),
+		filepath.Join(filepath.Dir(r.Root), ".claude", "settings.json"),
+		"../.claude/settings.json",
+		"sub/.claude/settings.json",
+	} {
+		t.Run(p, func(t *testing.T) {
+			assertAllowed(t, r.hook(t, writePayload(p)))
+		})
+	}
+	for _, p := range []string{
+		filepath.Join(r.Root, ".claude", "settings.json"),
+		filepath.Join(r.Root, ".claude", "hooks", "pre.sh"),
+		".claude/settings.json",
+		"./.claude/hooks/pre.sh",
+		`.claude\hooks\pre.sh`,
+		".Claude/Settings.json",
+	} {
+		t.Run(p, func(t *testing.T) {
+			assertRefused(t, r.hook(t, writePayload(p)), "guardrail-settings")
+		})
+	}
+}
+
 // TestUnlockMarkerContents: only one RFC 3339 time in the future is a
 // valid marker.
 func TestUnlockMarkerContents(t *testing.T) {

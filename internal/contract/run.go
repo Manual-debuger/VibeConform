@@ -25,8 +25,9 @@ import (
 const DefaultProbeTimeout = 30 * time.Minute
 
 // DefaultHookTimeout is the time limit of a hook that sets no timeout of
-// its own, as Claude Code's default.
-const DefaultHookTimeout = 60 * time.Second
+// its own: Claude Code's default for command hooks on PreToolUse, Stop and
+// SessionStart (https://code.claude.com/docs/en/hooks, checked 2026-10-18).
+const DefaultHookTimeout = 600 * time.Second
 
 // tailLines is how many lines of a failed run's output a finding shows.
 const tailLines = 20

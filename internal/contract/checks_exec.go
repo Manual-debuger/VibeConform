@@ -107,12 +107,9 @@ func checkA07Execution(env *Env) PartResult {
 	}
 	s := env.probe
 	var results []PartResult
-	for _, entry := range settings.commandEntries(eventSessionStart) {
-		if !entry.matches("startup") {
-			continue
-		}
-		for i, command := range entry.Commands {
-			results = append(results, a07Hook(s, command, entry.Timeouts[i]))
+	for _, h := range settings.commandHooks(eventSessionStart) {
+		if h.entry.matches("startup") {
+			results = append(results, a07Hook(s, h.command, h.limit))
 		}
 	}
 	return mergeRuns(results...)
@@ -269,16 +266,7 @@ func d01Lockfile(s *probeSession, comp Component, file string, check [][]string)
 	return Pass()
 }
 
-func lockfilesFor(language string) string {
-	switch language {
-	case LanguageGo:
-		return "go.sum"
-	case LanguagePython:
-		return "uv.lock or poetry.lock"
-	default:
-		return "pnpm-lock.yaml or package-lock.json"
-	}
-}
+func lockfilesFor(language string) string { return languageTable[language].lockfiles }
 
 func lockfileFix(file string) string {
 	switch {

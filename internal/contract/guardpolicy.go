@@ -13,10 +13,10 @@ import (
 // "Recognition rules", Guard policy and Local guardrail adjustments).
 
 const (
-	guardPolicyFile = ".claude/hooks/policy.json"
+	guardPolicyFile = guardrule.PolicyFile
 	// localPolicyFile is the repository's own guard adjustments (spec
 	// 0050). The report lists them; no rule judges them in Phase 1.
-	localPolicyFile = ".claude/hooks/policy.local.json"
+	localPolicyFile = guardrule.LocalPolicyFile
 )
 
 // guardPolicy is policy.json read as A-04 reads it: an object whose

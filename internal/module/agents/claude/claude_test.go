@@ -13,6 +13,7 @@ import (
 
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
+	"github.com/Manual-debuger/VibeConform/internal/state"
 )
 
 func TestName(t *testing.T) {
@@ -289,8 +290,15 @@ func TestTemplatesMatchLiveFiles(t *testing.T) {
 
 	// This repository selects policy.agent_guard vibe-guard (spec 0053), so
 	// its live files are that rendering of the templates.
-	// TestAgentGuardRuntimeUnchanged pins the default's.
-	live := resolveContents(t, agentGuard(module.AgentGuardVibeGuard))
+	// TestAgentGuardRuntimeUnchanged pins the default's. The install hint
+	// names the vibe that synced them, which .vibe/state.yaml records.
+	st, err := state.Load(repoRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mctx := agentGuard(module.AgentGuardVibeGuard)
+	mctx.VibeVersion = st.VibeVersion
+	live := resolveContents(t, mctx)
 
 	for _, tc := range []struct {
 		live     string

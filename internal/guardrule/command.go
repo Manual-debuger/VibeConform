@@ -58,6 +58,12 @@ const MaxDepth = 8
 // substitution, …) inside Word.Text.
 const ExpansionMark = "\x00"
 
+// ShowExpansions writes text with each ExpansionMark shown as $…, for a
+// message.
+func ShowExpansions(text string) string {
+	return strings.ReplaceAll(text, ExpansionMark, "$…")
+}
+
 // Word is one word of a simple command after quote removal.
 type Word struct {
 	// Text is the word after quote removal, with each expansion replaced
@@ -155,7 +161,7 @@ var psAliases = map[string]string{
 func (c Command) String() string {
 	parts := make([]string, len(c.Words))
 	for i, w := range c.Words {
-		parts[i] = strings.ReplaceAll(w.Text, ExpansionMark, "$…")
+		parts[i] = ShowExpansions(w.Text)
 	}
 	return strings.Join(parts, " ")
 }

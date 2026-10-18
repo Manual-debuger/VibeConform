@@ -231,8 +231,8 @@
     {"name": "A-08 (#106): Edit under hooks, expired unlock", "want": "deny", "payload": {"tool_name": "Edit", "tool_input": {"file_path": ".claude/hooks/guard.go", "old_string": "a", "new_string": "b"}}, "rule": "guardrail-settings", "unlock": "expired"},
     {"name": "A-08 (#106): Write settings.json, valid unlock", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": ".claude/settings.json", "content": "{}"}}, "unlock": "valid"},
     {"name": "A-08 (#106): Edit under hooks, valid unlock", "want": "allow", "payload": {"tool_name": "Edit", "tool_input": {"file_path": ".claude/hooks/guard.go", "old_string": "a", "new_string": "b"}}, "unlock": "valid"},
-    {"name": "A-08 (#106): MultiEdit settings.json by an absolute path, no unlock", "want": "deny", "payload": {"tool_name": "MultiEdit", "tool_input": {"file_path": "/repo/.claude/settings.json", "edits": []}}, "rule": "guardrail-settings"},
-    {"name": "A-08 (#106): Write a Windows path under hooks, no unlock", "want": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": "C:\\repo\\.claude\\hooks\\pre.sh", "content": ""}}, "rule": "guardrail-settings"},
+    {"name": "A-08 (#106): MultiEdit settings.json by a ./ path, no unlock", "want": "deny", "payload": {"tool_name": "MultiEdit", "tool_input": {"file_path": "./.claude/settings.json", "edits": []}}, "rule": "guardrail-settings"},
+    {"name": "A-08 (#106): Write a backslash path under hooks, no unlock", "want": "deny", "payload": {"tool_name": "Write", "tool_input": {"file_path": ".claude\\hooks\\pre.sh", "content": ""}}, "rule": "guardrail-settings"},
     {"name": "A-08 (#106): Bash vibe unlock, no unlock", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "vibe unlock"}}, "rule": "guardrail-settings"},
     {"name": "A-08 (#106): Bash vibe unlock, valid unlock", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "vibe unlock --minutes 240"}}, "rule": "guardrail-settings", "unlock": "valid"},
     {"name": "A-08 (#106): Bash vibe unlock, expired unlock", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "vibe unlock"}}, "rule": "guardrail-settings", "unlock": "expired"},
@@ -262,6 +262,8 @@
     {"name": "near miss (#106): vibe audit", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "vibe audit --static"}}},
     {"name": "near miss (#106): echo vibe unlock", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "echo run vibe unlock in your terminal"}}},
     {"name": "near miss (#106): Write a skill under .claude", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": ".claude/skills/vibeconform/SKILL.md", "content": ""}}},
-    {"name": "near miss (#106): Write a file named settings.json elsewhere", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": ".vscode/settings.json", "content": "{}"}}}
+    {"name": "near miss (#106): Write a file named settings.json elsewhere", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": ".vscode/settings.json", "content": "{}"}}},
+    {"name": "near miss (#106): the person's own settings.json outside the repository", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/home/me/.claude/settings.json", "content": "{}"}}},
+    {"name": "near miss (#106): a hook of the person's own outside the repository", "want": "allow", "payload": {"tool_name": "Edit", "tool_input": {"file_path": "C:\\Users\\me\\.claude\\hooks\\pre.sh", "old_string": "a", "new_string": "b"}}}
   ]
 }

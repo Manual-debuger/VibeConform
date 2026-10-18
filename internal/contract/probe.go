@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
 // The probe copy (spec 0053, "The probe copy"): one temporary Git
@@ -522,7 +524,7 @@ func runnableCommand(src string) (argv, assigns []string, why string) {
 	}
 	for _, w := range cmd.Words {
 		if !w.Literal {
-			return nil, nil, fmt.Sprintf("the word %q holds a parameter expansion or command substitution", strings.ReplaceAll(w.Text, expansionMark, "$…"))
+			return nil, nil, fmt.Sprintf("the word %q holds a parameter expansion or command substitution", guardrule.ShowExpansions(w.Text))
 		}
 		argv = append(argv, w.Text)
 	}

@@ -77,7 +77,7 @@ var (
 	guardrailSettings = pathRule{gr.GuardrailSettings,
 		".claude/settings.json and .claude/hooks/ change only after the user unlocks them; " +
 			"ask the user to run vibe unlock in their own terminal",
-		func(g *Guard, p string) bool { return matchGuardrailSettings(p) && !g.unlocked() }, false}
+		func(g *Guard, p string) bool { return g.matchGuardrailSettings(p) && !g.unlocked() }, false}
 
 	unlockMarker = pathRule{gr.GuardrailSettings,
 		"only the user unlocks the guardrail settings, with vibe unlock in their own terminal; the unlock marker is theirs to write",

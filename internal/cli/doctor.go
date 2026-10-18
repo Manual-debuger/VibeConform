@@ -53,7 +53,7 @@ func runDoctor(cmd *cobra.Command, repoRoot string) error {
 	gitOK := git.Status == doctor.Pass
 	report.Add(git)
 
-	p, err := buildPlan(repoRoot)
+	p, err := buildPlan(repoRoot, runningVersion(cmd))
 	if err != nil {
 		report.Add(
 			doctor.Result{Status: doctor.Fail, Name: "manifest", Detail: err.Error()},

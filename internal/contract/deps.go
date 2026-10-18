@@ -1,12 +1,9 @@
 package contract
 
 import (
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"strings"
-
-	"golang.org/x/mod/modfile"
 )
 
 // "Has dependencies" decides D-01's no-lockfile case (spec 0053, D-01).
@@ -23,14 +20,8 @@ var errNoManifest = errors.New("no manifest")
 // not counted. TypeScript: package.json has a non-empty dependencies,
 // devDependencies, optionalDependencies or peerDependencies.
 func hasDependencies(env *Env, comp Component) (manifest string, deps bool, err error) {
-	switch comp.Language {
-	case LanguageGo:
-		manifest = joinRel(comp.Path, "go.mod")
-	case LanguagePython:
-		manifest = joinRel(comp.Path, "pyproject.toml")
-	default:
-		manifest = joinRel(comp.Path, "package.json")
-	}
+	lang := languageTable[comp.Language]
+	manifest = joinRel(comp.Path, lang.manifest)
 	data, err := env.ReadFile(manifest)
 	if errors.Is(err, fs.ErrNotExist) {
 		return manifest, false, errNoManifest
@@ -38,35 +29,19 @@ func hasDependencies(env *Env, comp Component) (manifest string, deps bool, err 
 	if err != nil {
 		return manifest, false, err
 	}
-	switch comp.Language {
-	case LanguageGo:
-		f, err := modfile.ParseLax(manifest, data, nil)
-		if err != nil {
-			return manifest, false, err
-		}
-		return manifest, len(f.Require) > 0, nil
-	case LanguagePython:
-		doc, err := parseTOML(string(data))
-		if err != nil {
-			return manifest, false, err
-		}
-		return manifest, pyprojectHasDependencies(doc), nil
-	default:
-		var pkg map[string]json.RawMessage
-		if err := json.Unmarshal(data, &pkg); err != nil {
-			return manifest, false, err
-		}
-		for _, key := range []string{"dependencies", "devDependencies", "optionalDependencies", "peerDependencies"} {
-			var m map[string]any
-			if raw, ok := pkg[key]; ok && json.Unmarshal(raw, &m) == nil && len(m) > 0 {
-				return manifest, true, nil
-			}
-		}
-		return manifest, false, nil
-	}
+	deps, err = lang.hasDependencies(manifest, data)
+	return manifest, deps, err
 }
 
-func pyprojectHasDependencies(doc map[string]any) bool {
+func pyprojectHasDependencies(_ string, data []byte) (bool, error) {
+	doc, err := parseTOML(string(data))
+	if err != nil {
+		return false, err
+	}
+	return pyprojectDeclaresDependencies(doc), nil
+}
+
+func pyprojectDeclaresDependencies(doc map[string]any) bool {
 	project, _ := doc["project"].(map[string]any)
 	if nonEmptyList(project["dependencies"]) {
 		return true

@@ -22,10 +22,6 @@ const (
 	exitUsage = 64
 )
 
-// MarkerFile is the unlock marker's name in the common Git directory
-// (spec 0051, "The unlock marker").
-const MarkerFile = "vibe-unlock"
-
 // LogFile is observe mode's log, in the common Git directory.
 const LogFile = "vibe-guard.log"
 
@@ -220,7 +216,7 @@ func relock(env Env) int {
 		say(env.Stderr, "vibe-guard: relock: no Git directory found from "+repo.Root)
 		return 1
 	}
-	err := os.Remove(filepath.Join(repo.CommonDir, MarkerFile))
+	err := os.Remove(filepath.Join(repo.CommonDir, gr.UnlockMarkerFile))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		say(env.Stderr, "vibe-guard: relock: "+err.Error())
 		return 1
@@ -318,7 +314,7 @@ func writeMatch(w io.Writer, f Finding) {
 }
 
 func describeWord(w gr.Word) string {
-	s := "[" + strings.ReplaceAll(w.Text, gr.ExpansionMark, "$…") + "]"
+	s := "[" + gr.ShowExpansions(w.Text) + "]"
 	switch {
 	case w.Unknown:
 		s += "(unknown: an unquoted expansion)"

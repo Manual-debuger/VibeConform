@@ -386,10 +386,10 @@ func TestGuardProbeA08(t *testing.T) {
 		assertPart(t, rep, "A-08", contract.Probe, contract.ResultFail,
 			`corpus case "A-08 (#106): Write settings.json, no unlock" (Write ".claude/settings.json") should be refused with no unlock marker`,
 			`the exception guardrail-settings ".claude/**" in .claude/hooks/policy.json does not count: guard exceptions do not satisfy A-08`)
-		// Only the four cases the exception matches by a relative path get
-		// through: the marker and vibe unlock stay refused.
-		if p := part(t, rep, "A-08", contract.Probe); len(p.Findings) != 4 {
-			t.Errorf("A-08 has %d findings, want 4:\n%s", len(p.Findings), findingText(p))
+		// Only the six edits of settings and hooks get through: the marker
+		// and vibe unlock stay refused.
+		if p := part(t, rep, "A-08", contract.Probe); len(p.Findings) != 6 {
+			t.Errorf("A-08 has %d findings, want 6:\n%s", len(p.Findings), findingText(p))
 		}
 	})
 	t.Run("a Stop hook without vibe-guard relock fails A-08", func(t *testing.T) {

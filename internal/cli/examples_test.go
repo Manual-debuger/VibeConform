@@ -32,7 +32,7 @@ func TestExamplesAreConformant(t *testing.T) {
 		t.Run(example, func(t *testing.T) {
 			root := filepath.Join("..", "..", "examples", example)
 
-			p, err := buildPlan(root)
+			p, err := buildPlan(root, "test")
 			if err != nil {
 				t.Fatalf("planning %s: %v", root, err)
 			}
@@ -70,7 +70,7 @@ func TestExamplesCoverEveryLanguageStandard(t *testing.T) {
 	wantByExample := map[string]string{"typescript": "prod-ts", "python": "prod-py", "monorepo": "prod-mono"}
 	for _, example := range examples {
 		root := filepath.Join("..", "..", "examples", example)
-		p, err := buildPlan(root)
+		p, err := buildPlan(root, "test")
 		if err != nil {
 			t.Fatalf("planning %s: %v", root, err)
 		}
@@ -83,7 +83,7 @@ func TestExamplesCoverEveryLanguageStandard(t *testing.T) {
 // TestPlanCarriesComponents: modules and the missing-tool check both see
 // vibe.yaml's components through the plan's context.
 func TestPlanCarriesComponents(t *testing.T) {
-	p, err := buildPlan(filepath.Join("..", "..", "examples", "monorepo"))
+	p, err := buildPlan(filepath.Join("..", "..", "examples", "monorepo"), "test")
 	if err != nil {
 		t.Fatal(err)
 	}

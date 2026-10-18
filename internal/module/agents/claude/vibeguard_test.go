@@ -14,8 +14,36 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module"
 )
 
+// testVibeVersion is the vibe version the tests resolve with.
+const testVibeVersion = "v1.2.3"
+
 func agentGuard(v string) *module.Context {
-	return &module.Context{Integrations: []string{"claude"}, Policies: map[string]string{manifest.PolicyAgentGuard: v}}
+	return &module.Context{Integrations: []string{"claude"}, Policies: map[string]string{manifest.PolicyAgentGuard: v},
+		VibeVersion: testVibeVersion}
+}
+
+// TestVibeGuardInstallVersion: the install hint names the running vibe's
+// version when go install can fetch it, and latest otherwise (spec 0053,
+// "The reference hook commands").
+func TestVibeGuardInstallVersion(t *testing.T) {
+	for in, want := range map[string]string{
+		"v0.12.0":         "v0.12.0",
+		"v0.12.0-alpha.1": "v0.12.0-alpha.1",
+		"v0.11.0-alpha.1.0.20261017172609-46246ad76fbf":       "v0.11.0-alpha.1.0.20261017172609-46246ad76fbf",
+		"v0.11.0-alpha.1.0.20261017172609-46246ad76fbf+dirty": "latest",
+		"dev":     "latest",
+		"(devel)": "latest",
+		"":        "latest",
+		"test":    "latest",
+	} {
+		if got := VibeGuardVersion(in); got != want {
+			t.Errorf("VibeGuardVersion(%q) = %q, want %q", in, got, want)
+		}
+	}
+	got := resolveContents(t, agentGuard(module.AgentGuardVibeGuard))[SettingsPath]
+	if want := "go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@" + testVibeVersion + `\"`; !bytes.Contains(got, []byte(want)) {
+		t.Errorf("settings.json does not name %s:\n%s", want, got)
+	}
 }
 
 func resolveContents(t *testing.T, mctx *module.Context) map[string][]byte {
@@ -89,7 +117,7 @@ func TestAgentGuardVibeGuard(t *testing.T) {
 
 	pre := vg["PreToolUse"]
 	if len(pre) != 1 || pre[0].Matcher != guard.ReferencePreToolUseMatcher || len(pre[0].Hooks) != 1 ||
-		pre[0].Hooks[0].Command != guard.ReferencePreToolUse(VibeGuardVersion) {
+		pre[0].Hooks[0].Command != guard.ReferencePreToolUse(testVibeVersion) {
 		t.Errorf("PreToolUse = %+v, want the reference command and matcher", pre)
 	}
 	stop := vg["Stop"]

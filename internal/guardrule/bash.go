@@ -62,7 +62,7 @@ func bashWord(w *syntax.Word) Word {
 	for _, part := range w.Parts {
 		switch p := part.(type) {
 		case *syntax.Lit:
-			b.WriteString(unescape(p.Value, false))
+			b.WriteString(Unescape(p.Value, false))
 		case *syntax.SglQuoted:
 			out.Quoted = true
 			if p.Dollar {
@@ -74,7 +74,7 @@ func bashWord(w *syntax.Word) Word {
 			out.Quoted = true
 			for _, q := range p.Parts {
 				if l, ok := q.(*syntax.Lit); ok {
-					b.WriteString(unescape(l.Value, true))
+					b.WriteString(Unescape(l.Value, true))
 					continue
 				}
 				out.Literal = false
@@ -110,10 +110,11 @@ func expandsBraces(w *syntax.Word) bool {
 	return false
 }
 
-// unescape removes backslash quoting from literal text. Outside double
-// quotes a backslash quotes any character; inside them only $ ` " \ and
-// newline. A backslash before a newline joins the lines.
-func unescape(s string, inDouble bool) string {
+// Unescape removes backslash quoting from literal shell text. Outside
+// double quotes a backslash quotes any character; inside them only $ ` "
+// \ and newline. A backslash before a newline joins the lines. POSIX and
+// Bash agree on it, so the contract's POSIX parsing uses it too.
+func Unescape(s string, inDouble bool) string {
 	if !strings.Contains(s, `\`) {
 		return s
 	}

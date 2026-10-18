@@ -106,8 +106,10 @@ type repoPlan struct {
 // It holds all of the command-side I/O — manifest, recorded state, and
 // current file contents — so that diff and sync cannot drift apart: diff is
 // exactly the preview of what sync applies. Callers wrap the returned error
-// with their own command name.
-func buildPlan(repoRoot string) (*repoPlan, error) {
+// with their own command name. vibeVersion is the running vibe's version,
+// which a module may name in what it renders (the vibe-guard install
+// hint, spec 0053).
+func buildPlan(repoRoot, vibeVersion string) (*repoPlan, error) {
 	path := filepath.Join(repoRoot, manifestFileName)
 	data, err := os.ReadFile(path) // #nosec G304 -- repoRoot is an operator-supplied CLI flag, same trust boundary as init.go's WriteFile target
 	if err != nil {
@@ -151,6 +153,7 @@ func buildPlan(repoRoot string) (*repoPlan, error) {
 		DocsDirs:     m.Development.DocsDirs(),
 		Profiles:     profiles(s, m),
 		Generated:    m.Generated,
+		VibeVersion:  vibeVersion,
 	}
 	p := &repoPlan{Standard: s, Context: mctx, Selection: selected, Previous: previous, Modules: s.ModulesFor(selected)}
 	for _, mod := range p.Modules {
