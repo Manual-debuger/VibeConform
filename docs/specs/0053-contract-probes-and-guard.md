@@ -592,8 +592,11 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   added 108 cases, named "variant (#105): …" and "near miss (#105): …":
   89 deny and 19 allow. #106 added 38 cases, named "A-08 (#106): …",
   "unlock (#106): …" and "near miss (#106): …": 31 deny and 7 allow.
-  The corpus now has 263 cases: 195 deny and 68 allow. By guard rule ID
-  (a test keeps this table equal to the corpus):
+  The review fix of `guardrail-settings` (2026-10-18, below) turned its
+  two absolute-path deny cases into relative ones and added two allow
+  cases outside the repository. The corpus now has 265 cases: 195 deny
+  and 70 allow. By guard rule ID (a test keeps this table equal to the
+  corpus):
 
   | Guard rule ID | Deny cases |
   |---|---|
@@ -774,9 +777,9 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   reaches the guard.
 - **Baseline rules** are built in, one per guard rule ID of spec 0051,
   plus `guardrail-settings` as below. `policy.json` cannot remove them.
-- **`guardrail-settings`.** A file edit of `.claude/settings.json`, or
-  of any path under `.claude/hooks/`, is refused unless the marker is
-  valid. Spec 0051's `guard-policy-file` still refuses
+- **`guardrail-settings`.** A file edit of the repository's
+  `.claude/settings.json`, or of any path under its `.claude/hooks/`,
+  is refused unless the marker is valid. Spec 0051's `guard-policy-file` still refuses
   `.claude/hooks/policy.json` and `policy.local.json` even then: an
   unlock opens settings and hooks, not the guard's own policy. These
   are always refused, whatever the marker says:
@@ -802,7 +805,15 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     such as `repo.git`).
   - The guard's settings and hooks match is case-insensitive, as
     `guard-policy-file` is: `.claude/settings.json` and any path with
-    an element after `.claude/hooks/`, anywhere in the path.
+    an element after `.claude/hooks/`. Corrected in review (2026-10-18,
+    a bug): spec 0051 names the repository's files, so only paths
+    inside the repository root match, read as an exception glob reads
+    them (relative to the root, slash separated). The person's own
+    `~/.claude/settings.json`, or a `.claude/` directory below the
+    root, is not refused. Two corpus cases with absolute paths outside
+    any repository (`/repo/…`, `C:\repo\…`) became relative paths; the
+    corpus gained two allow cases for files outside the repository, and
+    `internal/guard` a regression test.
   - A PowerShell expression redirected to a file (`'x' > f`) is a
     redirect-only command in `internal/guardrule`, as `> f` is in Bash.
     Before, the PowerShell tokenizer skipped it.

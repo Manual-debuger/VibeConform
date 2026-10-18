@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
 // The A-08 probe (#106; spec 0053, "A-08"): the corpus's A-08 cases run
@@ -22,7 +24,7 @@ const a08CasePrefix = "A-08 ("
 func a08Cases() []GuardCase {
 	var out []GuardCase
 	for _, c := range guardCorpus() {
-		if c.Rule == "guardrail-settings" || strings.HasPrefix(c.Name, a08CasePrefix) {
+		if c.Rule == guardrule.GuardrailSettings || strings.HasPrefix(c.Name, a08CasePrefix) {
 			out = append(out, c)
 		}
 	}
@@ -50,18 +52,7 @@ func checkA08(env *Env) PartResult {
 	if !ok {
 		return res
 	}
-	var hooks []guardHook
-	for _, entry := range settings.commandEntries(eventPreToolUse) {
-		for i, command := range entry.Commands {
-			hooks = append(hooks, guardHook{entry: entry, command: command, limit: entry.Timeouts[i]})
-		}
-	}
-	var stops []guardHook
-	for _, entry := range settings.commandEntries(eventStop) {
-		for i, command := range entry.Commands {
-			stops = append(stops, guardHook{entry: entry, command: command, limit: entry.Timeouts[i]})
-		}
-	}
+	hooks, stops := settings.commandHooks(eventPreToolUse), settings.commandHooks(eventStop)
 	if len(hooks)+len(stops) > 0 {
 		if ok, why := s.HasBash(); !ok {
 			return Undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + why})
@@ -110,7 +101,7 @@ func checkA08(env *Env) PartResult {
 // a08Stop runs every Stop hook with a valid marker in place and a
 // payload with stop_hook_active true; afterwards the marker must be gone.
 // The copy is clean, so verify-fast passes and this is not a second A-05.
-func a08Stop(s *probeSession, stops []guardHook, v *verdicts) {
+func a08Stop(s *probeSession, stops []settingsHook, v *verdicts) {
 	if len(stops) == 0 {
 		v.fail(Finding{File: claudeSettingsFile, Message: "no Stop hook removes the unlock marker", Fix: relockFix})
 		return
@@ -138,7 +129,7 @@ func a08Stop(s *probeSession, stops []guardHook, v *verdicts) {
 		}
 		exits = append(exits, fmt.Sprintf("hook %q exited %d", shortCommand(h.command), out.ExitCode))
 	}
-	_, err := os.Stat(filepath.Join(s.GitDir(), unlockMarker))
+	_, err := os.Stat(filepath.Join(s.GitDir(), guardrule.UnlockMarkerFile))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
@@ -149,7 +140,7 @@ func a08Stop(s *probeSession, stops []guardHook, v *verdicts) {
 	default:
 		v.fail(Finding{File: claudeSettingsFile,
 			Message: fmt.Sprintf("after the Stop hooks ran with a valid unlock marker, the marker %s still exists; %s",
-				".git/"+unlockMarker, strings.Join(exits, "; ")),
+				".git/"+guardrule.UnlockMarkerFile, strings.Join(exits, "; ")),
 			Fix: relockFix + " before anything in it that can fail"})
 	}
 }

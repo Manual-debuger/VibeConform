@@ -167,17 +167,6 @@ func ruleFor(entrypoint string) string {
 	return "V-01"
 }
 
-func testFilePattern(language string) string {
-	switch language {
-	case LanguageGo:
-		return "a _test.go file"
-	case LanguagePython:
-		return "a test_*.py or *_test.py file"
-	default:
-		return "a *.test.ts, *.spec.ts, *.test.tsx or *.spec.tsx file"
-	}
-}
-
 func cannotReset(err error) PartResult {
 	return Undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
 }
@@ -212,17 +201,7 @@ func checkA05Probe(env *Env) PartResult {
 	if !ok {
 		return res
 	}
-	type hook struct {
-		command string
-		entry   claudeHookEntry
-		i       int
-	}
-	var hooks []hook
-	for _, entry := range settings.commandEntries(eventStop) {
-		for i, c := range entry.Commands {
-			hooks = append(hooks, hook{c, entry, i})
-		}
-	}
+	hooks := settings.commandHooks(eventStop)
 	if len(hooks) == 0 {
 		return Fail(Finding{File: claudeSettingsFile, Message: "has no Stop hook, so nothing blocks the end of a turn with a failing test", Fix: fix})
 	}
@@ -235,7 +214,7 @@ func checkA05Probe(env *Env) PartResult {
 		return Undecided(Finding{Message: "cannot decide: " + why})
 	}
 
-	run := func(h hook, active bool) runOutcome {
+	run := func(h settingsHook, active bool) runOutcome {
 		if err := s.Reset(); err != nil {
 			return runOutcome{Label: "the Stop hook", Undecided: "cannot reset the probe copy: " + err.Error()}
 		}
@@ -244,7 +223,7 @@ func checkA05Probe(env *Env) PartResult {
 		}
 		payload := s.HookPayload(eventStop, map[string]any{"stop_hook_active": active})
 		label := fmt.Sprintf("the Stop hook with the test defect in %s, stop_hook_active %t", comp.Path, active)
-		return s.RunHook(label, h.command, h.entry.Timeouts[h.i], payload, RunOpts{})
+		return s.RunHook(label, h.command, h.limit, payload, RunOpts{})
 	}
 
 	// Some hook blocks the turn while it is not yet continued.

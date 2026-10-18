@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	gr "github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
@@ -22,21 +21,24 @@ func (g *Guard) unlocked() bool {
 	if g.Repo.CommonDir == "" {
 		return false
 	}
-	data, err := os.ReadFile(filepath.Join(g.Repo.CommonDir, MarkerFile)) // #nosec G304 -- the unlock marker in the repository's own common Git directory
+	data, err := os.ReadFile(filepath.Join(g.Repo.CommonDir, gr.UnlockMarkerFile)) // #nosec G304 -- the unlock marker in the repository's own common Git directory
 	if err != nil {
 		return false
 	}
-	line, _, _ := strings.Cut(string(data), "\n")
-	expiry, err := time.Parse(time.RFC3339, strings.TrimSpace(line))
+	expiry, err := gr.ParseUnlockMarker(data)
 	return err == nil && g.Now.Before(expiry)
 }
 
-var guardrailSettingsRe = regexp.MustCompile(`(?i)(^|/)\.claude/+(settings\.json$|hooks/+[^/])`)
+var guardrailSettingsRe = regexp.MustCompile(`(?i)^\.claude/+(settings\.json$|hooks/+[^/])`)
 
-// matchGuardrailSettings reports whether p is .claude/settings.json or a
-// path under .claude/hooks/.
-func matchGuardrailSettings(p string) bool {
-	return guardrailSettingsRe.MatchString(strings.ReplaceAll(p, `\`, "/"))
+// matchGuardrailSettings reports whether p is the repository's
+// .claude/settings.json or a path under its .claude/hooks/ (spec 0051
+// names the repository's files). p is taken relative to the repository
+// root, as an exception glob is: a relative path, or an absolute one
+// inside the root. The same names elsewhere, such as the person's own
+// ~/.claude/settings.json, are not the repository's guardrails.
+func (g *Guard) matchGuardrailSettings(p string) bool {
+	return guardrailSettingsRe.MatchString(gr.RelPath(g.Repo.Root, p))
 }
 
 // isMarker reports whether p is the unlock marker: a file named
@@ -45,7 +47,7 @@ func matchGuardrailSettings(p string) bool {
 // and macOS file systems do.
 func (g *Guard) isMarker(p string) bool {
 	parts := strings.Split(strings.ReplaceAll(p, `\`, "/"), "/")
-	if !strings.EqualFold(parts[len(parts)-1], MarkerFile) {
+	if !strings.EqualFold(parts[len(parts)-1], gr.UnlockMarkerFile) {
 		return false
 	}
 	for _, part := range parts[:len(parts)-1] {
@@ -73,7 +75,7 @@ func (g *Guard) isMarker(p string) bool {
 func matchSelfUnlock(c gr.Command) bool {
 	for _, ws := range [][]gr.Word{c.Words, c.Redirects} {
 		for _, w := range ws {
-			if strings.Contains(strings.ToLower(w.Text), MarkerFile) {
+			if strings.Contains(strings.ToLower(w.Text), gr.UnlockMarkerFile) {
 				return true
 			}
 		}

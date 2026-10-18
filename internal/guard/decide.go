@@ -80,14 +80,10 @@ type Guard struct {
 	Now time.Time
 }
 
-// PolicyFile is where the guard reads its policy, relative to the
-// repository root.
-const PolicyFile = ".claude/hooks/policy.json"
-
 // New loads the guard of the repository at repo.
 func New(repo Repo, now time.Time) *Guard {
 	g := &Guard{Repo: repo, Now: now, Policy: &gr.Policy{Version: 2, Mode: gr.Enforce}}
-	data, err := os.ReadFile(filepath.Join(repo.Root, filepath.FromSlash(PolicyFile)))
+	data, err := os.ReadFile(filepath.Join(repo.Root, filepath.FromSlash(gr.PolicyFile)))
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 	case err != nil:
@@ -105,7 +101,7 @@ func deny(rule, why string) Decision {
 // Decide decides a tool call whose target was read without error.
 func (g *Guard) Decide(t gr.Target) Decision {
 	if g.PolicyErr != nil {
-		return deny(gr.IDPolicyError, PolicyFile+" cannot be used: "+g.PolicyErr.Error())
+		return deny(gr.IDPolicyError, gr.PolicyFile+" cannot be used: "+g.PolicyErr.Error())
 	}
 	var d Decision
 	switch {
@@ -121,7 +117,7 @@ func (g *Guard) Decide(t gr.Target) Decision {
 // DecideError decides a call whose payload could not be read.
 func (g *Guard) DecideError(rule, why string) Decision {
 	if g.PolicyErr != nil {
-		return deny(gr.IDPolicyError, PolicyFile+" cannot be used: "+g.PolicyErr.Error())
+		return deny(gr.IDPolicyError, gr.PolicyFile+" cannot be used: "+g.PolicyErr.Error())
 	}
 	d := deny(rule, why)
 	d.Observe = g.Policy.Mode == gr.Observe

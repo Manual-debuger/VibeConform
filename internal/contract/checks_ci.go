@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 	"gopkg.in/yaml.v3"
 )
 
@@ -176,7 +177,7 @@ func checkC02(env *Env) PartResult {
 				}
 				for _, w := range s.Run.Words() {
 					if strings.HasSuffix(w, "@latest") {
-						w = strings.ReplaceAll(w, expansionMark, "$…")
+						w = guardrule.ShowExpansions(w)
 						findings = append(findings, Finding{File: wf.File,
 							Message: fmt.Sprintf("line %d: job %s, step %d runs %s, which is not pinned", s.Line, j.ID, s.Index+1, w),
 							Fix:     "pin " + strings.TrimSuffix(w, "@latest") + " to a version (@v1.2.3) instead of @latest"})

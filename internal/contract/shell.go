@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
+
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
 // Shell parsing for the "called" checks (spec 0051, "Rules"; spec 0052,
@@ -26,8 +28,9 @@ type Word struct {
 	Literal bool
 }
 
-// expansionMark stands for an expansion inside Word.Text.
-const expansionMark = "\x00"
+// expansionMark stands for an expansion inside Word.Text. It is the
+// guard's mark, so a word reads the same in both.
+const expansionMark = guardrule.ExpansionMark
 
 // Command is one simple command: its words after quote removal, with
 // leading assignments and redirections dropped.
@@ -42,7 +45,7 @@ type Command struct {
 func (c Command) String() string {
 	parts := make([]string, len(c.Words))
 	for i, w := range c.Words {
-		parts[i] = strings.ReplaceAll(w.Text, expansionMark, "$…")
+		parts[i] = guardrule.ShowExpansions(w.Text)
 	}
 	return strings.Join(parts, " ")
 }
@@ -239,7 +242,7 @@ func wordOf(w *syntax.Word) Word {
 	for _, part := range w.Parts {
 		switch p := part.(type) {
 		case *syntax.Lit:
-			b.WriteString(unescape(p.Value, false))
+			b.WriteString(guardrule.Unescape(p.Value, false))
 		case *syntax.SglQuoted:
 			if p.Dollar {
 				literal = false
@@ -250,7 +253,7 @@ func wordOf(w *syntax.Word) Word {
 		case *syntax.DblQuoted:
 			for _, q := range p.Parts {
 				if l, ok := q.(*syntax.Lit); ok {
-					b.WriteString(unescape(l.Value, true))
+					b.WriteString(guardrule.Unescape(l.Value, true))
 					continue
 				}
 				literal = false
@@ -262,33 +265,6 @@ func wordOf(w *syntax.Word) Word {
 		}
 	}
 	return Word{Text: b.String(), Literal: literal}
-}
-
-// unescape removes backslash quoting from literal text. Outside double
-// quotes a backslash quotes any character; inside them only $ ` " \ and
-// newline. A backslash before a newline joins the lines.
-func unescape(s string, inDouble bool) string {
-	if !strings.Contains(s, `\`) {
-		return s
-	}
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		if s[i] != '\\' || i+1 == len(s) {
-			b.WriteByte(s[i])
-			continue
-		}
-		next := s[i+1]
-		switch {
-		case next == '\n':
-			i++
-		case !inDouble || strings.IndexByte("$`\"\\", next) >= 0:
-			b.WriteByte(next)
-			i++
-		default:
-			b.WriteByte(s[i])
-		}
-	}
-	return b.String()
 }
 
 // githubExpression matches a GitHub Actions expression, ${{ … }}.

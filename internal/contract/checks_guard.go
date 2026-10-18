@@ -20,10 +20,6 @@ import (
 // operating system's directories and with policy.json replaced by
 // invalid JSON. A hook refuses only by exiting 2.
 
-// unlockMarker is the name of the unlock marker in the common Git
-// directory (spec 0051).
-const unlockMarker = "vibe-unlock"
-
 // GuardExceptionUse is one corpus case a guard exception let through
 // (A-02), listed in the report under its exception.
 type GuardExceptionUse struct {
@@ -57,26 +53,14 @@ func GuardCorpusCounts() (byRule []GuardCorpusCount, deny, allow int) {
 	return byRule, deny, allow
 }
 
-// guardHook is one PreToolUse command hook of .claude/settings.json.
-type guardHook struct {
-	entry   claudeHookEntry
-	command string
-	limit   time.Duration
-}
-
 // preToolUseHooks reads the PreToolUse command hooks. When it cannot,
 // ok is false and result is what the probe decides.
-func preToolUseHooks(env *Env) (hooks []guardHook, result PartResult, ok bool) {
+func preToolUseHooks(env *Env) (hooks []settingsHook, result PartResult, ok bool) {
 	settings, res, ok := env.readClaudeSettings("add a PreToolUse hook that runs the guard")
 	if !ok {
 		return nil, res, false
 	}
-	for _, entry := range settings.commandEntries(eventPreToolUse) {
-		for i, command := range entry.Commands {
-			hooks = append(hooks, guardHook{entry: entry, command: command, limit: entry.Timeouts[i]})
-		}
-	}
-	return hooks, Pass(), true
+	return settings.commandHooks(eventPreToolUse), Pass(), true
 }
 
 // hookRun is one hook's run for one case.
@@ -171,7 +155,7 @@ var maxParallelCases = min(runtime.NumCPU(), 8)
 // concurrently; the states run one after another, because the marker is
 // one file. The R-01 shim's calls during these runs are recorded
 // afterwards, under who.
-func feedCases(s *probeSession, hooks []guardHook, cases []GuardCase, who string, label func(GuardCase) string, o RunOpts) ([]caseRun, error) {
+func feedCases(s *probeSession, hooks []settingsHook, cases []GuardCase, who string, label func(GuardCase) string, o RunOpts) ([]caseRun, error) {
 	runs := make([]caseRun, len(cases))
 	defer func() {
 		out := runOutcome{Label: who, File: claudeSettingsFile}
@@ -210,7 +194,7 @@ func feedCases(s *probeSession, hooks []guardHook, cases []GuardCase, who string
 
 // feedCase runs one case through every hook that matches its tool, one
 // hook after another. It may run concurrently with other cases.
-func feedCase(s *probeSession, hooks []guardHook, c GuardCase, label string, o RunOpts) caseRun {
+func feedCase(s *probeSession, hooks []settingsHook, c GuardCase, label string, o RunOpts) caseRun {
 	run := caseRun{c: c}
 	var payload []byte
 	for _, h := range hooks {
@@ -234,7 +218,7 @@ func feedCase(s *probeSession, hooks []guardHook, c GuardCase, label string, o R
 // ten minutes ahead for a valid marker and one minute in the past for an
 // expired one (spec 0053, A-08).
 func (s *probeSession) setUnlock(state string) error {
-	p := filepath.Join(s.GitDir(), unlockMarker)
+	p := filepath.Join(s.GitDir(), guardrule.UnlockMarkerFile)
 	var at time.Time
 	switch state {
 	case UnlockValid:
@@ -247,7 +231,7 @@ func (s *probeSession) setUnlock(state string) error {
 		}
 		return nil
 	}
-	return os.WriteFile(p, []byte(at.UTC().Format(time.RFC3339)+"\n"), 0o600)
+	return os.WriteFile(p, guardrule.FormatUnlockMarker(at), 0o600)
 }
 
 // policyExceptions returns the guard policy's exceptions as the audit
@@ -469,7 +453,7 @@ func checkA03(env *Env) PartResult {
 	return v.result()
 }
 
-func a03Run(s *probeSession, hooks []guardHook, sit a03Situation, v *verdicts) {
+func a03Run(s *probeSession, hooks []settingsHook, sit a03Situation, v *verdicts) {
 	o, undo, err := sit.prepare(s)
 	if err != nil {
 		v.undecided(Finding{Message: "cannot decide: cannot prepare the probe copy " + sit.what + ": " + err.Error()})

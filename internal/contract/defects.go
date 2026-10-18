@@ -69,24 +69,6 @@ var defectSamples = map[string]map[defectKind]defectSample{
 	},
 }
 
-// isTestFile reports whether a file name marks its directory as holding
-// tests of a language (spec 0053, "Placement").
-func isTestFile(language, name string) bool {
-	switch language {
-	case LanguageGo:
-		return strings.HasSuffix(name, "_test.go")
-	case LanguagePython:
-		return strings.HasSuffix(name, ".py") && (strings.HasPrefix(name, "test_") || strings.HasSuffix(name, "_test.py"))
-	case LanguageTypeScript:
-		for _, suf := range []string{".test.ts", ".spec.ts", ".test.tsx", ".spec.tsx"} {
-			if strings.HasSuffix(name, suf) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // plantDir returns the first directory, in sorted path order, inside a
 // component that holds a test file of its language, and that test file.
 // Directories under vendor/ or node_modules/ do not qualify. Components

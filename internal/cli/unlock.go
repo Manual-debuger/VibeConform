@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Manual-debuger/VibeConform/internal/guard"
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
 // Unlock bounds, in minutes (spec 0053, "vibe unlock").
@@ -41,8 +41,8 @@ func newUnlockCmd() *cobra.Command {
 			}
 			expiry := time.Now().Add(time.Duration(minutes) * time.Minute).UTC().Truncate(time.Second)
 			stamp := expiry.Format(time.RFC3339)
-			marker := filepath.Join(dir, guard.MarkerFile)
-			if err := os.WriteFile(marker, []byte(stamp+"\n"), 0o600); err != nil {
+			marker := filepath.Join(dir, guardrule.UnlockMarkerFile)
+			if err := os.WriteFile(marker, guardrule.FormatUnlockMarker(expiry), 0o600); err != nil {
 				return fmt.Errorf("unlock: %w", err)
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(),
