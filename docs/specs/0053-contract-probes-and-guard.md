@@ -246,8 +246,9 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
 - **Hook commands run the way Claude Code runs them**: `bash -c
   '<command>'` with the hook's JSON payload on stdin, the copy as the
   working directory, and `CLAUDE_PROJECT_DIR` set. On Windows, bash is
-  the one Claude Code uses: `CLAUDE_CODE_GIT_BASH_PATH` when set,
-  otherwise Git for Windows' `bash.exe` (found next to `git.exe`, never
+  the one Claude Code uses: `CLAUDE_CODE_GIT_BASH_PATH` when it names
+  an existing `bash.exe`, `sh.exe`, `bash` or `sh`, otherwise Git for
+  Windows' `bash.exe` (found next to `git.exe`, never
   the WSL launcher in `System32`). With no bash, every hook part is
   `cannot decide`. Bash is resolved once, before any change to `PATH`.
   - Only `type: command` hooks run. Hook entries are read as Phase 1
@@ -262,7 +263,9 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     `tool_input` for PreToolUse, `stop_hook_active` for Stop, `source:
     startup` for SessionStart).
 - **Time limit.** Every run has a limit: a hook's own `timeout` field
-  when it has one, otherwise 60 seconds for hooks, and
+  when it has one, otherwise 600 seconds for hooks (Claude Code's
+  default; corrected from 60 on 2026-10-18, see "Hidden assumptions"),
+  and
   `--probe-timeout` (default 30 minutes) for entrypoints. A run that
   exceeds it is killed together with its child processes (a process
   group on Unix, a job object on Windows), and its part is `cannot
@@ -516,7 +519,8 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   of #103, 2026-10-17). One hook run is a bash and a guard process,
   about 0.2 seconds on Windows, so one case after another A-02 and
   A-03 would take minutes. Within each part, the cases with the same
-  unlock state run concurrently, at most eight at a time; the unlock
+  unlock state run concurrently, at most eight at a time (approved by
+  the user on 2026-10-18); the unlock
   states run one after another, because the marker is one file, and
   the parts still run one after another. The R-01 shim calls made
   during these runs are listed under "the PreToolUse hooks during
@@ -761,10 +765,14 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     string, no script file and no here-document (`curl … | bash`) runs
     a script the guard cannot see, and is refused under
     `dynamic-command`; `bash script.sh` is allowed, as before.
-    `timeout` and `stdbuf` are stripped as wrappers too. Still not
+    `timeout` and `stdbuf` are stripped as wrappers too. (These two
+    decisions, `curl … | bash` refused under `dynamic-command` and
+    `timeout`/`stdbuf` stripped, were approved by the user on
+    2026-10-18.) Still not
     read: `cmd /c`, `Start-Process`, `watch`, shell aliases, and glob
     expansion into flag-like file names. A missing `policy.json` is
-    the default policy (enforce, no rules, no exceptions); an
+    the default policy (enforce, no rules, no exceptions; approved by
+    the user on 2026-10-18); an
     unreadable or invalid one refuses every call that reaches the
     guard, other tools included. Observe mode applies to payload and
     parse errors too; a policy error is always refused, since its mode
@@ -854,6 +862,8 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   >&2; exit 2; }; vibe-guard hook`. `command -v` is a shell builtin, so
   the check works with only the operating system's `PATH` (A-03). The
   matcher is `Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit`.
+  `<version>` is the running `vibe`'s version, or `latest` for a build
+  `go install` cannot fetch ("This repository" below).
 - **Stop**: `vibe-guard relock 2>/dev/null; task verify:fast 1>&2
   </dev/null || task -x hook:done`. The relock comes first, so it runs
   whatever `verify-fast` does. It keeps the simple command Phase 1's
@@ -899,9 +909,17 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   - The values are `runtime` and `vibe-guard`; an absent key is
     `runtime`. Only `prod-go` offers the key, since only this repository
     uses it; the other standards reject it as a policy they do not offer.
-  - The install hint in the PreToolUse command names `@latest`, a fixed
-    string, so the generated settings do not change with every `vibe`
-    build that syncs them.
+  - The install hint in the PreToolUse command names `@<version>`, the
+    version of the `vibe` that renders it, as "The reference hook
+    commands" says. (An implementation that named a fixed `@latest` was
+    reverted on 2026-10-18, by the user's decision.) A version `go
+    install` cannot fetch names `@latest` instead: `dev` from an
+    unstamped build, `(devel)`, an empty version, or one with build
+    metadata such as `+dirty`. A release and a pseudo-version are named
+    as they are, since `go install` fetches a pushed commit's
+    pseudo-version. The settings therefore change with each `vibe`
+    version that syncs them; `task audit` runs the recorded
+    `vibe_version`, which renders the same hint.
   - The generated `Taskfile.yml` keeps a four-line comment where
     `hook:guard` was. The vibeconform skill's "agent guard" paragraph
     names `vibe-guard` and `vibe unlock` instead of `hook:guard`.
@@ -933,7 +951,14 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     job sets `VIBE_TEST_REQUIRE_TOOLS=bash,uv,pnpm,python,node`, since
     the `verify` it audits runs the tests with the uv, pnpm and old-guard
     fixtures; `ci.yml`'s test job does not, because `ci.yml` is a
-    generated file shipped to adopters. The network-disabled job lifts
+    generated file shipped to adopters (this departs from "Testing
+    Decisions", which names the test job too; approved by the user on
+    2026-10-18). The "Contract / audit" job's `timeout-minutes` is 60
+    (review, 2026-10-18; it was 300): the audit runs one full `verify`
+    in the probe copy, after which Go's test cache makes the
+    planted-defect reruns short, so it is expected to take well under
+    30 minutes. Its real time on CI is not yet measured. The
+    network-disabled job lifts
     Ubuntu's AppArmor restriction on unprivileged user namespaces
     before `unshare -rn`. `hook-guard.yml`'s `prod-go` leg now runs the
     old corpus in a repository synced to `prod-go`'s defaults, since
@@ -1012,8 +1037,8 @@ runner or the guard's matcher directly.
 - **Python and TypeScript fixtures** (uv with ruff and pytest; pnpm with
   tsc, prettier and Vitest) run when `uv` or `pnpm` is on `PATH` and
   skip otherwise. `VIBE_TEST_REQUIRE_TOOLS=uv,pnpm` turns a skip into a
-  failure. The full-audit CI job and the test job that runs these
-  fixtures set it.
+  failure. The full-audit CI job sets it; `ci.yml`'s test job does not
+  ("This repository", CI; approved by the user on 2026-10-18).
 - **D-01 without the network.** Go fixtures use a `replace` to a module
   inside the fixture, so `go mod tidy` needs no download. Passing: tidy
   changes nothing. Failing: an unused `require` that tidy removes. No
@@ -1104,7 +1129,10 @@ runner or the guard's matcher directly.
   entrypoints through a shell, and recognizing more lockfiles. Each is a
   later MINOR release.
 - Codex hooks (spec 0051: Codex is exempt from the A rules).
-- Parallel probe runs. The parts run one after another.
+- Parallel probe parts. The parts run one after another. Within A-02
+  and A-03, the corpus cases of one unlock state run concurrently, up
+  to eight at a time ("How A-02 and A-03 run the corpus"; approved by
+  the user on 2026-10-18).
 - Measuring `verify-fast`'s speed (spec 0051).
 
 ## Further Notes
@@ -1144,6 +1172,37 @@ runner or the guard's matcher directly.
   checked against Claude Code's documentation, and this spec is
   corrected where it is wrong.
 
+  **Checked on 2026-10-18** against
+  https://code.claude.com/docs/en/hooks and
+  https://code.claude.com/docs/en/env-vars:
+  - Payload fields: confirmed. Every hook gets `session_id`,
+    `transcript_path`, `cwd` and `hook_event_name` (and more the audit
+    does not send and no check reads, such as `permission_mode`);
+    PreToolUse adds `tool_name`, `tool_input` and `tool_use_id`; Stop
+    adds `stop_hook_active` ("true when Claude Code is already
+    continuing as a result of a stop hook"); SessionStart's `source`
+    is `startup` for a new session, which is also its matcher value.
+    Exit 2 blocks a PreToolUse call and keeps a Stop from stopping.
+  - Git Bash on Windows: confirmed. A command hook's shell form runs in
+    Git Bash on Windows, and in PowerShell only when Git Bash is not
+    installed. On Linux and macOS the page says both that the `shell`
+    field defaults to `bash` and that the shell form is passed to
+    `sh -c`; the audit keeps `bash -c`, and which one Claude Code runs
+    there stays UNVERIFIED (the reference commands are POSIX, so both
+    read them the same).
+  - `CLAUDE_CODE_GIT_BASH_PATH`: confirmed, with a correction. It is
+    the path to `bash.exe`, Windows only. When the path does not exist
+    or its file is not named `bash.exe`, `sh.exe`, `bash` or `sh`,
+    Claude Code ignores the variable and finds Git Bash as if it were
+    unset. The audit made every hook part `cannot decide` instead; it
+    now ignores such a value too (regression test
+    `TestProbeIgnoresAnInvalidGitBashPath`).
+  - Default timeout: wrong. Command hooks default to 600 seconds on
+    most events, PreToolUse, Stop and SessionStart included (30 on
+    `UserPromptSubmit`, which the audit does not run). The audit's
+    default is now 600 seconds; "How the audit runs commands" is
+    corrected.
+
 ## Acceptance Criteria
 
 1. `vibe audit` without `--static` runs every execution and probe part
@@ -1152,7 +1211,13 @@ runner or the guard's matcher directly.
    unchanged and deletes the probe copy (a test proves both).
 3. V-01, V-02, V-03, D-01, A-02, A-03, A-05 (probe), A-07 (execution),
    A-08 and R-01 (execution) each have a passing and a failing fixture
-   test through the `vibe audit` seam (#102, #104 and #106 done-when).
+   test (#102, #104 and #106 done-when). Amended, approved by the user
+   on 2026-10-18: the fixtures that run real tools or guards may call
+   `contract.Audit`, the engine `vibe audit` runs
+   (`internal/contract/probetest`, `internal/contract/guardprobe_test.go`),
+   and each part also has at least one light test through the `vibe
+   audit` seam (`internal/cli`: `TestProbePartsLight`, `TestRuleD01`,
+   `TestRuleA02Reporting`, `TestRuleA08Reporting`).
 4. With the tests removed from `verify`, V-01 fails and names "test"
    (#104).
 5. The Go, Python and Node guards pass every corpus case taken over by

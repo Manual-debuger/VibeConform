@@ -277,7 +277,8 @@ repository's working tree, index and `.git` never change.
   and its arguments found on `PATH`. Hook commands run as Claude Code
   runs them, `bash -c '<command>'` with the JSON payload on stdin (on
   Windows, Git for Windows' bash or `CLAUDE_CODE_GIT_BASH_PATH`). Every
-  run has a time limit: the hook's own `timeout` or 60 seconds for hooks,
+  run has a time limit: the hook's own `timeout` or 600 seconds (Claude
+  Code's default) for hooks,
   `--probe-timeout` for entrypoints. A run over its limit is killed with
   its child processes.
 - **Tools.** The audit needs the tools the entrypoints call (`task`, the
@@ -2569,7 +2570,7 @@ version:
 
 ```bash
 go install ./cmd/vibe-guard
-go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@latest
+go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@<version>
 ```
 
 **Opting in** (`prod-go` only, until #111): set `policy.agent_guard:
@@ -2583,13 +2584,17 @@ every tool call refused.
 
 ```text
 PreToolUse (Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit):
-  command -v vibe-guard >/dev/null 2>&1 || { echo "vibe-guard is not installed; install it: go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@latest" >&2; exit 2; }; vibe-guard hook
+  command -v vibe-guard >/dev/null 2>&1 || { echo "vibe-guard is not installed; install it: go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@<version>" >&2; exit 2; }; vibe-guard hook
 Stop:
   vibe-guard relock 2>/dev/null; task verify:fast 1>&2 </dev/null || task -x hook:done
 ```
 
 `command -v` is a shell builtin, so a missing `vibe-guard` refuses every
 call with the install line, even with only the system's `PATH`.
+`<version>` is the version of the `vibe` that synced the settings, so
+the guard installed matches it; a `vibe` built without a fetchable
+version (`dev`, or one with `+dirty`) writes `latest`. Each `vibe`
+version that syncs therefore rewrites this line.
 
 **Commands:**
 

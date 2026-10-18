@@ -25,7 +25,7 @@ func newDiffCmd() *cobra.Command {
 }
 
 func runDiff(cmd *cobra.Command, repoRoot string) error {
-	p, err := buildPlan(repoRoot)
+	p, err := buildPlan(repoRoot, runningVersion(cmd))
 	if err != nil {
 		return fmt.Errorf("diff: %w", err)
 	}

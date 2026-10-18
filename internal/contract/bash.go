@@ -2,7 +2,6 @@ package contract
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -23,11 +22,11 @@ func resolveBash(env []string) (string, error) {
 		return "", errNoBash
 	}
 
-	if p, ok := envGet(env, "CLAUDE_CODE_GIT_BASH_PATH"); ok && p != "" {
-		if isExecutable(p) {
-			return p, nil
-		}
-		return "", fmt.Errorf("CLAUDE_CODE_GIT_BASH_PATH names %s, which is not a file; Claude Code runs hook commands with that bash", p)
+	// Claude Code ignores a CLAUDE_CODE_GIT_BASH_PATH that does not exist
+	// or does not name bash or sh, and finds Git Bash as if it were unset
+	// (https://code.claude.com/docs/en/env-vars, checked 2026-10-18).
+	if p, ok := envGet(env, "CLAUDE_CODE_GIT_BASH_PATH"); ok && p != "" && gitBashName(p) && isExecutable(p) {
+		return p, nil
 	}
 	git := lookPath("git", env, "")
 	if git == "" {
@@ -45,6 +44,16 @@ func resolveBash(env []string) (string, error) {
 		dir = filepath.Dir(dir)
 	}
 	return "", errNoBash
+}
+
+// gitBashName reports whether p's file name is one Claude Code accepts in
+// CLAUDE_CODE_GIT_BASH_PATH: bash.exe, sh.exe, bash or sh.
+func gitBashName(p string) bool {
+	switch strings.ToLower(filepath.Base(p)) {
+	case "bash.exe", "sh.exe", "bash", "sh":
+		return true
+	}
+	return false
 }
 
 // errNoBash says the same on every platform, so that reports compare.

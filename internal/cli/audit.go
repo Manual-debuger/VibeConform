@@ -40,7 +40,7 @@ func newAuditCmd(seams contractSeams) *cobra.Command {
 }
 
 func runAudit(cmd *cobra.Command, repoRoot string) error {
-	p, err := buildPlan(repoRoot)
+	p, err := buildPlan(repoRoot, runningVersion(cmd))
 	if err != nil {
 		return fmt.Errorf("audit: %w", err)
 	}

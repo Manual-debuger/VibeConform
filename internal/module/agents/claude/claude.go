@@ -108,7 +108,7 @@ func (claudeModule) Resolve(_ context.Context, mctx *module.Context) ([]resource
 	if module.VibeGuard(mctx) {
 		// policy.agent_guard: vibe-guard (spec 0053): the reference hook
 		// commands and an empty version 2 policy.
-		if settingsJSON, err = vibeGuardSettings(); err != nil {
+		if settingsJSON, err = vibeGuardSettings(mctx.VibeVersion); err != nil {
 			return nil, err
 		}
 		policyJSON = []byte(VibeGuardPolicy)

@@ -41,7 +41,10 @@ jobs:
   full:
     name: Contract / audit
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    # Expected well under 30 minutes: one full verify (go test ./...) in the
+    # probe copy, then mostly cached reruns with one planted defect each,
+    # the guard corpus and D-01. 60 leaves twice that (spec 0053).
+    timeout-minutes: 60
     env:
       VIBE_TEST_REQUIRE_TOOLS: bash,uv,pnpm,python,node
     steps:

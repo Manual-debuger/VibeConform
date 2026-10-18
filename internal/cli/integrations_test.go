@@ -15,7 +15,7 @@ func planFor(t *testing.T, body string) (*repoPlan, error) {
 	if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return buildPlan(dir)
+	return buildPlan(dir, "test")
 }
 
 func planPaths(p *repoPlan) []string {
