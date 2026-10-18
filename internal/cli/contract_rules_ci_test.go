@@ -47,6 +47,7 @@ func ciVerifyJob(id, runner string) string { return ciJob(id, runner, "task veri
 
 // C-03: every workflow's top-level permissions grant no write scope.
 func TestRuleC03(t *testing.T) {
+	t.Parallel()
 	jobs := ciVerifyJob("v", "ubuntu-latest")
 	perms := func(p string) fixtureEdit {
 		return withFile(".github/workflows/extra.yml", "on: push\n"+p+"jobs:\n"+jobs)
@@ -83,6 +84,7 @@ var noVerify = entrypoints("  verify-fast: task verify:fast\n  fmt: task fmt\n  
 // branch call verify. These fixtures have no origin, so the default
 // branch is main, or master when only master is admitted.
 func TestRuleC01(t *testing.T) {
+	t.Parallel()
 	linux := ciVerifyJob("v", "ubuntu-latest")
 	onPush := func(filters string) string { return "on:\n  pull_request:\n  push:\n" + filters }
 	onPR := func(filters string) string { return "on:\n  push:\n    branches: [main]\n  pull_request:\n" + filters }
@@ -183,6 +185,7 @@ func TestRuleC01(t *testing.T) {
 // The default branch comes from refs/remotes/origin/HEAD when the clone
 // has one; otherwise the report says which branch it assumed.
 func TestRuleC01DefaultBranch(t *testing.T) {
+	t.Parallel()
 	onPush := func(branch string) fixtureEdit {
 		return ciWith("on:\n  pull_request:\n  push:\n    branches: ["+branch+"]\n", ciVerifyJob("v", "ubuntu-latest"))
 	}
@@ -224,6 +227,7 @@ func TestRuleC01DefaultBranch(t *testing.T) {
 // SHA, and no run: step has a word ending in @latest. Every workflow
 // counts, whatever its triggers.
 func TestRuleC02(t *testing.T) {
+	t.Parallel()
 	extra := func(jobs string) fixtureEdit {
 		return withFile(".github/workflows/extra.yml", ciWorkflow("on: workflow_dispatch\n", jobs))
 	}
@@ -277,6 +281,7 @@ func auditWith(on, jobs string) fixtureEdit {
 // C-04: a job triggered on pull requests runs vibe audit and calls no
 // verify command.
 func TestRuleC04(t *testing.T) {
+	t.Parallel()
 	runRuleCases(t, "C-04", []ruleCase{
 		{name: "baseline", want: "pass"},
 		{name: "vibe audit after building vibe, in one step", want: "pass", edits: []fixtureEdit{
@@ -317,6 +322,7 @@ func TestRuleC04(t *testing.T) {
 // R-01 (static part): no entrypoint, hook command or CI step calls vibe,
 // except the C-04 audit job.
 func TestRuleR01(t *testing.T) {
+	t.Parallel()
 	const others = "  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n"
 	runStaticPartCases(t, "R-01", []ruleCase{
 		{name: "baseline", want: "pass"},
@@ -422,6 +428,7 @@ func runStaticPartCases(t *testing.T, id string, cases []ruleCase) {
 	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			rep, _ := auditJSON(t, contractFixture(t, tc.edits...), "--static")
 			r := rep.rule(t, id)
 			got := ""
@@ -452,6 +459,7 @@ func matrixJob(matrix string) string {
 
 // C-05: the steps that call verify run on a Linux and on a Windows runner.
 func TestRuleC05(t *testing.T) {
+	t.Parallel()
 	ubuntu, windows := ciVerifyJob("l", "ubuntu-22.04"), ciVerifyJob("w", "windows-2022")
 	runRuleCases(t, "C-05", []ruleCase{
 		{name: "baseline matrix", want: "pass"},
@@ -512,6 +520,7 @@ func TestRuleC05(t *testing.T) {
 
 // D-03: some workflow runs a recognized vulnerability scanner.
 func TestRuleD03(t *testing.T) {
+	t.Parallel()
 	scan := func(script string) fixtureEdit {
 		return withFile(ciFile, ciWorkflow(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("scan", "ubuntu-latest", script)))
 	}

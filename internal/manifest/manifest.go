@@ -51,6 +51,9 @@ type Manifest struct {
 // absent key selects nothing.
 type Policy struct {
 	LineEndings *string `yaml:"line_endings,omitempty"`
+	// AgentGuard picks the guard Claude Code's PreToolUse hook runs (spec
+	// 0053). Absent means the standard's runtime guard.
+	AgentGuard *string `yaml:"agent_guard,omitempty"`
 }
 
 // CI is vibe.yaml's ci: map. Each key takes one value, and an absent key
@@ -73,6 +76,9 @@ func (c *CI) Get(key string) *string {
 
 // PolicyLineEndings is the line-ending policy's key.
 const PolicyLineEndings = "line_endings"
+
+// PolicyAgentGuard is the agent guard policy's key (spec 0053).
+const PolicyAgentGuard = "agent_guard"
 
 // Development is vibe.yaml's development: map. Each key takes one value,
 // and an absent key selects nothing.
@@ -117,6 +123,7 @@ type ScalarKey struct {
 // ScalarKeys lists every single-valued key in resolution order.
 var ScalarKeys = []ScalarKey{
 	{MapPolicy, PolicyLineEndings},
+	{MapPolicy, PolicyAgentGuard},
 	{MapDevelopment, DevelopmentWorkflow},
 	{MapDevelopment, DevelopmentDocsLayout},
 	{MapDevelopment, DevelopmentDocsDevelopment},
@@ -162,8 +169,11 @@ func (p *Policy) Get(key string) *string {
 	if p == nil {
 		return nil
 	}
-	if key == PolicyLineEndings {
+	switch key {
+	case PolicyLineEndings:
 		return p.LineEndings
+	case PolicyAgentGuard:
+		return p.AgentGuard
 	}
 	return nil
 }

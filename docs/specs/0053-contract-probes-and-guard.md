@@ -884,6 +884,22 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   This is a small change to code #112 deletes. It is needed because
   this repository's `.claude/` and `Taskfile.yml` stay managed until
   #111. The opt-in becomes the frozen, repository-owned file at #111.
+  Decided during implementation (2026-10-18):
+  - The values are `runtime` and `vibe-guard`; an absent key is
+    `runtime`. Only `prod-go` offers the key, since only this repository
+    uses it; the other standards reject it as a policy they do not offer.
+  - The install hint in the PreToolUse command names `@latest`, a fixed
+    string, so the generated settings do not change with every `vibe`
+    build that syncs them.
+  - The generated `Taskfile.yml` keeps a four-line comment where
+    `hook:guard` was. The vibeconform skill's "agent guard" paragraph
+    names `vibe-guard` and `vibe unlock` instead of `hook:guard`.
+    `policy.local.json` is not checked with `vibe-guard`, which does not
+    read it, and `vibe doctor` names `vibe-guard` instead of `go` as the
+    hook runtime.
+  - The claude module imports `internal/guard` for the reference
+    commands, so the settings and the guard cannot disagree. That is an
+    old-to-new import; #112 deletes the module.
 - This repository's `vibe.yaml` sets `policy.agent_guard: vibe-guard`.
   `vibe sync` regenerates the files, and `.vibe/state.yaml` is
   committed with them. Developers install `vibe-guard` with `go install
@@ -902,6 +918,15 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     runs the contract corpus through the exact PreToolUse command of
     this repository's settings. On Linux it also runs the corpus with
     the network disabled.
+  - Decided during implementation (2026-10-18): the "Contract / audit"
+    job sets `VIBE_TEST_REQUIRE_TOOLS=bash,uv,pnpm,python,node`, since
+    the `verify` it audits runs the tests with the uv, pnpm and old-guard
+    fixtures; `ci.yml`'s test job does not, because `ci.yml` is a
+    generated file shipped to adopters. The network-disabled job lifts
+    Ubuntu's AppArmor restriction on unprivileged user namespaces
+    before `unshare -rn`. `hook-guard.yml`'s `prod-go` leg now runs the
+    old corpus in a repository synced to `prod-go`'s defaults, since
+    this repository has no `hook:guard` any more.
 - **Carried over from Phase 1.** The Stop hook command and the anchored
   matcher reading are checked in a real Claude Code session on Linux
   and on Windows: a refusal shows its rule ID, the Stop hook blocks
@@ -1010,6 +1035,21 @@ runner or the guard's matcher directly.
   `guard_exception_uses` and the text report's listing under each
   exception, is tested through the `vibe audit` seam in `internal/cli`
   with fixtures that run no hook.
+
+  Decided later (2026-10-18), for the same budget: the fixtures that run
+  real tools for A-07, V-03, D-01 (`go mod tidy`), R-01, `setup` and the
+  planted defects of V-01, V-02 and A-05 moved from `internal/cli` to a
+  test-only package, `internal/contract/probetest`, which calls
+  `contract.Audit` with only the rules each test asserts (a test of R-01
+  with Claude Code also runs A-02, whose verdict R-01 reads). It reuses
+  `internal/cli`'s probe fixtures in testdata. In `internal/cli` the
+  configuration tests run `--static`, and the rule and configuration
+  case tables run their cases in parallel. What stays there is what the
+  command adds: `TestContractAuditNeverWrites` (the whole registry),
+  `--keep-probe-copy`, progress lines, the A-02 and A-08 report
+  listings, and the D-01 lockfile cases that need no tool. Raising
+  `-test.timeout` from a package's `TestMain` does not help: `go test`
+  kills the test binary one minute after its own `-timeout`.
 - **R-01.** A fixture whose `verify` calls `vibe` fails R-01's execution
   part and lists the shim call. The same fixture without that call
   passes.

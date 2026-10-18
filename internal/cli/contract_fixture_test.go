@@ -158,28 +158,11 @@ func runVibeAudit(t *testing.T, args ...string) auditResult {
 // (nil for the registry). Every report it prints is watched. The runs of
 // the execution and probe parts find no program: PATH is an empty
 // directory and no bash is named, so that a fixture's result does not
-// depend on what this machine has installed. Probe tests use
-// runVibeAuditProbe.
+// depend on what this machine has installed. Probe tests use auditProbe,
+// which runs only the rules they read, in this process's environment.
 func runVibeAuditRules(t *testing.T, rules []contract.Rule, args ...string) auditResult {
 	t.Helper()
 	return runVibeAuditSeams(t, contractSeams{rules: rules, probeEnv: emptyProbeEnv(t)}, args...)
-}
-
-// runVibeAuditProbe runs vibe audit with the probe runs in this
-// process's environment, so they find the tools installed here. It runs
-// every rule but V-01 and V-02: their defect probes run verify and
-// verify-fast seven times each, which would multiply the time of every
-// probe test. contract_defects_test.go tests them, and
-// TestContractAuditNeverWrites runs the whole registry.
-func runVibeAuditProbe(t *testing.T, args ...string) auditResult {
-	t.Helper()
-	var rules []contract.Rule
-	for _, r := range contract.Rules() {
-		if r.ID != "V-01" && r.ID != "V-02" {
-			rules = append(rules, r)
-		}
-	}
-	return runVibeAuditSeams(t, contractSeams{rules: rules}, args...)
 }
 
 // emptyProbeEnv is this process's environment with PATH set to an empty

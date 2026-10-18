@@ -34,7 +34,7 @@ func TestRuleA02Reporting(t *testing.T) {
 	t.Parallel()
 	t.Run("no PreToolUse hook fails A-02 with one finding per tool", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t))
+		rep := auditProbe(t, probeFixture(t), ids("A-02"))
 		r := rep.rule(t, "A-02")
 		if r.Result != "fail" {
 			t.Errorf("A-02 = %s, want fail", r.Result)
@@ -55,7 +55,8 @@ func TestRuleA02Reporting(t *testing.T) {
 		t.Parallel()
 		dir := probeFixture(t, withFile(".claude/hooks/policy.json", rmBuildException))
 
-		r := runVibeAuditProbe(t, "--repo-root", dir, "--json")
+		a02 := contractSeams{rules: registryRules(t, "A-02")}
+		r := runVibeAuditSeams(t, a02, "--repo-root", dir, "--json")
 		var out struct {
 			Uses []struct {
 				Rule  string `json:"rule"`
@@ -77,7 +78,7 @@ func TestRuleA02Reporting(t *testing.T) {
 			t.Errorf("guard_exception_uses cases = %q, want %q", cases, rmBuildCases)
 		}
 
-		text := runVibeAuditProbe(t, "--repo-root", dir).stdout
+		text := runVibeAuditSeams(t, a02, "--repo-root", dir).stdout
 		want := "Guard exceptions\n" +
 			"  rm-rf \"rm -r -f build\" (the build directory is disposable)\n"
 		for _, c := range rmBuildCases {
@@ -89,7 +90,7 @@ func TestRuleA02Reporting(t *testing.T) {
 	})
 	t.Run("without exceptions guard_exception_uses is an empty list", func(t *testing.T) {
 		t.Parallel()
-		r := runVibeAudit(t, "--repo-root", contractFixture(t), "--json")
+		r := runVibeAuditRules(t, registryRules(t, "A-02"), "--repo-root", contractFixture(t), "--json")
 		if !strings.Contains(r.stdout, `"guard_exception_uses": []`) {
 			t.Errorf("--json lacks an empty guard_exception_uses:\n%s", r.stdout)
 		}

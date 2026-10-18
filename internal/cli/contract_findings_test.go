@@ -2,6 +2,7 @@ package cli
 
 import (
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
@@ -20,8 +21,9 @@ import (
 // statically may also carry an undecided part's "not implemented"
 // finding, which names no file.
 
-// reportsWatched counts the reports watchReports has checked.
-var reportsWatched int
+// reportsWatched counts the reports watchReports has checked. Parallel
+// subtests update it, so it is atomic.
+var reportsWatched atomic.Int64
 
 // watchReports returns the seam that checks every contract audit report
 // one runVibeAudit call prints for failures without a file or a fix.
@@ -29,7 +31,7 @@ func watchReports(t *testing.T) func(*contract.Report) {
 	t.Helper()
 	return func(rep *contract.Report) {
 		t.Helper()
-		reportsWatched++
+		reportsWatched.Add(1)
 		for _, p := range failureProblems(rep) {
 			t.Errorf("a failure must name a file and a fix: %s", p)
 		}
@@ -68,10 +70,10 @@ func failureProblems(rep *contract.Report) []string {
 // Every fixture run through runVibeAudit is checked, so a new rule's
 // failing cases are covered without being listed anywhere.
 func TestFailingFixturesAreWatched(t *testing.T) {
-	before := reportsWatched
+	before := reportsWatched.Load()
 	runVibeAudit(t, "--repo-root", contractFixture(t, withoutFile(".github/pull_request_template.md")), "--static")
 	auditJSON(t, contractFixture(t, withoutFile("AGENTS.md")), "--static")
-	if got := reportsWatched - before; got != 2 {
+	if got := reportsWatched.Load() - before; got != 2 {
 		t.Errorf("%d reports were checked for failures without a file or a fix, want 2", got)
 	}
 }

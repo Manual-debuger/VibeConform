@@ -143,6 +143,7 @@ func waiverConfig(rule, until string) fixtureEdit {
 }
 
 func TestContractAuditVerdicts(t *testing.T) {
+	t.Parallel()
 	t.Run("conformant exits 0", func(t *testing.T) {
 		rules := standIn(nil, contract.ResultPass, mustRules("V-04")...)
 		rep, r := auditJSONRules(t, rules, contractFixture(t))
@@ -220,6 +221,7 @@ func TestContractAuditVerdicts(t *testing.T) {
 }
 
 func TestContractAuditApplicabilityAndWaivers(t *testing.T) {
+	t.Parallel()
 	t.Run("C-05 not applicable without windows", func(t *testing.T) {
 		rep, _ := auditJSON(t, contractFixture(t,
 			withFile("vibe.yaml", configWith(section{"platforms", "platforms: [linux]\n"}))), "--static")
@@ -281,6 +283,7 @@ func TestContractAuditApplicabilityAndWaivers(t *testing.T) {
 }
 
 func TestContractAuditTextReport(t *testing.T) {
+	t.Parallel()
 	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--static")
 	assertExit(t, r, 1)
 	if !strings.HasPrefix(r.stdout, "vibe audit: contract 1.0.0 (vibe test), static checks only\n") {
@@ -292,6 +295,7 @@ func TestContractAuditTextReport(t *testing.T) {
 }
 
 func TestContractAuditReportsEveryRule(t *testing.T) {
+	t.Parallel()
 	dir := contractFixture(t)
 	rep, r := auditJSON(t, dir)
 

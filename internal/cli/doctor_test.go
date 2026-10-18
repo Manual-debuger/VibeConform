@@ -190,7 +190,8 @@ func TestAgentHookConfigsCoverCatalog(t *testing.T) {
 // standard's guard starts, taken from each committed repository.
 func TestDoctorHookBinaries(t *testing.T) {
 	for root, want := range map[string][]string{
-		filepath.Join("..", ".."):                           {"task", "go"},
+		// This repository runs vibe-guard (policy.agent_guard, spec 0053).
+		filepath.Join("..", ".."):                           {"task", "vibe-guard"},
 		filepath.Join("..", "..", "examples", "typescript"): {"task", "node"},
 		filepath.Join("..", "..", "examples", "python"):     {"task", "uv"},
 		// Go, TypeScript and Python components: the guard runs on Go.

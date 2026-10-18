@@ -135,6 +135,20 @@ func ciProviders() []Option {
 	}
 }
 
+// agentGuards is policy.agent_guard's group, offered by prod-go only
+// (spec 0053, "This repository"): VibeConform's own repository opts into
+// vibe-guard through it until #111 freezes its generated files. An absent
+// key selects nothing, which is the runtime guard; runtime selects it
+// explicitly. Like ci.provider, the options resolve nothing: claude-config
+// and repo-tooling read the value.
+func agentGuards() []Option {
+	g := scalarGroup(manifest.ScalarKey{Map: manifest.MapPolicy, Key: manifest.PolicyAgentGuard})
+	return []Option{
+		{Group: g, Name: module.AgentGuardRuntime, Module: module.NewSetting("agent-guard-runtime")},
+		{Group: g, Name: module.AgentGuardVibeGuard, Module: module.NewSetting("agent-guard-vibe-guard")},
+	}
+}
+
 func init() {
 	// "prod-go" was "production" through M2, kept unnamespaced because
 	// renaming it then would have broken the vibe.yaml and .vibe/state.yaml
@@ -148,7 +162,7 @@ func init() {
 		// Order matters: audit, diff, and sync report in module order, core
 		// then selected integrations.
 		Modules: []module.Module{gotooling.New(), github.New(), conformance.New(), repotooling.New()},
-		Options: catalog(),
+		Options: catalog(agentGuards()...),
 	})
 
 	// Through M2 these composed only their language-tooling module plus

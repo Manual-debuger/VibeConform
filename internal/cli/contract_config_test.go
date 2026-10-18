@@ -56,9 +56,12 @@ func runConfigCases(t *testing.T, cases []configCase) {
 	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			edits := append([]fixtureEdit{withFile("vibe.yaml", tc.config)}, tc.edits...)
 			dir := contractFixture(t, edits...)
-			r := runVibeAudit(t, "--repo-root", dir)
+			// --static: these cases test the configuration, which the
+			// probe copy adds nothing to; it exits 1 either way.
+			r := runVibeAudit(t, "--repo-root", dir, "--static")
 			assertExit(t, r, 1)
 			if tc.want == nil {
 				assertReport(t, r)
@@ -76,6 +79,7 @@ func runConfigCases(t *testing.T, cases []configCase) {
 }
 
 func TestContractConfigTopLevel(t *testing.T) {
+	t.Parallel()
 	runConfigCases(t, []configCase{
 		{name: "unknown field", config: configWith(section{"lint", "lint: true\n"}),
 			want: []string{"vibe.yaml: lint: unknown field"}},
@@ -92,6 +96,7 @@ func TestContractConfigTopLevel(t *testing.T) {
 
 // The v1 fields say where their content went (spec 0052, Q23).
 func TestContractConfigV1Fields(t *testing.T) {
+	t.Parallel()
 	runConfigCases(t, []configCase{
 		{name: "version", config: configWith(section{"version", "version: v1\n"}),
 			want: []string{"vibe.yaml: version: ", "no version field", "contract"}},
@@ -107,6 +112,7 @@ func TestContractConfigV1Fields(t *testing.T) {
 }
 
 func TestContractConfigVersion(t *testing.T) {
+	t.Parallel()
 	runConfigCases(t, []configCase{
 		{name: "not X.Y.Z", config: configWith(section{"contract", "contract: \"1.0\"\n"}),
 			want: []string{"vibe.yaml: contract: ", "X.Y.Z"}},
@@ -131,6 +137,7 @@ func TestContractConfigVersion(t *testing.T) {
 }
 
 func TestContractConfigPlatformsAndAgents(t *testing.T) {
+	t.Parallel()
 	runConfigCases(t, []configCase{
 		{name: "platforms missing", config: configWith(section{"platforms", ""}),
 			want: []string{"vibe.yaml: platforms: is required"}},
@@ -158,6 +165,7 @@ func TestContractConfigPlatformsAndAgents(t *testing.T) {
 }
 
 func TestContractConfigEntrypoints(t *testing.T) {
+	t.Parallel()
 	runConfigCases(t, []configCase{
 		{name: "not a map", config: configWith(section{"entrypoints", "entrypoints: task verify\n"}),
 			want: []string{"vibe.yaml: entrypoints: ", "map"}},
@@ -182,6 +190,7 @@ func TestContractConfigEntrypoints(t *testing.T) {
 }
 
 func TestContractConfigWaivers(t *testing.T) {
+	t.Parallel()
 	waiver := func(body string) section { return section{"waivers", "waivers:\n" + body} }
 	runConfigCases(t, []configCase{
 		{name: "valid", config: configWith(waiver("  - rule: C-05\n    reason: lint is platform-independent\n    until: 2026-12-31\n"))},
@@ -219,6 +228,7 @@ func TestContractConfigWaivers(t *testing.T) {
 
 // The parser reports the first error in document order.
 func TestContractConfigFirstErrorInDocumentOrder(t *testing.T) {
+	t.Parallel()
 	badPlatform := section{"platforms", "platforms: [bsd]\n"}
 	badWaiver := section{"waivers", "waivers:\n  - rule: C-02\n    reason: r\n    until: 2026-12-31\n"}
 	t.Run("platforms first", func(t *testing.T) {

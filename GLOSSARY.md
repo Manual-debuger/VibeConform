@@ -32,6 +32,20 @@ A check that feeds a known input, such as a guard corpus case or a planted
 defect, and verifies how the repository reacts.
 _Avoid_: mutation test, smoke test, canary
 
+**Probe copy**:
+The throwaway Git repository in which the audit runs every execution
+check and probe. It holds the working-tree content of every tracked file,
+committed once. The audit resets it between runs and deletes it at the
+end, so the adopter's own working tree and `.git` never change.
+_Avoid_: sandbox, scratch repo, clone
+
+**Planted defect**:
+A small file the audit writes into the probe copy, in one component, that
+one kind of check must catch: a format error, a static analysis error or
+a failing test. An entrypoint that still passes with it planted has
+missed that kind.
+_Avoid_: mutant, injected bug, fault
+
 **Guard corpus**:
 The fixed set of tool calls that any agent guard must refuse or allow.
 It belongs to the contract and is versioned with it.
@@ -80,7 +94,8 @@ _Avoid_: installer, generator, template
 The check that runs before an agent's shell command or file edit and
 refuses a short list of destructive commands and edits to secret files.
 It stops common accidents. It is not a security boundary, and it does not
-refuse every command with the same effect.
+refuse every command with the same effect. `vibe-guard` is VibeConform's
+reference agent guard; any guard that passes the guard probes will do.
 _Avoid_: sandbox, firewall, policy engine
 
 **Guard exception**:
@@ -91,7 +106,9 @@ _Avoid_: allow rule, whitelist, override
 
 **Unlock**:
 A person's time-limited permission for an agent to change the agent
-guardrail settings. An agent cannot grant it to itself.
+guardrail settings. An agent cannot grant it to itself. The person runs
+`vibe unlock` in their own terminal; the agent's next Stop, or
+`vibe-guard relock`, ends it.
 _Avoid_: override, bypass, escape
 
 ## CI
