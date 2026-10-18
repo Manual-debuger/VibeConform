@@ -188,7 +188,7 @@ func TestContractAuditVerdicts(t *testing.T) {
 			t.Errorf("verdict = %s, static_only %v; want undecided, false", rep.Verdict, rep.StaticOnly)
 		}
 		assertRule(t, rep, "V-01", "undecided", "`task` is not installed on this machine")
-		assertRule(t, rep, "A-08", "undecided", "#106")
+		assertRule(t, rep, "A-08", "undecided", "no bash found")
 		assertRule(t, rep, "R-01", "undecided", "`task` is not installed on this machine")
 	})
 	t.Run("a failed MUST rule beside an undecided one exits 1", func(t *testing.T) {

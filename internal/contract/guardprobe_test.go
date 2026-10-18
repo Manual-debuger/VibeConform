@@ -109,6 +109,24 @@ func guardSettings(commands ...string) string {
 	return string(data) + "\n"
 }
 
+// guardStopSettings is a .claude/settings.json with the reference
+// PreToolUse entry running pre and one Stop entry running stops.
+func guardStopSettings(pre string, stops ...string) string {
+	var stopHooks []map[string]any
+	for _, c := range stops {
+		stopHooks = append(stopHooks, map[string]any{"type": "command", "command": c})
+	}
+	data, err := json.MarshalIndent(map[string]any{"hooks": map[string]any{
+		"PreToolUse": []any{map[string]any{"matcher": guard.ReferencePreToolUseMatcher,
+			"hooks": []any{map[string]any{"type": "command", "command": pre}}}},
+		"Stop": []any{map[string]any{"hooks": stopHooks}},
+	}}, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return string(data) + "\n"
+}
+
 var referenceGuard = guard.ReferencePreToolUse("v0.0.0-test")
 
 // brokenGuard is a fixture guard that lets rm -r -f build through and
@@ -342,10 +360,55 @@ func TestGuardProbesVibeGuard(t *testing.T) {
 	})
 }
 
+// A-08 with vibe-guard (spec 0053, "Guard probe fixtures"): the A-08
+// cases in their unlock states, and a Stop hook that must remove the
+// marker.
+func TestGuardProbeA08(t *testing.T) {
+	t.Parallel()
+	requireBash(t)
+	bin := builtVibeGuard(t)
+	settings := ".claude/settings.json"
+
+	t.Run("vibe-guard with a relocking Stop hook passes A-08", func(t *testing.T) {
+		t.Parallel()
+		dir := guardFixture(t, map[string]string{settings: guardStopSettings(referenceGuard, "vibe-guard relock")})
+		rep := audit(t, dir, []string{"A-08"}, bin)
+		assertPart(t, rep, "A-08", contract.Probe, contract.ResultPass)
+	})
+	t.Run("an exception for guardrail-settings passes A-02 and fails A-08", func(t *testing.T) {
+		t.Parallel()
+		rep := audit(t, guardFixture(t, map[string]string{
+			settings: guardStopSettings(referenceGuard, "vibe-guard relock"),
+			".claude/hooks/policy.json": `{"version": 2, "exceptions": [` +
+				`{"rule": "guardrail-settings", "match": ".claude/**", "reason": "the agent maintains its hooks"}]}` + "\n",
+		}), []string{"A-02", "A-08"}, bin)
+		assertPart(t, rep, "A-02", contract.Probe, contract.ResultPass)
+		assertPart(t, rep, "A-08", contract.Probe, contract.ResultFail,
+			`corpus case "A-08 (#106): Write settings.json, no unlock" (Write ".claude/settings.json") should be refused with no unlock marker`,
+			`the exception guardrail-settings ".claude/**" in .claude/hooks/policy.json does not count: guard exceptions do not satisfy A-08`)
+		// Only the four cases the exception matches by a relative path get
+		// through: the marker and vibe unlock stay refused.
+		if p := part(t, rep, "A-08", contract.Probe); len(p.Findings) != 4 {
+			t.Errorf("A-08 has %d findings, want 4:\n%s", len(p.Findings), findingText(p))
+		}
+	})
+	t.Run("a Stop hook without vibe-guard relock fails A-08", func(t *testing.T) {
+		t.Parallel()
+		rep := audit(t, guardFixture(t, map[string]string{settings: guardStopSettings(referenceGuard, "true")}),
+			[]string{"A-08"}, bin)
+		assertPart(t, rep, "A-08", contract.Probe, contract.ResultFail,
+			"after the Stop hooks ran with a valid unlock marker, the marker .git/vibe-unlock still exists; hook \"true\" exited 0",
+			"Fix: add a Stop hook that runs `vibe-guard relock`")
+		if n := len(part(t, rep, "A-08", contract.Probe).Findings); n != 1 {
+			t.Errorf("A-08 has %d findings, want only the Stop hook's", n)
+		}
+	})
+}
+
 // The old guards of the repo-tooling modules run through the audit
 // (spec 0053, "Old guards"). Each must satisfy every case #103 took over
 // from their corpus; the cases #105 and #106 added that they miss are
-// listed exactly. Only A-02 runs.
+// listed exactly. A-02 runs, and A-08, which they fail.
 func TestGuardProbesOldGuards(t *testing.T) {
 	t.Parallel()
 	requireBash(t)
@@ -401,8 +464,11 @@ func TestGuardProbesOldGuards(t *testing.T) {
 			rep := audit(t, guardFixture(t, map[string]string{
 				".claude/settings.json":     guardSettings(hook),
 				".claude/hooks/policy.json": string(policy),
-			}), []string{"A-02"})
+			}), []string{"A-02", "A-08"})
 			assertPart(t, rep, "A-02", contract.Probe, contract.ResultFail)
+			assertPart(t, rep, "A-08", contract.Probe, contract.ResultFail,
+				`corpus case "A-08 (#106): Write settings.json, no unlock" (Write ".claude/settings.json") should be refused`,
+				"no Stop hook removes the unlock marker")
 			if got := casesNamed(t, rep); !slices.Equal(got, missed) {
 				t.Errorf("the %s guard misses\n%q\nwant\n%q\nfindings:\n%s", g.name, got, missed,
 					findingText(part(t, rep, "A-02", contract.Probe)))

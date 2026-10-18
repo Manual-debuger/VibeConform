@@ -544,6 +544,16 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     "refused", and A-08 is a MUST rule. An exception for
     `guardrail-settings` therefore passes A-02 and fails A-08, and the
     finding says so.
+  - How it runs (decided during implementation of #106, 2026-10-18):
+    A-08's cases are the corpus cases with guard rule ID
+    `guardrail-settings` and the allow cases named "A-08 (#106): …".
+    They go through every PreToolUse hook that matches their tool, the
+    same way as in A-02. Each case that fails gets its own finding,
+    which names its unlock state. With no Stop hook, A-08 fails ("no
+    Stop hook removes the unlock marker"). The Stop hooks run one after
+    another in a reset copy, and their exit codes do not count. If a
+    Stop hook did not end by itself and the marker is still there, the
+    part is undecided.
 - **Parts no longer unimplemented.** Every part of every rule now has a
   check function. The "not implemented in this vibe; #N adds it" path
   and the parts' issue numbers are removed. `--static` keeps its
@@ -1025,6 +1035,13 @@ runner or the guard's matcher directly.
   `guard_exception_uses` and the text report's listing under each
   exception, is tested through the `vibe audit` seam in `internal/cli`
   with fixtures that run no hook.
+
+  Decided later (2026-10-18), for the same budget: `internal/cli`'s
+  probe tests run only the rules they assert (a test of R-01 with Claude
+  Code also runs A-02, whose verdict R-01 reads), the configuration
+  tests run `--static`, and the rule and configuration case tables run
+  their cases in parallel. `TestContractAuditNeverWrites` still runs the
+  whole registry.
 - **R-01.** A fixture whose `verify` calls `vibe` fails R-01's execution
   part and lists the shim call. The same fixture without that call
   passes.

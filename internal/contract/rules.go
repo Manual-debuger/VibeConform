@@ -102,12 +102,8 @@ type Part struct {
 	Kind PartKind
 	// Check is the part's check as spec 0051 states it.
 	Check string
-	// Run decides the part. Nil means this vibe does not implement it
-	// yet: the part cannot be decided, and Issue names the ticket that
-	// adds it.
+	// Run decides the part. Every part of contract 1.0.0 has one.
 	Run CheckFunc
-	// Issue is the GitHub issue that implements a part Run is nil for.
-	Issue int
 }
 
 // Rule is one rule of contract 1.0.0 (spec 0051, "Rules"). The report
@@ -172,10 +168,6 @@ func static(check string, run CheckFunc) Part {
 // executionRun is an execution part this vibe implements.
 func executionRun(check string, run CheckFunc) Part {
 	return Part{Kind: Execution, Check: check, Run: run}
-}
-
-func probe(check string, issue int) Part {
-	return Part{Kind: Probe, Check: check, Issue: issue}
 }
 
 // probeRun is a probe part this vibe implements.
@@ -420,10 +412,10 @@ var rules = []Rule{
 		Source:            "ADR 0025",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
-			probe("a `Write` to `.claude/settings.json` and an `Edit` under `.claude/hooks/` are refused with no "+
+			probeRun("a `Write` to `.claude/settings.json` and an `Edit` under `.claude/hooks/` are refused with no "+
 				"marker, allowed with a valid marker, and refused with an expired marker. A `Bash` call that runs "+
 				"`vibe unlock`, and any `Write` or `Bash` that creates the marker, are refused. After the Stop hook "+
-				"runs, the marker is gone.", 106),
+				"runs, the marker is gone.", checkA08),
 		},
 		applies: needsClaude,
 	},
