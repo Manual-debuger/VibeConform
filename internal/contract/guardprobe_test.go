@@ -34,7 +34,6 @@ func TestMain(m *testing.M) {
 	for _, v := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"} {
 		_ = os.Unsetenv(v)
 	}
-	raiseDefaultTimeout()
 	code := m.Run()
 	if dir, err := vibeGuardDir(); err == nil && dir != "" {
 		_ = os.RemoveAll(dir)
