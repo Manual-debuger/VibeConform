@@ -1036,12 +1036,20 @@ runner or the guard's matcher directly.
   exception, is tested through the `vibe audit` seam in `internal/cli`
   with fixtures that run no hook.
 
-  Decided later (2026-10-18), for the same budget: `internal/cli`'s
-  probe tests run only the rules they assert (a test of R-01 with Claude
-  Code also runs A-02, whose verdict R-01 reads), the configuration
-  tests run `--static`, and the rule and configuration case tables run
-  their cases in parallel. `TestContractAuditNeverWrites` still runs the
-  whole registry.
+  Decided later (2026-10-18), for the same budget: the fixtures that run
+  real tools for A-07, V-03, D-01 (`go mod tidy`), R-01, `setup` and the
+  planted defects of V-01, V-02 and A-05 moved from `internal/cli` to a
+  test-only package, `internal/contract/probetest`, which calls
+  `contract.Audit` with only the rules each test asserts (a test of R-01
+  with Claude Code also runs A-02, whose verdict R-01 reads). It reuses
+  `internal/cli`'s probe fixtures in testdata. In `internal/cli` the
+  configuration tests run `--static`, and the rule and configuration
+  case tables run their cases in parallel. What stays there is what the
+  command adds: `TestContractAuditNeverWrites` (the whole registry),
+  `--keep-probe-copy`, progress lines, the A-02 and A-08 report
+  listings, and the D-01 lockfile cases that need no tool. Raising
+  `-test.timeout` from a package's `TestMain` does not help: `go test`
+  kills the test binary one minute after its own `-timeout`.
 - **R-01.** A fixture whose `verify` calls `vibe` fails R-01's execution
   part and lists the shim call. The same fixture without that call
   passes.
