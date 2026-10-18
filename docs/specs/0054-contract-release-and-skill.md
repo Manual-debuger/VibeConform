@@ -529,7 +529,13 @@ PR waits for it.
   uses GitLab CI, and contract v1 decides C rules for GitHub Actions
   only (Q19). Its verdict is therefore expected to be "cannot decide"
   for the C rules. That is a pilot result: the report records it with
-  every other rule's result, and it is evidence for #74. The work
+  every other rule's result, and it is evidence for #74. The user's
+  team uses GitLab, so this is the real adopter case, not an edge case.
+  Decided with the user on 2026-10-18: GitLab support for the C rules
+  (contract 1.1.0, #74) gets its own spec right after this phase, and
+  uses P1's evidence. For a GitLab repository, the skill keeps the
+  existing CI, makes it call the entrypoints, and reports that the C
+  rules cannot be decided yet. The work
   happens on a branch in that repository. Nothing is pushed or merged
   there without the user.
 - **P2, stand-in, migration:** `examples/typescript`, copied without
@@ -676,8 +682,9 @@ real files and processes. No test reads a private helper.
 - Removing the template-sync system, the old `vibeconform` skill, the
   module templates and the old guards. Also the `vibe init` that writes
   `vibe.yaml` version 2 and detects components (#112).
-- GitLab CI in the C rules (#74) and Codex in the A rules (#50). P1's
-  GitLab result is recorded as evidence only.
+- GitLab CI in the C rules (#74), which is the next spec after this
+  phase (decided with the user on 2026-10-18), and Codex in the A rules
+  (#50). P1's GitLab result is recorded as evidence for #74.
 - The GitLab conformance template's install path.
 - The monorepo PostToolUse hook that checks only the edited component
   (#81) and graphify's conflicting guidance (#86). The skill's optional
