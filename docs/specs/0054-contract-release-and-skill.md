@@ -1,6 +1,6 @@
 # Spec 0054: Release and setup skill (Phase 3)
 
-Status: draft (2026-10-18). Tickets #107, #108, #109, #110 (milestone
+Status: accepted (2026-10-18). Tickets #107, #108, #109, #110 (milestone
 "Contract v1 · Phase 3: Release and skill"), spec issue #118. Builds on
 spec 0051 (contract v1.0.0), spec 0052 (Phase 1), spec 0053 (Phase 2),
 ADR 0025 and ADR 0026. "Qn" refers to the grilling questions the tickets
