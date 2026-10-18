@@ -14,6 +14,7 @@ import (
 // kinds, source, rationale, the check as spec 0051 states it, when the
 // rule is not applicable, and whether it can be waived.
 func TestAuditExplainEveryRule(t *testing.T) {
+	t.Parallel()
 	for _, rule := range contract.Rules() {
 		t.Run(rule.ID, func(t *testing.T) {
 			r := runVibeAudit(t, "--explain", rule.ID)
@@ -40,6 +41,7 @@ func TestAuditExplainEveryRule(t *testing.T) {
 
 // The values below are spec 0051's, read from its rule table.
 func TestAuditExplainContent(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		id   string
 		want []string
@@ -81,6 +83,7 @@ func TestAuditExplainContent(t *testing.T) {
 // (spec 0053, "Planted defects"), so that a probe can be reproduced by
 // hand.
 func TestAuditExplainDefectSamples(t *testing.T) {
+	t.Parallel()
 	for _, id := range []string{"V-01", "V-02"} {
 		t.Run(id, func(t *testing.T) {
 			r := runVibeAudit(t, "--explain", id)
@@ -119,6 +122,7 @@ func TestAuditExplainDefectSamples(t *testing.T) {
 // ID (spec 0053, "Report and CLI"). The expected counts are taken from
 // the corpus data.
 func TestAuditExplainGuardCorpusCounts(t *testing.T) {
+	t.Parallel()
 	deny, allow := 0, 0
 	byRule := map[string]int{}
 	for _, c := range contract.GuardCorpus() {

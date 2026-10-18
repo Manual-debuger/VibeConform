@@ -22,6 +22,7 @@ var updateGoldens = flag.Bool("update", false, "rewrite the contract report gold
 // for byte, so a golden checked out with CRLF fails instead of being
 // normalized silently.
 func TestContractReportGolden(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		edits []fixtureEdit

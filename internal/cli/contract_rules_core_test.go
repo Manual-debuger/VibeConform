@@ -29,6 +29,7 @@ func agentsConfig(list string) fixtureEdit {
 // R-02: AGENTS.md names every verify command, and CLAUDE.md points to it
 // when Claude Code is in use.
 func TestRuleR02(t *testing.T) {
+	t.Parallel()
 	runRuleCases(t, "R-02", []ruleCase{
 		{name: "baseline", want: "pass"},
 		{name: "list verify, every command named", want: "pass", edits: []fixtureEdit{
@@ -65,6 +66,7 @@ func TestRuleR02(t *testing.T) {
 
 // R-03: every pull request template has a heading containing "verif".
 func TestRuleR03(t *testing.T) {
+	t.Parallel()
 	const tmpl = ".github/pull_request_template.md"
 	runRuleCases(t, "R-03", []ruleCase{
 		{name: "baseline", want: "pass"},
@@ -99,6 +101,7 @@ func entrypoints(body string) fixtureEdit {
 // V-04: the entrypoints are declared, non-empty, and each command is one
 // simple command (spec 0052, "Entrypoints").
 func TestRuleV04(t *testing.T) {
+	t.Parallel()
 	const others = "  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n"
 	runRuleCases(t, "V-04", []ruleCase{
 		{name: "baseline", want: "pass"},

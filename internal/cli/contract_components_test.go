@@ -6,6 +6,7 @@ func components(body string) section { return section{"components", "components:
 
 // Declared components (spec 0052, "Components"; Q11).
 func TestContractConfigComponents(t *testing.T) {
+	t.Parallel()
 	sub := withFile("svc/pyproject.toml", "[project]\nname = \"svc\"\n")
 	web := withFile("web/package.json", "{}\n")
 	runConfigCases(t, []configCase{
@@ -62,6 +63,7 @@ func TestContractConfigComponents(t *testing.T) {
 
 // Without components, the root's manifests decide the language.
 func TestContractConfigComponentDetection(t *testing.T) {
+	t.Parallel()
 	noComponents := configWith()
 	runConfigCases(t, []configCase{
 		{name: "go.mod", config: noComponents},
