@@ -1250,3 +1250,23 @@ runner or the guard's matcher directly.
 14. `GLOSSARY.md`, `docs/usage.md`, `docs/architecture/overview.md` and
     AGENTS.md's "Guardrails" section are updated.
 15. `task verify` and `task audit` pass.
+
+## Verification record (2026-10-18)
+
+- **AC12, "Contract / audit" on PR #117** (run 39103941671, commit
+  1f02760): verdict **conformant**, 5 min 24 s. No MUST rule fails.
+  Five SHOULD rules fail, all carried over from Phase 1 and outside this
+  spec: H-02 (pre-commit checks formatting; pre-push runs verification),
+  C-05 (tests run on Linux and Windows), A-06 (edited files are
+  formatted), D-03 (CI scans for known vulnerabilities) and R-02 (agents
+  are told the verification entrypoints).
+- **AC13, real Claude Code session checks:**
+  - Windows, this repository's own sessions while Phase 2 was built:
+    `vibe-guard` refused a command with its rule ID
+    (`dynamic-command`) and let ordinary commands through after the
+    switch. PASS for "a refusal shows its rule ID".
+  - The Stop hook blocking once and then letting the stop through, an
+    unlock that opens and relocks, and whether a `Write|Edit` matcher
+    sees a `MultiEdit`: UNVERIFIED on Windows and on Linux.
+  - Which shell Claude Code runs hooks with on Linux and macOS (the
+    documentation names both `bash` and `sh -c`): UNVERIFIED.
