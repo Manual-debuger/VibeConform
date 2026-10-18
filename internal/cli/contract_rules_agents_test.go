@@ -234,6 +234,7 @@ func runPartCases(t *testing.T, id, part string, cases []partCase) {
 	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			rep, _ := auditJSON(t, contractFixture(t, tc.edits...), "--static")
 			r := rep.rule(t, id)
 			got := ""

@@ -15,6 +15,7 @@ func runRuleCases(t *testing.T, id string, cases []ruleCase) {
 	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			rep, _ := auditJSON(t, contractFixture(t, tc.edits...), "--static")
 			assertRule(t, rep, id, tc.want, tc.findings...)
 		})

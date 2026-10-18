@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 )
 
 // The execution and probe parts (spec 0053), through the vibe audit
@@ -111,16 +113,38 @@ func goHook(step string) string {
 }
 
 // auditProbe runs the full audit with --json in this process's
-// environment.
-func auditProbe(t *testing.T, dir string, args ...string) jsonReport {
+// environment, with only the rules ids of the registry: a probe test
+// waits only for the runs it reads, which keeps internal/cli within go
+// test's ten-minute default. A rule that reads another's verdict (R-01
+// reads A-02's when Claude Code is in use) needs both named.
+func auditProbe(t *testing.T, dir string, ids []string, args ...string) jsonReport {
 	t.Helper()
-	r := runVibeAuditProbe(t, append([]string{"--repo-root", dir, "--json"}, args...)...)
+	r := runVibeAuditSeams(t, contractSeams{rules: registryRules(t, ids...)},
+		append([]string{"--repo-root", dir, "--json"}, args...)...)
 	var rep jsonReport
 	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
 		t.Fatalf("--json printed no JSON report: %v\nstdout:\n%s\nstderr:\n%s", err, r.stdout, r.stderr)
 	}
 	return rep
 }
+
+// registryRules returns the registry's rules ids, in registry order.
+func registryRules(t *testing.T, ids ...string) []contract.Rule {
+	t.Helper()
+	var rules []contract.Rule
+	for _, r := range contract.Rules() {
+		if slices.Contains(ids, r.ID) {
+			rules = append(rules, r)
+		}
+	}
+	if len(rules) != len(ids) {
+		t.Fatalf("rules %v: some ID is not in the registry", ids)
+	}
+	return rules
+}
+
+// ids is a short way to write a list of rule IDs.
+func ids(list ...string) []string { return list }
 
 // assertExecution checks the result of a rule's execution part.
 func assertExecution(t *testing.T, rep jsonReport, id, want string, findings ...string) {
@@ -153,22 +177,22 @@ func TestRuleA07Execution(t *testing.T) {
 	t.Parallel()
 	t.Run("a hook that prints facts passes", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t))
+		rep := auditProbe(t, probeFixture(t), ids("A-07"))
 		assertExecution(t, rep, "A-07", "pass")
 	})
 	t.Run("a hook that writes a file fails and names it", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, sessionStartHooks("startup", goHook("session-start-write"))))
+		rep := auditProbe(t, probeFixture(t, sessionStartHooks("startup", goHook("session-start-write"))), ids("A-07"))
 		assertExecution(t, rep, "A-07", "fail", ".claude/settings.json", "session.log")
 	})
 	t.Run("a hook that exits non-zero fails and shows its output", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, sessionStartHooks("startup", goHook("fail"))))
+		rep := auditProbe(t, probeFixture(t, sessionStartHooks("startup", goHook("fail"))), ids("A-07"))
 		assertExecution(t, rep, "A-07", "fail", "exited 1", "failing on purpose")
 	})
 	t.Run("a hook whose matcher does not match startup does not run", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, sessionStartHooks("resume", goHook("fail"))))
+		rep := auditProbe(t, probeFixture(t, sessionStartHooks("resume", goHook("fail"))), ids("A-07"))
 		assertExecution(t, rep, "A-07", "pass")
 	})
 	t.Run("no bash cannot decide", func(t *testing.T) {
@@ -180,7 +204,8 @@ func TestRuleA07Execution(t *testing.T) {
 				t.Skipf("%s sits beside go in %s, so PATH cannot hold go without bash", name, goDir)
 			}
 		}
-		r := runVibeAuditSeams(t, contractSeams{probeEnv: probeEnvWithPath(t, goDir)}, "--repo-root", dir, "--json")
+		r := runVibeAuditSeams(t, contractSeams{rules: registryRules(t, "A-07"), probeEnv: probeEnvWithPath(t, goDir)},
+			"--repo-root", dir, "--json")
 		var rep jsonReport
 		if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
 			t.Fatalf("no JSON: %v\n%s", err, r.stderr)
@@ -297,7 +322,8 @@ func TestContractAuditNeverWrites(t *testing.T) {
 func TestContractAuditKeepProbeCopy(t *testing.T) {
 	dir := probeFixture(t)
 	tmp := setTempDir(t)
-	r := runVibeAuditProbe(t, "--repo-root", dir, "--keep-probe-copy")
+	// One probe part is enough to make the copy.
+	r := runVibeAuditSeams(t, contractSeams{rules: registryRules(t, "V-03")}, "--repo-root", dir, "--keep-probe-copy")
 	assertStderr(t, r, "vibe audit: keeping the probe copy at ")
 	left := tempEntries(t, tmp, "vibe-audit-")
 	if len(left) != 1 {
@@ -310,9 +336,10 @@ func TestContractAuditKeepProbeCopy(t *testing.T) {
 
 func TestContractAuditProgress(t *testing.T) {
 	dir := probeFixture(t)
-	r := runVibeAuditProbe(t, "--repo-root", dir)
+	a07 := contractSeams{rules: registryRules(t, "A-07")}
+	r := runVibeAuditSeams(t, a07, "--repo-root", dir)
 	assertStderr(t, r, "vibe audit: the SessionStart hook")
-	rj := runVibeAuditProbe(t, "--repo-root", dir, "--json")
+	rj := runVibeAuditSeams(t, a07, "--repo-root", dir, "--json")
 	if strings.Contains(rj.stderr, "vibe audit: the SessionStart hook") {
 		t.Errorf("--json printed progress lines:\n%s", rj.stderr)
 	}
@@ -324,27 +351,27 @@ func TestRuleV03(t *testing.T) {
 	t.Parallel()
 	t.Run("a fmt-check that only lists passes", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t))
+		rep := auditProbe(t, probeFixture(t), ids("V-03"))
 		assertExecution(t, rep, "V-03", "pass")
 	})
 	t.Run("a fmt-check that rewrites fails and names the file", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, withEntrypoints("  fmt-check: go run ./ci fmt\n")))
+		rep := auditProbe(t, probeFixture(t, withEntrypoints("  fmt-check: go run ./ci fmt\n")), ids("V-03"))
 		assertExecution(t, rep, "V-03", "fail", "vibe.yaml", "calc/vibe_probe_format_test.go", "was changed")
 	})
 	t.Run("nowhere to plant cannot decide", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, withoutFile("calc/calc_test.go")))
+		rep := auditProbe(t, probeFixture(t, withoutFile("calc/calc_test.go")), ids("V-03"))
 		assertExecution(t, rep, "V-03", "undecided", "component . has no tests")
 	})
 	t.Run("a word with an expansion cannot decide", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, withEntrypoints("  fmt-check: go run ./ci $STEP\n")))
+		rep := auditProbe(t, probeFixture(t, withEntrypoints("  fmt-check: go run ./ci $STEP\n")), ids("V-03"))
 		assertExecution(t, rep, "V-03", "undecided", "without a shell", "parameter expansion")
 	})
 	t.Run("a tool that is not installed cannot decide", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, withEntrypoints("  fmt-check: vibe-no-such-tool check\n")))
+		rep := auditProbe(t, probeFixture(t, withEntrypoints("  fmt-check: vibe-no-such-tool check\n")), ids("V-03"))
 		assertExecution(t, rep, "V-03", "undecided", "`vibe-no-such-tool` is not installed on this machine")
 	})
 }
@@ -354,7 +381,7 @@ func TestRuleD01(t *testing.T) {
 	t.Parallel()
 	t.Run("go mod tidy changes nothing", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t))
+		rep := auditProbe(t, probeFixture(t), ids("D-01"))
 		assertExecution(t, rep, "D-01", "pass")
 	})
 	t.Run("an unused require fails", func(t *testing.T) {
@@ -364,46 +391,53 @@ func TestRuleD01(t *testing.T) {
 				"replace example.com/lib => ./lib\n\nreplace example.com/unused => ./unused\n"),
 			withFile("unused/go.mod", "module example.com/unused\n\ngo 1.27.0\n"),
 			withFile("unused/unused.go", "// Package unused is required and never imported.\npackage unused\n"),
-		))
+		), ids("D-01"))
 		assertExecution(t, rep, "D-01", "fail", "go.sum: does not match its manifest", "git diff --exit-code")
 	})
 	t.Run("dependencies without a lockfile fail", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, withoutFile("go.sum")))
+		rep := auditProbe(t, probeFixture(t, withoutFile("go.sum")), ids("D-01"))
 		assertExecution(t, rep, "D-01", "fail", "go.mod: component . has dependencies and no recognized lockfile")
 	})
+	// The cases below need no tool: auditD01 runs D-01 alone with an
+	// empty PATH.
+	auditD01 := func(t *testing.T, dir string) jsonReport {
+		t.Helper()
+		rep, _ := auditJSONRules(t, registryRules(t, "D-01"), dir)
+		return rep
+	}
 	t.Run("no dependencies and no lockfile pass", func(t *testing.T) {
 		t.Parallel()
-		rep, _ := auditJSON(t, contractFixture(t))
+		rep := auditD01(t, contractFixture(t))
 		assertExecution(t, rep, "D-01", "pass")
 	})
 	t.Run("a Python component with dependencies and no lockfile fails", func(t *testing.T) {
 		t.Parallel()
-		rep, _ := auditJSON(t, contractFixture(t, withoutFile("go.mod"),
+		rep := auditD01(t, contractFixture(t, withoutFile("go.mod"),
 			withFile("pyproject.toml", "[project]\nname = \"svc\"\ndependencies = [\n  \"requests>=2\",  # http\n]\n")))
 		assertExecution(t, rep, "D-01", "fail", "pyproject.toml: component . has dependencies", "uv.lock or poetry.lock")
 	})
 	t.Run("a Python component with only python in poetry passes", func(t *testing.T) {
 		t.Parallel()
-		rep, _ := auditJSON(t, contractFixture(t, withoutFile("go.mod"),
+		rep := auditD01(t, contractFixture(t, withoutFile("go.mod"),
 			withFile("pyproject.toml", "[project]\nname = \"svc\"\ndependencies = []\n\n[tool.poetry.dependencies]\npython = \"^3.12\"\n")))
 		assertExecution(t, rep, "D-01", "pass")
 	})
 	t.Run("a Python component with a poetry group fails", func(t *testing.T) {
 		t.Parallel()
-		rep, _ := auditJSON(t, contractFixture(t, withoutFile("go.mod"),
+		rep := auditD01(t, contractFixture(t, withoutFile("go.mod"),
 			withFile("pyproject.toml", "[project]\nname = 'svc'\n\n[tool.poetry.group.dev.dependencies]\npytest = { version = \"^8\" }\n")))
 		assertExecution(t, rep, "D-01", "fail", "has dependencies")
 	})
 	t.Run("a TypeScript component with devDependencies and no lockfile fails", func(t *testing.T) {
 		t.Parallel()
-		rep, _ := auditJSON(t, contractFixture(t, withoutFile("go.mod"),
+		rep := auditD01(t, contractFixture(t, withoutFile("go.mod"),
 			withFile("package.json", `{"name": "web", "devDependencies": {"vitest": "^2"}}`+"\n")))
 		assertExecution(t, rep, "D-01", "fail", "package.json: component . has dependencies", "pnpm-lock.yaml or package-lock.json")
 	})
 	t.Run("a lockfile check whose tool is not installed cannot decide", func(t *testing.T) {
 		t.Parallel()
-		rep, _ := auditJSON(t, contractFixture(t, withoutFile("go.mod"),
+		rep := auditD01(t, contractFixture(t, withoutFile("go.mod"),
 			withFile("package.json", `{"name": "web"}`+"\n"), withFile("pnpm-lock.yaml", "lockfileVersion: '9.0'\n")))
 		assertExecution(t, rep, "D-01", "undecided", "`pnpm` is not installed on this machine")
 	})
@@ -417,31 +451,32 @@ func TestRuleR01Execution(t *testing.T) {
 	noAgents := section{"agents", "agents: []\n"}
 	t.Run("verify without vibe passes", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, probeConfig(noAgents)))
+		rep := auditProbe(t, probeFixture(t, probeConfig(noAgents)), ids("R-01"))
 		assertExecution(t, rep, "R-01", "pass")
 	})
 	t.Run("verify that calls vibe fails and lists the call", func(t *testing.T) {
 		t.Parallel()
 		rep := auditProbe(t, probeFixture(t, probeConfig(noAgents,
-			section{"entrypoints", probeEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci call-vibe]\n")})))
+			section{"entrypoints", probeEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci call-vibe]\n")})), ids("R-01"))
 		assertExecution(t, rep, "R-01", "fail", "vibe not available", `verify ran "vibe version"`)
 	})
 	t.Run("a hook that calls vibe is listed", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, sessionStartHooks("startup", "vibe audit --static")))
+		// A-07 runs the hook; R-01 also reads A-02's verdict.
+		rep := auditProbe(t, probeFixture(t, sessionStartHooks("startup", "vibe audit --static")), ids("A-02", "A-07", "R-01"))
 		assertExecution(t, rep, "A-07", "fail", "exited 127", "vibe is not available during the R-01 probe")
 		// The fixture has no guard, so R-01's A-02 half fails as well.
 		assertExecution(t, rep, "R-01", "fail", `the SessionStart hook ran "vibe audit --static"`)
 	})
 	t.Run("with Claude Code and no guard the A-02 deny cases fail R-01", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t))
+		rep := auditProbe(t, probeFixture(t), ids("A-02", "R-01"))
 		assertExecution(t, rep, "R-01", "fail", "no PreToolUse hook matches Bash, so its")
 	})
 	t.Run("a verify that runs too long cannot decide", func(t *testing.T) {
 		t.Parallel()
 		rep := auditProbe(t, probeFixture(t, probeConfig(noAgents,
-			section{"entrypoints", probeEntrypoints("  verify: go run ./ci sleep\n")})), "--probe-timeout", "3s")
+			section{"entrypoints", probeEntrypoints("  verify: go run ./ci sleep\n")})), ids("R-01"), "--probe-timeout", "3s")
 		assertExecution(t, rep, "R-01", "undecided", "timed out after 3s")
 	})
 }
@@ -452,8 +487,9 @@ func TestProbeSetup(t *testing.T) {
 	t.Parallel()
 	t.Run("a failing setup leaves every part undecided", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, withEntrypoints("  setup: go run ./ci fail\n")))
-		for _, id := range []string{"V-03", "A-07", "D-01", "R-01"} {
+		parts := ids("V-03", "A-07", "D-01", "R-01")
+		rep := auditProbe(t, probeFixture(t, withEntrypoints("  setup: go run ./ci fail\n")), parts)
+		for _, id := range parts {
 			if r := rep.rule(t, id); r.Result != "undecided" {
 				t.Errorf("%s = %s, want undecided", id, r.Result)
 			}
@@ -462,7 +498,7 @@ func TestProbeSetup(t *testing.T) {
 	})
 	t.Run("a setup that succeeds lets the parts run", func(t *testing.T) {
 		t.Parallel()
-		rep := auditProbe(t, probeFixture(t, withEntrypoints("  setup: go run ./ci ok\n")))
+		rep := auditProbe(t, probeFixture(t, withEntrypoints("  setup: go run ./ci ok\n")), ids("V-03"))
 		assertExecution(t, rep, "V-03", "pass")
 	})
 }

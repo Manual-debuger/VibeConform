@@ -56,9 +56,12 @@ func runConfigCases(t *testing.T, cases []configCase) {
 	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			edits := append([]fixtureEdit{withFile("vibe.yaml", tc.config)}, tc.edits...)
 			dir := contractFixture(t, edits...)
-			r := runVibeAudit(t, "--repo-root", dir)
+			// --static: these cases test the configuration, which the
+			// probe copy adds nothing to; it exits 1 either way.
+			r := runVibeAudit(t, "--repo-root", dir, "--static")
 			assertExit(t, r, 1)
 			if tc.want == nil {
 				assertReport(t, r)

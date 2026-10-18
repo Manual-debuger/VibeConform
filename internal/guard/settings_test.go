@@ -101,7 +101,8 @@ func TestRepositorySettingsHookCorpus(t *testing.T) {
 					env = append(env, kv)
 				}
 			}
-			cmd.Env = append(env, "PATH="+dir, "CLAUDE_PROJECT_DIR="+r.Root)
+			env = append(env, "PATH="+dir, "CLAUDE_PROJECT_DIR="+r.Root)
+			cmd.Env = env
 			cmd.Stdin = strings.NewReader(payloadFor(t, c, r.Root))
 			var errOut bytes.Buffer
 			cmd.Stderr = &errOut
