@@ -746,9 +746,12 @@ reads no GitHub branch protection.
     `schedules` and branch names.
 
   A rule with any other condition, or with `changes:` or `exists:`,
-  does not admit the job for that pipeline kind, and the finding quotes
-  the condition and its line. So a job gated by `changes:` does not
-  count for C-01, as a GitHub `paths` filter does not.
+  does not admit the job for that pipeline kind. With `when: never` it
+  leaves the job out (it might exclude it); without, the audit passes
+  over it and a later rule may still admit the job. When none does, the
+  finding quotes the first such condition and its line. So a job gated
+  by `changes:` does not count for C-01, as a GitHub `paths` filter
+  does not. `workflow:rules` and include rules are read the same way.
 - **The rules.** C-01 and C-04 ask their questions of the jobs that run
   for each pipeline kind. C-02 requires every `image:` and `services:`
   entry to end in `@sha256:` and a digest, every unfollowed include to
