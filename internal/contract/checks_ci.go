@@ -30,23 +30,13 @@ func ciRead(env *Env) (ci *CI, res PartResult, ok bool) {
 	return ci, failIf(ci.Broken), true
 }
 
-// gitlabNotRead is the result of a rule this vibe does not read on GitLab
-// CI yet.
-func gitlabNotRead(res PartResult) PartResult {
-	return Merge(res, Undecided(Finding{File: gitlabCIFile,
-		Message: "this vibe does not read GitLab CI for this rule yet",
-		Fix:     "wait for a vibe that reads it"}))
-}
-
 // checkC03: every workflow has top-level permissions of read-all, {} or a
-// map whose every value is read or none.
+// map whose every value is read or none. On GitLab CI the rule is not
+// applicable, which the registry decides before it runs.
 func checkC03(env *Env) PartResult {
 	ci, res, ok := ciRead(env)
-	if !ok {
+	if !ok || ci.Provider == CIGitLab {
 		return res
-	}
-	if ci.Provider == CIGitLab {
-		return gitlabNotRead(res)
 	}
 	parsed := ci.Workflows
 	const fix = "set top-level `permissions: contents: read` (or `read-all`, or `{}`) and grant write scopes in the job that needs them"
@@ -164,7 +154,7 @@ func checkC02(env *Env) PartResult {
 		return res
 	}
 	if ci.Provider == CIGitLab {
-		return gitlabNotRead(res)
+		return Merge(res, gitlabC02(ci))
 	}
 	parsed := ci.Workflows
 	const pinFix = "pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)"
@@ -285,7 +275,7 @@ func checkC05(env *Env) PartResult {
 		return res
 	}
 	if ci.Provider == CIGitLab {
-		return gitlabNotRead(res)
+		return Merge(res, gitlabC05(ci, verify))
 	}
 	parsed := ci.Workflows
 	var findings []Finding
@@ -360,7 +350,7 @@ func checkD03(env *Env) PartResult {
 		return res
 	}
 	if ci.Provider == CIGitLab {
-		return gitlabNotRead(res)
+		return Merge(res, gitlabD03(ci))
 	}
 	parsed := ci.Workflows
 	for _, wf := range parsed {
@@ -382,20 +372,19 @@ func checkD03(env *Env) PartResult {
 // checkR01 is R-01's static part: no entrypoint, hook command or CI step
 // has a simple command whose first word is vibe, except in a job that
 // satisfies C-04, and except vibe --version in a CI job that calls no
-// entrypoint (spec 0055). Without GitHub workflows only the entrypoints and hook
-// commands are read; a workflow that does not parse fails it. GitLab CI
-// is not read here yet: only its entrypoints and hook commands are.
+// entrypoint (spec 0055). On GitLab CI every job's before_script, script
+// and after_script are read. Without CI only the entrypoints and hook
+// commands are read; a CI file that does not parse fails it.
 func checkR01(env *Env) PartResult {
 	calls := entrypointVibeCalls(env)
 	hookCalls, res := hookVibeCalls(env)
 	calls = append(calls, hookCalls...)
-	if ci, ciRes, ok := ciRead(env); ok && ci.Provider == CIGitHub {
-		parsed := ci.Workflows
+	if ci, ciRes, ok := ciRead(env); ok {
 		res = Merge(res, ciRes)
-		// With verify missing (V-04 fails), any vibe audit job of a pull
-		// request workflow is the audit job.
+		// With verify missing (V-04 fails), any vibe audit job that runs
+		// for pull (merge) requests is the audit job.
 		verify, _ := env.Entrypoint(EntrypointVerify)
-		calls = append(calls, ciVibeCalls(env, parsed, auditJobs(parsed, defaultBranch(env, parsed), verify))...)
+		calls = append(calls, ciVibeCalls(env, ci, ciAuditJobs(ci.Run(env, KindMergeRequest), verify))...)
 	}
 	var findings []Finding
 	for _, c := range calls {

@@ -77,7 +77,7 @@ func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, st
 		rr.Waiver = &WaiverStatus{Reason: w.Reason, Until: w.Until, Expired: !now.Before(waiverEnd(w))}
 	}
 
-	if ok, why := rule.Applies(env.Config); !ok {
+	if ok, why := rule.Applies(env); !ok {
 		rr.NotApplicable = why
 		if rr.Waiver != nil {
 			rr.Waiver.Unused = true

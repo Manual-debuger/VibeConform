@@ -660,7 +660,34 @@ func (r *glReader) readJob(k *yaml.Node, name, child string, node *yaml.Node, ct
 			}
 		}
 	}
+	cj.Images = r.images(node)
 	return &glJob{ci: cj, node: node, child: r.childFiles(cj.File, name, node, ctx)}
+}
+
+// images reads a resolved job's image: and services: entries: each a
+// string or a map with name:.
+func (r *glReader) images(node *yaml.Node) []CIImage {
+	var out []CIImage
+	for _, key := range []string{"image", "services"} {
+		v := mapValue(node, key)
+		if v == nil {
+			continue
+		}
+		entries := []*yaml.Node{v}
+		if key == "services" {
+			entries = listItems(v)
+		}
+		for _, e := range entries {
+			n := e
+			if e.Kind == yaml.MappingNode {
+				if n = mapValue(e, "name"); n == nil {
+					n = e
+				}
+			}
+			out = append(out, CIImage{File: r.origin[n], Line: n.Line, Key: key, Name: scalarOr(n, "")})
+		}
+	}
+	return out
 }
 
 // scriptLines flattens a script: one string, or a list of strings and

@@ -444,3 +444,309 @@ func TestRuleC04GitLab(t *testing.T) {
 			findings: []string{".gitlab-ci.yml: ", "does not parse"}},
 	})
 }
+
+// glSHA is a full commit SHA, as a pinned include names it.
+const glSHA = "08eba0b27e820071cde6df949e0beb9ba4906955"
+
+// glUnpinned is an image without a digest.
+const glUnpinned = "golang:1.25"
+
+// glWithJob is the baseline with one more job.
+func glWithJob(job string) []fixtureEdit { return gitlab(glBase + "\n" + job) }
+
+// glInclude is the baseline with a top-level include list.
+func glInclude(entries string) []fixtureEdit { return gitlab("include:\n" + entries + glBase) }
+
+// C-02 on GitLab CI: images and services pinned by digest, unfollowed
+// includes pinned, no template: include, no @latest in any script.
+func TestRuleC02GitLab(t *testing.T) {
+	t.Parallel()
+	run := func(key, line string) []fixtureEdit {
+		return glWithJob("x:\n  " + key + ":\n    - " + line + "\n  script: [echo]\n")
+	}
+	runRuleCases(t, "C-02", []ruleCase{
+		{name: "baseline", want: "pass", edits: gitlab(glBase)},
+
+		// Images and services.
+		{name: "a job image by tag", want: "fail", edits: glWithJob("x:\n  image: " + glUnpinned + "\n  script: [echo]\n"),
+			findings: []string{".gitlab-ci.yml: ", "line 24: ", "job x", "image golang:1.25", "@sha256:"}},
+		{name: "a job image pinned", want: "pass", edits: glWithJob("x:\n  image: " + glImage + "\n  script: [echo]\n")},
+		{name: "a job image in name: form by tag", want: "fail",
+			edits:    glWithJob("x:\n  image:\n    name: " + glUnpinned + "\n    entrypoint: ['']\n  script: [echo]\n"),
+			findings: []string{"image golang:1.25"}},
+		{name: "a job image in name: form pinned", want: "pass",
+			edits: glWithJob("x:\n  image:\n    name: " + glImage + "\n  script: [echo]\n")},
+		{name: "a default image by tag", want: "fail",
+			edits:    gitlab(strings.Replace(glBase, glImage, glUnpinned, 1)),
+			findings: []string{".gitlab-ci.yml: ", "line 2: ", "image golang:1.25"}},
+		{name: "a short digest", want: "fail",
+			edits: glWithJob("x:\n  image: golang:1.25@sha256:0123abcd\n  script: [echo]\n")},
+		{name: "a job service by tag", want: "fail",
+			edits:    glWithJob("x:\n  services:\n    - postgres:16\n  script: [echo]\n"),
+			findings: []string{"services postgres:16"}},
+		{name: "a job service in name: form by tag", want: "fail",
+			edits:    glWithJob("x:\n  services:\n    - name: postgres:16\n      alias: db\n  script: [echo]\n"),
+			findings: []string{"services postgres:16"}},
+		{name: "a job service pinned", want: "pass",
+			edits: glWithJob("x:\n  services:\n    - name: postgres:16@sha256:" + strings.Repeat("ab", 32) + "\n  script: [echo]\n")},
+		{name: "a default service by tag", want: "fail",
+			edits:    gitlab("default:\n  services: [redis:7]\n" + glBase[len("default:\n"):]),
+			findings: []string{"services redis:7"}},
+		{name: "an image from a template", want: "fail",
+			edits:    glWithJob(".tpl:\n  image: " + glUnpinned + "\nx:\n  extends: .tpl\n  script: [echo]\n"),
+			findings: []string{"image golang:1.25"}},
+		{name: "an unpinned image in a template no job uses", want: "pass",
+			edits: glWithJob(".tpl:\n  image: " + glUnpinned + "\n")},
+		{name: "an image in a local include", want: "fail", edits: gitlab("include: ci/x.yml\n"+glBase,
+			withFile("ci/x.yml", "x:\n  image: "+glUnpinned+"\n  script: [echo]\n")),
+			findings: []string{"ci/x.yml: ", "line 2: "}},
+		{name: "an image in a child pipeline", want: "fail", edits: gitlab(
+			glBase+"child:\n  trigger:\n    include: ci/child.yml\n    strategy: depend\n",
+			withFile("ci/child.yml", "x:\n  image: "+glUnpinned+"\n  script: [echo]\n")),
+			findings: []string{"ci/child.yml: ", "image golang:1.25"}},
+
+		// Includes that are not followed.
+		{name: "a project include pinned", want: "pass",
+			edits: glInclude("  - project: group/ci\n    ref: " + glSHA + "\n    file: verify.yml\n")},
+		{name: "a project include by tag", want: "fail",
+			edits:    glInclude("  - project: group/ci\n    ref: v1.2.3\n    file: verify.yml\n"),
+			findings: []string{".gitlab-ci.yml: ", "line 2: ", "project group/ci", "40-character"}},
+		{name: "a project include without ref", want: "fail",
+			edits: glInclude("  - project: group/ci\n    file: verify.yml\n")},
+		{name: "a component pinned", want: "pass",
+			edits: glInclude("  - component: $CI_SERVER_FQDN/group/lint/golangci@" + glSHA + "\n")},
+		{name: "a component by version", want: "fail",
+			edits:    glInclude("  - component: $CI_SERVER_FQDN/group/lint/golangci@1.2.0\n"),
+			findings: []string{"component $CI_SERVER_FQDN/group/lint/golangci@1.2.0"}},
+		{name: "a component at ~latest", want: "fail",
+			edits: glInclude("  - component: gitlab.com/group/lint/golangci@~latest\n")},
+		{name: "a remote include with integrity", want: "pass",
+			edits: glInclude("  - remote: https://example.com/ci.yml\n    integrity: sha256-" + strings.Repeat("A", 43) + "=\n")},
+		{name: "a remote include without integrity", want: "fail",
+			edits:    glInclude("  - remote: https://example.com/ci.yml\n"),
+			findings: []string{"remote https://example.com/ci.yml", "integrity:"}},
+		{name: "a remote include as a string", want: "fail", edits: glInclude("  - https://example.com/ci.yml\n")},
+		{name: "a template include cannot be pinned", want: "fail",
+			edits:    glInclude("  - template: Jobs/SAST.gitlab-ci.yml\n"),
+			findings: []string{"template Jobs/SAST.gitlab-ci.yml", "cannot be pinned"}},
+		{name: "an unpinned include in a local include", want: "fail", edits: gitlab("include: ci/x.yml\n"+glBase,
+			withFile("ci/x.yml", "include:\n  - project: group/ci\n    file: x.yml\n")),
+			findings: []string{"ci/x.yml: "}},
+		{name: "an unpinned include in a trigger", want: "fail", edits: glWithJob(
+			"child:\n  trigger:\n    include:\n      - project: group/ci\n        file: child.yml\n    strategy: depend\n")},
+
+		// @latest in scripts.
+		{name: "@latest in script", want: "fail", edits: run("script", "go install golang.org/x/tools/cmd/goimports@latest"),
+			findings: []string{".gitlab-ci.yml: ", "job x, script", "goimports@latest", "pin"}},
+		{name: "@latest in before_script", want: "fail", edits: run("before_script", "npx prettier@latest --check ."),
+			findings: []string{"job x, before_script", "prettier@latest"}},
+		{name: "@latest in after_script", want: "fail", edits: run("after_script", "npx prettier@latest --check ."),
+			findings: []string{"job x, after_script"}},
+		{name: "a pinned version", want: "pass", edits: run("script", "go install golang.org/x/tools/cmd/goimports@v0.30.0")},
+		{name: "@latest inside a word is not a version", want: "pass", edits: run("script", "echo user@latest.example")},
+		{name: "a .gitlab-ci.yml that does not parse", want: "fail", edits: gitlab("x: [\n"),
+			findings: []string{".gitlab-ci.yml: ", "does not parse"}},
+	})
+}
+
+// C-03 on GitLab CI is not applicable: job tokens have no per-file
+// permissions.
+func TestRuleC03GitLab(t *testing.T) {
+	t.Parallel()
+	runRuleCases(t, "C-03", []ruleCase{
+		{name: "GitLab only", want: "not_applicable", edits: gitlab(glBase),
+			findings: []string{"not applicable", "GitLab", "job tokens have no per-file permissions", "project setting"}},
+		{name: "even when .gitlab-ci.yml does not parse", want: "not_applicable", edits: gitlab("x: [\n")},
+		{name: "both providers: GitHub is read", want: "pass", edits: []fixtureEdit{withFile(gitlabFile, glBase)}},
+	})
+}
+
+// C-05 on GitLab CI: platforms from tags after parallel: matrix expansion;
+// no tags and an image is Linux.
+func TestRuleC05GitLab(t *testing.T) {
+	t.Parallel()
+	only := func(jobs string) []fixtureEdit { return gitlab(glOnly(jobs)) }
+	matrix := func(tags, entries string) []fixtureEdit {
+		return only(glVerify("verify", "  parallel:\n    matrix:\n"+entries+"  tags: "+tags+"\n"))
+	}
+	runRuleCases(t, "C-05", []ruleCase{
+		{name: "baseline", want: "pass", edits: gitlab(glBase)},
+		{name: "tags ignore case and match inside a tag", want: "pass", edits: only(
+			glVerify("a", "  tags: [saas-Linux-small-amd64]\n") + glVerify("b", "  tags: [SAAS-WINDOWS-MEDIUM-AMD64]\n"))},
+		{name: "untagged with an image is Linux", want: "pass", edits: only(
+			glVerify("a", "  image: "+glImage+"\n") + glVerify("b", "  tags: [windows]\n"))},
+		{name: "untagged with a default image is Linux", want: "pass",
+			edits: gitlab("default:\n  image: " + glImage + "\n" + glOnly(glVerify("a", "")+glVerify("b", "  tags: [windows]\n")))},
+		{name: "untagged without an image is unknown", want: "fail", edits: only(
+			glVerify("a", "") + glVerify("b", "  tags: [windows]\n")),
+			findings: []string{".gitlab-ci.yml: ", "`task verify`", "no Linux runner", "job a", "no tags and no image"}},
+		{name: "a tag that names no platform is unknown", want: "fail", edits: only(
+			glVerify("a", "  tags: [docker]\n") + glVerify("b", "  tags: [windows]\n")),
+			findings: []string{"no Linux runner", "docker"}},
+		{name: "a tag beside a platform tag", want: "pass", edits: only(
+			glVerify("a", "  tags: [docker, linux]\n") + glVerify("b", "  tags: [windows]\n"))},
+		{name: "Linux only", want: "fail", edits: only(glVerify("a", "  tags: [linux]\n")),
+			findings: []string{"no Windows runner", "tags: [windows]"}},
+		{name: "macOS and Windows", want: "fail", edits: only(
+			glVerify("a", "  tags: [saas-macos-medium-m1]\n") + glVerify("b", "  tags: [windows]\n")),
+			findings: []string{"no Linux runner"}},
+		{name: "a matrix over tags", want: "pass", edits: matrix("['${RUNNER}']", "      - RUNNER: [linux, windows]\n")},
+		{name: "a matrix with $VAR", want: "pass", edits: matrix("[$RUNNER]", "      - RUNNER: [linux, windows]\n")},
+		{name: "a matrix of several entries", want: "pass",
+			edits: matrix("[$OS]", "      - OS: linux\n        GO: ['1.24', '1.25']\n      - OS: windows\n")},
+		{name: "a matrix that leaves Windows out", want: "fail",
+			edits: matrix("[$OS]", "      - OS: linux\n        GO: ['1.24', '1.25']\n")},
+		{name: "a tag variable the matrix does not set is unknown", want: "fail",
+			edits:    matrix("[$RUNNER]", "      - OS: [linux, windows]\n"),
+			findings: []string{"$RUNNER"}},
+		{name: "after_script does not count", want: "fail", edits: only(glVerify("a", "  tags: [linux]\n") +
+			"b:\n  tags: [windows]\n  script: [echo]\n  after_script: [task verify]\n")},
+		{name: "tags from default:", want: "pass",
+			edits: gitlab("default:\n  tags: [windows]\n" + glOnly(glVerify("a", "  tags: [linux]\n")+glVerify("b", "")))},
+		{name: "list verify, one command on Linux only", want: "fail", edits: append(only(
+			"lint:\n  tags: [linux]\n  script: [task lint]\n"+
+				"test:\n  parallel:\n    matrix:\n      - T: [linux, windows]\n  tags: [$T]\n  script: [task test]\n"), listVerify),
+			findings: []string{"`task lint`"}},
+		{name: "verify called nowhere", want: "fail", edits: only("x:\n  tags: [linux]\n  script: [echo]\n"),
+			findings: []string{".gitlab-ci.yml: ", "no job calls"}},
+		{name: "not applicable without windows", want: "not_applicable",
+			edits: gitlab(glOnly(glVerify("a", "  tags: [linux]\n")),
+				withFile("vibe.yaml", configWith(section{"platforms", "platforms: [linux]\n"})))},
+		{name: "a .gitlab-ci.yml that does not parse", want: "fail", edits: gitlab("x: [\n"),
+			findings: []string{".gitlab-ci.yml: ", "does not parse"}},
+	})
+}
+
+// D-03 on GitLab CI: a scanner in any script, or GitLab's
+// Dependency-Scanning template or component.
+func TestRuleD03GitLab(t *testing.T) {
+	t.Parallel()
+	noScan := strings.Replace(glBase,
+		"scan:\n  script:\n    - go install golang.org/x/vuln/cmd/govulncheck@v1.1.4\n    - govulncheck ./...\n\n", "", 1)
+	with := func(more string) []fixtureEdit { return gitlab(noScan + more) }
+	include := func(entry string) []fixtureEdit { return gitlab("include:\n" + entry + noScan) }
+	runRuleCases(t, "D-03", []ruleCase{
+		{name: "baseline govulncheck", want: "pass", edits: gitlab(glBase)},
+		{name: "pip-audit in before_script", want: "pass", edits: with("scan:\n  before_script: [pip-audit]\n  script: [echo]\n")},
+		{name: "trivy in after_script", want: "pass", edits: with("scan:\n  script: [echo]\n  after_script: [trivy fs .]\n")},
+		{name: "a scanner in a child pipeline", want: "pass", edits: gitlab(
+			noScan+"child:\n  trigger:\n    include: ci/child.yml\n    strategy: depend\n",
+			withFile("ci/child.yml", "scan:\n  script: [osv-scanner scan -r .]\n"))},
+		{name: "a scanner in a job with rules", want: "pass",
+			edits: with("scan:\n  rules:\n    - if: '$CI_PIPELINE_SOURCE == \"schedule\"'\n  script: [npm audit]\n")},
+		{name: "the Dependency-Scanning template", want: "pass",
+			edits: include("  - template: Jobs/Dependency-Scanning.gitlab-ci.yml\n")},
+		{name: "the Security Dependency-Scanning template", want: "pass",
+			edits: include("  - template: Security/Dependency-Scanning.latest.gitlab-ci.yml\n")},
+		{name: "another template", want: "fail", edits: include("  - template: Jobs/SAST.gitlab-ci.yml\n")},
+		{name: "the dependency-scanning component", want: "pass",
+			edits: include("  - component: $CI_SERVER_FQDN/components/dependency-scanning/main@" + glSHA + "\n")},
+		{name: "the dependency-scanning component unpinned is still recognized", want: "pass",
+			edits: include("  - component: gitlab.com/components/dependency-scanning/main@0\n")},
+		{name: "another component", want: "fail", edits: include("  - component: gitlab.com/components/sast/main@" + glSHA + "\n")},
+		{name: "installing a scanner is not running it", want: "fail",
+			edits: with("scan:\n  script: [go install golang.org/x/vuln/cmd/govulncheck@v1.1.4]\n")},
+		{name: "no scanner", want: "fail", edits: gitlab(noScan),
+			findings: []string{".gitlab-ci.yml: ", "govulncheck", "Dependency-Scanning"}},
+		{name: "a .gitlab-ci.yml that does not parse", want: "fail", edits: gitlab("x: [\n"),
+			findings: []string{".gitlab-ci.yml: ", "does not parse"}},
+	})
+}
+
+// The Dependency-Scanning template is still a template: C-02 fails it.
+func TestRuleD03GitLabTemplateFailsC02(t *testing.T) {
+	t.Parallel()
+	rep, _ := auditJSON(t, contractFixture(t, glInclude("  - template: Jobs/Dependency-Scanning.gitlab-ci.yml\n")...), "--static")
+	assertRule(t, rep, "D-03", "pass")
+	assertRule(t, rep, "C-02", "fail", "template Jobs/Dependency-Scanning.gitlab-ci.yml")
+}
+
+// R-01 on GitLab CI: every job's scripts, after_script included, except the
+// C-04 audit job's; vibe --version in a job that calls no entrypoint.
+func TestRuleR01GitLab(t *testing.T) {
+	t.Parallel()
+	runStaticPartCases(t, "R-01", []ruleCase{
+		{name: "baseline", want: "pass", edits: gitlab(glBase)},
+		{name: "vibe in a script", want: "fail", edits: glWithJob("sync:\n  script:\n    - vibe sync && git diff --exit-code\n"),
+			findings: []string{".gitlab-ci.yml: ", "line 25: job sync, script", "`vibe sync`"}},
+		{name: "vibe in before_script", want: "fail", edits: glWithJob("sync:\n  before_script: [vibe sync]\n  script: [echo]\n"),
+			findings: []string{"job sync, before_script"}},
+		{name: "vibe in after_script", want: "fail", edits: glWithJob("sync:\n  script: [echo]\n  after_script: [vibe doctor]\n"),
+			findings: []string{"job sync, after_script", "`vibe doctor`"}},
+		{name: "vibe in a default before_script", want: "fail",
+			edits:    gitlab("default:\n  before_script: [vibe sync]\n" + glBase[len("default:\n"):]),
+			findings: []string{"`vibe sync`"}},
+		{name: "other vibe commands in the audit job", want: "pass",
+			edits: gitlab(strings.Replace(glBase, "    - vibe audit --static\n", "    - vibe doctor\n    - vibe audit --static\n", 1))},
+		{name: "vibe in the audit job's after_script", want: "pass",
+			edits: gitlab(glBase + "  after_script: [vibe doctor]\n")},
+		{name: "vibe audit in a job that also calls verify", want: "fail",
+			edits:    gitlab(strings.Replace(glBase, "    - vibe audit --static\n", "    - vibe audit --static\n    - task verify\n", 1)),
+			findings: []string{"job conformance:audit, script", "`vibe audit --static`"}},
+		{name: "vibe audit in a job that does not run in merge requests", want: "fail",
+			edits: gitlab(strings.Replace(glBase, "conformance:audit:\n", "conformance:audit:\n"+glRules(glDefault), 1))},
+		{name: "the audit job in a child pipeline", want: "pass", edits: gitlab(
+			strings.Replace(glBase, glAudit(""), "", 1)+"audit:\n  trigger:\n    include: ci/audit.yml\n    strategy: depend\n",
+			withFile("ci/audit.yml", glAudit("  after_script: [vibe doctor]\n")))},
+		{name: "vibe in a child pipeline", want: "fail", edits: gitlab(
+			glBase+"child:\n  trigger:\n    include: ci/child.yml\n    strategy: depend\n",
+			withFile("ci/child.yml", "sync:\n  script: [vibe sync]\n")),
+			findings: []string{"ci/child.yml: ", "`vibe sync`"}},
+		{name: "vibe by path is not a call of vibe", want: "pass",
+			edits: glWithJob("sync:\n  script: ['\"$CI_PROJECT_DIR/bin/vibe\" sync']\n")},
+		// vibe --version tests an installed binary (#120 Part A).
+		{name: "vibe --version in a job that calls no entrypoint", want: "pass",
+			edits: glWithJob("install:\n  script:\n    - go install ./cmd/vibe\n    - vibe --version | tee version.txt\n")},
+		{name: "vibe --version in a job that calls verify", want: "fail",
+			edits:    glWithJob("v:\n  before_script: [vibe --version]\n  script: [task verify]\n"),
+			findings: []string{"job v, before_script", "`vibe --version`"}},
+		{name: "vibe --version in a job that calls verify in after_script", want: "fail",
+			edits:    glWithJob("v:\n  script: [vibe --version]\n  after_script: [task verify]\n"),
+			findings: []string{"`vibe --version`"}},
+		{name: "vibe --version with more words is a call", want: "fail",
+			edits: glWithJob("install:\n  script: [vibe --version --json]\n")},
+		{name: "a .gitlab-ci.yml that does not parse", want: "fail", edits: gitlab("x: [\n"),
+			findings: []string{".gitlab-ci.yml: ", "does not parse"}},
+	})
+}
+
+// A GitLab-only repository: the baseline decides every C rule, D-03 and
+// R-01's static part, C-03 is not applicable, and the report names GitLab
+// CI (spec 0055, acceptance criterion 2).
+func TestGitLabBaseline(t *testing.T) {
+	t.Parallel()
+	dir := contractFixture(t, gitlab(glBase)...)
+	rep, _ := auditJSON(t, dir, "--static")
+	for _, id := range []string{"C-01", "C-02", "C-04", "C-05", "D-03"} {
+		assertRule(t, rep, id, "pass")
+	}
+	assertRule(t, rep, "C-03", "not_applicable", "GitLab")
+	for _, p := range rep.rule(t, "R-01").Parts {
+		if p.Check == "static" && p.Result != "pass" {
+			t.Errorf("R-01 static part = %s, want pass\n%s", p.Result, rep.rule(t, "R-01").findingText())
+		}
+	}
+	if rep.CIProvider != "gitlab_ci" {
+		t.Errorf("ci_provider = %q, want gitlab_ci", rep.CIProvider)
+	}
+	if text := runVibeAudit(t, "--repo-root", dir, "--static").stdout; !strings.Contains(text, "CI provider read: GitLab CI\n") {
+		t.Errorf("text report does not name GitLab CI:\n%s", text)
+	}
+}
+
+// A repository with both GitHub workflows and a .gitlab-ci.yml gets the
+// results of the GitHub baseline, whatever the GitLab file says (spec
+// 0055, acceptance criterion 4).
+func TestBothProvidersReadAsGitHub(t *testing.T) {
+	t.Parallel()
+	github, _ := auditJSON(t, contractFixture(t), "--static")
+	bad := "include:\n  - template: Jobs/SAST.gitlab-ci.yml\n" +
+		"x:\n  image: golang:1.25\n  services: [redis:7]\n  tags: [docker]\n  script: [vibe sync, go install a/b@latest]\n"
+	both, _ := auditJSON(t, contractFixture(t, withFile(gitlabFile, bad)), "--static")
+	for _, id := range []string{"C-01", "C-02", "C-03", "C-04", "C-05", "D-03", "R-01"} {
+		g, b := github.rule(t, id), both.rule(t, id)
+		if g.Result != b.Result || g.findingText() != b.findingText() {
+			t.Errorf("%s with both providers = %s %q, want the GitHub result %s %q", id, b.Result, b.findingText(), g.Result, g.findingText())
+		}
+	}
+}
