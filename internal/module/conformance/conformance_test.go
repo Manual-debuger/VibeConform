@@ -103,27 +103,34 @@ func TestTemplatesMatchLiveFiles(t *testing.T) {
 	}
 }
 
-// TestWorkflowIsPinnedAndSelfContained pins spec 0022's workflow: one job,
-// named as the required check, that runs task audit and never installs a
-// floating vibe. Pinning is task audit's job, so there is no vibe install
-// step for a later edit to point back at @latest.
+// TestWorkflowIsPinnedAndSelfContained pins spec 0022's workflow as spec
+// 0054 changed it: one job, named as the required check, that installs
+// exactly the vibe_version .vibe/state.yaml records through the setup
+// action, pinned by commit SHA, and then runs vibe audit itself. It needs
+// no Go and no Task: setup-go is gone, and the action's source auto builds
+// from the checkout only in VibeConform itself (ADR 0008).
 func TestWorkflowIsPinnedAndSelfContained(t *testing.T) {
 	text := string(conformanceWorkflow)
 	if strings.Contains(text, "@latest") {
 		t.Error("conformance.yml installs something @latest; its verdict would change with no change to the repository")
 	}
 	if regexp.MustCompile(`go install \S*cmd/vibe`).MatchString(text) {
-		t.Error("conformance.yml installs vibe itself; task audit's pinned fallback is the only way it may obtain vibe")
+		t.Error("conformance.yml installs vibe itself; the setup action is the only way it may obtain vibe")
 	}
-	if !strings.Contains(text, "if [ -d ./cmd/vibe ]") {
-		t.Error("self-hosting probe missing (ADR 0008)")
+	for _, gone := range []string{"setup-go", "go install", "go build", "task audit", "go-task"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("conformance.yml still names %q; the job needs neither Go nor Task (spec 0054)", gone)
+		}
 	}
 
 	var wf struct {
 		Jobs map[string]struct {
 			Name  string `yaml:"name"`
 			Steps []struct {
-				Run string `yaml:"run"`
+				ID   string            `yaml:"id"`
+				Uses string            `yaml:"uses"`
+				Run  string            `yaml:"run"`
+				With map[string]string `yaml:"with"`
 			} `yaml:"steps"`
 		} `yaml:"jobs"`
 	}
@@ -141,8 +148,34 @@ func TestWorkflowIsPinnedAndSelfContained(t *testing.T) {
 		t.Errorf("audit job name = %q, want %q: branch protection requires that exact check name",
 			job.Name, "Conformance / audit")
 	}
-	if n := len(job.Steps); n == 0 || strings.TrimSpace(job.Steps[n-1].Run) != "task audit" {
-		t.Error("the audit job's last step is not `task audit`")
+	if n := len(job.Steps); n == 0 || strings.TrimSpace(job.Steps[n-1].Run) != "vibe audit --repo-root ." {
+		t.Error("the audit job's last step is not `vibe audit --repo-root .`")
+	}
+
+	var setup int
+	for i, s := range job.Steps {
+		if strings.HasPrefix(s.Uses, "Manual-debuger/VibeConform") {
+			setup = i
+			if !regexp.MustCompile(`^Manual-debuger/VibeConform@[0-9a-f]{40}$`).MatchString(s.Uses) {
+				t.Errorf("the setup action is %q, want it pinned by a full commit SHA (C-02)", s.Uses)
+			}
+			if !strings.Contains(s.With["version"], "steps.") || !strings.Contains(s.With["version"], ".outputs.") {
+				t.Errorf("the setup action's version is %q, want the vibe_version read from .vibe/state.yaml", s.With["version"])
+			}
+			if src, ok := s.With["source"]; ok && src != "auto" {
+				t.Errorf("the setup action's source is %q, want auto", src)
+			}
+		}
+	}
+	if setup == 0 {
+		t.Fatal("conformance.yml does not use the setup action after checkout")
+	}
+	read := job.Steps[setup-1]
+	if !strings.Contains(read.Run, ".vibe/state.yaml") || !strings.Contains(read.Run, "vibe_version") {
+		t.Errorf("the step before the setup action does not read vibe_version from .vibe/state.yaml:\n%s", read.Run)
+	}
+	if !strings.Contains(job.Steps[setup].With["version"], "steps."+read.ID+".outputs.") {
+		t.Errorf("the setup action's version does not come from step %q", read.ID)
 	}
 }
 

@@ -17,8 +17,6 @@ concurrency:
 
 env:
   NODE_VERSION: "[[.Pins.Node]]"
-  GO_VERSION: "[[.Pins.Go]]"
-  TASK_VERSION: "[[.Pins.Task]]"
 
 jobs:
   lint:
@@ -37,12 +35,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
       - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+        uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
+        with:
+          version: "[[.Pins.TaskSetup]]"
+          checksum: "[[.Pins.TaskSHA256]]"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: task fmt:check
@@ -66,12 +63,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
       - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
+        uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
+        with:
+          version: "[[.Pins.TaskSetup]]"
+          checksum: "[[.Pins.TaskSHA256]]"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: task typecheck

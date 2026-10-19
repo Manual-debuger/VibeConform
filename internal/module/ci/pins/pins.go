@@ -20,7 +20,10 @@ type Table struct {
 	Task string
 	// TaskSHA256 is the checksum of Task's task_linux_amd64.tar.gz release
 	// archive at version Task. Change both together.
-	TaskSHA256   string
+	TaskSHA256 string
+	// TaskSetup is Task as go-task/setup-task takes it: the same release,
+	// without the leading v, which the action adds itself.
+	TaskSetup    string
 	GolangciLint string
 	// Goimports is a golang.org/x/tools version, the module goimports is
 	// installed from.
@@ -29,6 +32,10 @@ type Table struct {
 	Actionlint  string
 	Node        string
 	Python      string
+	// SetupAction is the commit of this repository whose action.yml the
+	// GitHub conformance workflow uses (spec 0054), pinned by SHA (C-02).
+	// Bump it when action.yml changes in a way the workflow needs.
+	SetupAction string
 }
 
 // Current is the table the generated CI uses. Modules read it when they
@@ -37,12 +44,14 @@ var Current = Table{
 	Go:           "1.27.0",
 	Task:         "v3.53.1",
 	TaskSHA256:   "a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7",
+	TaskSetup:    "3.53.1",
 	GolangciLint: "v2.13.2",
 	Goimports:    "v0.51.0",
 	Govulncheck:  "v1.8.0",
 	Actionlint:   "v1.7.12",
 	Node:         "22",
 	Python:       "3.12",
+	SetupAction:  "94de1c573252583f9984452bf8b8522582dcb2d5",
 }
 
 // Parse parses a CI template. Its [[ ]] delimiters leave GitHub's ${{ }}
