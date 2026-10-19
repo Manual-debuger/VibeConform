@@ -71,6 +71,8 @@ func checkSkill(skill fs.FS) []string {
 	c.checkReferencePolicies()
 	c.checkReferenceHooks()
 	c.checkUpgrade()
+	c.checkContractVersion()
+	c.checkSkillIgnored()
 	sort.Strings(c.problems)
 	return c.problems
 }
@@ -718,6 +720,57 @@ func (c *skillChecker) checkReferenceHooks() {
 	}
 	if len(stop) != 1 || len(stop[0].Hooks) != 1 || stop[0].Hooks[0].Command != guard.ReferenceStop {
 		c.problem(file, "Stop is not the reference guard's command")
+	}
+}
+
+// contractVersionPattern is a contract version the skill names as the one
+// it sets up: "contract 1.0.1" in prose, "contract: 1.0.1" in vibe.yaml.
+var contractVersionPattern = regexp.MustCompile(`\bcontract:? ([0-9]+\.[0-9]+\.[0-9]+)\b`)
+
+// checkContractVersion: SKILL.md, reference/rules.md and the reference
+// vibe.yaml files name the contract version vibe implements, and no
+// other. migrate.md and upgrade.md may name other versions.
+func (c *skillChecker) checkContractVersion() {
+	for _, f := range c.files {
+		if f.path != "SKILL.md" && f.path != "reference/rules.md" && pathpkg.Dir(f.path) != "reference/vibe-yaml" {
+			continue
+		}
+		matches := contractVersionPattern.FindAllStringSubmatch(f.text, -1)
+		// A vibe.yaml with no contract: is not version 2, which
+		// checkReferenceConfigs reports.
+		if len(matches) == 0 && f.path == "SKILL.md" {
+			c.problem(f.path, "names no contract version; want %s", contract.Implemented)
+		}
+		for _, m := range matches {
+			if m[1] != contract.Implemented {
+				c.problem(f.path, "names contract %s; vibe implements %s", m[1], contract.Implemented)
+			}
+		}
+	}
+}
+
+// ignoreConfigs are the reference lint and format configurations that
+// must leave the skill's own directories alone, so that the files vibe
+// init --skill writes do not fail the repository's checks (pilot P2, P3).
+var ignoreConfigs = []string{
+	"reference/lint/typescript/.prettierignore",
+	"reference/lint/typescript/eslint.config.js",
+	"reference/lint/python/ruff.toml",
+}
+
+// checkSkillIgnored: each of ignoreConfigs names both skill directories.
+func (c *skillChecker) checkSkillIgnored() {
+	for _, name := range ignoreConfigs {
+		f, ok := c.file(name)
+		if !ok {
+			c.problem(name, "is missing, so the repository's checks read the skill's own files")
+			continue
+		}
+		for _, dir := range setupskill.Dirs {
+			if !strings.Contains(f.text, dir) {
+				c.problem(name, "does not exclude %s, so the repository's checks read the skill's own files", dir)
+			}
+		}
 	}
 }
 

@@ -41,8 +41,11 @@ jobs:
           version: 3.53.1
       # The setup action installs vibe and vibe-guard {{VIBE_VERSION}} from
       # the release and checks the archives against its checksums.txt.
-      # version must be an exact release such as v0.12.0-alpha.1: the action
-      # refuses latest, so replace latest with the release you installed.
+      # version must be an exact release such as v0.12.0-alpha.1, never
+      # latest: the action refuses it. Where this file says latest (it came
+      # from a vibe built from source), use the newest release tag instead,
+      # here and in the pin and its comment; list the tags with
+      #   git ls-remote --tags https://github.com/Manual-debuger/VibeConform
       # The other inputs keep their defaults: tools (vibe vibe-guard),
       # source (auto: the release for a release version), verify-attestation
       # (false) and checksums (the release's own). Replace the zeros with the

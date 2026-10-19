@@ -1,4 +1,4 @@
-# The rules of contract 1.0.0
+# The rules of contract 1.0.1
 
 One entry per rule: its level, what satisfies it, and the reference file
 to start from. Keep anything that already satisfies a rule. The audit is
@@ -65,7 +65,7 @@ The pre-commit hook calls `fmt-check` or `fmt`; the pre-push hook calls
 
 ## C: CI
 
-Contract 1.0.0 decides the C rules for GitHub Actions only. A repository
+Contract 1.0.1 decides the C rules for GitHub Actions only. A repository
 with another provider's CI and no `.github/workflows/` gets "cannot
 decide": keep its CI, make it call the entrypoints, and report it.
 

@@ -7,7 +7,7 @@ metadata:
 
 # Set up the VibeConform contract
 
-You take a repository to a conformant `vibe audit` under contract 1.0.0.
+You take a repository to a conformant `vibe audit` under contract 1.0.1.
 The contract names properties, not tools: keep what the repository
 already has whenever it satisfies a rule. `vibe audit` is the judge, not
 this file.
@@ -73,7 +73,7 @@ Keep the team's runner and use its existing targets when they exist:
 `make verify`, `just verify`, `npm run verify`, `task verify`. Use Task
 only when there is no runner (`reference/taskrunner/<stack>/`). Then
 write `vibe.yaml` version 2 from `reference/vibe-yaml/<stack>.yaml`:
-`contract: 1.0.0`, `platforms`, `agents`, `components` when needed, and
+`contract: 1.0.1`, `platforms`, `agents`, `components` when needed, and
 the entrypoints `verify`, `verify-fast`, `fmt`, `fmt-check`, plus `setup`
 when the audit's probe copy must install dependencies first. An
 entrypoint is one command or a list; write the commands exactly as CI and

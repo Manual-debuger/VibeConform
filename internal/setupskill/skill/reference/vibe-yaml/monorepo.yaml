@@ -1,6 +1,6 @@
 # vibe.yaml version 2 for a monorepo. Every component is listed with its
 # path and language; the entrypoints are repository-wide.
-contract: 1.0.0
+contract: 1.0.1
 platforms: [linux, windows]
 agents: [claude]
 components:

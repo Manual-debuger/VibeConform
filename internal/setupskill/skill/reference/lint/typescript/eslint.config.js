@@ -38,7 +38,14 @@ const configFiles = ['**/*.config.ts', '**/*.config.*.ts']
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/coverage/**'],
+    // The setup skill's directories hold reference configs, not the
+    // repository's code: vibe init --skill rewrites them.
+    ignores: [
+      '**/dist/**',
+      '**/coverage/**',
+      '.claude/skills/vibeconform-setup/**',
+      '.agents/skills/vibeconform-setup/**',
+    ],
   },
   ...gitignored,
   {
