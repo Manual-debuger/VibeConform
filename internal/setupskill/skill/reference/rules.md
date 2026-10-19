@@ -1,4 +1,4 @@
-# The rules of contract 1.0.0
+# The rules of contract 1.0.1
 
 One entry per rule: its level, what satisfies it, and the reference file
 to start from. Keep anything that already satisfies a rule. The audit is
@@ -27,6 +27,22 @@ or `*_test.py`, TypeScript `*.test.ts`, `*.spec.ts`, `*.test.tsx` or
 Python needs a type checker or linter that reports undefined names
 (ruff's `F821`, pyright); TypeScript needs `tsc --noEmit` or ESLint's
 `no-undef`.
+
+A component with no test runner (a `test` script that only echoes, say)
+gets one, and one real test of its code. V-01 plants its failing test
+beside the component's first test file, so the runner must pick up
+every test file there:
+
+- Go: `go test ./...`, built in.
+- TypeScript: Node's built-in runner, `node --test "src/**/*.test.ts"`
+  (Node 22.18 or newer runs `.ts` files). A test that imports `./x.ts`
+  needs `rewriteRelativeImportExtensions` (or
+  `allowImportingTsExtensions`) in `tsconfig.json`. The planted test
+  throws when loaded, which fails the run.
+- Python: pytest (`uv add --dev pytest`). Not `python -m unittest`: it
+  finds only `test*.py` files and `TestCase` classes, so it misses the
+  planted `vibe_probe_test.py` and its plain `test_` function, and V-01
+  fails.
 
 ### V-02 (MUST): `verify-fast` catches the same defects
 
@@ -65,7 +81,7 @@ The pre-commit hook calls `fmt-check` or `fmt`; the pre-push hook calls
 
 ## C: CI
 
-Contract 1.0.0 decides the C rules for GitHub Actions only. A repository
+Contract 1.0.1 decides the C rules for GitHub Actions only. A repository
 with another provider's CI and no `.github/workflows/` gets "cannot
 decide": keep its CI, make it call the entrypoints, and report it.
 

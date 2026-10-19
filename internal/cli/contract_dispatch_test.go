@@ -9,7 +9,7 @@ import (
 
 // reportHeader starts the contract audit's report: a valid configuration
 // reached the rule engine.
-const reportHeader = "vibe audit: contract 1.0.0"
+const reportHeader = "vibe audit: contract 1.0.1"
 
 // assertReport checks that the contract audit printed its report.
 func assertReport(t *testing.T, r auditResult) {

@@ -321,8 +321,7 @@ func a02(env *Env, s *probeSession) PartResult {
 			if line := run.refusal(); line != "" {
 				msg += ": " + line
 			}
-			all.fail(Finding{File: claudeSettingsFile, Message: msg,
-				Fix: "make the guard allow it: the contract's corpus expects this call allowed"})
+			all.fail(allowCaseFinding(env, msg, "make the guard allow it: the contract's corpus expects this call allowed"))
 		case run.undecided() != nil:
 			all.undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + run.what() + ": " + run.undecided().describe()})
 		}
@@ -338,6 +337,17 @@ func a02(env *Env, s *probeSession) PartResult {
 	d := deny.result()
 	s.guardDeny = &d
 	return all.result()
+}
+
+// allowCaseFinding is the finding for an allow case the guard refused. It
+// names policy.json when vibe-guard runs and cannot load it, since
+// vibe-guard then refuses every call (contract 1.0.1), and the settings
+// otherwise.
+func allowCaseFinding(env *Env, msg, fix string) Finding {
+	if env.vibeGuardLoadError() != "" {
+		return Finding{File: guardPolicyFile, Message: msg, Fix: unloadableFix}
+	}
+	return Finding{File: claudeSettingsFile, Message: msg, Fix: fix}
 }
 
 // exceptionsFor returns the policy exceptions for a case's rule ID that

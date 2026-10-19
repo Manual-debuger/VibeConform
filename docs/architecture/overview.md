@@ -234,7 +234,7 @@ reconcile code rather than inside it:
         contract: ↓                          ↓ standard:
 internal/contract                    the old audit: manifest, standard,
   vibe.yaml version 2                module, resource, reconcile, state
-  the 25 rules of contract 1.0.0
+  the 25 rules of contract 1.0.1
   static checks of tracked files
   report model (plain data)
 ```

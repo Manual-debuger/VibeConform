@@ -388,7 +388,7 @@ func TestRuleA04(t *testing.T) {
 			`{"rule": "git-push-force", "match": "^git push --force origin feat/", "reason": "rebasing feature branches"},
 			 {"rule": "guardrail-settings", "match": "x", "reason": "y", "note": "other keys are the guard's"}`)}},
 		{name: "version 1", want: "fail", edits: []fixtureEdit{policy("1", "")},
-			findings: []string{policyFile + ": has version 1; contract 1.0.0 needs version 2", "Fix: "}},
+			findings: []string{policyFile + ": has version 1; contract 1.0.1 needs version 2", "Fix: "}},
 		{name: "no version", want: "fail", edits: []fixtureEdit{withFile(policyFile, `{"rules": []}`)},
 			findings: []string{policyFile + ": has no version"}},
 		{name: "version is a string", want: "fail", edits: []fixtureEdit{policy(`"2"`, "")},
@@ -416,7 +416,32 @@ func TestRuleA04(t *testing.T) {
 			findings: []string{"exceptions[0].reason is empty"}},
 		{name: "a policy.local.json is not judged", want: "pass",
 			edits: []fixtureEdit{withFile(localPolicyFile, `{"version": 7, "exceptions": [{"rule": "x"}]}`)}},
+		// Contract 1.0.1 (pilot P2): when the PreToolUse hooks run
+		// vibe-guard, policy.json must be one vibe-guard loads. Another
+		// guard's keys stay the guard's (the cases above).
+		{name: "vibe-guard cannot load it", want: "fail",
+			edits: []fixtureEdit{vibeGuardSettings(), withFile(policyFile, `{"version": 2, "tools": [], "rules": [], "exceptions": []}`)},
+			findings: []string{policyFile + ": vibe-guard cannot load it: policy.json: tools is not a known key",
+				"Fix: make " + policyFile + " a policy vibe-guard loads"}},
+		{name: "vibe-guard cannot load an exception", want: "fail",
+			edits:    []fixtureEdit{vibeGuardSettings(), policy("2", `{"rule": "rm-rf", "match": "a", "reason": "b", "note": "c"}`)},
+			findings: []string{policyFile + ": vibe-guard cannot load it: policy.json: exceptions[0].note is not a known key"}},
+		{name: "vibe-guard loads it", want: "pass",
+			edits: []fixtureEdit{vibeGuardSettings(), withFile(policyFile, `{"version": 2, "mode": "enforce", "rules": [], "exceptions": []}`)}},
+		{name: "another guard's keys are not read", want: "pass",
+			edits: []fixtureEdit{withFile(policyFile, `{"version": 2, "tools": [], "rules": [], "exceptions": []}`)}},
+		{name: "vibe-guard and a missing policy", want: "fail",
+			edits:    []fixtureEdit{vibeGuardSettings(), withoutFile(policyFile)},
+			findings: []string{"create " + policyFile}},
 	})
+}
+
+// vibeGuardSettings is the baseline settings with the reference
+// PreToolUse command, which runs vibe-guard.
+func vibeGuardSettings() fixtureEdit {
+	return settings(baseSessionHook + `, "PreToolUse": [` +
+		hookEntry("Bash|PowerShell|Write|Edit|MultiEdit", `command -v vibe-guard >/dev/null 2>&1 || exit 2; vibe-guard hook`) +
+		`], ` + baseStopHook)
 }
 
 // listingsReport is the part of the --json report that lists the guard's

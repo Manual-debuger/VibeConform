@@ -71,6 +71,9 @@ func checkSkill(skill fs.FS) []string {
 	c.checkReferencePolicies()
 	c.checkReferenceHooks()
 	c.checkUpgrade()
+	c.checkContractVersion()
+	c.checkSkillIgnored()
+	c.checkPolicyHandOff()
 	sort.Strings(c.problems)
 	return c.problems
 }
@@ -718,6 +721,90 @@ func (c *skillChecker) checkReferenceHooks() {
 	}
 	if len(stop) != 1 || len(stop[0].Hooks) != 1 || stop[0].Hooks[0].Command != guard.ReferenceStop {
 		c.problem(file, "Stop is not the reference guard's command")
+	}
+}
+
+// contractVersionPattern is a contract version the skill names as the one
+// it sets up: "contract 1.0.1" in prose, "contract: 1.0.1" in vibe.yaml.
+var contractVersionPattern = regexp.MustCompile(`\bcontract:? ([0-9]+\.[0-9]+\.[0-9]+)\b`)
+
+// checkContractVersion: SKILL.md, reference/rules.md and the reference
+// vibe.yaml files name the contract version vibe implements, and no
+// other. migrate.md and upgrade.md may name other versions.
+func (c *skillChecker) checkContractVersion() {
+	for _, f := range c.files {
+		if f.path != "SKILL.md" && f.path != "reference/rules.md" && pathpkg.Dir(f.path) != "reference/vibe-yaml" {
+			continue
+		}
+		matches := contractVersionPattern.FindAllStringSubmatch(f.text, -1)
+		// A vibe.yaml with no contract: is not version 2, which
+		// checkReferenceConfigs reports.
+		if len(matches) == 0 && f.path == "SKILL.md" {
+			c.problem(f.path, "names no contract version; want %s", contract.Implemented)
+		}
+		for _, m := range matches {
+			if m[1] != contract.Implemented {
+				c.problem(f.path, "names contract %s; vibe implements %s", m[1], contract.Implemented)
+			}
+		}
+	}
+}
+
+// ignoreConfigs are the reference lint and format configurations that
+// must leave the skill's own directories alone, so that the files vibe
+// init --skill writes do not fail the repository's checks (pilot P2, P3).
+var ignoreConfigs = []string{
+	"reference/lint/typescript/.prettierignore",
+	"reference/lint/typescript/eslint.config.js",
+	"reference/lint/python/ruff.toml",
+}
+
+// checkSkillIgnored: each of ignoreConfigs names both skill directories.
+func (c *skillChecker) checkSkillIgnored() {
+	for _, name := range ignoreConfigs {
+		f, ok := c.file(name)
+		if !ok {
+			c.problem(name, "is missing, so the repository's checks read the skill's own files")
+			continue
+		}
+		for _, dir := range setupskill.Dirs {
+			if !strings.Contains(f.text, dir) {
+				c.problem(name, "does not exclude %s, so the repository's checks read the skill's own files", dir)
+			}
+		}
+	}
+}
+
+// policyHandOff is the here-document in SKILL.md that the person runs to
+// write the guard policy, which a guard refuses the agent (pilots P1-P3).
+var policyHandOff = regexp.MustCompile("(?s)cat > \\.claude/hooks/policy\\.json <<'EOF'\n(.*?)\n[ \t]*EOF\n")
+
+// checkPolicyHandOff: SKILL.md hands the person a command that writes
+// reference/agents/policy.json exactly, as vibe-guard loads it.
+func (c *skillChecker) checkPolicyHandOff() {
+	f, ok := c.file("SKILL.md")
+	if !ok {
+		return
+	}
+	m := policyHandOff.FindStringSubmatch(f.text)
+	if m == nil {
+		c.problem(f.path, "gives the person no command that writes .claude/hooks/policy.json")
+		return
+	}
+	lines := strings.Split(m[1], "\n")
+	indent := len(lines[0]) - len(strings.TrimLeft(lines[0], " "))
+	for i, l := range lines {
+		lines[i] = strings.TrimPrefix(l, strings.Repeat(" ", indent))
+	}
+	got := strings.Join(lines, "\n") + "\n"
+	if _, err := guardrule.ParsePolicy([]byte(got)); err != nil {
+		c.problem(f.path, "writes a .claude/hooks/policy.json that vibe-guard cannot load: %v", err)
+		return
+	}
+	// A reference policy that does not load is checkReferencePolicies'.
+	ref, ok := c.file("reference/agents/policy.json")
+	if _, err := guardrule.ParsePolicy([]byte(ref.text)); ok && err == nil && got != ref.text {
+		c.problem(f.path, "writes a .claude/hooks/policy.json that differs from reference/agents/policy.json:\n%s", got)
 	}
 }
 

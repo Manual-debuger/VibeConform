@@ -1,5 +1,7 @@
 # Spec 0051: Contract v1.0.0
 
+Current version: 1.0.1 (see "Changes" under "Versioning").
+
 Status: accepted (2026-10-16). Issue #96. Decided by ADR 0025. Settled
 with the user on 2026-10-16 in a grilling session; "Qn" refers to its
 questions, which the issues also cite. The rules come from the contract
@@ -159,7 +161,11 @@ exception has:
 - `reason`: non-empty
 
 The file may also hold the repository's own deny rules, in any shape
-the guard reads. The contract only reads `version` and `exceptions`.
+the guard reads. The contract only reads `version` and `exceptions`,
+with one addition since 1.0.1: when a PreToolUse hook runs
+`vibe-guard hook`, the guard is `vibe-guard`, and A-04 also checks that
+`vibe-guard` can load the file (spec 0053, "policy.json version 2").
+Another guard's keys stay the guard's.
 
 A deny case counts as satisfied in either of two ways:
 
@@ -231,7 +237,7 @@ may override any guardrail, and the audit does not read them.
 | A-01 | Shell commands and file edits pass through the guard | Static: in `.claude/settings.json`, PreToolUse hooks match each of `Bash`, `PowerShell`, `Write`, `Edit` and `MultiEdit` | MUST | spec 0021 |
 | A-02 | The guard refuses the baseline unless an exception says otherwise | Probe: every corpus case is fed to every PreToolUse hook command that matches its tool. A deny case is satisfied as described under "Guard policy and exceptions". Every allow case must be allowed. A hook "refuses" by exiting 2. | MUST | specs 0012, 0047 |
 | A-03 | The guard fails closed | Probe: every deny case is still refused in two situations: with `PATH` reduced to the operating system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON | MUST | spec 0021 |
-| A-04 | The guard is loosened only through listed exceptions | Static: `.claude/hooks/policy.json` is valid version 2; every exception names a guard rule ID and has a non-empty reason; the audit lists them. Tightening is not restricted. | MUST | spec 0050, ADR 0024 |
+| A-04 | The guard is loosened only through listed exceptions | Static: `.claude/hooks/policy.json` is valid version 2; every exception names a guard rule ID and has a non-empty reason; when a PreToolUse hook runs `vibe-guard hook`, vibe-guard can load it; the audit lists them. Tightening is not restricted. | MUST | spec 0050, ADR 0024 |
 | A-05 | The agent's turn ends with `verify-fast` | Static: a Stop hook calls `verify-fast`. Probe: with a planted defect, the Stop hook exits 2 for a payload with `stop_hook_active: false`, and exits 0 for one with `stop_hook_active: true` | MUST | spec 0023 |
 | A-06 | Edited files are formatted | Static: a PostToolUse hook that matches `Write` and `Edit` calls `fmt` | SHOULD | spec 0023 |
 | A-07 | Session start injects facts and changes nothing | Static: a SessionStart hook exists. Execution: running it in the probe copy exits 0, and `git status --porcelain` stays empty. | SHOULD | spec 0023 |
@@ -268,6 +274,24 @@ may override any guardrail, and the audit does not read them.
 - If a repository declares a MINOR newer than vibe implements, or a
   MAJOR vibe does not support, there is no verdict: "cannot decide;
   upgrade vibe".
+
+### Changes
+
+- **1.0.1** (2026-10-19, pilot #110, spec 0054). A-04 passed a
+  `.claude/hooks/policy.json` that `vibe-guard` cannot load: in pilot P2
+  a version 2 file that kept the old `tools` key. A-04 now fails such a
+  file when a PreToolUse hook runs `vibe-guard hook`. The finding names
+  `policy.json` and quotes the guard's own loader error. The allow cases
+  that A-02 and A-08 then see refused name `policy.json` too, not
+  `.claude/settings.json`.
+
+  This is a PATCH, not a tightening. A-04's stated purpose is a policy
+  that the guard applies. A `vibe-guard` that cannot load its policy
+  refuses every call, allow cases included, so A-02 already failed for
+  every such repository. No repository's full-audit verdict changes; the
+  check now says why at the file that causes it. A missing `policy.json`
+  still fails A-04, as in 1.0.0.
+- **1.0.0** (2026-10-16). The first version.
 
 ## Later versions
 

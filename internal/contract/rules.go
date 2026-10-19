@@ -356,12 +356,14 @@ var rules = []Rule{
 		ID: "A-04", Level: Must, Category: CategoryAgents,
 		Title: "The guard is loosened only through listed exceptions",
 		Check: "Static: `.claude/hooks/policy.json` is valid version 2; every exception names a guard rule ID and " +
-			"has a non-empty reason; the audit lists them. Tightening is not restricted.",
+			"has a non-empty reason; when a PreToolUse hook runs `vibe-guard hook`, vibe-guard can load it; " +
+			"the audit lists them. Tightening is not restricted.",
 		Source:            "spec 0050, ADR 0024",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
 			static("`.claude/hooks/policy.json` is valid version 2; every exception names a guard rule ID and "+
-				"has a non-empty reason; the audit lists them. Tightening is not restricted.", checkA04),
+				"has a non-empty reason; when a PreToolUse hook runs `vibe-guard hook`, vibe-guard can load it; "+
+				"the audit lists them. Tightening is not restricted.", checkA04),
 		},
 		applies: needsClaude,
 	},
