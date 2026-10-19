@@ -135,6 +135,9 @@ func TestSkillDriftFixtures(t *testing.T) {
 		{"a reference lint config checks the skill's directories", func(t *testing.T) func(fstest.MapFS) {
 			return replaceIn(t, "reference/lint/python/ruff.toml", `, ".agents/skills/vibeconform-setup"`, "")
 		}, "reference/lint/python/ruff.toml"},
+		{"the policy SKILL.md hands to the person differs from the reference", func(t *testing.T) func(fstest.MapFS) {
+			return replaceIn(t, "SKILL.md", `    "rules": [],`, `    "tools": [],`)
+		}, "SKILL.md"},
 		{"upgrade.md does not name vibe unlock", func(*testing.T) func(fstest.MapFS) {
 			return func(files fstest.MapFS) {
 				f := files["reference/upgrade.md"]

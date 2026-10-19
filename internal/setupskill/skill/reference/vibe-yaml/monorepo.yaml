@@ -13,6 +13,9 @@ components:
 entrypoints:
   # Installs each component's dependencies in the audit's probe copy.
   setup: task setup
+  # When CI verifies each component in a job of its own, list the
+  # commands those jobs call instead:
+  #   verify: [task api:verify, task web:verify, task worker:verify]
   verify: task verify
   verify-fast: task verify:fast
   fmt: task fmt

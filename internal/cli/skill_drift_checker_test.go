@@ -73,6 +73,7 @@ func checkSkill(skill fs.FS) []string {
 	c.checkUpgrade()
 	c.checkContractVersion()
 	c.checkSkillIgnored()
+	c.checkPolicyHandOff()
 	sort.Strings(c.problems)
 	return c.problems
 }
@@ -771,6 +772,39 @@ func (c *skillChecker) checkSkillIgnored() {
 				c.problem(name, "does not exclude %s, so the repository's checks read the skill's own files", dir)
 			}
 		}
+	}
+}
+
+// policyHandOff is the here-document in SKILL.md that the person runs to
+// write the guard policy, which a guard refuses the agent (pilots P1-P3).
+var policyHandOff = regexp.MustCompile("(?s)cat > \\.claude/hooks/policy\\.json <<'EOF'\n(.*?)\n[ \t]*EOF\n")
+
+// checkPolicyHandOff: SKILL.md hands the person a command that writes
+// reference/agents/policy.json exactly, as vibe-guard loads it.
+func (c *skillChecker) checkPolicyHandOff() {
+	f, ok := c.file("SKILL.md")
+	if !ok {
+		return
+	}
+	m := policyHandOff.FindStringSubmatch(f.text)
+	if m == nil {
+		c.problem(f.path, "gives the person no command that writes .claude/hooks/policy.json")
+		return
+	}
+	lines := strings.Split(m[1], "\n")
+	indent := len(lines[0]) - len(strings.TrimLeft(lines[0], " "))
+	for i, l := range lines {
+		lines[i] = strings.TrimPrefix(l, strings.Repeat(" ", indent))
+	}
+	got := strings.Join(lines, "\n") + "\n"
+	if _, err := guardrule.ParsePolicy([]byte(got)); err != nil {
+		c.problem(f.path, "writes a .claude/hooks/policy.json that vibe-guard cannot load: %v", err)
+		return
+	}
+	// A reference policy that does not load is checkReferencePolicies'.
+	ref, ok := c.file("reference/agents/policy.json")
+	if _, err := guardrule.ParsePolicy([]byte(ref.text)); ok && err == nil && got != ref.text {
+		c.problem(f.path, "writes a .claude/hooks/policy.json that differs from reference/agents/policy.json:\n%s", got)
 	}
 }
 

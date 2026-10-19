@@ -2362,21 +2362,30 @@ What the agent does with it, in order:
 2. **Migrate** first when the template-sync system is there
    (`reference/migrate.md`): merge each seam pair into one file, fold
    `Taskfile.local.yml` into `Taskfile.yml`, remove `.vibe/`,
-   `Taskfile.vibe.yml`, the old guard scripts and the managed-region
-   markers.
+   `Taskfile.vibe.yml`, the managed-region markers and the prose about
+   the old system. The old guard keeps working until the new
+   `.claude/settings.json` is in place; its task and script go last.
 3. **Decide the entrypoints**: keep the team's runner (Task, make, just,
    package scripts), and use Task only when there is none. Write
-   `vibe.yaml` version 2.
+   `vibe.yaml` version 2. A monorepo whose CI verifies each component in
+   its own job declares `verify` as the list of those commands.
 4. **Satisfy the rules** one category at a time from
    `reference/rules.md`, keeping whatever already satisfies a rule. Each
-   configuration is one file; no `*.local.*` or `*.base.*`.
+   configuration is one file; no `*.local.*` or `*.base.*`. The skill's
+   own directories go into the formatter's and linters' ignores. The
+   setup action is pinned to a release, never `latest`.
+   `.claude/hooks/policy.json` comes before `.claude/settings.json`; a
+   guard refuses the agent that file, so the skill hands you a command
+   that writes it, and stops until you have run it.
 5. **Install `vibe-guard`** from the release archive with its SHA-256
-   checked against `checksums.txt`, or with `go install`.
-6. **Audit loop**: `vibe audit --static --json`, then `vibe audit
-   --json`, fixing each finding by its `file` and `fix`, until the verdict
-   is conformant. It stops and reports when a finding needs a person (a
-   missing tool, an unlock, an unsupported CI provider, a waiver) or when
-   two rounds change nothing.
+   checked against `checksums.txt`, or with `go install`, and check that
+   a non-interactive shell, as hooks use, finds it.
+6. **Audit loop**: stage the changes (the audit reads tracked files
+   only), `vibe audit --static --json`, then `vibe audit --json`, fixing
+   each finding by its `file` and `fix`, until the verdict is
+   conformant. It stops and reports when a finding needs a person (a
+   missing tool, the guard policy, an unlock, an unsupported CI
+   provider, a waiver) or when two rounds change nothing.
 7. **Report** the verdict, the files written, changed and removed, and
    the SHOULD rules that still fail.
 
@@ -2391,7 +2400,7 @@ The skill's files:
 | `reference/hooks/` | `lefthook.yml` per stack |
 | `reference/ci/` | `ci.yml` (verify on Linux and Windows, a vulnerability scan), `audit.yml` (the audit job with the setup action), `dependabot.yml`, the pull request template |
 | `reference/agents/` | `.claude/settings.json` with the `vibe-guard` hooks, `policy.json` version 2, the `AGENTS.md` Verification section, `CLAUDE.md` |
-| `reference/lint/` | golangci-lint; ruff and pyright; ESLint, Prettier and `tsconfig.json`, each one file |
+| `reference/lint/` | golangci-lint; ruff and pyright; ESLint, Prettier (with a `.prettierignore`) and `tsconfig.json`, each one file. The ESLint, Prettier and Ruff files exclude the skill's own directories |
 | `reference/optional/` | Graphify, VS Code, Zed, language servers, the `AGENTS.md` workflow sections and a docs layout |
 | `reference/migrate.md` | Leaving the template-sync system |
 | `reference/upgrade.md` | The upgrade flow |

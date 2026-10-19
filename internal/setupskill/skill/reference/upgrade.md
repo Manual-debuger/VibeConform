@@ -24,7 +24,13 @@ Compare the MAJOR parts (the X).
 2. Update `vibe-guard` to the version of the new `vibe` (`SKILL.md`,
    step 5).
 3. Update the setup action in the audit workflow: its `version` input,
-   and its pinned SHA to the commit of the new release tag.
+   and its pinned SHA to the commit of the new release tag. Never use
+   `latest`: the action refuses it. When the new `vibe` is not a release
+   (`vibe --version` shows a pseudo-version or `dev`, and this skill
+   names `latest`), there is no tag for it: keep the action on the
+   newest release tag that
+   `git ls-remote --tags https://github.com/Manual-debuger/VibeConform`
+   lists, and install `vibe-guard` from the same commit as `vibe`.
 4. Run the audit loop (`SKILL.md`, step 6). A new MINOR may add SHOULD
    rules; see `reference/rules.md`.
 
