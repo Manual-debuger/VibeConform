@@ -61,7 +61,7 @@ func TestAuditExplainContent(t *testing.T) {
 			"Level: SHOULD", "Category: C, CI", "Checks: static", "Source: principle 2",
 			"Not applicable: when `platforms` does not include `windows`",
 			"Waivable: yes, through a waiver in vibe.yaml",
-			"Contract v1 supports GitHub Actions only (Q19).",
+			"The C rules read GitHub Actions or GitLab CI (GitLab CI since 1.1.0).",
 		}},
 		{"V-01", []string{"Checks: execution, probe", "Rationale: Source: spec 0011, principle 2."}},
 	}
