@@ -275,7 +275,7 @@ func (e *Env) readCI() *ciState {
 	return &ciState{res: Fail(Finding{
 		File:    workflowDir + "/",
 		Message: "the repository has no CI configuration",
-		Fix:     "add a GitHub Actions workflow under .github/workflows/",
+		Fix:     "add a GitHub Actions workflow under .github/workflows/ or a GitLab CI configuration (.gitlab-ci.yml)",
 	})}
 }
 

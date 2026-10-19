@@ -75,7 +75,7 @@ func TestCIProvider(t *testing.T) {
 			edits: []fixtureEdit{withFile(gitlabFile, "test: [\n")}},
 		{name: "an untracked .gitlab-ci.yml is not CI", c01: "fail",
 			edits:    []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile), withUntracked(gitlabFile, glBase)},
-			findings: []string{"no CI configuration"}},
+			findings: []string{"no CI configuration", "Fix: add a GitHub Actions workflow under .github/workflows/ or a GitLab CI configuration (.gitlab-ci.yml)"}},
 		{name: "another provider cannot be decided", c01: "undecided",
 			edits:    []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile), withFile(".circleci/config.yml", "version: 2.1\n")},
 			findings: []string{".circleci/config.yml: ", "GitHub Actions", "GitLab CI"}},
