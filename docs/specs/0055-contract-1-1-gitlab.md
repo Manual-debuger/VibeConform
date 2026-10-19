@@ -1,6 +1,6 @@
 # Spec 0055: Contract 1.1.0, GitLab CI
 
-Status: draft (2026-10-19). Spec issue #122. Issues #74 (GitLab CI in the C rules) and
+Status: accepted (2026-10-19). Spec issue #122. Issues #74 (GitLab CI in the C rules) and
 #120 Part A (R-01 exempts tool-installation tests). Builds on spec 0051
 (contract v1, amended to 1.0.1), spec 0052 (static checks and their
 recognition rules), spec 0053, spec 0054 (setup skill, drift test, pilot),
