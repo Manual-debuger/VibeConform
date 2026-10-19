@@ -5,26 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"golang.org/x/mod/module"
-	"golang.org/x/mod/semver"
-
 	"github.com/Manual-debuger/VibeConform/internal/guard"
 )
-
-// VibeGuardVersion is the version the PreToolUse command's install hint
-// names for a vibe of version vibeVersion (spec 0053, "The reference hook
-// commands"): the running vibe's own version when it is a release, so
-// that the guard installed matches the vibe that wrote the settings.
-// Any other version names latest: "dev" from an unstamped build, one
-// with build metadata ("+dirty"), and a pseudo-version, which go build
-// stamps from the commit and so would change the settings with every
-// commit of a repository that builds vibe from source.
-func VibeGuardVersion(vibeVersion string) string {
-	if semver.IsValid(vibeVersion) && semver.Build(vibeVersion) == "" && !module.IsPseudoVersion(vibeVersion) {
-		return vibeVersion
-	}
-	return "latest"
-}
 
 // VibeGuardPolicy is .claude/hooks/policy.json with policy.agent_guard
 // vibe-guard: version 2 of the policy (spec 0053), enforcing, with no
@@ -52,7 +34,7 @@ func vibeGuardSettings(vibeVersion string) ([]byte, error) {
 	out := settings
 	for _, r := range []struct{ old, new string }{
 		{runtimeMatcher, `"matcher": ` + jsonString(guard.ReferencePreToolUseMatcher) + `,`},
-		{runtimeGuard, `"command": ` + jsonString(guard.ReferencePreToolUse(VibeGuardVersion(vibeVersion)))},
+		{runtimeGuard, `"command": ` + jsonString(guard.ReferencePreToolUse(guard.InstallVersion(vibeVersion)))},
 		{runtimeStop, `"command": ` + jsonString(guard.ReferenceStop) + `,`},
 	} {
 		if n := bytes.Count(out, []byte(r.old)); n != 1 {
