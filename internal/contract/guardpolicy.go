@@ -77,7 +77,9 @@ func (p *guardPolicy) exceptions() ([]json.RawMessage, error) {
 
 // checkA04: policy.json is a JSON object with version 2. exceptions is
 // optional and is a list; each entry names a guard rule ID and has a
-// non-empty match and reason. Other keys are the guard's and not read.
+// non-empty match and reason. Other keys are the guard's and not read,
+// unless the guard is vibe-guard: then vibe-guard must load the file
+// (contract 1.0.1).
 func checkA04(env *Env) PartResult {
 	p, res, ok := env.readGuardPolicy()
 	if !ok {
@@ -119,10 +121,55 @@ func checkA04(env *Env) PartResult {
 			fail(at+".reason is empty", "say in reason why the guard is loosened")
 		}
 	}
+	if why := env.vibeGuardLoadError(); why != "" {
+		fail("vibe-guard cannot load it: "+why, unloadableFix)
+	}
 	if len(findings) > 0 {
 		return Fail(findings...)
 	}
 	return Pass()
+}
+
+// unloadableFix is the fix for a policy.json that vibe-guard cannot load.
+const unloadableFix = "make " + guardPolicyFile + " a policy vibe-guard loads (spec 0053, \"policy.json version 2\"): " +
+	"version, mode, rules and exceptions only; until then vibe-guard refuses every call"
+
+// vibeGuardLoadError is why vibe-guard cannot load policy.json, or "".
+// It is "" unless a PreToolUse hook runs `vibe-guard hook` and policy.json
+// is tracked: another guard reads its own keys, which the contract does
+// not judge (spec 0051, "Guard policy and exceptions"; contract 1.0.1).
+func (e *Env) vibeGuardLoadError() string {
+	if !e.runsVibeGuard() {
+		return ""
+	}
+	data, err := e.ReadFile(guardPolicyFile)
+	if err != nil {
+		return ""
+	}
+	if _, err := guardrule.ParsePolicy(data); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+// runsVibeGuard reports whether a PreToolUse hook of the tracked
+// .claude/settings.json calls `vibe-guard hook`.
+func (e *Env) runsVibeGuard() bool {
+	if !e.Repo.HasFile(claudeSettingsFile) {
+		return false
+	}
+	s, _, ok := e.readClaudeSettings("")
+	if !ok {
+		return false
+	}
+	for _, entry := range s.commandEntries(eventPreToolUse) {
+		for _, c := range entry.calls() {
+			if c.HasPrefix("vibe-guard", "hook") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // jsonText writes a decoded JSON value back as JSON, for messages.

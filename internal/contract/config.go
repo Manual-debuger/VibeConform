@@ -125,7 +125,7 @@ var v1Fields = map[string]string{
 	"integrations": "agents go in agents; editors and repository intelligence moved into the setup skill",
 	"development":  "the docs layout and development workflow moved into the setup skill",
 	"policy":       "repository policies such as line endings moved into the setup skill",
-	"ci":           "contract 1.0.0 reads GitHub Actions workflows and needs no CI provider",
+	"ci":           "contract " + Implemented + " reads GitHub Actions workflows and needs no CI provider",
 }
 
 const v2FieldList = "contract, platforms, agents, components, entrypoints, waivers"

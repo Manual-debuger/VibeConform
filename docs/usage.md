@@ -271,7 +271,7 @@ configuration it reads picks which:
   this section describes, exactly as before;
 - a top-level `contract:` key (a version 2 `vibe.yaml`, see "`vibe.yaml`
   version 2" below) runs the contract audit, which checks the rules of
-  contract 1.0.0 (spec 0051). See "`vibe audit` on a contract" below.
+  contract 1.0.1 (spec 0051). See "`vibe audit` on a contract" below.
 
 A file with both keys, or with neither, is an error that names the two
 (exit `1`). `vibe diff`, `vibe sync` and `vibe init` read version 1
@@ -395,7 +395,7 @@ as correct. `sync` refuses outright for the same reason; see below.
 
 With a version 2 configuration (a top-level `contract:` key), `vibe
 audit` checks the repository against the rules of the contract version
-it declares: 25 rules in contract 1.0.0, in six categories (spec 0051,
+it declares: 25 rules in contract 1.0.1, in six categories (spec 0051,
 spec 0052). Each rule ends as `pass`, `fail`, `not applicable`, `waived`,
 `cannot decide` or `not run`. A full run decides every part of every
 rule: the static checks, then the execution checks and probes in a
@@ -541,7 +541,7 @@ Verdict: cannot decide. 10 rules did not run (--static).
 The verdict line is `Verdict: conformant`, `Verdict: not conformant` or
 `Verdict: cannot decide. <reason>`. When the configuration declares a
 newer PATCH, such as `1.0.3`, the header says
-`contract 1.0.0 (declared 1.0.3; vibe …)`.
+`contract 1.0.1 (declared 1.0.3; vibe …)`.
 
 **What is listed.** Not-applicable rules, waivers (in force, expired, or
 unused because the rule is not applicable), every exception in
@@ -567,12 +567,17 @@ report:
 
 ```
 Error: vibe.yaml: waivers[0].until: "2026-13-01" is not a date YYYY-MM-DD
-Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements contract 1.0.0, and the configuration declares 1.1.0
+Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements contract 1.0.1, and the configuration declares 1.1.0
 ```
 
-**Contract versions.** This vibe implements contract 1.0.0. A declared
-version must be `X.Y.Z`. A newer PATCH (`1.0.n`) is audited as 1.0.0,
-since a PATCH changes no verdict, and the report shows both versions.
+**Contract versions.** This vibe implements contract 1.0.1. A declared
+version must be `X.Y.Z`. Every PATCH of 1.0 (`1.0.n`, older or newer)
+is audited as 1.0.1, since a PATCH changes no verdict, and the report
+shows both versions when they differ. A repository set up under 1.0.0
+keeps `contract: 1.0.0`. Spec 0051, "Changes", lists what each version
+changed: in 1.0.1, A-04 fails a `.claude/hooks/policy.json` that
+`vibe-guard` cannot load when a PreToolUse hook runs `vibe-guard hook`,
+and the allow cases A-02 and A-08 then see refused name `policy.json`.
 Another MAJOR, or a MINOR above 0, is "cannot decide; upgrade vibe"
 (exit `1`).
 
@@ -645,7 +650,7 @@ jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "
   absent, so a local file cannot make a repository look conformant.
 - A file a rule needs that does not parse fails that rule, and the
   finding names the file and the parse error.
-- **Not applicable** in contract 1.0.0: C-05 when `platforms` has no
+- **Not applicable** in contract 1.0.1: C-05 when `platforms` has no
   `windows`; every A rule when `agents` has no `claude`; R-02 when
   `agents` is empty, and R-02's `CLAUDE.md` half when `agents` has no
   `claude`.
@@ -2341,7 +2346,7 @@ documentation or VibeConform's repository (spec 0041, ADR 0022):
 ## The setup skill
 
 `vibeconform-setup` (spec 0054) takes a repository in any of the
-contract's languages to a conformant `vibe audit` under contract 1.0.0,
+contract's languages to a conformant `vibe audit` under contract 1.0.1,
 without the template-sync system. `vibe init --skill` writes it; the
 repository owns it from then on. It is a different skill from
 `vibeconform` above, which describes the template-sync model and is
@@ -2380,7 +2385,7 @@ The skill's files:
 | Path | Holds |
 |---|---|
 | `SKILL.md` | The process above, for the agent |
-| `reference/rules.md` | One entry per rule of contract 1.0.0: what satisfies it, which file to start from |
+| `reference/rules.md` | One entry per rule of contract 1.0.1: what satisfies it, which file to start from |
 | `reference/vibe-yaml/` | `vibe.yaml` version 2 for Go, Python, TypeScript and a monorepo |
 | `reference/taskrunner/` | Taskfiles per stack, with `verify`, `verify:fast`, `fmt`, `fmt:check` and the agent hook tasks |
 | `reference/hooks/` | `lefthook.yml` per stack |
@@ -2789,7 +2794,7 @@ restart any running agent session.
 
 ### `vibe-guard`, the reference guard
 
-`vibe-guard` (spec 0053) is the guard contract 1.0.0's guard probes are
+`vibe-guard` (spec 0053) is the guard contract 1.0.1's guard probes are
 written against. It parses commands instead of matching text, so the
 respellings in the limitations above (a quoted command name, `eval`,
 flags after many operands, a variable in a flag) are refused. It is a
@@ -3257,7 +3262,7 @@ as you gave it.
   pipes or redirections); write a list instead. A missing, empty or
   compound required entrypoint is not a configuration error: V-04 fails,
   and the rest of the report still runs.
-- **Waivers.** `rule` must be a rule ID of contract 1.0.0 and a SHOULD
+- **Waivers.** `rule` must be a rule ID of contract 1.0.1 and a SHOULD
   rule: a MUST rule cannot be waived. `reason` must be non-empty after
   trimming. `until` is a date, `YYYY-MM-DD`, and the waiver is in force
   through the end of that day in UTC. At most one waiver per rule. An

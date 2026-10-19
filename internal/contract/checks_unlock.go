@@ -90,8 +90,8 @@ func checkA08(env *Env) PartResult {
 			if line := run.refusal(); line != "" {
 				msg += ": " + line
 			}
-			v.fail(Finding{File: claudeSettingsFile, Message: msg,
-				Fix: "make the guard allow changes of the guardrail settings while the unlock marker in the common Git directory is valid"})
+			v.fail(allowCaseFinding(env, msg,
+				"make the guard allow changes of the guardrail settings while the unlock marker in the common Git directory is valid"))
 		}
 	}
 	a08Stop(s, stops, v)
