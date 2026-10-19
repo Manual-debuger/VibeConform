@@ -559,7 +559,8 @@ PR waits for it.
   described; the files written, changed and removed, with their count;
   the user's feedback on the number of files and their readability; and
   the time taken.
-- **The report** is committed as `docs/reports/contract-v1-pilot.md`
+- **The report** is committed as
+  [`docs/reports/contract-v1-pilot.md`](../reports/contract-v1-pilot.md)
   and linked from this spec. Each finding in it is classified as a
   contract change, a skill change or no change.
 - **Contract adjustments.** A contract change goes into spec 0051 as a
