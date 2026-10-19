@@ -24,8 +24,10 @@ import (
 // merge_requests, branches, pushes, tags, schedules and branch names.
 // Conditions are three-valued, so a condition the audit does not read
 // decides nothing when the rest decides alone. A rule left undecided, or
-// one with changes: or exists:, does not admit the job, and the finding
-// quotes it with its line.
+// one with changes: or exists:, does not admit the job: with when: never
+// it leaves the job out, otherwise a later rule may still admit it
+// (evalRules). A job left out that way is reported with the rule quoted
+// with its line.
 
 // glRef is what a ref variable holds in a context.
 type glRef int
@@ -115,31 +117,57 @@ func (r *glReader) admitted(p *glPipeline, j *glJob, ctx *glContext) (bool, *glW
 
 // evalRules applies a rules: list: the first rule that matches decides,
 // when: never excludes, and no match leaves the job (or pipeline) out.
+//
+// A rule the audit cannot decide (an if: it does not read, changes: or
+// exists:) is unread. An unread rule with when: never might exclude the
+// job, so the job is not admitted. Any other unread rule is passed over:
+// had it matched, the job would run anyway, so a later rule that admits
+// it decides. When no later rule admits it, the reason quotes the first
+// unread rule.
 func (r *glReader) evalRules(rules *yaml.Node, ctx *glContext, label string) (bool, *glWhy) {
 	if rules.Kind != yaml.SequenceNode {
 		return false, r.why(rules, true, "%s: rules that are not a list", label)
 	}
+	var unread *glWhy
 	for _, rule := range flattenRules(rules, 0) {
 		if rule.Kind != yaml.MappingNode {
 			return false, r.why(rule, true, "%s: a rule that is not a map", label)
 		}
+		never := false
+		if w := mapValue(rule, "when"); w != nil && w.Value == "never" {
+			never = true
+		}
+		var why *glWhy
 		if cond := mapValue(rule, "if"); cond != nil {
 			switch evalExpression(scalarOr(cond, ""), ctx) {
 			case triFalse:
 				continue
 			case triUnknown:
-				return false, r.why(cond, true, "%s: if: `%s` is a condition the audit does not read", label, scalarOr(cond, "(not a string)"))
+				why = r.why(cond, true, "%s: if: `%s` is a condition the audit does not read", label, scalarOr(cond, "(not a string)"))
 			}
 		}
 		for _, k := range []string{"changes", "exists"} {
-			if key := mapKey(rule, k); key != nil {
-				return false, r.why(key, true, "%s: a rule with %s: does not count (the audit does not read which files change or exist)", label, k)
+			if key := mapKey(rule, k); key != nil && why == nil {
+				why = r.why(key, true, "%s: a rule with %s: does not count (the audit does not read which files change or exist)", label, k)
 			}
 		}
-		if w := mapValue(rule, "when"); w != nil && w.Value == "never" {
-			return false, r.why(w, false, "%s: when: never excludes it", label)
+		switch {
+		case why != nil && never:
+			return false, why
+		case why != nil:
+			if unread == nil {
+				unread = why
+			}
+			continue
+		case never && unread != nil:
+			return false, unread
+		case never:
+			return false, r.why(mapValue(rule, "when"), false, "%s: when: never excludes it", label)
 		}
 		return true, nil
+	}
+	if unread != nil {
+		return false, unread
 	}
 	return false, r.why(rules, false, "%s: no rule admits it", label)
 }

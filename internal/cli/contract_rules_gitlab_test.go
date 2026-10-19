@@ -75,7 +75,7 @@ func TestCIProvider(t *testing.T) {
 			edits: []fixtureEdit{withFile(gitlabFile, "test: [\n")}},
 		{name: "an untracked .gitlab-ci.yml is not CI", c01: "fail",
 			edits:    []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile), withUntracked(gitlabFile, glBase)},
-			findings: []string{"no CI configuration"}},
+			findings: []string{"no CI configuration", "Fix: add a GitHub Actions workflow under .github/workflows/ or a GitLab CI configuration (.gitlab-ci.yml)"}},
 		{name: "another provider cannot be decided", c01: "undecided",
 			edits:    []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile), withFile(".circleci/config.yml", "version: 2.1\n")},
 			findings: []string{".circleci/config.yml: ", "GitHub Actions", "GitLab CI"}},
@@ -181,6 +181,21 @@ func TestRuleC01GitLab(t *testing.T) {
 			findings: []string{"exists:"}},
 		{name: "changes: in a rule that does not match is not read", want: "pass",
 			edits: v("  rules:\n    - if: $CI_COMMIT_TAG\n      changes: [go.mod]\n    - when: on_success\n")},
+
+		// An unread rule without when: never is passed over: had it matched,
+		// the job would run anyway. One with when: never might exclude it.
+		{name: "an unread rule before admitting rules is passed over", want: "pass",
+			edits: v("  rules:\n    - if: $FOO\n    - if: '" + glMR + "'\n    - if: '" + glDefault + "'\n")},
+		{name: "an unread rule with when: never does not admit the job", want: "fail",
+			edits:    v("  rules:\n    - if: $FOO\n      when: never\n    - when: always\n"),
+			findings: []string{"line 3: job verify does not count for merge request pipelines", "`$FOO`"}},
+		{name: "changes: followed by an admitting rule counts", want: "pass",
+			edits: v("  rules:\n    - changes: [go.mod]\n    - if: '" + glMR + "'\n    - if: '" + glDefault + "'\n")},
+		{name: "workflow rules: an unread rule before an admitting one is passed over", want: "pass", edits: gitlab(
+			"workflow:\n  rules:\n    - if: $FOO\n    - when: always\n" + glOnly(glVerify("verify", "")))},
+		{name: "workflow rules: an unread rule with when: never", want: "fail", edits: gitlab(
+			"workflow:\n  rules:\n    - if: $FOO\n      when: never\n    - when: always\n" + glOnly(glVerify("verify", ""))),
+			findings: []string{"line 3: ", "workflow:rules: if: `$FOO`"}},
 		{name: "rules from a !reference", want: "pass",
 			edits: gitlab(glOnly(".rules:\n  rules:\n    - if: '" + glMR + "'\n    - if: '" + glDefault + "'\n" +
 				glVerify("verify", "  rules:\n    - !reference [.rules, rules]\n")))},
@@ -301,6 +316,18 @@ func TestRuleC01GitLab(t *testing.T) {
 			findings: []string{"pushes to main"}},
 		{name: "an include whose rules admit both kinds", want: "pass", edits: gitlab(
 			"include:\n  - local: ci/verify.yml\n    rules:\n      - if: '"+glMR+"'\n      - if: $CI_COMMIT_BRANCH\n"+glOnly(""),
+			withFile("ci/verify.yml", glVerify("verify", "")))},
+		{name: "an include rule the audit does not read is quoted with its line", want: "fail", edits: gitlab(
+			"include:\n  - local: ci/verify.yml\n    rules:\n      - if: $FOO\n"+glOnly(""),
+			withFile("ci/verify.yml", glVerify("verify", ""))),
+			findings: []string{".gitlab-ci.yml: line 4: job verify does not count for merge request pipelines",
+				"include rules: if: `$FOO`", "job verify does not count for pushes to main"}},
+		{name: "an include rule with changes: is quoted with its line", want: "fail", edits: gitlab(
+			"include:\n  - local: ci/verify.yml\n    rules:\n      - changes: [go.mod]\n"+glOnly(""),
+			withFile("ci/verify.yml", glVerify("verify", ""))),
+			findings: []string{".gitlab-ci.yml: line 4: job verify does not count for merge request pipelines", "changes:"}},
+		{name: "an unread include rule before an admitting one is passed over", want: "pass", edits: gitlab(
+			"include:\n  - local: ci/verify.yml\n    rules:\n      - if: $FOO\n      - when: always\n"+glOnly(""),
 			withFile("ci/verify.yml", glVerify("verify", "")))},
 		{name: "a project include is not followed", want: "fail", edits: gitlab(
 			"include:\n  - project: group/ci\n    ref: 08eba0b27e820071cde6df949e0beb9ba4906955\n    file: verify.yml\n" + glOnly(""))},
@@ -429,6 +456,11 @@ func TestRuleC04GitLab(t *testing.T) {
 		{name: "changes: does not count", want: "fail",
 			edits:    audit("  rules:\n    - changes: [vibe.yaml]\n", "    - vibe audit\n"),
 			findings: []string{"changes:"}},
+		{name: "in an include whose rule the audit does not read", want: "fail", edits: gitlab(
+			"include:\n  - local: ci/audit.yml\n    rules:\n      - if: $FOO\n"+verify,
+			withFile("ci/audit.yml", glAudit(""))),
+			findings: []string{".gitlab-ci.yml: line 4: job conformance:audit does not count for merge request pipelines",
+				"include rules: if: `$FOO`"}},
 		{name: "in a child pipeline the parent waits for", want: "pass", edits: gitlab(
 			verify+"audit:\n  trigger:\n    include: ci/audit.yml\n    strategy: depend\n",
 			withFile("ci/audit.yml", glAudit("")))},

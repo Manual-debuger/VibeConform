@@ -105,7 +105,10 @@ these conditions: `$CI_PIPELINE_SOURCE ==` or `!=` a quoted value,
 presence tests, `$CI_COMMIT_BRANCH` or `$CI_COMMIT_REF_NAME` compared with
 `$CI_DEFAULT_BRANCH` or a branch name, and `&&`, `||` and parentheses
 over these. A rule with another condition, or with `changes:` or
-`exists:`, does not admit the job; the finding quotes it and its line.
+`exists:`, does not admit the job. With `when: never` it leaves the job
+out; without, a later rule may still admit it. When none does, the
+finding quotes it and its line. `workflow:rules` and include rules read
+the same way.
 A job with no rules counts for both, but GitLab does not run it in a
 merge request pipeline: with `workflow:rules` that admit merge request
 pipelines, give every job the same rules, as the reference does with
@@ -266,8 +269,8 @@ there. A Renovate configuration (`renovate.json`, `renovate.json5`,
 `.gitlab/renovate.json` and the other Renovate locations) covers each
 component's manager and `gitlabci`, which updates the image digests, with
 no automerge. When it lists `enabledManagers`, add `gitlabci`, and
-`gitlabci-include` when `.gitlab-ci.yml` includes files from outside the
-repository. Start from `reference/ci/renovate.json`; Renovate's
+`gitlabci-include` when `.gitlab-ci.yml` has `project:` includes (the
+ones that manager updates). Start from `reference/ci/renovate.json`; Renovate's
 `config:recommended` enables every manager. The person runs Renovate on
 the project (the Mend app, or a scheduled Renovate pipeline).
 

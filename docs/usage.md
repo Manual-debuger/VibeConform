@@ -746,9 +746,12 @@ reads no GitHub branch protection.
     `schedules` and branch names.
 
   A rule with any other condition, or with `changes:` or `exists:`,
-  does not admit the job for that pipeline kind, and the finding quotes
-  the condition and its line. So a job gated by `changes:` does not
-  count for C-01, as a GitHub `paths` filter does not.
+  does not admit the job for that pipeline kind. With `when: never` it
+  leaves the job out (it might exclude it); without, the audit passes
+  over it and a later rule may still admit the job. When none does, the
+  finding quotes the first such condition and its line. So a job gated
+  by `changes:` does not count for C-01, as a GitHub `paths` filter
+  does not. `workflow:rules` and include rules are read the same way.
 - **The rules.** C-01 and C-04 ask their questions of the jobs that run
   for each pipeline kind. C-02 requires every `image:` and `services:`
   entry to end in `@sha256:` and a digest, every unfollowed include to
@@ -767,7 +770,8 @@ reads no GitHub branch protection.
   does not run on GitLab and cannot satisfy D-02 there. The Renovate
   configuration covers each component's manager and `gitlabci` instead
   of `github-actions`, and, when it lists `enabledManagers` and the
-  pipeline has includes the audit does not follow, `gitlabci-include`.
+  pipeline has `project:` includes (the ones Renovate's
+  `gitlabci-include` manager updates), `gitlabci-include`.
   `.gitlab/renovate.json` and `.gitlab/renovate.json5` are recognized
   Renovate locations on any repository. The fix text names Renovate on
   GitLab CI and Dependabot on GitHub Actions.

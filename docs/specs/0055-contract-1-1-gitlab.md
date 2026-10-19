@@ -244,7 +244,10 @@ Contract 1.1.0, a MINOR release:
     `schedules` and literal branch names.
   A rule with any other condition, or with `changes:` or `exists:`,
   does not admit the job for that pipeline kind; the finding quotes the
-  condition and its line. A job with no rules and no `only`/`except`
+  condition and its line. (Review clarification: with `when: never`
+  such a rule leaves the job out; without, it is passed over and a
+  later rule may still admit the job. `workflow:rules` and include
+  rules read the same way; spec 0051 states it.) A job with no rules and no `only`/`except`
   runs in both kinds, branch pipelines included (GitLab shows them on
   the merge request).
 
@@ -305,8 +308,8 @@ Contract 1.1.0, a MINOR release:
 
 - When the C rules read GitLab CI, D-02 requires coverage of Renovate's
   `gitlabci` manager instead of `github-actions` (and of
-  `gitlabci-include` when `enabledManagers` is set and includes are
-  used). Dependabot cannot satisfy it on a GitLab repository.
+  `gitlabci-include` when `enabledManagers` is set and `project:`
+  includes are used, the ones that manager updates). Dependabot cannot satisfy it on a GitLab repository.
 - `.gitlab/renovate.json` and its JSON5 form join the recognized
   Renovate locations.
 - The fix text names Renovate and `renovate.json` for GitLab

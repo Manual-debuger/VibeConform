@@ -172,7 +172,7 @@ func onConfig(f func(cfg *Config) (bool, string)) func(env *Env) (bool, string) 
 // notOnGitLab is C-03's applicability: GitLab CI has no workflow
 // permissions to read (spec 0055, Q6).
 func notOnGitLab(env *Env) (bool, string) {
-	if ci, _, ok := env.CI(); ok && ci.Provider == CIGitLab {
+	if _, gitlab := env.gitLabCI(); gitlab {
 		return false, "the C rules read GitLab CI: GitLab job tokens have no per-file permissions, " +
 			"and job-token push access is a project setting the audit does not read"
 	}

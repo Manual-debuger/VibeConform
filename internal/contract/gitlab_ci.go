@@ -76,6 +76,9 @@ type glReader struct {
 	seenIncludes map[*yaml.Node]bool
 	nodes        int
 	pipelines    map[string]*glPipeline
+	// dropped maps a context's key to the files include rules left out
+	// of its pipeline, each with the rule's reason.
+	dropped map[string]map[string]*glWhy
 }
 
 // glPipeline is one pipeline (the main one or a child) resolved for one
@@ -99,7 +102,7 @@ type glJob struct {
 func readGitLabCI(env *Env) *CI {
 	r := &glReader{env: env, origin: map[*yaml.Node]string{}, docs: map[string]*yaml.Node{},
 		loaded: map[string]bool{}, seen: map[string]bool{}, seenIncludes: map[*yaml.Node]bool{},
-		pipelines: map[string]*glPipeline{}}
+		pipelines: map[string]*glPipeline{}, dropped: map[string]map[string]*glWhy{}}
 	ci := &CI{Provider: CIGitLab, Dir: gitlabCIFile}
 
 	all := &glContext{all: true}
@@ -110,8 +113,8 @@ func readGitLabCI(env *Env) *CI {
 
 	branch := gitlabDefaultBranch(env, r)
 	ci.runs = map[PipelineKind]*CIRun{
-		KindMergeRequest: r.run(KindMergeRequest, branch),
-		KindDefaultPush:  r.run(KindDefaultPush, branch),
+		KindMergeRequest: r.run(KindMergeRequest, branch, ci.Jobs),
+		KindDefaultPush:  r.run(KindDefaultPush, branch, ci.Jobs),
 	}
 	ci.Broken = r.broken
 	return ci
@@ -353,21 +356,21 @@ func listItems(n *yaml.Node) []*yaml.Node {
 }
 
 // glIncludeKinds are the include keys GitLab reads, local first.
-var glIncludeKinds = []string{"local", "project", "remote", "template", "component", "artifact"}
+var glIncludeKinds = []CIIncludeKind{IncludeLocal, IncludeProject, IncludeRemote, IncludeTemplate, IncludeComponent, IncludeArtifact}
 
 // includeKind classifies an include entry: its kind and, for a local one,
-// the path.
-func includeKind(e *yaml.Node) (kind, local string) {
+// the path. An entry of no kind GitLab reads has kind "".
+func includeKind(e *yaml.Node) (kind CIIncludeKind, local string) {
 	switch e.Kind {
 	case yaml.ScalarNode:
 		if strings.HasPrefix(e.Value, "https://") || strings.HasPrefix(e.Value, "http://") {
-			return "remote", ""
+			return IncludeRemote, ""
 		}
-		return "local", e.Value
+		return IncludeLocal, e.Value
 	case yaml.MappingNode:
 		for _, k := range glIncludeKinds {
-			if v := mapValue(e, k); v != nil {
-				if k == "local" {
+			if v := mapValue(e, string(k)); v != nil {
+				if k == IncludeLocal {
 					return k, scalarOr(v, "")
 				}
 				return k, ""
@@ -385,17 +388,18 @@ func (r *glReader) include(file string, e *yaml.Node, ctx *glContext, stack []st
 	case "":
 		r.failAt(e, "an include must be a path or a map with local:, project:, remote:, template:, component: or artifact:")
 		return nil
-	case "local":
+	case IncludeLocal:
 	default:
 		r.record(file, kind, e)
 		return nil
 	}
+	files := r.localFiles(local)
 	if rules := mapValue(e, "rules"); rules != nil && !ctx.all {
-		if ok, _ := r.evalRules(rules, ctx, "include rules"); !ok {
+		if ok, why := r.evalRules(rules, ctx, "include rules"); !ok {
+			r.dropInclude(ctx, files, why)
 			return nil
 		}
 	}
-	files := r.localFiles(local)
 	if len(files) == 0 {
 		r.failAt(e, "include local: "+local+" names no tracked file")
 		return nil
@@ -407,8 +411,57 @@ func (r *glReader) include(file string, e *yaml.Node, ctx *glContext, stack []st
 	return out
 }
 
+// dropInclude records, for ctx, the files an include whose rules do not
+// admit ctx would have brought in, local includes of theirs too, with
+// why: a job of those files that runs nowhere is reported with it.
+func (r *glReader) dropInclude(ctx *glContext, files []string, why *glWhy) {
+	k := ctx.key()
+	if r.dropped[k] == nil {
+		r.dropped[k] = map[string]*glWhy{}
+	}
+	var visit func(f string)
+	visit = func(f string) {
+		if _, ok := r.dropped[k][f]; ok {
+			return
+		}
+		r.dropped[k][f] = why
+		root := r.load(f)
+		if root == nil {
+			return
+		}
+		if inc := mapValue(root, "include"); inc != nil {
+			for _, e := range listItems(inc) {
+				if kind, local := includeKind(e); kind == IncludeLocal {
+					for _, g := range r.localFiles(local) {
+						visit(g)
+					}
+				}
+			}
+		}
+	}
+	for _, f := range files {
+		visit(f)
+	}
+}
+
+// droppedWhy returns why a job is in none of the pipelines of contexts:
+// an include whose rules leave its file out, preferring one the audit
+// could not read. It returns nil when no include left it out.
+func (r *glReader) droppedWhy(j *CIJob, contexts []*glContext) *glWhy {
+	var out *glWhy
+	for _, ctx := range contexts {
+		for _, c := range []*glContext{ctx, ctx.child()} {
+			why := r.dropped[c.key()][j.File]
+			if why != nil && (out == nil || (why.unread && !out.unread)) {
+				out = why
+			}
+		}
+	}
+	return out
+}
+
 // record keeps an unfollowed include once.
-func (r *glReader) record(file, kind string, e *yaml.Node) {
+func (r *glReader) record(file string, kind CIIncludeKind, e *yaml.Node) {
 	if r.seenIncludes[e] {
 		return
 	}
@@ -636,7 +689,7 @@ var glScriptKeys = []struct {
 // readJob reads a resolved job: its scripts, and the child pipeline it
 // triggers when the parent waits for it.
 func (r *glReader) readJob(k *yaml.Node, name, child string, node *yaml.Node, ctx *glContext) *glJob {
-	cj := &CIJob{File: r.origin[k], ID: name, Line: k.Line, Child: child, Node: node}
+	cj := &CIJob{File: r.origin[k], ID: name, Line: k.Line, Child: child, Node: node, key: gitlabJobKey(child, name)}
 	for _, s := range glScriptKeys {
 		v := mapValue(node, s.key)
 		if v == nil {
@@ -668,13 +721,13 @@ func (r *glReader) readJob(k *yaml.Node, name, child string, node *yaml.Node, ct
 // string or a map with name:.
 func (r *glReader) images(node *yaml.Node) []CIImage {
 	var out []CIImage
-	for _, key := range []string{"image", "services"} {
-		v := mapValue(node, key)
+	for _, key := range []CIImageKey{ImageKey, ServicesKey} {
+		v := mapValue(node, string(key))
 		if v == nil {
 			continue
 		}
 		entries := []*yaml.Node{v}
-		if key == "services" {
+		if key == ServicesKey {
 			entries = listItems(v)
 		}
 		for _, e := range entries {
@@ -728,7 +781,7 @@ func (r *glReader) childFiles(file, name string, node *yaml.Node, ctx *glContext
 	for _, e := range listItems(inc) {
 		kind, local := includeKind(e)
 		switch kind {
-		case "local":
+		case IncludeLocal:
 			if !waits {
 				continue
 			}
@@ -783,7 +836,9 @@ func (r *glReader) walk(p *glPipeline, ctx *glContext, outer *glWhy, depth int, 
 // default branch: a job runs when it runs in any of the kind's contexts.
 // A job that runs in none is skipped with the reason of the first context
 // whose condition the audit could not read, or else of the first context.
-func (r *glReader) run(kind PipelineKind, branch string) *CIRun {
+// A job of every that is in none of the kind's pipelines because
+// include rules left its file out is skipped with those rules' reason.
+func (r *glReader) run(kind PipelineKind, branch string, every []*CIJob) *CIRun {
 	type entry struct {
 		job  *CIJob
 		runs bool
@@ -791,7 +846,8 @@ func (r *glReader) run(kind PipelineKind, branch string) *CIRun {
 	}
 	var order []string
 	got := map[string]*entry{}
-	for _, ctx := range contextsFor(kind, branch) {
+	contexts := contextsFor(kind, branch)
+	for _, ctx := range contexts {
 		r.walk(r.pipeline([]string{gitlabCIFile}, "", ctx, nil), ctx, nil, 0, nil, func(j *CIJob, runs bool, why *glWhy) {
 			e := got[j.Key()]
 			if e == nil {
@@ -817,6 +873,14 @@ func (r *glReader) run(kind PipelineKind, branch string) *CIRun {
 			continue
 		}
 		out.Skipped = append(out.Skipped, CISkip{Job: e.job, File: e.why.file, Line: e.why.line, Why: e.why.text})
+	}
+	for _, j := range every {
+		if got[j.Key()] != nil {
+			continue
+		}
+		if why := r.droppedWhy(j, contexts); why != nil {
+			out.Skipped = append(out.Skipped, CISkip{Job: j, File: why.file, Line: why.line, Why: why.text})
+		}
 	}
 	return out
 }

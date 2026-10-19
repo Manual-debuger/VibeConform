@@ -101,22 +101,39 @@ type CIJob struct {
 	// Images are the GitLab job's image: and services: entries, after
 	// resolution (default: included).
 	Images []CIImage
+
+	key string
 }
 
 // CIImage is one GitLab image: or services: entry.
 type CIImage struct {
 	File string
 	Line int
-	// Key is image or services.
-	Key string
+	Key  CIImageKey
 	// Name is the image reference, or "" when the entry has none that is a
 	// string.
 	Name string
 }
 
-// Key identifies a job across the GitLab pipelines resolved for each
-// pipeline kind.
-func (j *CIJob) Key() string { return j.Child + "\x00" + j.ID }
+// CIImageKey is the GitLab key an image entry is under.
+type CIImageKey string
+
+// The keys that name images.
+const (
+	ImageKey    CIImageKey = "image"
+	ServicesKey CIImageKey = "services"
+)
+
+// Key identifies a job, whichever provider read it: a job of a CIRun has
+// the key of the same job in CI.Jobs, although on GitLab the run holds
+// its own copy, resolved for that pipeline kind.
+func (j *CIJob) Key() string { return j.key }
+
+// githubJobKey and gitlabJobKey are the keys of the two providers' jobs.
+// A GitHub job ID is unique in its workflow file; a GitLab job name in
+// its pipeline, the main one or a child.
+func githubJobKey(file, id string) string  { return file + "\x00" + id }
+func gitlabJobKey(child, id string) string { return child + "\x00" + id }
 
 // where names a job for a finding.
 func (j *CIJob) where() string {
@@ -146,10 +163,25 @@ type CIInclude struct {
 	File string
 	Line int
 	// Kind is project, remote, component, template or artifact.
-	Kind string
+	Kind CIIncludeKind
 	// Node is the include entry: a string or a map.
 	Node *yaml.Node
 }
+
+// CIIncludeKind is the kind of a GitLab include: the key that names
+// what it includes.
+type CIIncludeKind string
+
+// The include kinds GitLab reads, local first; only local ones are
+// followed.
+const (
+	IncludeLocal     CIIncludeKind = "local"
+	IncludeProject   CIIncludeKind = "project"
+	IncludeRemote    CIIncludeKind = "remote"
+	IncludeTemplate  CIIncludeKind = "template"
+	IncludeComponent CIIncludeKind = "component"
+	IncludeArtifact  CIIncludeKind = "artifact"
+)
 
 // CIRun is the jobs that run for one pipeline kind.
 type CIRun struct {
@@ -176,15 +208,18 @@ func (ci *CI) Run(env *Env, kind PipelineKind) *CIRun {
 	if r := ci.runs[kind]; r != nil {
 		return r
 	}
+	// GitLab runs are decided when the configuration is read, for every
+	// kind; GitHub ones here, on first use, as contract 1.0.1 did.
+	if ci.Provider != CIGitHub || (kind != KindMergeRequest && kind != KindDefaultPush) {
+		panic(fmt.Sprintf("contract: no %s run for pipeline kind %d", ci.Provider.Name(), kind))
+	}
+	event := eventPullRequest
+	if kind == KindDefaultPush {
+		event = eventPush
+	}
 	r := &CIRun{}
-	if ci.Provider == CIGitHub {
-		event := eventPullRequest
-		if kind == KindDefaultPush {
-			event = eventPush
-		}
-		for _, j := range jobsTriggered(ci.Workflows, event, defaultBranch(env, ci.Workflows)) {
-			r.Jobs = append(r.Jobs, ci.gh[j.job])
-		}
+	for _, j := range jobsTriggered(ci.Workflows, event, defaultBranch(env, ci.Workflows)) {
+		r.Jobs = append(r.Jobs, ci.gh[j.job])
 	}
 	if ci.runs == nil {
 		ci.runs = map[PipelineKind]*CIRun{}
@@ -211,6 +246,16 @@ func (e *Env) CI() (ci *CI, result PartResult, ok bool) {
 	return e.ci.ci, e.ci.res, e.ci.ok
 }
 
+// gitLabCI reports whether the C rules read GitLab CI, with the model.
+// Rules outside C that read differently on GitLab (C-03's applicability,
+// D-02) ask it.
+func (e *Env) gitLabCI() (*CI, bool) {
+	if ci, _, ok := e.CI(); ok && ci.Provider == CIGitLab {
+		return ci, true
+	}
+	return nil, false
+}
+
 func (e *Env) readCI() *ciState {
 	ws := e.Workflows()
 	if len(ws.Files) > 0 {
@@ -230,7 +275,7 @@ func (e *Env) readCI() *ciState {
 	return &ciState{res: Fail(Finding{
 		File:    workflowDir + "/",
 		Message: "the repository has no CI configuration",
-		Fix:     "add a GitHub Actions workflow under .github/workflows/",
+		Fix:     "add a GitHub Actions workflow under .github/workflows/ or a GitLab CI configuration (.gitlab-ci.yml)",
 	})}
 }
 
@@ -244,7 +289,8 @@ func githubCI(ws *Workflows) *CI {
 		}
 		ci.Workflows = append(ci.Workflows, wf)
 		for _, j := range wf.Jobs {
-			cj := &CIJob{File: wf.File, ID: j.ID, Line: j.Node.Line, Node: j.Node, Commands: j.Commands()}
+			cj := &CIJob{File: wf.File, ID: j.ID, Line: j.Node.Line, Node: j.Node, Commands: j.Commands(),
+				key: githubJobKey(wf.File, j.ID)}
 			for _, s := range j.Steps {
 				if s.HasRun {
 					cj.Scripts = append(cj.Scripts, CIScript{File: wf.File, Line: s.Line,

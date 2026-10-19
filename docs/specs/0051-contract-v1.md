@@ -290,8 +290,13 @@ parse does.
     `tags`, `schedules` and literal branch names.
 
   A rule with any other condition, or with `changes:` or `exists:`,
-  does not admit the job for that pipeline kind, and the finding quotes
-  the condition and its line. A job with no rules and no
+  does not admit the job for that pipeline kind. With `when: never` it
+  leaves the job out, since it might exclude it. Without `when: never`
+  it is passed over, since had it matched the job would run anyway, and
+  a later rule may still admit the job. When no rule admits it, the
+  finding quotes the first such condition and its line. `workflow:rules`
+  and include rules are read the same way, and a job that an include's
+  rules leave out is reported with that rule. A job with no rules and no
   `only`/`except` runs in both kinds: GitLab runs it in every branch
   pipeline and shows that pipeline on the merge request. Extending the
   list is MINOR.
@@ -354,7 +359,9 @@ read GitLab CI (see "C: CI"):
 
 - **D-02**: a Renovate configuration must cover Renovate's `gitlabci`
   manager instead of `github-actions`, and also `gitlabci-include`
-  when `enabledManagers` is set and the pipeline uses includes.
+  when `enabledManagers` is set and the pipeline has `project:`
+  includes (the ones that manager updates; `template:`, `component:`,
+  `remote:` and `artifact:` includes do not need it).
   Dependabot cannot satisfy D-02 there. The fix text names Renovate and
   `renovate.json` on GitLab CI, and Dependabot on GitHub Actions.
 - **D-03**: a job's `before_script`, `script` or `after_script` runs a
