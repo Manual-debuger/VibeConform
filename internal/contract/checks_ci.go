@@ -359,7 +359,8 @@ func checkD03(env *Env) PartResult {
 
 // checkR01 is R-01's static part: no entrypoint, hook command or CI step
 // has a simple command whose first word is vibe, except in a job that
-// satisfies C-04. Without GitHub workflows only the entrypoints and hook
+// satisfies C-04, and except vibe --version in a CI job that calls no
+// entrypoint (spec 0055). Without GitHub workflows only the entrypoints and hook
 // commands are read; a workflow that does not parse fails it.
 func checkR01(env *Env) PartResult {
 	calls := entrypointVibeCalls(env)
@@ -370,7 +371,7 @@ func checkR01(env *Env) PartResult {
 		// With verify missing (V-04 fails), any vibe audit job of a pull
 		// request workflow is the audit job.
 		verify, _ := env.Entrypoint(EntrypointVerify)
-		calls = append(calls, ciVibeCalls(parsed, auditJobs(parsed, defaultBranch(env, parsed), verify))...)
+		calls = append(calls, ciVibeCalls(env, parsed, auditJobs(parsed, defaultBranch(env, parsed), verify))...)
 	}
 	var findings []Finding
 	for _, c := range calls {
