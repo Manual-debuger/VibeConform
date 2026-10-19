@@ -50,7 +50,7 @@ jobs:
       # compared with the previous release's templates
       # (docs/decisions/0008-self-hosting-probe-in-shipped-templates.md).
       - name: Install vibe
-        uses: Manual-debuger/VibeConform@94de1c573252583f9984452bf8b8522582dcb2d5 # setup action
+        uses: Manual-debuger/VibeConform@32514425a6693842f13177086897a2ca6e9beffc # setup action
         with:
           version: ${{ steps.state.outputs.version }}
           tools: vibe

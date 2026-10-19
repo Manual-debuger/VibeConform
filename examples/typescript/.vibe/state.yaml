@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.11.0-alpha.1.0.20261019013904-3c8d259ca915
+vibe_version: v0.11.0-alpha.1.0.20261019020732-eb233c7cca5d
 standard: prod-ts/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
@@ -44,7 +44,7 @@ resources:
       sha256: ef95589d7dfd2fe1b04cbfd2056af6b6bed133a11e0b1e60395077945dcbfc3f
     - path: .github/workflows/conformance.yml
       ownership: generated
-      sha256: 5f5d11da416f76d4c814f507acbbd23479185e13c67d319eebdbf136d4d79fa8
+      sha256: 570a092a18179b2b4b190c3dd4e94fe151cc286a9ad1de3022b91b5a3c418c54
     - path: .gitignore
       section_id: claude
       ownership: managed-section
