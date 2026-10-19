@@ -85,8 +85,7 @@ type Result struct {
 // "vibe init --skill"). Every file is replaced with the rendered
 // version, files the skill does not have are removed, and directories
 // that removal empties are removed too. Nothing outside the two
-// directories is read or written: each is opened as an os.Root, so a
-// symbolic link inside cannot lead a write or a removal out of it.
+// directories is written.
 func Install(repoRoot, vibeVersion string) (Result, error) {
 	files, err := Render(vibeVersion)
 	if err != nil {
@@ -110,16 +109,7 @@ func Install(repoRoot, vibeVersion string) (Result, error) {
 // install writes files into the directory at path, which Result names
 // as dir, after pruning it.
 func install(path, dir string, files map[string][]byte, names []string, res *Result) error {
-	if err := os.MkdirAll(path, 0o750); err != nil {
-		return fmt.Errorf("write %s: %w", dir, err)
-	}
-	root, err := os.OpenRoot(path)
-	if err != nil {
-		return fmt.Errorf("write %s: %w", dir, err)
-	}
-	defer func() { _ = root.Close() }()
-
-	removed, err := prune(root, files)
+	removed, err := prune(path, files)
 	if err != nil {
 		return fmt.Errorf("prune %s: %w", dir, err)
 	}
@@ -127,12 +117,11 @@ func install(path, dir string, files map[string][]byte, names []string, res *Res
 		res.Removed = append(res.Removed, pathpkg.Join(dir, r))
 	}
 	for _, name := range names {
-		if err := root.MkdirAll(pathpkg.Dir(name), 0o750); err != nil {
+		target := filepath.Join(path, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 			return fmt.Errorf("write %s: %w", pathpkg.Join(dir, name), err)
 		}
-		// A skill is read by every agent and person working in the
-		// repository, like any other committed file.
-		if err := root.WriteFile(name, files[name], 0o644); err != nil {
+		if err := os.WriteFile(target, files[name], 0o600); err != nil {
 			return fmt.Errorf("write %s: %w", pathpkg.Join(dir, name), err)
 		}
 		res.Written = append(res.Written, pathpkg.Join(dir, name))
@@ -142,43 +131,55 @@ func install(path, dir string, files map[string][]byte, names []string, res *Res
 
 // prune removes every file under root that keep does not name, and every
 // directory left empty, and returns the removed files' slash paths
-// relative to root.
-func prune(root *os.Root, keep map[string][]byte) ([]string, error) {
-	var removed, dirs []string
-	err := fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
-		switch {
-		case err != nil:
+// relative to root. A missing root has nothing to prune. The walk only
+// collects; the removals follow it.
+func prune(root string, keep map[string][]byte) ([]string, error) {
+	if _, err := os.Lstat(root); os.IsNotExist(err) {
+		return nil, nil
+	}
+	var stale, dirs []string
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
 			return err
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		switch {
 		case d.IsDir():
-			if p != "." {
-				dirs = append(dirs, p)
+			if rel != "." {
+				dirs = append(dirs, rel)
 			}
-			return nil
+		case !d.Type().IsRegular():
+			stale = append(stale, rel)
+		default:
+			if _, ok := keep[rel]; !ok {
+				stale = append(stale, rel)
+			}
 		}
-		if _, ok := keep[p]; ok && d.Type().IsRegular() {
-			return nil
-		}
-		removed = append(removed, p)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	for _, p := range removed {
-		if err := root.Remove(p); err != nil {
+	for _, rel := range stale {
+		if err := os.Remove(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
 			return nil, err
 		}
 	}
 	// Deepest first, so that a directory is empty once its children are
 	// gone. A directory that still holds a file is kept.
 	slices.Reverse(dirs)
-	for _, d := range dirs {
-		if entries, err := fs.ReadDir(root.FS(), d); err == nil && len(entries) == 0 {
-			if err := root.Remove(d); err != nil {
+	for _, rel := range dirs {
+		d := filepath.Join(root, filepath.FromSlash(rel))
+		if entries, err := os.ReadDir(d); err == nil && len(entries) == 0 {
+			if err := os.Remove(d); err != nil {
 				return nil, err
 			}
 		}
 	}
-	sort.Strings(removed)
-	return removed, nil
+	sort.Strings(stale)
+	return stale, nil
 }
