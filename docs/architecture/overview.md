@@ -234,7 +234,7 @@ reconcile code rather than inside it:
         contract: ↓                          ↓ standard:
 internal/contract                    the old audit: manifest, standard,
   vibe.yaml version 2                module, resource, reconcile, state
-  the 25 rules of contract 1.0.1
+  the 25 rules of contract 1.1.0
   static checks of tracked files
   report model (plain data)
 ```
@@ -262,6 +262,26 @@ internal/contract                    the old audit: manifest, standard,
   repository in the system's temporary directory, holding the same
   files, reset between runs and deleted at the end. Entrypoints run
   without a shell, hooks through `bash -c`, each with a time limit.
+- **One CI model, two readers** (spec 0055). The C rules, D-03 and
+  R-01 read the repository's CI through one provider-neutral model
+  (`ci_model.go`): the CI provider read, its jobs with their commands
+  and scripts, the includes not followed, and for each *pipeline kind*
+  (merge request, push to the default branch) the jobs that run and
+  why the others do not. `Env.CI()` picks the provider once per audit:
+  GitHub Actions when tracked workflows exist, otherwise GitLab CI when
+  `.gitlab-ci.yml` is tracked. The GitHub reader wraps the existing
+  workflow parsing, and the GitHub checks keep reading the workflows
+  directly so their 1.0.1 results and wording do not change. The GitLab
+  reader (`gitlab_ci.go`) resolves `.gitlab-ci.yml` statically: anchors,
+  local includes, `default:`, `extends:`, `!reference` and child
+  pipelines the parent waits for. `gitlab_rules.go` evaluates
+  `workflow:rules`, `rules:` and `only`/`except` over a closed list of
+  conditions, and `gitlab_checks.go` holds the C, D-03 and R-01 checks
+  on that model. Both readers live in `internal/contract` and add no
+  import: they use `gopkg.in/yaml.v3`, the package's shell parser and
+  `internal/guardrule`, which the package already imported, so the
+  dependency direction above is unchanged. The report model carries the provider
+  read, which the CLI prints as `CI provider read:` and `ci_provider`.
 
 ### The reference guard
 
@@ -445,7 +465,7 @@ internal/
   textregion/               # marker-delimited sections of text files; imports nothing from internal/ (spec 0029)
   atomicfile/               # temp-file + rename writes
   doctor/                   # vibe doctor checks; imports nothing from internal/ (spec 0028)
-  contract/                 # contract audit: vibe.yaml v2, rule registry, static checks, probe copy and probes; imports none of the old packages (spec 0052, 0053)
+  contract/                 # contract audit: vibe.yaml v2, rule registry, static checks, the CI model with its GitHub Actions and GitLab CI readers, probe copy and probes; imports none of the old packages (spec 0052, 0053, 0055)
   guardrule/                # guard rule IDs, policy.json v2, command parsing shared by the audit and vibe-guard; imports nothing from internal/ (spec 0053)
   guard/                    # vibe-guard: baseline rules, hook/explain/relock, unlock marker, reference commands, version rule; imports only guardrule (spec 0053, 0054)
   setupskill/               # the embedded vibeconform-setup skill and vibe init --skill; imports only guard (spec 0054)
