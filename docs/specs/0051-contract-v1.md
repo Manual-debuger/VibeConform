@@ -374,12 +374,16 @@ read GitLab CI (see "C: CI"):
 
 - **R-01, `vibe --version`** (since 1.1.0, on any CI provider): a
   simple command whose words are exactly `vibe --version` is not a call
-  of `vibe` when it is in a CI job that calls none of the declared
-  entrypoints (`verify`, `verify-fast`, `fmt`, `fmt-check`, `setup`).
-  Such a job tests that `vibe` installs; the repository's own checks do
-  not need it. In an entrypoint, in a hook command, and in a CI job
-  that calls an entrypoint, `vibe --version` is still a call. No other
-  spelling is exempt, and `vibe-guard` is not `vibe`.
+  of `vibe` when it is in a CI job that calls no command of any
+  declared entrypoint (`verify`, `verify-fast`, `fmt`, `fmt-check`,
+  `setup`). Unlike "called" above, one command of a list entrypoint is
+  enough: a job that calls any of them is a job that calls an
+  entrypoint. Such a job tests that `vibe` installs; the repository's
+  own checks do not need it. In an entrypoint, in a hook command, and
+  in a CI job that calls an entrypoint, `vibe --version` is still a
+  call. No other spelling is exempt (`vibe version`, or
+  `vibe --version` with more words, is a call), and `vibe-guard` is not
+  `vibe`.
 - **R-01 on GitLab CI**: the CI part reads every job's
   `before_script`, `script` and `after_script`, except those of a job
   that satisfies C-04.
