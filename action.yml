@@ -45,7 +45,9 @@ inputs:
   checksums:
     description: >-
       A checksums.txt in the checkout to check the archives against,
-      instead of the release's own. Applies to source release only.
+      instead of the release's own, as a path relative to the workspace.
+      An absolute path and a path with a .. part are refused. Meant for
+      tests and air-gapped mirrors. Applies to source release only.
     required: false
     default: ""
   token:
@@ -100,12 +102,24 @@ runs:
           *) fail "verify-attestation is $VERIFY_ATTESTATION; use true or false." ;;
         esac
 
+        # checksums names a file in the checkout: a relative path that stays
+        # inside GITHUB_WORKSPACE. An absolute path or a .. part is refused.
+        if [ -n "$CHECKSUMS" ]; then
+          case "$CHECKSUMS" in
+            /* | \\* | [A-Za-z]:*) fail "checksums is $CHECKSUMS, an absolute path. Name a file in the checkout, relative to the workspace." ;;
+          esac
+          case "/$CHECKSUMS/" in
+            */../* | *\\..\\* | */..\\* | *\\../*) fail "checksums is $CHECKSUMS, which leaves the checkout. Name a file in the checkout, relative to the workspace." ;;
+          esac
+        fi
+
         source="$SOURCE"
         case "$source" in
           auto)
             if [ -d "$GITHUB_WORKSPACE/cmd/vibe" ] && [ -f "$GITHUB_WORKSPACE/go.mod" ] &&
               tr -d '\r' < "$GITHUB_WORKSPACE/go.mod" | grep -Eq '^module github\.com/Manual-debuger/VibeConform[[:space:]]*$'; then
               source=workspace
+              echo "::notice title=VibeConform setup::source auto chose workspace in this checkout of VibeConform: the tools are built from the checkout, and version $VERSION is not installed."
             elif printf '%s\n' "$VERSION" | grep -Eq "$pseudo"; then
               source=go-install
             else
@@ -186,7 +200,13 @@ runs:
 
         sums="$work/checksums.txt"
         if [ -n "$CHECKSUMS" ]; then
-          cp "$GITHUB_WORKSPACE/$CHECKSUMS" "$sums" || fail "checksums file $CHECKSUMS not found in the checkout."
+          # The resolve step refused an absolute path and a .. part.
+          workspace="$GITHUB_WORKSPACE"
+          if [ "$RUNNER_OS" = Windows ] && command -v cygpath > /dev/null 2>&1; then
+            workspace=$(cygpath -u "$GITHUB_WORKSPACE")
+          fi
+          [ -f "$workspace/$CHECKSUMS" ] || fail "checksums file $CHECKSUMS not found in the checkout."
+          cp "$workspace/$CHECKSUMS" "$sums" || fail "could not copy checksums file $CHECKSUMS."
         else
           curl -fsSL --retry 3 -o "$sums" "$base/checksums.txt" ||
             fail "could not download checksums.txt of release $VERSION. Is $VERSION a published release?"
@@ -213,11 +233,13 @@ runs:
           rm -rf "$dest"
           mkdir -p "$dest"
           if [ "$ext" = zip ]; then
-            if command -v unzip > /dev/null 2>&1; then
-              unzip -q -o "$work/$archive" -d "$dest"
-            else
-              pwsh -NoProfile -Command "Expand-Archive -LiteralPath '$work/$archive' -DestinationPath '$dest' -Force"
-            fi
+            # Only Windows archives are zips. pwsh is a native program: it
+            # gets Windows paths, through the environment rather than
+            # inside its command text, so no path needs quoting there.
+            ARCHIVE_NATIVE=$(cygpath -w "$work/$archive") DEST_NATIVE=$(cygpath -w "$dest") \
+              pwsh -NoProfile -NonInteractive -Command \
+              'Expand-Archive -LiteralPath $env:ARCHIVE_NATIVE -DestinationPath $env:DEST_NATIVE -Force' ||
+              fail "could not unpack $archive."
           else
             tar -xzf "$work/$archive" -C "$dest"
           fi
