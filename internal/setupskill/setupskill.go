@@ -11,11 +11,10 @@ package setupskill
 import (
 	"bytes"
 	"embed"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"path"
+	pathpkg "path"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -86,83 +85,97 @@ type Result struct {
 // "vibe init --skill"). Every file is replaced with the rendered
 // version, files the skill does not have are removed, and directories
 // that removal empties are removed too. Nothing outside the two
-// directories is read or written.
+// directories is read or written: each is opened as an os.Root, so a
+// symbolic link inside cannot lead a write or a removal out of it.
 func Install(repoRoot, vibeVersion string) (Result, error) {
 	files, err := Render(vibeVersion)
 	if err != nil {
 		return Result{}, err
 	}
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	var res Result
 	for _, dir := range Dirs {
-		root := filepath.Join(repoRoot, filepath.FromSlash(dir))
-		removed, err := prune(root, files)
-		if err != nil {
+		if err := install(filepath.Join(repoRoot, filepath.FromSlash(dir)), dir, files, names, &res); err != nil {
 			return res, err
-		}
-		for _, r := range removed {
-			res.Removed = append(res.Removed, path.Join(dir, r))
-		}
-		names := make([]string, 0, len(files))
-		for name := range files {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			target := filepath.Join(root, filepath.FromSlash(name))
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return res, fmt.Errorf("write %s: %w", path.Join(dir, name), err)
-			}
-			if err := os.WriteFile(target, files[name], 0o644); err != nil { //nolint:gosec // a skill is read by everyone
-				return res, fmt.Errorf("write %s: %w", path.Join(dir, name), err)
-			}
-			res.Written = append(res.Written, path.Join(dir, name))
 		}
 	}
 	return res, nil
 }
 
+// install writes files into the directory at path, which Result names
+// as dir, after pruning it.
+func install(path, dir string, files map[string][]byte, names []string, res *Result) error {
+	if err := os.MkdirAll(path, 0o750); err != nil {
+		return fmt.Errorf("write %s: %w", dir, err)
+	}
+	root, err := os.OpenRoot(path)
+	if err != nil {
+		return fmt.Errorf("write %s: %w", dir, err)
+	}
+	defer func() { _ = root.Close() }()
+
+	removed, err := prune(root, files)
+	if err != nil {
+		return fmt.Errorf("prune %s: %w", dir, err)
+	}
+	for _, r := range removed {
+		res.Removed = append(res.Removed, pathpkg.Join(dir, r))
+	}
+	for _, name := range names {
+		if err := root.MkdirAll(pathpkg.Dir(name), 0o750); err != nil {
+			return fmt.Errorf("write %s: %w", pathpkg.Join(dir, name), err)
+		}
+		// A skill is read by every agent and person working in the
+		// repository, like any other committed file.
+		if err := root.WriteFile(name, files[name], 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", pathpkg.Join(dir, name), err)
+		}
+		res.Written = append(res.Written, pathpkg.Join(dir, name))
+	}
+	return nil
+}
+
 // prune removes every file under root that keep does not name, and every
 // directory left empty, and returns the removed files' slash paths
-// relative to root. A missing root has nothing to prune.
-func prune(root string, keep map[string][]byte) ([]string, error) {
-	if _, err := os.Lstat(root); errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
+// relative to root.
+func prune(root *os.Root, keep map[string][]byte) ([]string, error) {
 	var removed, dirs []string
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
+	err := fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
 			return err
-		}
-		rel, err := filepath.Rel(root, p)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-		if d.IsDir() {
-			if rel != "." {
+		case d.IsDir():
+			if p != "." {
 				dirs = append(dirs, p)
 			}
 			return nil
 		}
-		if _, ok := keep[rel]; ok && d.Type().IsRegular() {
+		if _, ok := keep[p]; ok && d.Type().IsRegular() {
 			return nil
 		}
-		if err := os.Remove(p); err != nil {
-			return err
-		}
-		removed = append(removed, rel)
+		removed = append(removed, p)
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("prune %s: %w", root, err)
+		return nil, err
+	}
+	for _, p := range removed {
+		if err := root.Remove(p); err != nil {
+			return nil, err
+		}
 	}
 	// Deepest first, so that a directory is empty once its children are
 	// gone. A directory that still holds a file is kept.
 	slices.Reverse(dirs)
 	for _, d := range dirs {
-		if entries, err := os.ReadDir(d); err == nil && len(entries) == 0 {
-			if err := os.Remove(d); err != nil {
-				return nil, fmt.Errorf("prune %s: %w", d, err)
+		if entries, err := fs.ReadDir(root.FS(), d); err == nil && len(entries) == 0 {
+			if err := root.Remove(d); err != nil {
+				return nil, err
 			}
 		}
 	}
