@@ -121,8 +121,12 @@ func checkA04(env *Env) PartResult {
 			fail(at+".reason is empty", "say in reason why the guard is loosened")
 		}
 	}
-	if why := env.vibeGuardLoadError(); why != "" {
-		fail("vibe-guard cannot load it: "+why, unloadableFix)
+	// vibe-guard's loader judges only a policy with no defect above, so
+	// one defect is one finding.
+	if len(findings) == 0 {
+		if why := env.vibeGuardLoadError(); why != "" {
+			fail("vibe-guard cannot load it: "+why, unloadableFix)
+		}
 	}
 	if len(findings) > 0 {
 		return Fail(findings...)
@@ -135,41 +139,59 @@ const unloadableFix = "make " + guardPolicyFile + " a policy vibe-guard loads (s
 	"version, mode, rules and exceptions only; until then vibe-guard refuses every call"
 
 // vibeGuardLoadError is why vibe-guard cannot load policy.json, or "".
-// It is "" unless a PreToolUse hook runs `vibe-guard hook` and policy.json
-// is tracked: another guard reads its own keys, which the contract does
-// not judge (spec 0051, "Guard policy and exceptions"; contract 1.0.1).
+// It is "" unless a PreToolUse hook runs vibe-guard and policy.json is
+// tracked: another guard reads its own keys, which the contract does not
+// judge (spec 0051, "Guard policy and exceptions"; contract 1.0.1). It is
+// worked out once per audit.
+//
+// The contract calls guardrule.ParsePolicy, the loader built into the
+// audit binary, not the installed vibe-guard, so the two can disagree
+// when they come from different releases (spec 0051).
 func (e *Env) vibeGuardLoadError() string {
-	if !e.runsVibeGuard() {
-		return ""
+	if e.guardLoad != nil {
+		return *e.guardLoad
 	}
-	data, err := e.ReadFile(guardPolicyFile)
-	if err != nil {
-		return ""
+	why := ""
+	if e.runsVibeGuard() {
+		if data, err := e.ReadFile(guardPolicyFile); err == nil {
+			if _, err := guardrule.ParsePolicy(data); err != nil {
+				why = err.Error()
+			}
+		}
 	}
-	if _, err := guardrule.ParsePolicy(data); err != nil {
-		return err.Error()
-	}
-	return ""
+	e.guardLoad = &why
+	return why
 }
 
 // runsVibeGuard reports whether a PreToolUse hook of the tracked
-// .claude/settings.json calls `vibe-guard hook`.
+// .claude/settings.json runs `vibe-guard hook`, with vibe-guard named by
+// any path (isVibeGuardHook). A wrapper that runs vibe-guard, such as a
+// task, is not followed: such a repository is judged as one with another
+// guard.
 func (e *Env) runsVibeGuard() bool {
-	if !e.Repo.HasFile(claudeSettingsFile) {
-		return false
-	}
 	s, _, ok := e.readClaudeSettings("")
 	if !ok {
 		return false
 	}
 	for _, entry := range s.commandEntries(eventPreToolUse) {
 		for _, c := range entry.calls() {
-			if c.HasPrefix("vibe-guard", "hook") {
+			if isVibeGuardHook(c) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// isVibeGuardHook reports whether c is `vibe-guard hook`: its first word
+// has the base name vibe-guard, .exe dropped, and its second word is hook.
+func isVibeGuardHook(c Command) bool {
+	if len(c.Words) < 2 || !c.Words[0].Literal || !c.Words[1].Literal || c.Words[1].Text != "hook" {
+		return false
+	}
+	name := c.Words[0].Text
+	name = name[strings.LastIndexAny(name, `/\`)+1:]
+	return strings.TrimSuffix(strings.ToLower(name), ".exe") == "vibe-guard"
 }
 
 // jsonText writes a decoded JSON value back as JSON, for messages.

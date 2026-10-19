@@ -572,7 +572,8 @@ Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements co
 
 **Contract versions.** This vibe implements contract 1.0.1. A declared
 version must be `X.Y.Z`. Every PATCH of 1.0 (`1.0.n`, older or newer)
-is audited as 1.0.1, since a PATCH changes no verdict, and the report
+is audited as 1.0.1, since a PATCH makes no conformant repository
+non-conformant (spec 0051, "Versioning"), and the report
 shows both versions when they differ. A repository set up under 1.0.0
 keeps `contract: 1.0.0`. Spec 0051, "Changes", lists what each version
 changed: in 1.0.1, A-04 fails a `.claude/hooks/policy.json` that

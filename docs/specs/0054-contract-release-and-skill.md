@@ -764,9 +764,27 @@ real files and processes. No test reads a private helper.
     paragraphs that contain the words "guard rule ID". It does not check
     `vibe.yaml` field names that the prose names against the schema.
     Only the reference `vibe.yaml` files are loaded and checked.
+  - The setup action pin moved to `9a45d06`, so the conformance
+    workflows use its fixes for unzipping on Windows and for the
+    `checksums` input.
 - **Running time.** The pilot needs the user's time: approving the
   branch in P1, feedback on readability, and `vibe unlock` for the
   session checks. The PR waits for the report.
+
+## Verification record
+
+The real-session checks (see "Real-session checks (carried over from
+spec 0053)"). The pilot report, `docs/reports/contract-v1-pilot.md`,
+"Real-session checks", has the detail.
+
+| Platform | Check | Result |
+| --- | --- | --- |
+| Windows 11 | the Stop hook blocks once with a failing `verify:fast` | PASS |
+| Windows 11 | `vibe unlock`, then `vibe-guard relock` at the next Stop | PASS |
+| Windows 11 | `MultiEdit` | not offered by this Claude Code version |
+| Windows 11 | the hook shell | Git Bash |
+| Linux | all checks | UNVERIFIED: the user runs them later in WSL |
+| macOS | all checks | UNVERIFIED: no machine is available |
 
 ## Acceptance Criteria
 
