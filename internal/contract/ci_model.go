@@ -98,6 +98,20 @@ type CIJob struct {
 	// Scripts are every script of the job, with where each is: GitLab
 	// after_script included (Counts false).
 	Scripts []CIScript
+	// Images are the GitLab job's image: and services: entries, after
+	// resolution (default: included).
+	Images []CIImage
+}
+
+// CIImage is one GitLab image: or services: entry.
+type CIImage struct {
+	File string
+	Line int
+	// Key is image or services.
+	Key string
+	// Name is the image reference, or "" when the entry has none that is a
+	// string.
+	Name string
 }
 
 // Key identifies a job across the GitLab pipelines resolved for each

@@ -90,25 +90,32 @@ func hookVibeCalls(env *Env) ([]vibeCall, PartResult) {
 	return calls, res
 }
 
-// ciVibeCalls reads every CI step of every parsed workflow, except the
-// jobs in exempt. In a job that calls no declared entrypoint, a command
-// that is exactly vibe --version tests the installed binary and is not a
-// call of vibe (spec 0055, "R-01 and tool-installation tests").
-func ciVibeCalls(env *Env, parsed []*Workflow, exempt []ciJob) []vibeCall {
+// ciVibeCalls reads every script of every CI job (GitHub run: steps;
+// GitLab before_script, script and after_script), except the jobs in
+// exempt. In a job that calls no declared entrypoint, a command that is
+// exactly vibe --version tests the installed binary and is not a call of
+// vibe (spec 0055, "R-01 and tool-installation tests").
+func ciVibeCalls(env *Env, ci *CI, exempt []*CIJob) []vibeCall {
+	// A GitLab run resolves its own copy of each job: match it by key.
+	// GitHub job IDs repeat across workflows, but the run holds the same
+	// jobs.
+	same := func(a, b *CIJob) bool { return a == b || (ci.Provider == CIGitLab && a.Key() == b.Key()) }
 	var out []vibeCall
-	for _, wf := range parsed {
-		for _, j := range wf.Jobs {
-			if slices.ContainsFunc(exempt, func(e ciJob) bool { return e.job == j }) {
-				continue
-			}
-			testsTools := !callsAnEntrypoint(env, j.Commands())
-			for _, s := range j.Steps {
-				for _, c := range callsVibe(wf.File, fmt.Sprintf("line %d: job %s, step %d", s.Line, j.ID, s.Index+1), s.Run.Commands) {
-					if testsTools && c.cmd.Calls(vibeVersion) {
-						continue
-					}
-					out = append(out, c)
+	for _, j := range ci.Jobs {
+		if slices.ContainsFunc(exempt, func(e *CIJob) bool { return same(e, j) }) {
+			continue
+		}
+		var all []Command
+		for _, s := range j.Scripts {
+			all = append(all, s.Commands...)
+		}
+		testsTools := !callsAnEntrypoint(env, all)
+		for _, s := range j.Scripts {
+			for _, c := range callsVibe(s.File, fmt.Sprintf("line %d: %s", s.Line, s.Where), s.Commands) {
+				if testsTools && c.cmd.Calls(vibeVersion) {
+					continue
 				}
+				out = append(out, c)
 			}
 		}
 	}
