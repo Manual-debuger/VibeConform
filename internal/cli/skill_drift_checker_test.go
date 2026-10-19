@@ -282,6 +282,9 @@ var redirection = regexp.MustCompile(`^[0-9]*>|^<[^>]*$`)
 var (
 	vibeRootOnce sync.Once
 	vibeRoot     *cobra.Command
+	// vibeRootMu serializes lookups: cobra's Find records the name a
+	// command was called as, so parallel fixture tests race on the tree.
+	vibeRootMu sync.Mutex
 )
 
 // vibeCommandTree is the real vibe command tree, with cobra's default
@@ -308,6 +311,8 @@ func vibeCommandTree() *cobra.Command {
 // every flag is one of the command's. It returns "" when they are valid.
 func checkVibeArgs(args []string) string {
 	cmd := vibeCommandTree()
+	vibeRootMu.Lock()
+	defer vibeRootMu.Unlock()
 	positional := false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
