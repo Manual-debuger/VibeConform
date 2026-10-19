@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -134,11 +135,15 @@ func checkR03(env *Env) PartResult {
 
 // isPRTemplate recognizes a pull request template: pull_request_template.md
 // in the root, .github/ or docs/, or any file under
-// .github/PULL_REQUEST_TEMPLATE/, case-insensitive.
+// .github/PULL_REQUEST_TEMPLATE/, or a .md file directly under
+// .gitlab/merge_request_templates/ (spec 0055, R-03), case-insensitive.
 func isPRTemplate(file string) bool {
 	f := strings.ToLower(file)
 	switch f {
 	case "pull_request_template.md", ".github/pull_request_template.md", "docs/pull_request_template.md":
+		return true
+	}
+	if path.Dir(f) == ".gitlab/merge_request_templates" && strings.HasSuffix(f, ".md") {
 		return true
 	}
 	return strings.HasPrefix(f, ".github/pull_request_template/")
