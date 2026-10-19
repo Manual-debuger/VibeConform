@@ -51,7 +51,7 @@ var Current = Table{
 	Actionlint:   "v1.7.12",
 	Node:         "22",
 	Python:       "3.12",
-	SetupAction:  "94de1c573252583f9984452bf8b8522582dcb2d5",
+	SetupAction:  "32514425a6693842f13177086897a2ca6e9beffc",
 }
 
 // Parse parses a CI template. Its [[ ]] delimiters leave GitHub's ${{ }}
