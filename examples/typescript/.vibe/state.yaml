@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.11.0-alpha.1.0.20261019022326-817cb5c37ab3
+vibe_version: v0.11.0-alpha.1.0.20261019022421-815a31d94264
 standard: prod-ts/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
