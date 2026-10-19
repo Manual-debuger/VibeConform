@@ -359,7 +359,9 @@ read GitLab CI (see "C: CI"):
 
 - **D-02**: a Renovate configuration must cover Renovate's `gitlabci`
   manager instead of `github-actions`, and also `gitlabci-include`
-  when `enabledManagers` is set and the pipeline uses includes.
+  when `enabledManagers` is set and the pipeline has `project:`
+  includes (the ones that manager updates; `template:`, `component:`,
+  `remote:` and `artifact:` includes do not need it).
   Dependabot cannot satisfy D-02 there. The fix text names Renovate and
   `renovate.json` on GitLab CI, and Dependabot on GitHub Actions.
 - **D-03**: a job's `before_script`, `script` or `after_script` runs a

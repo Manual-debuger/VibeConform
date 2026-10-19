@@ -56,7 +56,7 @@ var renovateManagers = map[string][]string{
 const githubActions = "github-actions"
 
 // Renovate's GitLab CI managers (spec 0051, after the D table): gitlabci
-// updates .gitlab-ci.yml, gitlabci-include the includes it does not follow.
+// updates .gitlab-ci.yml, gitlabci-include its project: includes.
 const (
 	gitlabCIManager      = "gitlabci"
 	gitlabIncludeManager = "gitlabci-include"
@@ -82,7 +82,7 @@ type updateBot struct {
 // renovateFix is the fix for a GitLab CI repository without a Renovate
 // configuration that D-02 accepts.
 const renovateFix = "add renovate.json with Renovate covering each component's manager and gitlabci " +
-	"(and gitlabci-include when you list enabledManagers and .gitlab-ci.yml includes files from outside the repository), without automerge"
+	"(and gitlabci-include when you list enabledManagers and .gitlab-ci.yml has project: includes), without automerge"
 
 // onGitLab reports whether the C rules read GitLab CI, with the model.
 func onGitLab(env *Env) (*CI, bool) {
@@ -422,8 +422,8 @@ func readRenovateFile(env *Env, rf renovateFile) (map[string]any, *PartResult) {
 // judgeRenovate decides coverage and automerge for a Renovate
 // configuration. Coverage holds unless enabledManagers leaves out a
 // component's manager or github-actions; on GitLab CI, gitlabci, and
-// gitlabci-include when the pipeline has includes the audit does not
-// follow (the ones that name a version elsewhere). Automerge is any automerge:
+// gitlabci-include when the pipeline has project: includes (the ones
+// that manager updates). Automerge is any automerge:
 // true, or an extends preset whose name contains "automerge", except
 // Renovate's built-in presets that do not enable it (renovateNotAutomerge).
 // Other presets are not resolved.
@@ -461,8 +461,9 @@ func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) {
 					Fix:     "add gitlabci to enabledManagers",
 				})
 			}
-			if len(ci.Includes) > 0 && !slices.Contains(enabled, gitlabIncludeManager) {
-				in := ci.Includes[0]
+			i := slices.IndexFunc(ci.Includes, func(in CIInclude) bool { return in.Kind == "project" })
+			if i >= 0 && !slices.Contains(enabled, gitlabIncludeManager) {
+				in := ci.Includes[i]
 				b.CI = append(b.CI, Finding{
 					File: b.File,
 					Message: fmt.Sprintf("enabledManagers leaves out gitlabci-include, which updates includes such as the %s include at %s line %d",

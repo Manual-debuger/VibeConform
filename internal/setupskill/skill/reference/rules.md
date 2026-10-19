@@ -269,8 +269,8 @@ there. A Renovate configuration (`renovate.json`, `renovate.json5`,
 `.gitlab/renovate.json` and the other Renovate locations) covers each
 component's manager and `gitlabci`, which updates the image digests, with
 no automerge. When it lists `enabledManagers`, add `gitlabci`, and
-`gitlabci-include` when `.gitlab-ci.yml` includes files from outside the
-repository. Start from `reference/ci/renovate.json`; Renovate's
+`gitlabci-include` when `.gitlab-ci.yml` has `project:` includes (the
+ones that manager updates). Start from `reference/ci/renovate.json`; Renovate's
 `config:recommended` enables every manager. The person runs Renovate on
 the project (the Mend app, or a scheduled Renovate pipeline).
 

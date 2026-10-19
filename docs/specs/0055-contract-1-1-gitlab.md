@@ -308,8 +308,8 @@ Contract 1.1.0, a MINOR release:
 
 - When the C rules read GitLab CI, D-02 requires coverage of Renovate's
   `gitlabci` manager instead of `github-actions` (and of
-  `gitlabci-include` when `enabledManagers` is set and includes are
-  used). Dependabot cannot satisfy it on a GitLab repository.
+  `gitlabci-include` when `enabledManagers` is set and `project:`
+  includes are used, the ones that manager updates). Dependabot cannot satisfy it on a GitLab repository.
 - `.gitlab/renovate.json` and its JSON5 form join the recognized
   Renovate locations.
 - The fix text names Renovate and `renovate.json` for GitLab

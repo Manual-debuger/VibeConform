@@ -770,7 +770,8 @@ reads no GitHub branch protection.
   does not run on GitLab and cannot satisfy D-02 there. The Renovate
   configuration covers each component's manager and `gitlabci` instead
   of `github-actions`, and, when it lists `enabledManagers` and the
-  pipeline has includes the audit does not follow, `gitlabci-include`.
+  pipeline has `project:` includes (the ones Renovate's
+  `gitlabci-include` manager updates), `gitlabci-include`.
   `.gitlab/renovate.json` and `.gitlab/renovate.json5` are recognized
   Renovate locations on any repository. The fix text names Renovate on
   GitLab CI and Dependabot on GitHub Actions.

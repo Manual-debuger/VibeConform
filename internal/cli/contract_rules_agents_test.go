@@ -761,6 +761,15 @@ func TestRuleD02GitLab(t *testing.T) {
 			edits: gitlab("include:\n  - local: ci/lint.yml\n\n"+glBase, edits(
 				[]fixtureEdit{withFile("ci/lint.yml", "lint:\n  script: echo lint\n")},
 				renovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`))...)},
+		// gitlabci-include updates project: includes only.
+		{name: "component, template and remote includes need no gitlabci-include", want: "pass",
+			edits: gitlab("include:\n  - component: gitlab.com/acme/lint/lint@1.0.0\n  - template: Jobs/SAST.gitlab-ci.yml\n"+
+				"  - remote: https://example.com/ci.yml\n\n"+glBase,
+				renovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`)...)},
+		{name: "a project include after other kinds is the one named", want: "fail",
+			edits: gitlab("include:\n  - template: Jobs/SAST.gitlab-ci.yml\n  - project: acme/ci\n    file: /go.yml\n\n"+glBase,
+				renovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`)...),
+			findings: []string{"enabledManagers leaves out gitlabci-include", "project include at .gitlab-ci.yml line 3"}},
 	})
 }
 
