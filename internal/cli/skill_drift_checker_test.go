@@ -666,7 +666,7 @@ func writeGitTree(dir string, files map[string]string) error {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("git %v: %v\n%s", args, err, out)
+			return fmt.Errorf("git %v: %w\n%s", args, err, out)
 		}
 	}
 	return nil
