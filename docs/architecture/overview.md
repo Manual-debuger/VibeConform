@@ -242,7 +242,8 @@ internal/contract                    the old audit: manifest, standard,
 - **Dispatch.** `vibe audit` reads the configuration once and picks the
   engine from its top-level key: `contract` runs the contract audit,
   `standard` the old audit, unchanged. Both or neither is an error. `diff`,
-  `sync` and `init` still speak only the old schema.
+  `sync` and `init` still speak only the old schema; `vibe init --skill`
+  writes the setup skill and reads no configuration.
 - **Dependency direction.** `internal/contract` imports none of the old
   packages (`reconcile`, `state`, `resource`, `standard`, `module`,
   `manifest`), so #112 can delete them without touching it.
@@ -300,9 +301,35 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
 - The dependency is one way: `internal/contract` → `internal/guardrule`
   ← `internal/guard`. Neither new package imports the old ones, and
   tests in each package enforce it. The old `internal/module/agents/claude`
-  imports `internal/guard` for the reference commands when
+  imports `internal/guard` for the reference commands and the version
+  rule (`InstallVersion`: the version the install hint names) when
   `policy.agent_guard` selects `vibe-guard`, an old-to-new direction #112
   removes with the module.
+
+### The setup skill
+
+Spec 0054 adds `internal/setupskill`: the `vibeconform-setup` skill
+directory, embedded with `go:embed`, and `Install`, which `vibe init
+--skill` calls to write it to `.claude/skills/` and `.agents/skills/`.
+
+```text
+cmd/vibe → internal/cli ──→ internal/setupskill ──→ internal/guard
+           (vibe init --skill)   (embedded skill/)    (InstallVersion,
+                                                       reference commands)
+```
+
+- **Imports.** Among this repository's packages, `internal/setupskill`
+  imports only `internal/guard`, for the version rule that fills the
+  skill's one placeholder (the `vibe` version). It imports no old package,
+  so #112 can delete them without touching it; its tests enforce that.
+- **Embedded bytes.** `.gitattributes` forces LF for
+  `internal/setupskill/skill/`, and a test fails on any carriage return
+  in an embedded file, so a CRLF working copy cannot change what a build
+  ships.
+- **Reference files.** The skill's reference implementations are copied
+  from the module templates as single files; the templates stay until
+  #112 deletes them with the template-sync system. The reference hook
+  commands in its `settings.json` equal `internal/guard`'s.
 
 ## Affected-component graph
 
@@ -407,7 +434,8 @@ internal/
   doctor/                   # vibe doctor checks; imports nothing from internal/ (spec 0028)
   contract/                 # contract audit: vibe.yaml v2, rule registry, static checks, probe copy and probes; imports none of the old packages (spec 0052, 0053)
   guardrule/                # guard rule IDs, policy.json v2, command parsing shared by the audit and vibe-guard; imports nothing from internal/ (spec 0053)
-  guard/                    # vibe-guard: baseline rules, hook/explain/relock, unlock marker; imports only guardrule (spec 0053)
+  guard/                    # vibe-guard: baseline rules, hook/explain/relock, unlock marker, reference commands, version rule; imports only guardrule (spec 0053, 0054)
+  setupskill/               # the embedded vibeconform-setup skill and vibe init --skill; imports only guard (spec 0054)
   cli/                      # command tree; audit/diff/sync share one plan walk; vibe audit dispatches to contract/; vibe unlock
 ```
 

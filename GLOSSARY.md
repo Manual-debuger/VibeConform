@@ -85,7 +85,9 @@ _Avoid_: package, workspace, sub-project
 
 **Setup skill**:
 The agent skill that gives an adopting repository the properties the
-contract requires, and runs the audit until it passes.
+contract requires, and runs the audit until it passes. It is
+`vibeconform-setup`, embedded in `vibe`; `vibe init --skill` writes it
+into the repository's skill paths, where the repository owns it.
 _Avoid_: installer, generator, template
 
 ## Agent guardrails
