@@ -122,13 +122,22 @@ runs:
           echo "::notice title=VibeConform setup::verify-attestation and checksums apply to source release only; source is $source."
         fi
 
-        bin="$RUNNER_TEMP/vibeconform-$VERSION/bin"
+        # The steps below run in bash, which gets the directory in its own
+        # form (/d/a/_temp/… on Windows); bin-dir is the runner's native form.
+        tmp="$RUNNER_TEMP"
+        native="$RUNNER_TEMP/vibeconform-$VERSION/bin"
+        if [ "$RUNNER_OS" = Windows ] && command -v cygpath > /dev/null 2>&1; then
+          tmp=$(cygpath -u "$RUNNER_TEMP")
+          native=$(cygpath -w "$tmp/vibeconform-$VERSION/bin")
+        fi
+        bin="$tmp/vibeconform-$VERSION/bin"
         mkdir -p "$bin"
         echo "VibeConform setup: installing$tools $VERSION from source $source."
         {
           echo "source=$source"
           echo "tools=${tools# }"
-          echo "bin-dir=$bin"
+          echo "bin=$bin"
+          echo "bin-dir=$native"
         } >> "$GITHUB_OUTPUT"
 
     - name: Install from the release
@@ -137,7 +146,7 @@ runs:
       env:
         VERSION: ${{ inputs.version }}
         TOOLS: ${{ steps.resolve.outputs.tools }}
-        BIN: ${{ steps.resolve.outputs.bin-dir }}
+        BIN: ${{ steps.resolve.outputs.bin }}
         VERIFY_ATTESTATION: ${{ inputs.verify-attestation }}
         CHECKSUMS: ${{ inputs.checksums }}
         GH_TOKEN: ${{ inputs.token }}
@@ -171,7 +180,7 @@ runs:
           fi
         }
 
-        work="$RUNNER_TEMP/vibeconform-$VERSION/download"
+        work="${BIN%/bin}/download"
         mkdir -p "$work"
         base="https://github.com/$REPO/releases/download/$VERSION"
 
@@ -230,10 +239,12 @@ runs:
       env:
         VERSION: ${{ inputs.version }}
         TOOLS: ${{ steps.resolve.outputs.tools }}
-        BIN: ${{ steps.resolve.outputs.bin-dir }}
+        BIN: ${{ steps.resolve.outputs.bin }}
+        GOBIN_NATIVE: ${{ steps.resolve.outputs.bin-dir }}
       run: |
+        # go is a native program: give it the runner's own path form.
         for tool in $TOOLS; do
-          GOBIN="$BIN" go install "github.com/Manual-debuger/VibeConform/cmd/$tool@$VERSION" || {
+          GOBIN="$GOBIN_NATIVE" go install "github.com/Manual-debuger/VibeConform/cmd/$tool@$VERSION" || {
             echo "::error title=VibeConform setup::go install of $tool@$VERSION failed."
             exit 1
           }
@@ -255,7 +266,7 @@ runs:
       working-directory: ${{ github.workspace }}
       env:
         TOOLS: ${{ steps.resolve.outputs.tools }}
-        BIN: ${{ steps.resolve.outputs.bin-dir }}
+        BIN: ${{ steps.resolve.outputs.bin }}
       run: |
         exe=""
         if [ "$RUNNER_OS" = Windows ]; then exe=.exe; fi
@@ -269,7 +280,7 @@ runs:
     - name: Add the binaries to PATH
       shell: bash
       env:
-        BIN: ${{ steps.resolve.outputs.bin-dir }}
+        BIN: ${{ steps.resolve.outputs.bin }}
         TOOLS: ${{ steps.resolve.outputs.tools }}
       run: |
         dir="$BIN"
