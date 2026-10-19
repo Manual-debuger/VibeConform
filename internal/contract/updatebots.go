@@ -452,7 +452,7 @@ func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) {
 					Fix:     "add gitlabci to enabledManagers",
 				})
 			}
-			i := slices.IndexFunc(ci.Includes, func(in CIInclude) bool { return in.Kind == "project" })
+			i := slices.IndexFunc(ci.Includes, func(in CIInclude) bool { return in.Kind == IncludeProject })
 			if i >= 0 && !slices.Contains(enabled, gitlabIncludeManager) {
 				in := ci.Includes[i]
 				b.CI = append(b.CI, Finding{

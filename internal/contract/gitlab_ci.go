@@ -356,21 +356,21 @@ func listItems(n *yaml.Node) []*yaml.Node {
 }
 
 // glIncludeKinds are the include keys GitLab reads, local first.
-var glIncludeKinds = []string{"local", "project", "remote", "template", "component", "artifact"}
+var glIncludeKinds = []CIIncludeKind{IncludeLocal, IncludeProject, IncludeRemote, IncludeTemplate, IncludeComponent, IncludeArtifact}
 
 // includeKind classifies an include entry: its kind and, for a local one,
-// the path.
-func includeKind(e *yaml.Node) (kind, local string) {
+// the path. An entry of no kind GitLab reads has kind "".
+func includeKind(e *yaml.Node) (kind CIIncludeKind, local string) {
 	switch e.Kind {
 	case yaml.ScalarNode:
 		if strings.HasPrefix(e.Value, "https://") || strings.HasPrefix(e.Value, "http://") {
-			return "remote", ""
+			return IncludeRemote, ""
 		}
-		return "local", e.Value
+		return IncludeLocal, e.Value
 	case yaml.MappingNode:
 		for _, k := range glIncludeKinds {
-			if v := mapValue(e, k); v != nil {
-				if k == "local" {
+			if v := mapValue(e, string(k)); v != nil {
+				if k == IncludeLocal {
 					return k, scalarOr(v, "")
 				}
 				return k, ""
@@ -388,7 +388,7 @@ func (r *glReader) include(file string, e *yaml.Node, ctx *glContext, stack []st
 	case "":
 		r.failAt(e, "an include must be a path or a map with local:, project:, remote:, template:, component: or artifact:")
 		return nil
-	case "local":
+	case IncludeLocal:
 	default:
 		r.record(file, kind, e)
 		return nil
@@ -431,7 +431,7 @@ func (r *glReader) dropInclude(ctx *glContext, files []string, why *glWhy) {
 		}
 		if inc := mapValue(root, "include"); inc != nil {
 			for _, e := range listItems(inc) {
-				if kind, local := includeKind(e); kind == "local" {
+				if kind, local := includeKind(e); kind == IncludeLocal {
 					for _, g := range r.localFiles(local) {
 						visit(g)
 					}
@@ -461,7 +461,7 @@ func (r *glReader) droppedWhy(j *CIJob, contexts []*glContext) *glWhy {
 }
 
 // record keeps an unfollowed include once.
-func (r *glReader) record(file, kind string, e *yaml.Node) {
+func (r *glReader) record(file string, kind CIIncludeKind, e *yaml.Node) {
 	if r.seenIncludes[e] {
 		return
 	}
@@ -721,13 +721,13 @@ func (r *glReader) readJob(k *yaml.Node, name, child string, node *yaml.Node, ct
 // string or a map with name:.
 func (r *glReader) images(node *yaml.Node) []CIImage {
 	var out []CIImage
-	for _, key := range []string{"image", "services"} {
-		v := mapValue(node, key)
+	for _, key := range []CIImageKey{ImageKey, ServicesKey} {
+		v := mapValue(node, string(key))
 		if v == nil {
 			continue
 		}
 		entries := []*yaml.Node{v}
-		if key == "services" {
+		if key == ServicesKey {
 			entries = listItems(v)
 		}
 		for _, e := range entries {
@@ -781,7 +781,7 @@ func (r *glReader) childFiles(file, name string, node *yaml.Node, ctx *glContext
 	for _, e := range listItems(inc) {
 		kind, local := includeKind(e)
 		switch kind {
-		case "local":
+		case IncludeLocal:
 			if !waits {
 				continue
 			}

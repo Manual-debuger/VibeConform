@@ -109,12 +109,20 @@ type CIJob struct {
 type CIImage struct {
 	File string
 	Line int
-	// Key is image or services.
-	Key string
+	Key  CIImageKey
 	// Name is the image reference, or "" when the entry has none that is a
 	// string.
 	Name string
 }
+
+// CIImageKey is the GitLab key an image entry is under.
+type CIImageKey string
+
+// The keys that name images.
+const (
+	ImageKey    CIImageKey = "image"
+	ServicesKey CIImageKey = "services"
+)
 
 // Key identifies a job, whichever provider read it: a job of a CIRun has
 // the key of the same job in CI.Jobs, although on GitLab the run holds
@@ -155,10 +163,25 @@ type CIInclude struct {
 	File string
 	Line int
 	// Kind is project, remote, component, template or artifact.
-	Kind string
+	Kind CIIncludeKind
 	// Node is the include entry: a string or a map.
 	Node *yaml.Node
 }
+
+// CIIncludeKind is the kind of a GitLab include: the key that names
+// what it includes.
+type CIIncludeKind string
+
+// The include kinds GitLab reads, local first; only local ones are
+// followed.
+const (
+	IncludeLocal     CIIncludeKind = "local"
+	IncludeProject   CIIncludeKind = "project"
+	IncludeRemote    CIIncludeKind = "remote"
+	IncludeTemplate  CIIncludeKind = "template"
+	IncludeComponent CIIncludeKind = "component"
+	IncludeArtifact  CIIncludeKind = "artifact"
+)
 
 // CIRun is the jobs that run for one pipeline kind.
 type CIRun struct {
