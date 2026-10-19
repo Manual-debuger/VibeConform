@@ -720,6 +720,10 @@ real files and processes. No test reads a private helper.
   changed in this phase. #120 settles R-01's scope in the contract 1.1.0
   spec with #74: whether tool-installation tests are exempt, and
   whether a call by path counts.
+  **Resolved** by spec 0055 (contract 1.1.0, #120 Part A): R-01 exempts
+  `vibe --version` in a CI job that calls no entrypoint, and both
+  workflows run `vibe --version` and `vibe-guard version` by name again.
+  Whether a call by path counts (Part B) ships with #50.
 - **Interpretations beyond the tickets**, approved with this spec:
   - the skill name `vibeconform-setup`;
   - the migration path from the template-sync system ("detect the
