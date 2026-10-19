@@ -61,7 +61,12 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       # The setup action installs vibe and vibe-guard {{VIBE_VERSION}} from
-      # the release and checks their checksums. Replace the zeros with the
+      # the release and checks the archives against its checksums.txt.
+      # version must be an exact release such as v0.12.0-alpha.1: the action
+      # refuses latest, so replace latest with the release you installed.
+      # The other inputs keep their defaults: tools (vibe vibe-guard),
+      # source (auto: the release for a release version), verify-attestation
+      # (false) and checksums (the release's own). Replace the zeros with the
       # commit SHA of that release tag:
       #   git ls-remote https://github.com/Manual-debuger/VibeConform refs/tags/{{VIBE_VERSION}}
       - name: Install vibe and vibe-guard
