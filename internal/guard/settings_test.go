@@ -54,10 +54,10 @@ func TestRepositorySettingsRunTheReferenceHook(t *testing.T) {
 		t.Errorf("matcher %q, want %q", matcher, guard.ReferencePreToolUseMatcher)
 	}
 	const marker = "\x00version\x00"
-	before, after, _ := strings.Cut(guard.ReferencePreToolUse(marker), marker)
+	before, _, _ := strings.Cut(guard.ReferencePreToolUse(marker), marker)
 	version, ok := strings.CutPrefix(command, before)
 	if ok {
-		version, ok = strings.CutSuffix(version, after)
+		version, _, ok = strings.Cut(version, ",")
 	}
 	if !ok || version == "" || strings.ContainsAny(version, " \"'") || command != guard.ReferencePreToolUse(version) {
 		t.Errorf("PreToolUse command %q is not the reference command", command)

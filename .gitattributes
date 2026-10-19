@@ -2,3 +2,7 @@
 # Managed by VibeConform: policy.line_endings in vibe.yaml.
 * text=auto eol=lf
 # vibeconform:end line-endings
+
+# The setup skill is embedded in vibe (go:embed): a CRLF working copy
+# would change the bytes a build ships, so its files are always LF.
+internal/setupskill/skill/** text eol=lf

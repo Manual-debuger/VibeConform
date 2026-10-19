@@ -3,6 +3,8 @@ package cli
 
 import (
 	"github.com/spf13/cobra"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 )
 
 // NewRootCmd constructs the root "vibe" command with all subcommands attached.
@@ -20,6 +22,9 @@ func newRootCmd(version string, seams contractSeams) *cobra.Command {
 		SilenceErrors: false,
 		Version:       version,
 	}
+	// vibe --version names the contract version vibe implements (spec
+	// 0054); the setup skill's upgrade flow reads it.
+	root.SetVersionTemplate("vibe version {{.Version}} (contract " + contract.Implemented + ")\n")
 
 	root.AddCommand(
 		newInitCmd(),
