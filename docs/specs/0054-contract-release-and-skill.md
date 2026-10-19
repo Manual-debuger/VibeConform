@@ -709,6 +709,16 @@ real files and processes. No test reads a private helper.
     and merged, and #112's deletion completes the move.
   - #108 says `vibe init` writes the skill. Here only `vibe init
     --skill` does, by the user's choice. #112 adds the v2 `vibe init`.
+- **Known deviation: R-01 and the tool-testing workflows** (found in
+  implementation, decided with the user on 2026-10-19). R-01's static
+  check refuses any CI step outside the C-04 audit job that calls
+  `vibe`. The release check and `setup-action.yml` must run the
+  installed tools. They run the binaries by path and check `PATH` with
+  `command -v`, and they pass R-01 only because the check matches the
+  text `vibe` and does not see a call by path. The contract is not
+  changed in this phase. #120 settles R-01's scope in the contract 1.1.0
+  spec with #74: whether tool-installation tests are exempt, and
+  whether a call by path counts.
 - **Interpretations beyond the tickets**, approved with this spec:
   - the skill name `vibeconform-setup`;
   - the migration path from the template-sync system ("detect the
