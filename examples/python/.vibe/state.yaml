@@ -1,10 +1,10 @@
 schema: 4
-vibe_version: v0.11.0-alpha.1.0.20261016081626-2dd1645e0e3c
+vibe_version: v0.11.0-alpha.1.0.20261019013904-3c8d259ca915
 standard: prod-py/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
       ownership: generated
-      sha256: 6ab8801f64c589c2df9cdf3c13c3f6507c6c7609f459b74980355cb57e5299e0
+      sha256: 81951d89696fff9f48d272e5fc9eeda9862350f266e303e9e7ce2863056244b8
     - path: .claude/hooks/block-dangerous.sh
       ownership: generated
       sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
@@ -25,7 +25,7 @@ resources:
       sha256: 1fd67532d8ddacf7ee45289a4e21f3713519dc49db93b02b78aa6fbc9b5eb32f
     - path: .claude/skills/vibeconform/SKILL.md
       ownership: generated
-      sha256: 6ab8801f64c589c2df9cdf3c13c3f6507c6c7609f459b74980355cb57e5299e0
+      sha256: 81951d89696fff9f48d272e5fc9eeda9862350f266e303e9e7ce2863056244b8
     - path: .codex/config.toml
       ownership: generated
       sha256: 886d348f8109660e2e05069f7caba033d3035cbb25f1db58b4b80ae9f188c931
@@ -40,10 +40,10 @@ resources:
       sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
     - path: .github/workflows/ci.yml
       ownership: generated
-      sha256: 4ee29f4fec08fedb9ac5a7ca84455b4d81732d73a714f92e54a879c13def96f5
+      sha256: 9a3b7833969929827818852c63118fea55248c7c97ad89e79d8c0687c15135e2
     - path: .github/workflows/conformance.yml
       ownership: generated
-      sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
+      sha256: 5f5d11da416f76d4c814f507acbbd23479185e13c67d319eebdbf136d4d79fa8
     - path: .gitignore
       section_id: claude
       ownership: managed-section

@@ -102,7 +102,7 @@ VibeConform decodes the file strictly: an unknown key is an error.
   repository root. Format and lint checks skip it. Type checks still
   run.
 - CI: `.github/workflows/ci.yml` ends in the `CI / gate` check, and
-  `.github/workflows/conformance.yml` runs `task audit` as
+  `.github/workflows/conformance.yml` runs `vibe audit` as
   `Conformance / audit`. Both must be required checks.
 
 ## Removing VibeConform
