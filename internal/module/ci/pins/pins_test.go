@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -160,4 +161,21 @@ func keys(m map[string][]byte) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// TestTaskSetupIsTask: go-task/setup-task takes Task's version without the
+// leading v (it adds one), and the two entries name the same release.
+func TestTaskSetupIsTask(t *testing.T) {
+	if pins.Current.Task != "v"+pins.Current.TaskSetup {
+		t.Errorf("Task = %q, TaskSetup = %q; TaskSetup must be Task without its leading v",
+			pins.Current.Task, pins.Current.TaskSetup)
+	}
+}
+
+// TestSetupActionIsACommitSHA: the conformance workflow uses the setup
+// action pinned by a full commit SHA (spec 0054, C-02).
+func TestSetupActionIsACommitSHA(t *testing.T) {
+	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(pins.Current.SetupAction) {
+		t.Errorf("SetupAction = %q, want a full commit SHA", pins.Current.SetupAction)
+	}
 }

@@ -1,0 +1,64 @@
+name: Release snapshot
+
+# Builds every release target with GoReleaser in snapshot mode, without
+# publishing, so a missing build or a broken .goreleaser.yaml fails the
+# pull request before a tag exists (spec 0054). Repository-owned, not
+# generated: adopters do not receive it.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-snapshot-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.0"
+  # The version release.yml pins.
+  GORELEASER_VERSION: "v2.18.3"
+
+jobs:
+  snapshot:
+    name: Release / snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: GoReleaser snapshot
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: ${{ env.GORELEASER_VERSION }}
+          args: release --snapshot --clean
+      - name: Every archive is built and listed
+        working-directory: dist
+        run: |
+          for tool in vibe vibe-guard; do
+            for os in linux darwin windows; do
+              for arch in amd64 arm64; do
+                ext=tar.gz
+                if [ "$os" = windows ]; then ext=zip; fi
+                if ! grep -Eq "  ${tool}_[^_]+_${os}_${arch}\.${ext}\$" checksums.txt; then
+                  echo "checksums.txt lists no ${tool} archive for ${os}/${arch}"
+                  exit 1
+                fi
+              done
+            done
+          done
+          count=$(wc -l < checksums.txt)
+          if [ "$count" -ne 12 ]; then
+            echo "checksums.txt lists $count archives, want 12"
+            exit 1
+          fi
+          sha256sum --check --strict checksums.txt

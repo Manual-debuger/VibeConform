@@ -106,7 +106,7 @@ VibeConform decodes the file strictly: an unknown key is an error.
 - `generated:` is not accepted. golangci-lint skips a file with a
   `// Code generated ... DO NOT EDIT.` header.
 - CI: `.github/workflows/ci.yml` ends in the `CI / gate` check, and
-  `.github/workflows/conformance.yml` runs `task audit` as
+  `.github/workflows/conformance.yml` runs `vibe audit` as
   `Conformance / audit`. Both must be required checks.
 
 ## Removing VibeConform

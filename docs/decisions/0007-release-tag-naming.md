@@ -57,3 +57,19 @@ a snapshot never gets mistaken for a real, supported cut.
   guards these tags from force-push/deletion once pushed, but does nothing
   to enforce the naming convention itself — that stays a documented
   agreement, not a checked one.
+
+## Amendment (2026-10-19, spec 0054)
+
+Releases are no longer drafts. `.goreleaser.yaml` drops `release.draft:
+true`, so a tag push publishes the release without a manual step, with
+`vibe` and `vibe-guard` archives, `checksums.txt` and GitHub artifact
+attestations. `release.prerelease: auto` stays. The pre-release suffix
+alone now keeps a preview out of "Latest release": an `-alpha.N`,
+`-beta.N` or `-rc.N` tag is marked "Pre-release", and nothing else is.
+The Decision's reliance on the draft step ("a human publishes explicitly")
+no longer holds. Because a tag push now publishes, the person who pushes
+a tag decides the release, so ask before each tag push.
+
+GoReleaser now stamps the version from `{{ .Tag }}` instead of
+`{{ .Version }}`, so the binaries print the tag with its leading `v`, as
+`go install …@<tag>` builds do.

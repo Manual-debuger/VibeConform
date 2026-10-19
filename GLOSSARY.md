@@ -120,6 +120,13 @@ A CI job whose name stays stable so that branch protection can require
 it: the gate and the conformance audit. Other job names may change.
 _Avoid_: status check (alone), gate job (for conformance)
 
+**Setup action**:
+The GitHub Action at this repository's root that installs an exact
+version of `vibe` and `vibe-guard` in the conformance job: from a release
+with its checksums checked, or built from source. It never runs the audit
+itself, and `verify` must not use it.
+_Avoid_: installer, setup-vibe, bootstrap step
+
 ## Retired terms
 
 Terms of the template-sync model. They stay in use until that model is

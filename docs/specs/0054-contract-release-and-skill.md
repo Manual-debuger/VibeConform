@@ -243,7 +243,8 @@ Phase 3 makes the contract adoptable:
   × amd64 and arm64), `CGO_ENABLED=0`, and the version stamped the same
   way. Each binary gets its own archive (`vibe_<version>_<os>_<arch>` and
   `vibe-guard_<version>_<os>_<arch>`, tar.gz, zip on Windows). One
-  `checksums.txt` lists all 24 archives.
+  `checksums.txt` lists all 12 archives (2 tools × 3 OS × 2
+  architectures; corrected from 24 in implementation).
 - **Published, not drafted.** `release.draft: true` is removed. A tag push
   publishes the release. `prerelease: auto` stays, so an `-alpha.N` tag
   is still marked "Pre-release" (ADR 0007). ADR 0007's Consequences
@@ -259,7 +260,7 @@ Phase 3 makes the contract adoptable:
   release workflow. It runs the setup action from the tagged commit on
   Linux, macOS and Windows, on every architecture GitHub hosts for this
   public repository. For each runner it checks that `vibe --version` and
-  `vibe-guard version` print the tag. It also downloads all 24 archives
+  `vibe-guard version` print the tag. It also downloads all 12 archives
   and runs `gh attestation verify` on each archive and each binary inside.
   It runs `go install …/cmd/vibe-guard@<tag>` and `go install
   …/cmd/vibe@<tag>` once on Linux, which proves that the hook's install
@@ -648,7 +649,7 @@ real files and processes. No test reads a private helper.
   cases) and the new hint text. A-03 still refuses every deny case
   through the reference command with `vibe-guard` missing.
 - **Release configuration.** The PR job's goreleaser snapshot build
-  produces all 24 archives and `checksums.txt`. actionlint covers the
+  produces all 12 archives and `checksums.txt`. actionlint covers the
   release and action workflows, as `task workflows:lint` does today.
 - **The setup action.** A pull-request workflow runs the action on
   Linux, macOS and Windows:

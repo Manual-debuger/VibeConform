@@ -1,0 +1,211 @@
+name: Setup action
+
+# Tests the setup action (action.yml, spec 0054) on Linux, macOS and
+# Windows. Repository-owned, not generated: adopters do not receive it.
+#
+# The release cases need a release that contains vibe-guard. Until
+# RELEASE_VERSION is published, the probe job reports it and those jobs are
+# skipped, which the spec records as UNVERIFIED.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: setup-action-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The first release with vibe-guard (spec 0054).
+  RELEASE_VERSION: v0.12.0-alpha.1
+
+jobs:
+  # source: auto in this checkout resolves to workspace (ADR 0008), and a
+  # refused version fails the step.
+  local:
+    name: Setup action / workspace and refusals (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup action, source auto
+        id: auto
+        uses: ./
+        with:
+          version: ${{ env.RELEASE_VERSION }}
+      # The binaries are run by the path the action reports, so each check
+      # covers the files it installed; command -v checks that they are on
+      # PATH.
+      - name: auto resolved to workspace and both tools run
+        shell: bash
+        env:
+          SOURCE: ${{ steps.auto.outputs.source }}
+          BIN: ${{ steps.auto.outputs.bin-dir }}
+        run: |
+          if [ "$SOURCE" != workspace ]; then
+            echo "source auto resolved to $SOURCE in this checkout, want workspace"
+            exit 1
+          fi
+          bin="$BIN"
+          exe=""
+          if [ "$RUNNER_OS" = Windows ]; then
+            bin=$(cygpath -u "$BIN")
+            exe=.exe
+          fi
+          command -v vibe
+          command -v vibe-guard
+          "$bin/vibe$exe" --version
+          "$bin/vibe-guard$exe" version
+      - name: Setup action, version latest
+        id: latest
+        continue-on-error: true
+        uses: ./
+        with:
+          version: latest
+      - name: Setup action, version not semver
+        id: loose
+        continue-on-error: true
+        uses: ./
+        with:
+          version: v0.12
+      - name: Both refusals failed
+        shell: bash
+        env:
+          LATEST: ${{ steps.latest.outcome }}
+          LOOSE: ${{ steps.loose.outcome }}
+        run: |
+          if [ "$LATEST" != failure ] || [ "$LOOSE" != failure ]; then
+            echo "version latest: $LATEST, version v0.12: $LOOSE; both must fail"
+            exit 1
+          fi
+
+  # source: go-install builds from the tagged source, here at the
+  # pseudo-version .vibe/state.yaml records, as an example synced by a
+  # source build does.
+  go-install:
+    name: Setup action / go-install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read vibe_version
+        id: state
+        shell: bash
+        run: |
+          v=$(sed -n 's/^vibe_version: *//p' .vibe/state.yaml | tr -d '\r')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Setup action, source go-install
+        id: setup
+        uses: ./
+        with:
+          version: ${{ steps.state.outputs.version }}
+          source: go-install
+      - name: Both tools print the version
+        shell: bash
+        env:
+          VERSION: ${{ steps.state.outputs.version }}
+          BIN: ${{ steps.setup.outputs.bin-dir }}
+        run: |
+          bin="$BIN"
+          exe=""
+          if [ "$RUNNER_OS" = Windows ]; then
+            bin=$(cygpath -u "$BIN")
+            exe=.exe
+          fi
+          "$bin/vibe$exe" --version | grep -F "$VERSION"
+          "$bin/vibe-guard$exe" version | grep -F "$VERSION"
+
+  probe:
+    name: Setup action / release exists
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.probe.outputs.exists }}
+    steps:
+      - name: Is RELEASE_VERSION published?
+        id: probe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=Setup action::$RELEASE_VERSION is not published; the release cases are skipped (UNVERIFIED)."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: Setup action / release (${{ matrix.os }})
+    needs: probe
+    if: needs.probe.outputs.exists == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup action, source release
+        uses: ./
+        with:
+          version: ${{ env.RELEASE_VERSION }}
+          source: release
+      - name: Setup action, source release, attestations verified
+        id: setup
+        uses: ./
+        with:
+          version: ${{ env.RELEASE_VERSION }}
+          source: release
+          verify-attestation: "true"
+      - name: Both tools print the version
+        shell: bash
+        env:
+          BIN: ${{ steps.setup.outputs.bin-dir }}
+        run: |
+          bin="$BIN"
+          exe=""
+          if [ "$RUNNER_OS" = Windows ]; then
+            bin=$(cygpath -u "$BIN")
+            exe=.exe
+          fi
+          "$bin/vibe$exe" --version | grep -F "$RELEASE_VERSION"
+          "$bin/vibe-guard$exe" version | grep -F "$RELEASE_VERSION"
+      - name: A tampered checksums.txt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --pattern checksums.txt --output "$RUNNER_TEMP/checksums.txt"
+          sed -E 's/^[0-9a-f]{8}/deadbeef/' "$RUNNER_TEMP/checksums.txt" > tampered-checksums.txt
+      - name: Setup action, tampered checksum
+        id: tampered
+        continue-on-error: true
+        uses: ./
+        with:
+          version: ${{ env.RELEASE_VERSION }}
+          source: release
+          checksums: tampered-checksums.txt
+      - name: The tampered checksum failed
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.tampered.outcome }}
+        run: |
+          if [ "$OUTCOME" != failure ]; then
+            echo "the setup action accepted a tampered checksum ($OUTCOME)"
+            exit 1
+          fi

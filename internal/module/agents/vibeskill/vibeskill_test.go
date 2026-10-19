@@ -120,7 +120,7 @@ const (
 	wantGitLabFiles = "- `.gitlab-ci.vibe.yml`\n"
 
 	wantGitHubCI = "- CI: `.github/workflows/ci.yml` ends in the `CI / gate` check, and\n" +
-		"  `.github/workflows/conformance.yml` runs `task audit` as\n" +
+		"  `.github/workflows/conformance.yml` runs `vibe audit` as\n" +
 		"  `Conformance / audit`. Both must be required checks.\n"
 
 	wantGeneratedTop = "- `generated:` lists code that a generator writes, relative to the\n" +
@@ -176,7 +176,7 @@ const (
 	wantMonoGitHub = wantMonoHead + "`github`.\n" +
 		"- CI: `.github/workflows/ci.yml` runs one job per component and ends\n" +
 		"  in the `CI / gate` check. `.github/workflows/conformance.yml` runs\n" +
-		"  `task audit` as `Conformance / audit`. Both must be required checks.\n" +
+		"  `vibe audit` as `Conformance / audit`. Both must be required checks.\n" +
 		"\n"
 
 	wantMonoGitLab = wantMonoHead + "`gitlab`.\n" +
