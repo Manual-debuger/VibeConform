@@ -175,10 +175,10 @@ func TestRuleC01(t *testing.T) {
 			findings: []string{"no CI configuration"}},
 		{name: "another CI provider", want: "undecided",
 			edits: []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile),
-				withFile(".gitlab-ci.yml", "test:\n  script: task verify\n")},
-			findings: []string{".gitlab-ci.yml: ", "GitHub Actions"}},
+				withFile("azure-pipelines.yml", "steps:\n  - script: task verify\n")},
+			findings: []string{"azure-pipelines.yml: ", "GitHub Actions"}},
 		{name: "another CI provider beside GitHub workflows", want: "pass",
-			edits: []fixtureEdit{withFile(".gitlab-ci.yml", "test:\n  script: task verify\n")}},
+			edits: []fixtureEdit{withFile("azure-pipelines.yml", "steps:\n  - script: task verify\n")}},
 	})
 }
 

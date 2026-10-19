@@ -59,6 +59,9 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 	}
 	rep.GuardExceptions, rep.LocalAdjustments = guardListings(env)
 	rep.GuardExceptionUses = env.guardUses
+	if ci, _, ok := env.CI(); ok {
+		rep.CIProvider = ci.Provider
+	}
 	rep.Notes = env.notes
 	rep.decide()
 	return rep

@@ -21,8 +21,9 @@ type jsonReport struct {
 		Declared string `json:"declared"`
 		Audited  string `json:"audited"`
 	} `json:"contract"`
-	Summary map[string]map[string]int `json:"summary"`
-	Rules   []jsonRule                `json:"rules"`
+	Summary    map[string]map[string]int `json:"summary"`
+	Rules      []jsonRule                `json:"rules"`
+	CIProvider string                    `json:"ci_provider"`
 }
 
 type jsonRule struct {

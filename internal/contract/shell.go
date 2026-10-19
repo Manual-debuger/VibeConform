@@ -302,6 +302,18 @@ func ParseRunStep(src string) Script {
 	return Script{Source: src, Commands: cmds}
 }
 
+// ParseShellScript parses one GitLab script line (a before_script, script
+// or after_script item) as POSIX shell, kept like a run: step that does
+// not parse when it does not. GitLab's $VAR and ${VAR} are already shell
+// expansions, so nothing is replaced first.
+func ParseShellScript(src string) Script {
+	cmds, err := ParseCommands(src)
+	if err != nil {
+		return Script{Source: src, Err: err, Fields: strings.Fields(src)}
+	}
+	return Script{Source: src, Commands: cmds}
+}
+
 // Words returns every word of the step's simple commands, or the step's
 // whitespace-separated fields when it does not parse.
 func (s Script) Words() []string {

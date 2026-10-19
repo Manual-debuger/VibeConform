@@ -179,6 +179,9 @@ type Report struct {
 	LocalAdjustments   []LocalAdjustment
 	// Notes are facts the audit assumed, such as the default branch.
 	Notes []string
+	// CIProvider is the CI provider the C rules, D-03 and R-01 read, or ""
+	// when they read none (spec 0055, Q1).
+	CIProvider CIProvider
 }
 
 // Count returns how many rules of a level have a result.

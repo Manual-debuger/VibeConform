@@ -55,6 +55,9 @@ type jsonContractReport struct {
 	// GuardExceptionUses is new in spec 0053; a new key keeps schema 1.
 	GuardExceptionUses []jsonGuardExceptionUse `json:"guard_exception_uses"`
 	LocalAdjustments   []jsonLocalAdjustment   `json:"local_adjustments"`
+	// CIProvider is new in spec 0055 (github_actions, gitlab_ci, or null
+	// when no CI was read); a new key keeps schema 1.
+	CIProvider *contract.CIProvider `json:"ci_provider"`
 }
 
 type jsonContractVersions struct {
@@ -127,6 +130,10 @@ func writeContractJSON(w io.Writer, rep *contract.Report, vibeVersion string) er
 		GuardExceptions:    []jsonGuardException{},
 		GuardExceptionUses: []jsonGuardExceptionUse{},
 		LocalAdjustments:   []jsonLocalAdjustment{},
+	}
+	if rep.CIProvider != "" {
+		p := rep.CIProvider
+		out.CIProvider = &p
 	}
 	for _, level := range []contract.Level{contract.Must, contract.Should} {
 		s := jsonSummary{}
