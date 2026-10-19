@@ -433,15 +433,54 @@ func TestRuleA04(t *testing.T) {
 		{name: "vibe-guard and a missing policy", want: "fail",
 			edits:    []fixtureEdit{vibeGuardSettings(), withoutFile(policyFile)},
 			findings: []string{"create " + policyFile}},
+		// vibe-guard is found by the base name of the hook command's
+		// first word, with .exe dropped.
+		{name: "vibe-guard by absolute path", want: "fail",
+			edits:    []fixtureEdit{guardHookSettings(`/usr/local/bin/vibe-guard hook`), unloadablePolicy()},
+			findings: []string{policyFile + ": vibe-guard cannot load it"}},
+		{name: "vibe-guard.exe", want: "fail",
+			edits:    []fixtureEdit{guardHookSettings(`vibe-guard.exe hook`), unloadablePolicy()},
+			findings: []string{policyFile + ": vibe-guard cannot load it"}},
+		{name: "vibe-guard by quoted Windows path", want: "fail",
+			edits:    []fixtureEdit{guardHookSettings(`'C:\\Program Files\\vibe\\vibe-guard.exe' hook`), unloadablePolicy()},
+			findings: []string{policyFile + ": vibe-guard cannot load it"}},
+		// A known limit: a wrapper that runs vibe-guard is not followed.
+		{name: "a wrapper is not followed", want: "pass",
+			edits: []fixtureEdit{guardHookSettings(`task -x hook:guard`), unloadablePolicy()}},
+		{name: "vibe-guard without hook is not the guard", want: "pass",
+			edits: []fixtureEdit{guardHookSettings(`vibe-guard explain x`), unloadablePolicy()}},
 	})
+}
+
+// A policy with defects of its own is not also reported as one vibe-guard
+// cannot load: version 1 is one finding, not two.
+func TestRuleA04OneFindingPerDefect(t *testing.T) {
+	t.Parallel()
+	rep, _ := auditJSON(t, contractFixture(t, vibeGuardSettings(), policy("1", "")), "--static")
+	r := rep.rule(t, "A-04")
+	if r.Result != "fail" || len(r.Findings) != 1 {
+		t.Errorf("A-04 = %s with %d findings, want fail with 1\nfindings:\n%s", r.Result, len(r.Findings), r.findingText())
+	}
 }
 
 // vibeGuardSettings is the baseline settings with the reference
 // PreToolUse command, which runs vibe-guard.
 func vibeGuardSettings() fixtureEdit {
+	return guardHookSettings(`command -v vibe-guard >/dev/null 2>&1 || exit 2; vibe-guard hook`)
+}
+
+// guardHookSettings is the baseline settings with command as the
+// PreToolUse hook (a JSON string body).
+func guardHookSettings(command string) fixtureEdit {
 	return settings(baseSessionHook + `, "PreToolUse": [` +
-		hookEntry("Bash|PowerShell|Write|Edit|MultiEdit", `command -v vibe-guard >/dev/null 2>&1 || exit 2; vibe-guard hook`) +
+		hookEntry("Bash|PowerShell|Write|Edit|MultiEdit", command) +
 		`], ` + baseStopHook)
+}
+
+// unloadablePolicy is a policy.json the contract accepts and vibe-guard
+// does not load.
+func unloadablePolicy() fixtureEdit {
+	return withFile(policyFile, `{"version": 2, "tools": [], "rules": [], "exceptions": []}`)
 }
 
 // listingsReport is the part of the --json report that lists the guard's

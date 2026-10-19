@@ -165,7 +165,19 @@ the guard reads. The contract only reads `version` and `exceptions`,
 with one addition since 1.0.1: when a PreToolUse hook runs
 `vibe-guard hook`, the guard is `vibe-guard`, and A-04 also checks that
 `vibe-guard` can load the file (spec 0053, "policy.json version 2").
-Another guard's keys stay the guard's.
+The audit finds `vibe-guard` by the base name of the hook command's
+first word, with `.exe` dropped, so `/usr/local/bin/vibe-guard hook`,
+`vibe-guard.exe hook` and a quoted path count. It does not follow a
+wrapper: a hook that runs `task -x hook:guard`, which then runs
+`vibe-guard`, is judged as another guard. Another guard's keys stay the
+guard's. A-04 runs this load check only when the file has no other A-04
+defect, so one defect gives one finding.
+
+A-04 and A-02 can use different copies of `vibe-guard`'s loader. A-04
+parses the file with the loader built into the `vibe` binary that runs
+the audit. A-02 runs the `vibe-guard` installed on `PATH`. When the two
+come from different releases, they can disagree about the same file.
+Install `vibe-guard` from the same release as `vibe`.
 
 A deny case counts as satisfied in either of two ways:
 
@@ -267,7 +279,10 @@ may override any guardrail, and the audit does not read them.
     corpus.
   - MINOR: a new SHOULD rule, a relaxed check, or a newly recognized
     tool or CI provider.
-  - PATCH: a wording fix that changes no repository's verdict.
+  - PATCH: a wording fix that changes no repository's verdict, or a fix
+    that makes a check match its stated purpose, where no conformant
+    verdict becomes non-conformant. Such a fix may turn an undecided
+    full-audit verdict, or a `--static` result, into a failure.
 - Rule IDs and guard rule IDs are never reused.
 - A vibe release implements the latest MINOR of each MAJOR it supports,
   and audits every repository that declares that MAJOR with it (Q15).
@@ -285,10 +300,19 @@ may override any guardrail, and the audit does not read them.
   that A-02 and A-08 then see refused name `policy.json` too, not
   `.claude/settings.json`.
 
-  This is a PATCH, not a tightening. A-04's stated purpose is a policy
-  that the guard applies. A `vibe-guard` that cannot load its policy
-  refuses every call, allow cases included, so A-02 already failed for
-  every such repository. No repository's full-audit verdict changes; the
+  This is a PATCH under the second half of the PATCH definition: it
+  makes A-04 match its stated purpose, a policy that the guard applies.
+  A `vibe-guard` that cannot load its policy refuses every call, allow
+  cases included, so wherever A-02 runs it already failed for every
+  such repository. No conformant verdict becomes non-conformant. Two
+  verdicts can change, both for a repository whose PreToolUse hook runs
+  `vibe-guard hook` and whose `policy.json` `vibe-guard` cannot load:
+
+  - a full audit in which A-02 cannot run (cannot decide) was undecided
+    and is now not conformant, since A-04 fails;
+  - a `--static` audit's A-04 passed and now fails.
+
+  Where A-02 runs, the full-audit verdict stays not conformant; the
   check now says why at the file that causes it. A missing `policy.json`
   still fails A-04, as in 1.0.0.
 - **1.0.0** (2026-10-16). The first version.

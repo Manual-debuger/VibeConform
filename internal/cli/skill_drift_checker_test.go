@@ -750,18 +750,18 @@ func (c *skillChecker) checkContractVersion() {
 	}
 }
 
-// ignoreConfigs are the reference lint and format configurations that
+// skillExcludingConfigs are the reference lint and format configurations that
 // must leave the skill's own directories alone, so that the files vibe
 // init --skill writes do not fail the repository's checks (pilot P2, P3).
-var ignoreConfigs = []string{
+var skillExcludingConfigs = []string{
 	"reference/lint/typescript/.prettierignore",
 	"reference/lint/typescript/eslint.config.js",
 	"reference/lint/python/ruff.toml",
 }
 
-// checkSkillIgnored: each of ignoreConfigs names both skill directories.
+// checkSkillIgnored: each of skillExcludingConfigs names both skill directories.
 func (c *skillChecker) checkSkillIgnored() {
-	for _, name := range ignoreConfigs {
+	for _, name := range skillExcludingConfigs {
 		f, ok := c.file(name)
 		if !ok {
 			c.problem(name, "is missing, so the repository's checks read the skill's own files")

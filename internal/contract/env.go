@@ -24,7 +24,9 @@ type Env struct {
 	defaultBranch  string
 	hookMgrs       *[]*hookManager
 	claudeSettings *parsedClaudeSettings
-	notes          []string
+	// guardLoad is vibeGuardLoadError's answer once worked out.
+	guardLoad *string
+	notes     []string
 	// probe is the probe copy while the execution and probe parts run,
 	// and nil otherwise.
 	probe *probeSession
