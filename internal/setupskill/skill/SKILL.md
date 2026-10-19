@@ -88,7 +88,16 @@ Work through `reference/rules.md` category by category: V, H, C, A, D,
 R. For each rule, keep what already satisfies it; otherwise start from
 the reference file it names and adapt it. Notes:
 
-- Pin every action in `.github/workflows/` to a full commit SHA (C-02).
+- **CI provider.** On GitHub Actions, start from `ci.yml` and `audit.yml`
+  in `reference/ci/<stack>/`, and `dependabot.yml`. On GitLab CI (a
+  `.gitlab-ci.yml` and no `.github/workflows/`), start from the stack's
+  `.gitlab-ci.yml` there instead: its verify jobs, its `security` job and
+  its `conformance:audit` job. Use Renovate rather than Dependabot, and
+  `.gitlab/merge_request_templates/Default.md` as the template. Each rule
+  in `reference/rules.md` has a "GitLab:" paragraph. Keep the team's
+  pipeline and change only what a rule needs.
+- Pin every action in `.github/workflows/` to a full commit SHA, and
+  every GitLab `image:` and `services:` entry by digest (C-02).
 - The audit workflow (`reference/ci/<stack>/audit.yml`) uses the setup
   action `Manual-debuger/VibeConform`, pinned to the commit of the
   release tag. Find it with
@@ -192,4 +201,8 @@ Give the person:
 - the files you wrote, changed and removed;
 - the SHOULD rules that still fail, and why;
 - what they must do themselves (install a tool, write
-  `.claude/hooks/policy.json`, `vibe unlock`, push).
+  `.claude/hooks/policy.json`, `vibe unlock`, push);
+- on GitLab, the project settings the audit cannot read and what to set
+  them to (`reference/rules.md`, "GitLab project settings the audit
+  cannot read"): pipelines must succeed, a protected default branch, and
+  job-token push access off.
