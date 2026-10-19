@@ -1,0 +1,71 @@
+version: "3"
+
+# A Go component of a monorepo; copy it to <component path>/Taskfile.yml.
+# The root Taskfile.yml includes this file under the component's id, so
+# "task <id>:test" at the root runs "task test" here; "task verify" works
+# from this directory too.
+
+tasks:
+  fmt:
+    desc: Apply gofmt/goimports formatting.
+    cmds:
+      - gofmt -l -w .
+      - goimports -l -w .
+
+  fmt:check:
+    desc: Fail if any file is not gofmt/goimports formatted (CI-safe, no writes).
+    cmds:
+      - test -z "$(gofmt -l .)"
+      - test -z "$(goimports -l .)"
+
+  lint:
+    desc: Run go vet and golangci-lint.
+    cmds:
+      - go vet ./...
+      - golangci-lint run
+
+  typecheck:
+    desc: Type-check by building all packages (Go has no separate typechecker).
+    cmds:
+      - go build ./...
+
+  test:
+    desc: Run the test suite.
+    cmds:
+      - go test ./...
+
+  test:race:
+    desc: Run the test suite with the race detector.
+    cmds:
+      - go test -race ./...
+
+  mod:verify:
+    desc: Ensure go.mod/go.sum are tidy and modules are verified.
+    cmds:
+      - go mod tidy
+      - go mod verify
+      - git diff --exit-code -- go.mod go.sum
+
+  security:
+    desc: Run vulnerability scanning.
+    cmds:
+      - govulncheck ./...
+
+  verify:
+    desc: Verification gate for this component. Race detection needs a C
+      compiler (CGO); run "task test:race" separately if you have one.
+    cmds:
+      - task: fmt:check
+      - task: typecheck
+      - task: lint
+      - task: test
+      - task: mod:verify
+      - task: security
+
+  verify:fast:
+    desc: Fast incremental subset of verify (format, build, lint, test).
+    cmds:
+      - task: fmt:check
+      - task: typecheck
+      - task: lint
+      - task: test

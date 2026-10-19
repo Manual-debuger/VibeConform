@@ -1,0 +1,18 @@
+# Lefthook: the format check at commit time, verification at push time.
+# CI is the full gate; these hooks are a fast local first line of defense.
+# Install once per clone with "lefthook install".
+#
+# The root's fmt:check covers every component (services/api, apps/web,
+# services/worker), so a commit checks the formatting of all of them.
+
+pre-commit:
+  commands:
+    fmt-check:
+      glob: "*.{go,py,js,jsx,ts,tsx,json,css,md}"
+      run: task fmt:check
+      fail_text: "Run 'task fmt' to format every component."
+
+pre-push:
+  commands:
+    verify-fast:
+      run: task verify:fast
