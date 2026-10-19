@@ -9,57 +9,144 @@ in a new repository, start to finish. This manual is the reference.
 
 ## Installing
 
-### `go install` or `go run`, by module path (no clone needed)
+Every release has two binaries, `vibe` and `vibe-guard`, for Linux, macOS
+and Windows on amd64 and arm64 (spec 0054). Install them from a release
+without Go, or build them from source.
 
-The repository is public, so Go can fetch it unauthenticated. `go install`
-puts a `vibe` binary on `$GOPATH/bin` (usually `~/go/bin`):
+### From a release
+
+A `v*` tag push runs `.github/workflows/release.yml`. GoReleaser publishes
+the release, with no draft step. A tag with a `-alpha.N`, `-beta.N` or
+`-rc.N` suffix is marked "Pre-release", so a preview never becomes "Latest
+release" (`docs/decisions/0007-release-tag-naming.md`). The release has
+one archive per tool and platform, named after the binary:
+
+- `vibe_<version>_<os>_<arch>.tar.gz`, and `.zip` on Windows;
+- `vibe-guard_<version>_<os>_<arch>.tar.gz`, and `.zip` on Windows;
+- `checksums.txt`, the SHA-256 of all 12 archives.
+
+`<version>` is the tag without its leading `v`, `<os>` is `linux`,
+`darwin` or `windows`, and `<arch>` is `amd64` or `arm64`. `vibe-guard`
+has an archive of its own, so you can install the guard without `vibe`.
+
+To install, download the archive and `checksums.txt` from the release
+page, check the checksum before you unpack anything, and put the binary
+on `PATH`:
 
 ```bash
-go install github.com/Manual-debuger/VibeConform/cmd/vibe@latest
+v=v0.12.0-alpha.1
+gh release download "$v" --repo Manual-debuger/VibeConform \
+  --pattern "vibe-guard_${v#v}_linux_amd64.tar.gz" --pattern checksums.txt
+sha256sum --check --ignore-missing checksums.txt
+tar -xzf "vibe-guard_${v#v}_linux_amd64.tar.gz" vibe-guard
 ```
 
-`go run` does the same fetch without leaving a binary behind:
+On macOS, use `shasum -a 256 --check --ignore-missing checksums.txt`.
+
+### Verifying a release
+
+Every archive, every binary inside it and `checksums.txt` has a GitHub
+artifact attestation. It records the commit and the workflow run that
+built the file. `gh attestation verify` checks it:
 
 ```bash
-go run github.com/Manual-debuger/VibeConform/cmd/vibe@latest --help
+gh attestation verify "vibe-guard_${v#v}_linux_amd64.tar.gz" \
+  --repo Manual-debuger/VibeConform
+gh attestation verify vibe-guard --repo Manual-debuger/VibeConform
 ```
 
-Pin an exact tag instead of tracking `@latest` — see
-`docs/decisions/0007-release-tag-naming.md` for what a tag looks like and
-why:
-
-```bash
-go run github.com/Manual-debuger/VibeConform/cmd/vibe@v0.1.0-alpha.1 --help
-```
-
-This previously required git credentials even with a version suffix,
-because the repository was private; it works unauthenticated now.
-
-### Prebuilt binaries
-
-`.github/workflows/release.yml` runs GoReleaser on every `v*` tag push and
-attaches per-OS/arch archives (`.tar.gz` for Linux/macOS, `.zip` for
-Windows) plus a `checksums.txt` to a GitHub Release. `.goreleaser.yaml` sets
-`release.draft: true`, so each run creates that release as a **draft**
-first — nothing is downloadable from it until a maintainer opens it on the
-Releases page and publishes it by hand.
+After each release, the release workflow installs both tools through the
+setup action on every OS and architecture that GitHub hosts. It checks
+that each binary prints the tag, verifies the attestation of every archive
+and binary, and runs `go install` for both tools at the tag. A pull
+request builds every target as a GoReleaser snapshot
+(`.github/workflows/release-snapshot.yml`), so a broken release
+configuration fails before a tag exists.
 
 ### From source
 
-Still works, and is the only path if you want to build from a commit that
-hasn't been tagged:
+For teams that do not allow prebuilt binaries, and for a commit that has
+no tag. `go install` builds a tag (or any commit) from the module proxy:
 
 ```bash
-git clone <this repo>
+go install github.com/Manual-debuger/VibeConform/cmd/vibe@v0.12.0-alpha.1
+go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@v0.12.0-alpha.1
+```
+
+The binaries go to `$GOPATH/bin` (usually `~/go/bin`). `@latest` also
+works. Go picks the newest release, and when there is none, the newest
+pre-release. Pin an exact tag where the version matters.
+
+`go run` fetches and runs without leaving a binary behind:
+
+```bash
+go run github.com/Manual-debuger/VibeConform/cmd/vibe@v0.12.0-alpha.1 --help
+```
+
+From a checkout:
+
+```bash
+git clone https://github.com/Manual-debuger/VibeConform
 cd VibeConform
 go build -o vibe ./cmd/vibe
+go build -o vibe-guard ./cmd/vibe-guard
 ```
 
-Or without building:
+The setup action has the same choice for CI: its `go-install` source
+builds both tools from the tagged source.
 
-```bash
-go run ./cmd/vibe --help
+### The setup action
+
+The setup action is a composite action at this repository's root
+(`action.yml`). It installs an exact version of `vibe` and `vibe-guard`
+in a GitHub Actions job, and it is meant for the conformance job only.
+`verify` must not need `vibe` (contract rule R-01). The action never runs
+`vibe audit`. The job's own `run:` step does. Pin the action by commit
+SHA (C-02):
+
+```yaml
+- name: Install vibe
+  uses: Manual-debuger/VibeConform@<commit SHA> # v0.12.0-alpha.1
+  with:
+    version: v0.12.0-alpha.1
+- name: vibe audit
+  run: vibe audit --repo-root .
 ```
+
+Inputs:
+
+- `version` (required): an exact version, such as `v0.12.0-alpha.1`, or a
+  Go pseudo-version. The action refuses `latest`, an empty value, build
+  metadata and anything that is not semver. Then the job's verdict cannot
+  change without a change to the repository (spec 0022).
+- `tools`: `vibe vibe-guard` by default. Name one to install only that
+  one.
+- `source`:
+  - `release` downloads the archives for the runner's OS and
+    architecture with `checksums.txt`. It checks each archive's SHA-256
+    before it unpacks anything. A mismatch or a missing entry fails the
+    step.
+  - `go-install` sets up Go inside the action (pinned) and runs
+    `go install …/cmd/<tool>@<version>`.
+  - `workspace` builds both tools from the checked-out VibeConform
+    repository, with the Go version its `go.mod` names. This is the
+    self-hosting case of ADR 0008.
+  - `auto` (the default) chooses `workspace` in a checkout of
+    VibeConform itself, `go-install` for a pseudo-version (no release
+    exists for one), and `release` otherwise.
+- `verify-attestation`: `false` by default. With `true` and source
+  `release`, the action also runs `gh attestation verify` on each archive
+  with the job's token.
+- `checksums`: a `checksums.txt` in the checkout to check the archives
+  against, instead of the release's own. With this input, the checksums
+  your repository reviewed decide, not a file on the same release.
+
+The binaries go into a directory under `RUNNER_TEMP`, which the action
+adds to `PATH`. The outputs are `source` (after `auto` is resolved) and
+`bin-dir`.
+
+`.github/workflows/setup-action.yml` tests the action on Linux, macOS and
+Windows in every pull request.
 
 ## Commands
 
@@ -910,10 +997,16 @@ reviewable change to `vibe_version`. It uses `go install` rather than
 `go run` because `go run` reports every non-zero exit as 1, which would
 blur "not conformant" (2) and "could not answer" (1).
 
-The generated `.github/workflows/conformance.yml` runs `task audit` in its
-own job, `Conformance / audit`, separate from `ci.yml`'s `CI / gate`. The
-job has no step that installs `vibe`; step 2 obtains it. Make both checks
-required in branch protection. Nothing else in `Taskfile.yml` depends on
+The generated `.github/workflows/conformance.yml` runs the audit in its
+own job, `Conformance / audit`, separate from `ci.yml`'s `CI / gate`.
+Since spec 0054 the job needs neither Go nor Task. It reads
+`vibe_version` from `.vibe/state.yaml`, installs exactly that version with
+the setup action (see "The setup action" above, pinned by commit SHA
+through the pin table), and runs `vibe audit --repo-root .` itself. The
+verdict is pinned as with step 2: a new VibeConform release cannot change
+it. In VibeConform itself, the action's `source: auto` builds `vibe` from
+the checkout instead (ADR 0008). Make both checks required in branch
+protection. Nothing else in `Taskfile.yml` depends on
 `vibe`: since spec 0017, `task verify` and `task verify-ci` use native
 language tooling only, so a contributor with no `vibe` installed can still
 run the full verification gate.
@@ -1202,6 +1295,21 @@ adopting repository): it runs `task verify` inside each example with no
 `vibe` on `PATH`, then builds `vibe` from source and runs `task audit` as a
 separate step, so a template change that breaks linting fails CI, not just
 a byte-comparison test.
+
+**No setup-go.** The TypeScript and Python examples' workflow files have
+no setup-go step (spec 0054). `ci.yml` installs Task with
+`go-task/setup-task`, pinned by SHA, with Task's checksum checked. The
+monorepo's TypeScript and Python jobs do the same; its Go component's job
+and its `workflows` job keep setup-go, because they need Go. The
+conformance job installs `vibe` with the setup action, and what that needs
+depends on the recorded `vibe_version`:
+
+- a release (an example synced by a released `vibe`): the action
+  downloads the binaries, and no Go is installed at all;
+- a pseudo-version (an example synced by a `vibe` built from source, as
+  the examples in this repository are): no release exists, so the
+  action's `go-install` source sets up Go inside the action and builds
+  `vibe` at that commit. The workflow file still has no setup-go step.
 
 ## What `prod-mono/v1` manages
 

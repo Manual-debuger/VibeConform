@@ -413,6 +413,19 @@ internal/
 
 and `cmd/vibe-guard`, the reference agent guard's `main` (spec 0053).
 
+**The release and the setup action** (spec 0054). One release holds both
+binaries: `.goreleaser.yaml` builds `vibe` and `vibe-guard` for linux,
+darwin and windows on amd64 and arm64, each in its own archive, with one
+`checksums.txt`. A tag push publishes it (`.github/workflows/release.yml`)
+and attests every archive and binary. The jobs after it install the
+release on every hosted platform and verify the attestations. The
+root `action.yml` is the setup action: it installs an exact version of
+either tool from a release (checksums checked) or builds it from source,
+and the generated conformance workflow is its only consumer outside this
+repository. Neither is Go code, so neither appears in the tree above.
+They are repository files that no module generates, like
+`contract-audit.yml`.
+
 Since M2, `examples/typescript` and `examples/python` hold real repositories
 declaring the language standards, synced and committed; since spec 0025,
 `examples/monorepo` does the same for `prod-mono/v1`. They are the drift
@@ -475,7 +488,10 @@ external `prod-go/v1` adopter with a `task audit` — and so a CI
 self-hosting build step is conditional as a result; see
 `docs/decisions/0008-self-hosting-probe-in-shipped-templates.md` for why a
 published release is the wrong binary for this repository to audit itself
-with.
+with. Since spec 0054 the GitHub conformance job no longer goes through
+`task audit`: it installs the recorded `vibe_version` with the setup
+action, whose `source: auto` holds the self-hosting probe, and runs
+`vibe audit` directly, with no Go or Task in the job.
 
 The managed target set is fixed and extended, never overridden. A
 repository's own tasks go in a project-owned `Taskfile.local.yml`, which
