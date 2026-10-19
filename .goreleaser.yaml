@@ -6,6 +6,11 @@ before:
   hooks:
     - go mod tidy
 
+# Two builds, one release (spec 0054): vibe and vibe-guard, each in an
+# archive of its own, so the guard can be installed without vibe and kept
+# after VibeConform is removed (ADR 0025, decision 8). The version is the
+# tag itself ({{ .Tag }}, with its leading v), which is what the binaries
+# print and what .vibe/state.yaml records; {{ .Version }} drops the v.
 builds:
   - id: vibe
     main: ./cmd/vibe
@@ -20,8 +25,24 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.version={{ .Version }}
+      - -s -w -X main.version={{ .Tag }}
+  - id: vibe-guard
+    main: ./cmd/vibe-guard
+    binary: vibe-guard
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Tag }}
 
+# The setup action (action.yml) builds these names from the tag, so a
+# change here is a change there.
 archives:
   - id: vibe
     ids: [vibe]
@@ -30,7 +51,15 @@ archives:
       - goos: windows
         formats: [zip]
     name_template: >-
-      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+      vibe_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+  - id: vibe-guard
+    ids: [vibe-guard]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      vibe-guard_{{ .Version }}_{{ .Os }}_{{ .Arch }}
 
 checksum:
   name_template: "checksums.txt"
@@ -44,9 +73,7 @@ changelog:
       - "^chore:"
 
 release:
-  # Draft so a human confirms before publishing; matches "no real public
-  # release from bootstrap" guidance in docs/plans/0001-bootstrap.md.
-  draft: true
-  # A -alpha.N, -beta.N or -rc.N tag becomes a GitHub "Pre-release", kept
-  # out of "Latest release" (docs/decisions/0007-release-tag-naming.md).
+  # Published by the tag push (spec 0054, ADR 0007 amendment): no draft
+  # step. A -alpha.N, -beta.N or -rc.N tag becomes a GitHub "Pre-release",
+  # kept out of "Latest release" (docs/decisions/0007-release-tag-naming.md).
   prerelease: auto

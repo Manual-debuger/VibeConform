@@ -1,5 +1,12 @@
 name: Release
 
+# A tag push publishes a release of vibe and vibe-guard (spec 0054): one
+# archive per tool for linux, darwin and windows on amd64 and arm64,
+# checksums.txt, and a GitHub artifact attestation for every archive,
+# every binary and checksums.txt. A -alpha.N, -beta.N or -rc.N tag is
+# marked "Pre-release" (ADR 0007). The jobs after it check the published
+# release the way an adopter would install it.
+
 on:
   push:
     tags:
@@ -10,13 +17,23 @@ on:
 permissions:
   contents: read
 
+env:
+  GO_VERSION: "1.27.0"
+  # Exact, not a range, so a GoReleaser release cannot change what a tag
+  # builds (spec 0054). .github/workflows/release-snapshot.yml uses the
+  # same version.
+  GORELEASER_VERSION: "v2.18.3"
+
 jobs:
   goreleaser:
     name: GoReleaser
     runs-on: ubuntu-latest
-    # contents: write creates the GitHub release and uploads its assets.
+    # contents: write creates the GitHub release and uploads its assets;
+    # id-token and attestations: write sign and store the attestations.
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,12 +42,134 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.0"
+          go-version: ${{ env.GO_VERSION }}
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
-          version: "~> v2"
+          version: ${{ env.GORELEASER_VERSION }}
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Every archive checksums.txt lists.
+      - name: Attest the archives
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
+      # Every binary GoReleaser built (the bytes inside the archives), and
+      # checksums.txt itself.
+      - name: Attest the binaries and checksums.txt
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*/vibe
+            dist/*/vibe.exe
+            dist/*/vibe-guard
+            dist/*/vibe-guard.exe
+            dist/checksums.txt
+
+  # The setup action from the tagged commit, on every OS and architecture
+  # GitHub hosts for this public repository. Each runner installs both
+  # tools from the release with checksums and attestations checked, and
+  # checks that they call themselves by the tag.
+  install:
+    name: Verify install (${{ matrix.runner }})
+    needs: goreleaser
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-15-intel
+          - macos-latest
+          - windows-latest
+          - windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup action
+        uses: ./
+        with:
+          version: ${{ github.ref_name }}
+          source: release
+          verify-attestation: "true"
+      - name: Both tools print the tag
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          vibe --version | tee "$RUNNER_TEMP/vibe-version.txt"
+          vibe-guard version | tee "$RUNNER_TEMP/vibe-guard-version.txt"
+          grep -qF "$TAG" "$RUNNER_TEMP/vibe-version.txt"
+          grep -qF "$TAG" "$RUNNER_TEMP/vibe-guard-version.txt"
+
+  # Every archive of the release, and every binary inside it, against its
+  # attestation, including the architectures no runner above covers.
+  attestations:
+    name: Verify attestations
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Download the release
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/release"
+      - name: Checksums
+        working-directory: ${{ runner.temp }}/release
+        run: |
+          sha256sum --check --strict checksums.txt
+          count=$(wc -l < checksums.txt)
+          if [ "$count" -ne 12 ]; then
+            echo "checksums.txt lists $count archives, want 12"
+            exit 1
+          fi
+      - name: gh attestation verify
+        working-directory: ${{ runner.temp }}/release
+        run: |
+          gh attestation verify checksums.txt --repo "$GITHUB_REPOSITORY"
+          while read -r _ archive; do
+            gh attestation verify "$archive" --repo "$GITHUB_REPOSITORY"
+            dir="unpacked/${archive%.*}"
+            mkdir -p "$dir"
+            case "$archive" in
+              *.zip) unzip -q "$archive" -d "$dir" ;;
+              *.tar.gz) tar -xzf "$archive" -C "$dir" ;;
+            esac
+            for bin in "$dir"/vibe "$dir"/vibe.exe "$dir"/vibe-guard "$dir"/vibe-guard.exe; do
+              if [ -f "$bin" ]; then
+                gh attestation verify "$bin" --repo "$GITHUB_REPOSITORY"
+              fi
+            done
+          done < checksums.txt
+
+  # The PreToolUse hook's install hint names go install …@<version>. A tag
+  # that contains cmd/vibe-guard makes it work.
+  go-install:
+    name: Verify go install
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: go install both tools at the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          GOBIN="$RUNNER_TEMP/bin" go install "github.com/Manual-debuger/VibeConform/cmd/vibe-guard@$TAG"
+          GOBIN="$RUNNER_TEMP/bin" go install "github.com/Manual-debuger/VibeConform/cmd/vibe@$TAG"
+          "$RUNNER_TEMP/bin/vibe-guard" version | grep -qF "$TAG"
+          "$RUNNER_TEMP/bin/vibe" --version | grep -qF "$TAG"
