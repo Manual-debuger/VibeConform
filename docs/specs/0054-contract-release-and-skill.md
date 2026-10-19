@@ -745,6 +745,24 @@ real files and processes. No test reads a private helper.
     `.claude/skills/`, and Codex reads `.agents/skills/` (spec 0041).
 
   Each is checked, and this spec is corrected where it is wrong.
+- **Recorded in implementation:**
+  - The setup action has two inputs beyond the ones above: `checksums`
+    (a checksum file in the checkout that replaces the release's own,
+    as a path relative to the workspace, for tests and air-gapped
+    mirrors) and `token` (for `gh attestation verify`). It has two
+    outputs: `source` (after `auto` is resolved) and `bin-dir`.
+  - goreleaser stamps `{{ .Tag }}` into the binaries, with its leading
+    `v`, so `vibe --version` and `vibe-guard version` print the tag.
+  - ADR 0008 has an update note for this spec: the self-hosting probe
+    moved out of the conformance workflow into the setup action's
+    `source: auto`, which also checks the module path.
+  - `setupskill.Render` rewrites `/releases/tag/latest` to `/releases`
+    in every skill file, because `latest` has no release page of its
+    own. The reference hook's install hint does the same.
+  - Known limits of the drift test: it checks guard rule IDs only in
+    paragraphs that contain the words "guard rule ID". It does not check
+    `vibe.yaml` field names that the prose names against the schema.
+    Only the reference `vibe.yaml` files are loaded and checked.
 - **Running time.** The pilot needs the user's time: approving the
   branch in P1, feedback on readability, and `vibe unlock` for the
   session checks. The PR waits for the report.
