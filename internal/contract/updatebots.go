@@ -84,22 +84,13 @@ type updateBot struct {
 const renovateFix = "add renovate.json with Renovate covering each component's manager and gitlabci " +
 	"(and gitlabci-include when you list enabledManagers and .gitlab-ci.yml has project: includes), without automerge"
 
-// onGitLab reports whether the C rules read GitLab CI, with the model.
-func onGitLab(env *Env) (*CI, bool) {
-	ci, _, ok := env.CI()
-	if ok && ci.Provider == CIGitLab {
-		return ci, true
-	}
-	return nil, false
-}
-
 // checkD02: Dependabot or Renovate covers each component's ecosystem and
 // github-actions, and enables no automerge. With both bots configured,
 // either may cover a component, and automerge in either fails it. When
 // the C rules read GitLab CI, only Renovate counts, and it must cover
 // gitlabci instead of github-actions (spec 0055, D-02).
 func checkD02(env *Env) PartResult {
-	_, gitlab := onGitLab(env)
+	_, gitlab := env.gitLabCI()
 	var bots []*updateBot
 	dependabotBot := dependabot(env)
 	if dependabotBot != nil && !gitlab {
@@ -445,7 +436,7 @@ func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) {
 				}
 			}
 		}
-		if ci, gitlab := onGitLab(env); !gitlab {
+		if ci, gitlab := env.gitLabCI(); !gitlab {
 			if !slices.Contains(enabled, githubActions) {
 				b.CI = append(b.CI, Finding{
 					File:    b.File,

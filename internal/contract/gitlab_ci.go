@@ -689,7 +689,7 @@ var glScriptKeys = []struct {
 // readJob reads a resolved job: its scripts, and the child pipeline it
 // triggers when the parent waits for it.
 func (r *glReader) readJob(k *yaml.Node, name, child string, node *yaml.Node, ctx *glContext) *glJob {
-	cj := &CIJob{File: r.origin[k], ID: name, Line: k.Line, Child: child, Node: node}
+	cj := &CIJob{File: r.origin[k], ID: name, Line: k.Line, Child: child, Node: node, key: gitlabJobKey(child, name)}
 	for _, s := range glScriptKeys {
 		v := mapValue(node, s.key)
 		if v == nil {

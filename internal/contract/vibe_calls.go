@@ -96,13 +96,9 @@ func hookVibeCalls(env *Env) ([]vibeCall, PartResult) {
 // exactly vibe --version tests the installed binary and is not a call of
 // vibe (spec 0055, "R-01 and tool-installation tests").
 func ciVibeCalls(env *Env, ci *CI, exempt []*CIJob) []vibeCall {
-	// A GitLab run resolves its own copy of each job: match it by key.
-	// GitHub job IDs repeat across workflows, but the run holds the same
-	// jobs.
-	same := func(a, b *CIJob) bool { return a == b || (ci.Provider == CIGitLab && a.Key() == b.Key()) }
 	var out []vibeCall
 	for _, j := range ci.Jobs {
-		if slices.ContainsFunc(exempt, func(e *CIJob) bool { return same(e, j) }) {
+		if slices.ContainsFunc(exempt, func(e *CIJob) bool { return e.Key() == j.Key() }) {
 			continue
 		}
 		var all []Command
