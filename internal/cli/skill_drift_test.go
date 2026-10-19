@@ -88,6 +88,15 @@ func TestSkillDriftFixtures(t *testing.T) {
 		{"unknown vibe command in a workflow run step", func(t *testing.T) func(fstest.MapFS) {
 			return replaceIn(t, "reference/ci/go/audit.yml", "run: vibe audit", "run: vibe audit --verbose")
 		}, "--verbose"},
+		{"unknown vibe command in a GitLab script", func(t *testing.T) func(fstest.MapFS) {
+			return replaceIn(t, "reference/ci/python/.gitlab-ci.yml", "- vibe audit", "- vibe audit --verbose")
+		}, "--verbose"},
+		{"unknown vibe command in a GitLab before_script", func(t *testing.T) func(fstest.MapFS) {
+			return replaceIn(t, "reference/ci/monorepo/.gitlab-ci.yml", "  before_script:\n", "  before_script:\n    - vibe fix\n")
+		}, `"fix"`},
+		{"missing GitLab reference for one stack", func(*testing.T) func(fstest.MapFS) {
+			return func(files fstest.MapFS) { delete(files, "reference/ci/typescript/.gitlab-ci.yml") }
+		}, "reference/ci/typescript/.gitlab-ci.yml"},
 		{"unknown vibe-guard command", func(*testing.T) func(fstest.MapFS) {
 			return appendTo("SKILL.md", "Check with `vibe-guard status`.")
 		}, `"status"`},

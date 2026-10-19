@@ -4,9 +4,10 @@ One entry per rule: its level, what satisfies it, and the reference file
 to start from. Keep anything that already satisfies a rule. The audit is
 the judge: `vibe audit --explain <ID>` prints a rule's exact check.
 
-"Called" means a hook command, CI `run:` step or entrypoint that, parsed
-as shell, contains the declared entrypoint command as a whole simple
-command. For a list entrypoint, every command in the list must be called.
+"Called" means a hook command, CI `run:` step, GitLab `script` or
+`before_script` line, or entrypoint that, parsed as shell, contains the
+declared entrypoint command as a whole simple command. For a list
+entrypoint, every command in the list must be called.
 
 `vibe.yaml` declares the entrypoints `verify`, `verify-fast`, `fmt` and
 `fmt-check`, and optionally `setup`. Start from
@@ -81,14 +82,43 @@ The pre-commit hook calls `fmt-check` or `fmt`; the pre-push hook calls
 
 ## C: CI
 
-Contract 1.0.1 decides the C rules for GitHub Actions only. A repository
-with another provider's CI and no `.github/workflows/` gets "cannot
-decide": keep its CI, make it call the entrypoints, and report it.
+The C rules read GitHub Actions (`.github/workflows/`) or GitLab CI
+(`.gitlab-ci.yml`). GitHub wins: with tracked workflows, `.gitlab-ci.yml`
+is not read. The report says which provider it read. A repository with
+another provider's CI gets "cannot decide": keep its CI, make it call
+the entrypoints, and report it. Keep the provider the team has.
+
+On GitLab CI, the audit reads `.gitlab-ci.yml` as GitLab resolves it:
+anchors, `include: local` files, `default:`, `extends:` and `!reference`.
+Keys starting with `.` are templates, not jobs. Includes of other kinds
+are not followed. A child pipeline (`trigger: include:` of local files)
+is read only with `strategy: depend`, under the trigger job's rules. A
+job's commands are its `before_script` and `script` lines; `after_script`
+does not count as calling `verify`. Start from
+`reference/ci/<stack>/.gitlab-ci.yml`.
+
+The audit asks of each GitLab job: does it run in merge request
+pipelines, and on pushes to the default branch? It evaluates
+`workflow:rules`, then the job's `rules:` or `only`/`except`. It reads
+these conditions: `$CI_PIPELINE_SOURCE ==` or `!=` a quoted value,
+`$CI_MERGE_REQUEST_IID`, `$CI_COMMIT_BRANCH` and `$CI_COMMIT_TAG` as
+presence tests, `$CI_COMMIT_BRANCH` or `$CI_COMMIT_REF_NAME` compared with
+`$CI_DEFAULT_BRANCH` or a branch name, and `&&`, `||` and parentheses
+over these. A rule with another condition, or with `changes:` or
+`exists:`, does not admit the job; the finding quotes it and its line.
+A job with no rules counts for both, but GitLab does not run it in a
+merge request pipeline: with `workflow:rules` that admit merge request
+pipelines, give every job the same rules, as the reference does with
+`extends: .pipelines`.
 
 ### C-01 (MUST): CI runs `verify` on pull requests and pushes
 
 A workflow triggered by `pull_request` and by `push` to the default
 branch calls `verify`. Start from `reference/ci/<stack>/ci.yml`.
+
+GitLab: jobs that run in merge request pipelines call every `verify`
+command, and so do jobs that run on pushes to the default branch. A job
+gated by `changes:` does not count, as a GitHub `paths` filter does not.
 
 ### C-02 (MUST): toolchains and actions are pinned
 
@@ -98,10 +128,24 @@ step has a command word ending in `@latest`. Find a tag's SHA with
 `git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag>`. The
 reference workflows are pinned.
 
+GitLab: every `image:` and `services:` entry, in jobs and `default:`,
+ends in `@sha256:` and the 64-character digest (keep the tag before it:
+`golang:1.27.0-bookworm@sha256:<digest>`). Find the digest with
+`docker buildx imagetools inspect <image>:<tag>` (the `Digest:` line).
+Every include the audit does not follow is pinned: `project:` with a
+`ref:` of a full commit SHA, `component:` with `@<full commit SHA>`,
+`remote:` with `integrity:`. A `template:` include cannot be pinned and
+fails: copy the template into the repository and include it with
+`local:`, or include the matching component pinned to a SHA. No word of
+a `script`, `before_script` or `after_script` line ends in `@latest`.
+
 ### C-03 (MUST): workflow permissions default to read
 
 Every workflow has top-level `permissions` that grant no write scope:
 `contents: read`, `read-all` or `{}`. A job may widen them.
+
+GitLab: not applicable. A GitLab job token has no per-file permissions,
+and its push access is a project setting (below).
 
 ### C-04 (MUST): the audit runs in its own job
 
@@ -110,11 +154,39 @@ action) and does not call `verify`. Start from
 `reference/ci/<stack>/audit.yml`. Replace the zero SHA of
 `Manual-debuger/VibeConform` with the commit of the release tag.
 
+GitLab: a job that runs in merge request pipelines has a `script` line
+starting with `vibe audit` and calls no `verify` command. Start from the
+`conformance:audit` job of `reference/ci/<stack>/.gitlab-ci.yml`, which
+installs `vibe` and `vibe-guard` from the release and checks them against
+its `checksums.txt`. Set `VIBE_VERSION` to an exact release tag.
+
 ### C-05 (SHOULD): tests run on Linux and Windows
 
 The steps that call `verify` run on a Linux and a Windows runner after
 matrix expansion. Not applicable when `platforms` has no `windows`. The
 reference `ci.yml` has an `os` matrix.
+
+GitLab: a job's platform comes from its `tags:`, after `parallel: matrix`
+expansion. A tag containing `windows` is Windows, `linux` Linux, `macos`
+macOS (case-insensitive). A job with no tags and an `image:` is Linux.
+On GitLab.com the Windows runners take `tags: [saas-windows-medium-amd64]`;
+the reference has a `verify:windows` job. A self-managed instance names
+its own runner tags.
+
+### GitLab project settings the audit cannot read
+
+The audit reads files, not GitLab's project settings. Tell the person to
+set these in the project's settings, as GitHub branch protection is set:
+
+- **Pipelines must succeed** (Settings, Merge requests, Merge checks), so
+  that a red `verify` or `conformance:audit` job blocks the merge.
+- **Protected branches** (Settings, Repository): protect the default
+  branch, with "Allowed to push and merge" set to no one, or to
+  Maintainers, and force push off, so that changes land through merge
+  requests.
+- **Job token push access** (Settings, CI/CD, Job token permissions):
+  keep "Allow Git push requests to the repository" off, so that a job
+  cannot push to the repository. This is what C-03 checks on GitHub.
 
 ## A: agent guardrails (Claude Code)
 
@@ -189,17 +261,36 @@ package manager's lock command and commit the result.
 component's ecosystem and `github-actions`, with no automerge. Start from
 `reference/ci/<stack>/dependabot.yml`.
 
+GitLab: Dependabot does not run on GitLab, so it cannot satisfy D-02
+there. A Renovate configuration (`renovate.json`, `renovate.json5`,
+`.gitlab/renovate.json` and the other Renovate locations) covers each
+component's manager and `gitlabci`, which updates the image digests, with
+no automerge. When it lists `enabledManagers`, add `gitlabci`, and
+`gitlabci-include` when `.gitlab-ci.yml` includes files from outside the
+repository. Start from `reference/ci/renovate.json`; Renovate's
+`config:recommended` enables every manager. The person runs Renovate on
+the project (the Mend app, or a scheduled Renovate pipeline).
+
 ### D-03 (SHOULD): CI scans for known vulnerabilities
 
 A workflow runs `govulncheck`, `pip-audit`, `pnpm audit`, `npm audit`,
 `osv-scanner` or `trivy`. The reference `ci.yml` does.
+
+GitLab: a job's script runs one of those scanners, as the reference
+`security` job does, or the pipeline includes GitLab's dependency
+scanning: the `dependency-scanning` CI/CD component, pinned to a commit
+SHA, or the Dependency-Scanning template. The template fails C-02 (it
+cannot be pinned), so prefer a scanner command or the pinned component.
 
 ## R: removability and repository hygiene
 
 ### R-01 (MUST): everything but the audit works without vibe
 
 No entrypoint, hook command or CI step calls `vibe`, except the audit job
-of C-04. `vibe-guard` is not `vibe`, so the guard hooks are fine.
+of C-04. `vibe-guard` is not `vibe`, so the guard hooks are fine. A CI
+job that calls no entrypoint may run `vibe --version` to check an
+installed binary. On GitLab, every job's `before_script`, `script` and
+`after_script` is read, except the `conformance:audit` job's.
 
 ### R-02 (SHOULD): agents are told the verification entrypoints
 
@@ -211,3 +302,8 @@ references `AGENTS.md`. Start from `reference/agents/AGENTS.md` and
 
 A pull request template has a heading containing "verif". Start from
 `reference/ci/pull_request_template.md`.
+
+GitLab: every `.md` file directly under `.gitlab/merge_request_templates/`
+is a template too. Put the reference there as
+`.gitlab/merge_request_templates/Default.md`, which GitLab uses for new
+merge requests.

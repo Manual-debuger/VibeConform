@@ -26,10 +26,9 @@ From the old `vibe.yaml`, note:
   (`reference/optional/workflow.md`).
 - `policy`: `agent_guard` and `line_endings`. Line endings stay as a
   plain `.gitattributes`.
-- `ci`: `provider`. Contract 1.0.1 decides the C rules, and D-03, for
-  GitHub Actions only. Keep GitLab CI (step 4) and report that C-01 to
-  C-04 cannot be decided until contract 1.1.0 (#74): the verdict stays
-  "cannot decide".
+- `ci`: `provider`. Keep the provider: the C rules, D-03 and R-01 read
+  GitHub Actions or GitLab CI. A GitLab repository keeps `.gitlab-ci.yml`
+  (step 4), and `reference/rules.md` says how each rule reads it.
 
 ## 2. Merge each seam pair into one file
 
@@ -45,10 +44,19 @@ repository's own additions:
   Remove the `extends:` entry that names it from `lefthook.yml` in any
   case, also when the file does not exist.
 - `.gitlab-ci.local.yml` → `.gitlab-ci.yml`. When it ran as a child
-  pipeline (a job whose `trigger:` includes it), move its `stages`,
-  `default` and jobs into `.gitlab-ci.yml`, drop its `workflow:`, and
-  remove the trigger job. Check that the jobs still run in the order the
-  team wants.
+  pipeline (a job whose `trigger:` includes it), choose one with the
+  person:
+  - Merge it: move its `stages`, `default` and jobs into
+    `.gitlab-ci.yml`, drop its `workflow:`, and remove the trigger job.
+    Check that the jobs still run in the order the team wants.
+  - Keep it as a child pipeline, under a name of the team's choosing (no
+    `.local.`): give the trigger job `strategy: depend`, so that the
+    parent waits for the child and mirrors its status, and the rules of
+    the parent's other jobs. The audit reads the child's jobs only then,
+    under the trigger job's rules (C-01). Keep the child's `workflow:`
+    rules if they let it run as a child pipeline
+    (`$CI_PIPELINE_SOURCE == "parent_pipeline"`). The monorepo reference
+    `.gitlab-ci.yml` shows the trigger job.
 - `.claude/hooks/policy.local.json` → the `rules` and `exceptions` of
   `.claude/hooks/policy.json` version 2, which step 5 writes. Each
   exception needs a guard rule ID, a `match` and a `reason`.
@@ -88,35 +96,11 @@ repository's own additions:
 - On GitLab, `.gitlab-ci.vibe.yml`, which ran `task audit`. Merge
   `.gitlab-ci.defaults.yml` into `.gitlab-ci.yml`. Keep the team's jobs,
   and make them call the entrypoints: `task verify`, or each command of
-  a list `verify`. Add an audit job of its own, which needs every tool
-  the entrypoints call. A starting point (not checked by the contract
-  until 1.1.0):
-
-  ```yaml
-  conformance:audit:
-    stage: test
-    image: <an image with every toolchain the entrypoints call>
-    rules:
-      - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    variables:
-      VIBE_VERSION: <an exact release tag, never latest>
-    before_script:
-      - <install the tools the entrypoints call, at the versions CI pins>
-      - |
-        base="https://github.com/Manual-debuger/VibeConform/releases/download/$VIBE_VERSION"
-        dl=$(mktemp -d) && mkdir -p "$HOME/.local/bin"
-        curl -fsSL -o "$dl/checksums.txt" "$base/checksums.txt"
-        for tool in vibe vibe-guard; do
-          archive="${tool}_${VIBE_VERSION#v}_linux_amd64.tar.gz"
-          curl -fsSL -o "$dl/$archive" "$base/$archive"
-          (cd "$dl" && grep " $archive\$" checksums.txt | sha256sum -c -)
-          tar -xzf "$dl/$archive" -C "$HOME/.local/bin" "$tool"
-        done
-      - export PATH="$HOME/.local/bin:$PATH"
-    script:
-      - vibe audit
-  ```
+  a list `verify`. Add the `conformance:audit` job of the GitLab
+  reference CI (`reference/rules.md`, C-04), adapted to the tools the
+  entrypoints call, and give every job rules that run it in merge
+  request pipelines and on pushes to the default branch, as the
+  reference does.
 
 ## 5. Move the guardrails to `vibe-guard`
 

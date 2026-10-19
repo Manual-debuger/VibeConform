@@ -11,10 +11,10 @@ import (
 )
 
 // The reference implementations pass the static audit (spec 0054, "The
-// drift test (#109)"): for each stack, a fixture repository assembled
-// from the skill's reference files around a minimal component with one
-// test has no failing MUST rule under vibe audit --static --json. The
-// static audit runs no tool.
+// drift test (#109)"; spec 0055, Seam 2): for each stack and CI provider,
+// a fixture repository assembled from the skill's reference files around
+// a minimal component with one test has no failing MUST rule under vibe
+// audit --static --json. The static audit runs no tool.
 
 // minimalComponents are the source files of a minimal component with one
 // test, by language, relative to the component's directory.
@@ -38,10 +38,11 @@ var minimalComponents = map[string]map[string]string{
 	},
 }
 
-// referenceRepo is the fixture repository of stack: every reference file
-// the stack uses at its place, with the version placeholder rendered,
-// and a minimal component for each component.
-func referenceRepo(t *testing.T, stack string) map[string]string {
+// referenceRepo is the fixture repository of stack on provider: every
+// reference file the stack and provider use at its place, with the
+// version placeholder rendered, and a minimal component for each
+// component.
+func referenceRepo(t *testing.T, stack, provider string) map[string]string {
 	t.Helper()
 	rendered, err := setupskill.Render("v0.12.0-alpha.1")
 	if err != nil {
@@ -49,7 +50,7 @@ func referenceRepo(t *testing.T, stack string) map[string]string {
 	}
 	files := map[string]string{}
 	for _, ref := range referenceFiles(setupskill.FS()) {
-		if target, ok := referenceTarget(stack, ref); ok {
+		if target, ok := referenceTarget(stack, provider, ref); ok {
 			files[target] = string(rendered[ref])
 		}
 	}
@@ -65,41 +66,130 @@ func referenceRepo(t *testing.T, stack string) map[string]string {
 	return files
 }
 
+// staticReport is the part of a --static --json report these tests read.
+type staticReport struct {
+	CIProvider string `json:"ci_provider"`
+	Rules      []struct {
+		ID       string          `json:"id"`
+		Level    contract.Level  `json:"level"`
+		Result   contract.Result `json:"result"`
+		Findings []struct {
+			File    string `json:"file"`
+			Message string `json:"message"`
+		} `json:"findings"`
+	} `json:"rules"`
+}
+
+// auditReference runs the static audit on the files of a reference
+// repository.
+func auditReference(t *testing.T, files map[string]string) staticReport {
+	t.Helper()
+	var edits []fixtureEdit
+	for name, content := range files {
+		edits = append(edits, withFile(name, content))
+	}
+	dir := fixtureFrom(t, t.TempDir(), edits...)
+	res := runVibeAudit(t, "--static", "--json", "--repo-root", dir)
+	var report staticReport
+	if err := json.Unmarshal([]byte(res.stdout), &report); err != nil {
+		t.Fatalf("the report is not JSON: %v\nstdout: %s\nstderr: %s", err, res.stdout, res.stderr)
+	}
+	if len(report.Rules) == 0 {
+		t.Fatalf("the report has no rules\nstdout: %s", res.stdout)
+	}
+	return report
+}
+
+// findings joins the findings of a rule of the report.
+func (r staticReport) findings(id string) (contract.Result, string) {
+	for _, rule := range r.Rules {
+		if rule.ID == id {
+			var msgs []string
+			for _, f := range rule.Findings {
+				msgs = append(msgs, f.File+": "+f.Message)
+			}
+			return rule.Result, strings.Join(msgs, "; ")
+		}
+	}
+	return "", "(no such rule)"
+}
+
+// gitlabDecided are the rules a GitLab reference repository must pass
+// under the static audit, MUST and SHOULD: the CI rules the GitLab
+// reference decides (C-03 is not applicable on GitLab CI), its update bot,
+// its scanners and its merge request template.
+var gitlabDecided = []string{"C-01", "C-02", "C-04", "C-05", "D-02", "D-03", "R-03"}
+
 func TestReferenceImplementationsPassTheStaticAudit(t *testing.T) {
-	for _, stack := range referenceStacks {
-		t.Run(stack, func(t *testing.T) {
-			var edits []fixtureEdit
-			for name, content := range referenceRepo(t, stack) {
-				edits = append(edits, withFile(name, content))
-			}
-			dir := fixtureFrom(t, t.TempDir(), edits...)
-			res := runVibeAudit(t, "--static", "--json", "--repo-root", dir)
-			var report struct {
-				Rules []struct {
-					ID       string          `json:"id"`
-					Level    contract.Level  `json:"level"`
-					Result   contract.Result `json:"result"`
-					Findings []struct {
-						File    string `json:"file"`
-						Message string `json:"message"`
-					} `json:"findings"`
-				} `json:"rules"`
-			}
-			if err := json.Unmarshal([]byte(res.stdout), &report); err != nil {
-				t.Fatalf("the report is not JSON: %v\nstdout: %s\nstderr: %s", err, res.stdout, res.stderr)
-			}
-			if len(report.Rules) == 0 {
-				t.Fatalf("the report has no rules\nstdout: %s", res.stdout)
-			}
-			for _, r := range report.Rules {
-				if r.Level == contract.Must && r.Result == contract.ResultFail {
-					var msgs []string
-					for _, f := range r.Findings {
-						msgs = append(msgs, f.File+": "+f.Message)
+	for _, provider := range referenceProviders {
+		for _, stack := range referenceStacks {
+			t.Run(provider+"/"+stack, func(t *testing.T) {
+				report := auditReference(t, referenceRepo(t, stack, provider))
+				for _, r := range report.Rules {
+					if r.Level == contract.Must && r.Result == contract.ResultFail {
+						_, msgs := report.findings(r.ID)
+						t.Errorf("MUST rule %s fails: %s", r.ID, msgs)
 					}
-					t.Errorf("MUST rule %s fails: %s", r.ID, strings.Join(msgs, "; "))
 				}
-			}
-		})
+				if provider != providerGitLab {
+					return
+				}
+				if report.CIProvider != "gitlab_ci" {
+					t.Errorf("ci_provider = %q, want gitlab_ci", report.CIProvider)
+				}
+				for _, id := range gitlabDecided {
+					if got, msgs := report.findings(id); got != contract.ResultPass {
+						t.Errorf("%s = %s, want pass: %s", id, got, msgs)
+					}
+				}
+				if got, msgs := report.findings("C-03"); got != contract.ResultNotApplicable {
+					t.Errorf("C-03 = %s, want not_applicable: %s", got, msgs)
+				}
+			})
+		}
+	}
+}
+
+// TestGitLabReferencePlantedProblems: each GitLab reference CI with one
+// planted problem fails the rule that problem breaks (spec 0055, Seam 2),
+// so the static audit test above would catch the reference drifting that
+// way.
+func TestGitLabReferencePlantedProblems(t *testing.T) {
+	cases := []struct {
+		name, old, new string
+		rule, finding  string
+	}{
+		{name: "an image pinned by tag only", old: "@sha256:", new: "@sha256-removed:",
+			rule: "C-02", finding: "is not pinned by digest"},
+		{name: "an unpinned GitLab template include", old: "\nworkflow:",
+			new:  "\ninclude:\n  - template: Jobs/Dependency-Scanning.gitlab-ci.yml\n\nworkflow:",
+			rule: "C-02", finding: "cannot be pinned"},
+		{name: "a tool installed at @latest", old: "\n  script:\n", new: "\n  script:\n    - go install example.com/tool@latest\n",
+			rule: "C-02", finding: "@latest"},
+		{name: "the verify jobs gated by changes:", old: "    - if: $CI_PIPELINE_SOURCE == \"merge_request_event\"\n",
+			new:  "    - if: $CI_PIPELINE_SOURCE == \"merge_request_event\"\n      changes: [\"**/*\"]\n",
+			rule: "C-01", finding: "merge request pipelines"},
+		{name: "the audit job also calls verify", old: "    - vibe audit\n", new: "    - task verify\n    - vibe audit\n",
+			rule: "C-04", finding: "also calls the verify command"},
+		{name: "a job other than the audit calls vibe", old: "    - task verify\n", new: "    - task verify\n    - vibe audit --static\n",
+			rule: "R-01", finding: "vibe"},
+	}
+	for _, stack := range referenceStacks {
+		for _, c := range cases {
+			t.Run(stack+"/"+c.name, func(t *testing.T) {
+				t.Parallel()
+				files := referenceRepo(t, stack, providerGitLab)
+				ci := files[".gitlab-ci.yml"]
+				if !strings.Contains(ci, c.old) {
+					t.Fatalf("the %s reference .gitlab-ci.yml does not contain %q", stack, c.old)
+				}
+				files[".gitlab-ci.yml"] = strings.ReplaceAll(ci, c.old, c.new)
+				report := auditReference(t, files)
+				got, msgs := report.findings(c.rule)
+				if got != contract.ResultFail || !strings.Contains(msgs, c.finding) {
+					t.Errorf("%s = %s with %q, want fail naming %q", c.rule, got, msgs, c.finding)
+				}
+			})
+		}
 	}
 }

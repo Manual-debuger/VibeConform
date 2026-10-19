@@ -65,6 +65,9 @@ func checkSkill(skill fs.FS) []string {
 		} else {
 			c.checkConfigCommands(f)
 		}
+		if pathpkg.Base(f.path) == ".gitlab-ci.yml" {
+			c.checkGitLabCommands(f)
+		}
 	}
 	c.checkRulesGuidance()
 	c.checkReferenceConfigs()
@@ -239,6 +242,38 @@ func (c *skillChecker) checkConfigCommands(f skillFile) {
 		}
 		c.checkCommands(f.path, cmd)
 	}
+}
+
+// gitlabScriptKeys are the keys of a GitLab CI job whose lines are shell.
+var gitlabScriptKeys = []string{"before_script", "script", "after_script"}
+
+// checkGitLabCommands checks the commands of a reference .gitlab-ci.yml:
+// every line of every script, before_script and after_script, at any
+// depth, so that hidden templates and default: count too.
+func (c *skillChecker) checkGitLabCommands(f skillFile) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(f.text), &doc); err != nil {
+		c.problem(f.path, "is not YAML: %v", err)
+		return
+	}
+	var walk func(n *yaml.Node, script bool)
+	walk = func(n *yaml.Node, script bool) {
+		switch n.Kind {
+		case yaml.ScalarNode:
+			if script {
+				c.checkCommands(f.path, n.Value)
+			}
+		case yaml.MappingNode:
+			for i := 0; i+1 < len(n.Content); i += 2 {
+				walk(n.Content[i+1], slices.Contains(gitlabScriptKeys, n.Content[i].Value))
+			}
+		default:
+			for _, child := range n.Content {
+				walk(child, script)
+			}
+		}
+	}
+	walk(&doc, false)
 }
 
 // commandSeparators split a command line into simple commands.
@@ -481,9 +516,11 @@ func knownRepoFiles() []string {
 			knownRepoFilesList = append(knownRepoFilesList, goStringLiterals(dir)...)
 		}
 		for _, stack := range referenceStacks {
-			for _, ref := range referenceFiles(setupskill.FS()) {
-				if p, ok := referenceTarget(stack, ref); ok {
-					knownRepoFilesList = append(knownRepoFilesList, p)
+			for _, provider := range referenceProviders {
+				for _, ref := range referenceFiles(setupskill.FS()) {
+					if p, ok := referenceTarget(stack, provider, ref); ok {
+						knownRepoFilesList = append(knownRepoFilesList, p)
+					}
 				}
 			}
 		}
@@ -543,10 +580,43 @@ var monorepoComponents = map[string]string{
 	"python":     "services/worker",
 }
 
-// referenceTarget is where a repository of stack places the reference
-// file ref (a skill path), or false when the stack does not use it.
-func referenceTarget(stack, ref string) (string, bool) {
+// The CI providers a reference repository uses (spec 0055): GitHub
+// Actions with Dependabot, or GitLab CI with Renovate.
+const (
+	providerGitHub = "github"
+	providerGitLab = "gitlab"
+)
+
+var referenceProviders = []string{providerGitHub, providerGitLab}
+
+// gitlabReferences are the reference files only a GitLab repository uses,
+// with their places in it.
+var gitlabReferences = map[string]string{
+	".gitlab-ci.yml": ".gitlab-ci.yml",
+	"renovate.json":  "renovate.json",
+}
+
+// referenceTarget is where a repository of stack on provider places the
+// reference file ref (a skill path), or false when it does not use it.
+// A GitHub repository takes the workflows and dependabot.yml; a GitLab
+// repository takes .gitlab-ci.yml, renovate.json and the pull request
+// template as a merge request template.
+func referenceTarget(stack, provider, ref string) (string, bool) {
 	parts := strings.Split(strings.TrimPrefix(ref, "reference/"), "/")
+	if parts[0] == "ci" {
+		name := parts[len(parts)-1]
+		target, gitlabOnly := gitlabReferences[name]
+		switch {
+		case len(parts) == 2 && name == "pull_request_template.md" && provider == providerGitLab:
+			return ".gitlab/merge_request_templates/Default.md", true
+		case gitlabOnly && provider != providerGitLab:
+			return "", false
+		case gitlabOnly:
+			return target, len(parts) == 2 || parts[1] == stack
+		case len(parts) == 3 && provider == providerGitLab:
+			return "", false
+		}
+	}
 	switch {
 	case len(parts) == 2 && parts[0] == "vibe-yaml":
 		return "vibe.yaml", parts[1] == stack+".yaml"
