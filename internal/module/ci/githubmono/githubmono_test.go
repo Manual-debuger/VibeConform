@@ -120,7 +120,7 @@ func TestOnlyGoJobsSetUpGo(t *testing.T) {
 			setupGo = setupGo || strings.HasPrefix(s.Uses, "actions/setup-go@") || strings.HasPrefix(s.Run, "go install")
 			if strings.HasPrefix(s.Uses, "go-task/setup-task@") {
 				setupTask = len(strings.TrimPrefix(s.Uses, "go-task/setup-task@")) == 40 &&
-					s.With["version"] == pins.Current.TaskSetup && s.With["checksum"] == pins.Current.TaskSHA256
+					s.With["version"] == pins.Current.TaskSetup() && s.With["checksum"] == pins.Current.TaskSHA256
 			}
 		}
 		if c.Profile == manifest.ProfileGo {

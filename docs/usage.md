@@ -134,16 +134,35 @@ Inputs:
   - `auto` (the default) chooses `workspace` in a checkout of
     VibeConform itself, `go-install` for a pseudo-version (no release
     exists for one), and `release` otherwise.
+  When `auto` chooses `workspace`, the action says so in a notice:
+  `version` is then not installed, and the tools are built from the
+  checkout.
 - `verify-attestation`: `false` by default. With `true` and source
   `release`, the action also runs `gh attestation verify` on each archive
-  with the job's token.
-- `checksums`: a `checksums.txt` in the checkout to check the archives
-  against, instead of the release's own. With this input, the checksums
-  your repository reviewed decide, not a file on the same release.
+  with the `token` input.
+- `checksums`: a `checksums.txt` to check the archives against. It
+  replaces the release's own checksum file. Give a path relative to the
+  workspace: the action refuses an absolute path and a path with a `..`
+  part. This input is mainly for tests and air-gapped mirrors. With it,
+  the checksums your repository reviewed decide, not a file on the same
+  release.
+- `token`: the token `gh attestation verify` uses. The default is the
+  job's token (`github.token`).
 
-The binaries go into a directory under `RUNNER_TEMP`, which the action
-adds to `PATH`. The outputs are `source` (after `auto` is resolved) and
-`bin-dir`.
+What the checks prove: the default checksum check proves integrity
+only. Each archive matches the release's own `checksums.txt`, so the
+download was not corrupted or truncated. It does not prove authenticity:
+someone who can change the release can change `checksums.txt` too. Set
+`verify-attestation: true` to add provenance. The attestation proves
+that this repository's release workflow built the archive from the tag.
+
+Outputs:
+
+- `source`: the source the action used, after `auto` is resolved
+  (`release`, `go-install` or `workspace`).
+- `bin-dir`: the directory the binaries are in, in the runner's native
+  path form. It is a directory under `RUNNER_TEMP`, and the action adds
+  it to `PATH`.
 
 `.github/workflows/setup-action.yml` tests the action on Linux, macOS and
 Windows in every pull request.

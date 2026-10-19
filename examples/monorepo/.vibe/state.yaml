@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.11.0-alpha.1.0.20261019022421-815a31d94264
+vibe_version: v0.12.0-alpha.1.0.20261019062348-e5aa42faeceb
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go
@@ -22,7 +22,7 @@ resources:
       sha256: 0ab9a6a8086ee336b0a4abe1eee5e9e50de861001206fb7f5823c878c1b32d81
     - path: .github/workflows/ci.yml
       ownership: generated
-      sha256: 945c9714de801c6c2c8914914c4130e988836cab9301ae70fc29618ef2ec0ff0
+      sha256: 1cfcadadd5ceef191a8ee040e0385efd618dd797424179f671432e47057d6751
     - path: .github/workflows/conformance.yml
       ownership: generated
       sha256: 570a092a18179b2b4b190c3dd4e94fe151cc286a9ad1de3022b91b5a3c418c54

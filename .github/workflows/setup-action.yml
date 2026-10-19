@@ -76,14 +76,25 @@ jobs:
         uses: ./
         with:
           version: v0.12
-      - name: Both refusals failed
+      # checksums is a path relative to the workspace: an absolute path is
+      # refused before anything downloads.
+      - name: Setup action, absolute checksums path
+        id: absolute
+        continue-on-error: true
+        uses: ./
+        with:
+          version: ${{ env.RELEASE_VERSION }}
+          source: release
+          checksums: ${{ github.workspace }}/go.mod
+      - name: All refusals failed
         shell: bash
         env:
           LATEST: ${{ steps.latest.outcome }}
           LOOSE: ${{ steps.loose.outcome }}
+          ABSOLUTE: ${{ steps.absolute.outcome }}
         run: |
-          if [ "$LATEST" != failure ] || [ "$LOOSE" != failure ]; then
-            echo "version latest: $LATEST, version v0.12: $LOOSE; both must fail"
+          if [ "$LATEST" != failure ] || [ "$LOOSE" != failure ] || [ "$ABSOLUTE" != failure ]; then
+            echo "version latest: $LATEST, version v0.12: $LOOSE, absolute checksums: $ABSOLUTE; all must fail"
             exit 1
           fi
 
@@ -192,6 +203,10 @@ jobs:
         run: |
           gh release download "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --pattern checksums.txt --output "$RUNNER_TEMP/checksums.txt"
           sed -E 's/^[0-9a-f]{8}/deadbeef/' "$RUNNER_TEMP/checksums.txt" > tampered-checksums.txt
+          # The escape case below must fail by refusal, not for a missing file.
+          workspace="$GITHUB_WORKSPACE"
+          if [ "$RUNNER_OS" = Windows ]; then workspace=$(cygpath -u "$GITHUB_WORKSPACE"); fi
+          test -f "$workspace/../../_temp/checksums.txt"
       - name: Setup action, tampered checksum
         id: tampered
         continue-on-error: true
@@ -200,12 +215,28 @@ jobs:
           version: ${{ env.RELEASE_VERSION }}
           source: release
           checksums: tampered-checksums.txt
-      - name: The tampered checksum failed
+      # The release's real checksums.txt, reached by a path that leaves the
+      # checkout (RUNNER_TEMP is two levels above the workspace): accepted
+      # before the input was checked, refused now.
+      - name: Setup action, checksums path outside the checkout
+        id: escape
+        continue-on-error: true
+        uses: ./
+        with:
+          version: ${{ env.RELEASE_VERSION }}
+          source: release
+          checksums: ../../_temp/checksums.txt
+      - name: The tampered checksum and the path outside the checkout failed
         shell: bash
         env:
           OUTCOME: ${{ steps.tampered.outcome }}
+          ESCAPE: ${{ steps.escape.outcome }}
         run: |
           if [ "$OUTCOME" != failure ]; then
             echo "the setup action accepted a tampered checksum ($OUTCOME)"
+            exit 1
+          fi
+          if [ "$ESCAPE" != failure ]; then
+            echo "the setup action read a checksums file outside the checkout ($ESCAPE)"
             exit 1
           fi
