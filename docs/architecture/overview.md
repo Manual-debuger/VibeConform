@@ -330,6 +330,19 @@ cmd/vibe → internal/cli ──→ internal/setupskill ──→ internal/guard
   from the module templates as single files; the templates stay until
   #112 deletes them with the template-sync system. The reference hook
   commands in its `settings.json` equal `internal/guard`'s.
+- **The drift test** (#109) is test code in `internal/cli`
+  (`skill_drift_checker_test.go`), not a package: it checks the
+  skill's `vibe` commands and flags against the real command tree, which
+  only `internal/cli` builds, and loads the reference `vibe.yaml` files
+  through `contract.Parse` in a Git work tree. One function reads a
+  skill as a file system and returns every problem: rule IDs, guard rule
+  IDs, `vibe` and `vibe-guard` commands and flags (`vibe-guard`'s from its
+  help output), paths into the skill, repository files named, the
+  reference `vibe.yaml`, `policy.json` and hook commands, a `rules.md`
+  entry per rule, and `vibe unlock` in `upgrade.md`. A fenced block
+  marked `text` is output, not commands. A second test assembles a
+  repository per stack from the reference files and requires
+  `vibe audit --static --json` to fail no MUST rule.
 
 ## Affected-component graph
 

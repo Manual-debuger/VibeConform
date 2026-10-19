@@ -11,7 +11,10 @@ skill afterwards: the files you read before may have changed.
 
 - The repository's version is `contract:` in `vibe.yaml`.
 - The new version is in the output of `vibe --version`:
-  `vibe version <version> (contract <X.Y.Z>)`.
+
+  ```text
+  vibe version <version> (contract <X.Y.Z>)
+  ```
 
 Compare the MAJOR parts (the X).
 
