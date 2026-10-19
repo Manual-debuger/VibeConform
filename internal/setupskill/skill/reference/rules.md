@@ -1,4 +1,4 @@
-# The rules of contract 1.0.1
+# The rules of contract 1.1.0
 
 One entry per rule: its level, what satisfies it, and the reference file
 to start from. Keep anything that already satisfies a rule. The audit is
