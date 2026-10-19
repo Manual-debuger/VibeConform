@@ -28,6 +28,7 @@ Guard exceptions
 Local guardrail adjustments
   (none)
 
+CI provider read: GitHub Actions
 Note: the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is main
 
 Verdict: cannot decide. 10 rules did not run (--static).

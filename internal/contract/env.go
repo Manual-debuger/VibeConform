@@ -21,6 +21,7 @@ type Env struct {
 	files          map[string]fileEntry
 	entrypoints    map[string]*entrypointState
 	workflows      *Workflows
+	ci             *ciState
 	defaultBranch  string
 	hookMgrs       *[]*hookManager
 	claudeSettings *parsedClaudeSettings

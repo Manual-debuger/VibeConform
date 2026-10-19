@@ -19,11 +19,11 @@ import (
 // files directly in it.
 const workflowDir = ".github/workflows"
 
-// otherCIFiles are the CI configurations of providers contract 1.0.0 does
-// not read. A path ending in "/" is a directory: any tracked file in it
-// counts.
+// otherCIFiles are the CI configurations of providers vibe does not read
+// (GitLab CI is read by gitlab_ci.go). A path ending in "/" is a
+// directory: any tracked file in it counts.
 var otherCIFiles = []string{
-	".gitlab-ci.yml", ".circleci/config.yml", "Jenkinsfile", "azure-pipelines.yml",
+	".circleci/config.yml", "Jenkinsfile", "azure-pipelines.yml",
 	".travis.yml", "bitbucket-pipelines.yml", ".buildkite/", ".drone.yml",
 }
 
@@ -131,30 +131,6 @@ func (e *Env) Workflows() *Workflows {
 	}
 	e.workflows = ws
 	return ws
-}
-
-// GitHubCI returns the workflows for a rule that reads GitHub Actions.
-// When there are none, ok is false and result is what the rule decides:
-// cannot decide when another provider's CI is tracked, fail when the
-// repository has no CI at all (spec 0052, Q19).
-func (e *Env) GitHubCI() (ws *Workflows, result PartResult, ok bool) {
-	ws = e.Workflows()
-	if len(ws.Files) > 0 {
-		return ws, Pass(), true
-	}
-	if len(ws.OtherCI) > 0 {
-		return ws, Undecided(Finding{
-			File: ws.OtherCI[0],
-			Message: fmt.Sprintf("contract %s reads GitHub Actions workflows only, and this repository's CI is %s",
-				Implemented, joinWords(ws.OtherCI, "and")),
-			Fix: "run CI in GitHub Actions under .github/workflows/, or wait for a vibe that reads this provider",
-		}), false
-	}
-	return ws, Fail(Finding{
-		File:    workflowDir + "/",
-		Message: "the repository has no CI configuration",
-		Fix:     "add a GitHub Actions workflow under .github/workflows/",
-	}), false
 }
 
 func (wf *Workflow) parse(data []byte) error {
