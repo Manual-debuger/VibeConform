@@ -154,7 +154,7 @@ type section struct {
 // probeConfig is the probe fixture's vibe.yaml with fields replaced.
 func probeConfig(changes ...section) fixtureEdit {
 	base := []section{
-		{"contract", "contract: 1.0.1\n"},
+		{"contract", "contract: 1.1.0\n"},
 		{"platforms", "platforms: [linux, windows]\n"},
 		{"agents", "agents: [claude]\n"},
 		{"entrypoints", probeEntrypoints("")},

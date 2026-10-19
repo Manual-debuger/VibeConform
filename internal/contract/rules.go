@@ -40,8 +40,10 @@ var categoryInfo = []struct {
 	{CategoryHooks, "Local Git hooks", "Recognized hook managers: lefthook (`lefthook.yml`, `.lefthook.yml`), " +
 		"pre-commit (`.pre-commit-config.yaml`) and husky (`.husky/`). Adding one is MINOR. " +
 		"A repository that uses another manager gets \"not recognized\" on both rules."},
-	{CategoryCI, "CI", "Contract v1 supports GitHub Actions only (Q19). If the repository has CI configuration " +
-		"for another provider and no `.github/workflows/`, the C rules cannot be decided."},
+	{CategoryCI, "CI", "The C rules read GitHub Actions or GitLab CI (GitLab CI since 1.1.0). " +
+		"GitHub Actions wins: when the repository has workflows in `.github/workflows/`, the C rules read them only. " +
+		"GitLab CI (`.gitlab-ci.yml`) is read when there are none. If the repository has CI configuration " +
+		"for another provider and neither, the C rules cannot be decided. The report names the provider it read."},
 	{CategoryAgents, "Agent guardrails", "The A rules cover Claude Code only. Codex is exempt; bringing it in is MAJOR. " +
 		"Personal, uncommitted settings (`.claude/settings.local.json`) may override any guardrail, " +
 		"and the audit does not read them."},
@@ -463,12 +465,14 @@ var rules = []Rule{
 	{
 		ID: "R-01", Level: Must, Category: CategoryRemovability,
 		Title: "Everything but the audit works without vibe",
-		Check: "Static: no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04. " +
+		Check: "Static: no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 " +
+			"and `vibe --version` in a CI job that calls no entrypoint. " +
 			"Execution: with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases " +
 			"are still refused.",
 		Source: "principle 3, spec 0017",
 		Parts: []Part{
-			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04.", checkR01),
+			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 "+
+				"and `vibe --version` in a CI job that calls no entrypoint.", checkR01),
 			executionRun("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
 				"are still refused.", checkR01Execution),
 		},

@@ -2,7 +2,7 @@
 # 0052). vibe.yaml stays version 1 for the old audit until #111 makes the
 # contract audit the required check and renames this file to vibe.yaml.
 # The contract-audit workflow runs `vibe audit --static --config vibe.v2.yaml`.
-contract: 1.0.0
+contract: 1.1.0
 platforms: [linux, windows]
 agents: [claude, codex]
 # No components: one Go component at the root, found from go.mod.

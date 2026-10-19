@@ -13,7 +13,7 @@ type section struct {
 
 // baseConfig is the baseline fixture's vibe.yaml, field by field.
 var baseConfig = []section{
-	{"contract", "contract: 1.0.1\n"},
+	{"contract", "contract: 1.1.0\n"},
 	{"platforms", "platforms: [linux, windows]\n"},
 	{"agents", "agents: [claude]\n"},
 	{"entrypoints", "entrypoints:\n  verify: task verify\n  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n"},
@@ -123,18 +123,20 @@ func TestContractConfigVersion(t *testing.T) {
 		{name: "not a string", config: configWith(section{"contract", "contract: [1, 0, 0]\n"}),
 			want: []string{"vibe.yaml: contract: ", "X.Y.Z"}},
 		{name: "newer MAJOR", config: configWith(section{"contract", "contract: 2.0.0\n"}),
-			want: []string{"vibe.yaml: contract: ", "cannot decide; upgrade vibe", "2.0.0", "1.0.1"}},
+			want: []string{"vibe.yaml: contract: ", "cannot decide; upgrade vibe", "2.0.0", "1.1.0"}},
 		{name: "older MAJOR", config: configWith(section{"contract", "contract: 0.9.0\n"}),
 			want: []string{"vibe.yaml: contract: ", "cannot decide; upgrade vibe"}},
-		{name: "newer MINOR", config: configWith(section{"contract", "contract: 1.1.0\n"}),
-			want: []string{"vibe.yaml: contract: ", "cannot decide; upgrade vibe", "1.1.0"}},
+		{name: "newer MINOR", config: configWith(section{"contract", "contract: 1.2.0\n"}),
+			want: []string{"vibe.yaml: contract: ", "cannot decide; upgrade vibe", "1.2.0", "1.1.0"}},
 		// A newer MINOR may add fields this vibe does not know: the version
 		// decides before the unknown field does.
-		{name: "newer MINOR with a new field", config: configWith(section{"contract", "contract: 1.1.0\n"}, section{"future", "future: true\n"}),
+		{name: "newer MINOR with a new field", config: configWith(section{"contract", "contract: 1.2.0\n"}, section{"future", "future: true\n"}),
 			want: []string{"cannot decide; upgrade vibe"}},
-		{name: "newer PATCH is audited", config: configWith(section{"contract", "contract: 1.0.7\n"})},
-		// A repository set up under contract 1.0.0 keeps its declaration.
-		{name: "older PATCH is audited", config: configWith(section{"contract", "contract: 1.0.0\n"})},
+		{name: "newer PATCH is audited", config: configWith(section{"contract", "contract: 1.1.7\n"})},
+		// A repository set up under contract 1.0.0 or 1.0.1 keeps its
+		// declaration and is audited with 1.1.0 (spec 0051, "Versioning").
+		{name: "older MINOR is audited", config: configWith(section{"contract", "contract: 1.0.0\n"})},
+		{name: "older MINOR's PATCH is audited", config: configWith(section{"contract", "contract: 1.0.1\n"})},
 	})
 }
 
@@ -209,7 +211,7 @@ func TestContractConfigWaivers(t *testing.T) {
 		{name: "until missing", config: configWith(waiver("  - rule: C-05\n    reason: r\n")),
 			want: []string{"vibe.yaml: waivers[0].until: is required"}},
 		{name: "unknown rule", config: configWith(waiver("  - rule: X-99\n    reason: r\n    until: 2026-12-31\n")),
-			want: []string{"vibe.yaml: waivers[0].rule: ", "X-99", "not a rule of contract 1.0.1"}},
+			want: []string{"vibe.yaml: waivers[0].rule: ", "X-99", "not a rule of contract 1.1.0"}},
 		{name: "MUST rule", config: configWith(waiver("  - rule: C-02\n    reason: r\n    until: 2026-12-31\n")),
 			want: []string{"vibe.yaml: waivers[0].rule: ", "C-02 is a MUST rule", "SHOULD"}},
 		{name: "blank reason", config: configWith(waiver("  - rule: C-05\n    reason: \"   \"\n    until: 2026-12-31\n")),

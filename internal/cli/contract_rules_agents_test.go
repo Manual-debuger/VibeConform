@@ -388,7 +388,7 @@ func TestRuleA04(t *testing.T) {
 			`{"rule": "git-push-force", "match": "^git push --force origin feat/", "reason": "rebasing feature branches"},
 			 {"rule": "guardrail-settings", "match": "x", "reason": "y", "note": "other keys are the guard's"}`)}},
 		{name: "version 1", want: "fail", edits: []fixtureEdit{policy("1", "")},
-			findings: []string{policyFile + ": has version 1; contract 1.0.1 needs version 2", "Fix: "}},
+			findings: []string{policyFile + ": has version 1; contract 1.1.0 needs version 2", "Fix: "}},
 		{name: "no version", want: "fail", edits: []fixtureEdit{withFile(policyFile, `{"rules": []}`)},
 			findings: []string{policyFile + ": has no version"}},
 		{name: "version is a string", want: "fail", edits: []fixtureEdit{policy(`"2"`, "")},

@@ -1,6 +1,6 @@
 # Spec 0051: Contract v1.0.0
 
-Current version: 1.0.1 (see "Changes" under "Versioning").
+Current version: 1.1.0 (see "Changes" under "Versioning").
 
 Status: accepted (2026-10-16). Issue #96. Decided by ADR 0025. Settled
 with the user on 2026-10-16 in a grilling session; "Qn" refers to its
@@ -196,12 +196,13 @@ the future. A missing, unreadable or expired marker is not valid.
 
 ## Rules
 
-Contract v1.0.0 has 25 rules: 16 MUST and 9 SHOULD.
+Contract v1 has 25 rules: 16 MUST and 9 SHOULD.
 
-"Called" means a hook command, CI `run:` step or entrypoint that, when
-parsed as shell, contains the declared command as a whole simple
-command. For a list entrypoint, "called" means every command in the
-list is called, in any steps or jobs.
+"Called" means a hook command, CI `run:` step (on GitLab CI, a
+`before_script` or `script` line) or entrypoint that, when parsed as
+shell, contains the declared command as a whole simple command. For a
+list entrypoint, "called" means every command in the list is called,
+in any steps or jobs.
 
 ### V: verification entrypoints
 
@@ -226,9 +227,16 @@ on both rules.
 
 ### C: CI
 
-Contract v1 supports GitHub Actions only (Q19). If the repository has
-CI configuration for another provider and no `.github/workflows/`, the
-C rules cannot be decided.
+The C rules read GitHub Actions or GitLab CI (GitLab CI since 1.1.0).
+GitHub Actions wins: when the repository has workflows in
+`.github/workflows/`, the C rules read them only. GitLab CI
+(`.gitlab-ci.yml`) is read when there are none. If the repository has
+CI configuration for another provider and neither, the C rules cannot
+be decided. The report names the provider it read.
+
+Each row below states the GitHub Actions reading. The paragraphs after
+the table state the GitLab CI reading of each rule; spec 0052
+("Recognition rules") and spec 0055 give the details of both.
 
 | ID | Rule | Check | Level | Source |
 |---|---|---|---|---|
@@ -237,6 +245,82 @@ C rules cannot be decided.
 | C-03 | Workflow permissions default to read | Static: every workflow has top-level `permissions` that grant no write scope (`contents: read`, `read-all` or `{}`). Jobs may widen them. | MUST | spec 0010 |
 | C-04 | The audit runs in its own job | Static: a job triggered on pull requests runs `vibe audit` (or the setup action followed by it) and does not call `verify` | MUST | spec 0022 |
 | C-05 | Tests run on Linux and Windows | Static: the steps that call `verify` run on a Linux runner and on a Windows runner, after matrix expansion. Not applicable when `platforms` does not include `windows`. | SHOULD | principle 2 |
+
+#### Reading GitLab CI
+
+The audit resolves `.gitlab-ci.yml` the way GitLab does, statically:
+YAML anchors and merge keys, `include: local` (with GitLab's wildcard
+paths) merged in GitLab's order, `default:` keys, `extends:` (a deep
+merge, up to GitLab's nesting limit) and `!reference` tags that point
+at locally defined keys. Keys that start with `.` are templates, not
+jobs. A file that does not parse, an
+`extends:` or `!reference` that points at nothing, or a cycle fails
+every rule that needs the file, as a GitHub workflow that does not
+parse does.
+
+- **Includes.** Only `local:` includes are followed. `project:`,
+  `remote:`, `component:` and `template:` includes are not followed;
+  their jobs call nothing, as remote reusable workflows on GitHub. An
+  include with `rules:` is followed only when its rules admit the
+  pipeline kind being read.
+- **Child pipelines.** A job with `trigger: include:` that names local
+  files is followed when it has `strategy: depend` (or GitLab's newer
+  equivalent that makes the parent mirror the child's status). The
+  child's jobs are read with the trigger job's rules as their outer
+  condition. A child without such a strategy, a dynamic child
+  (`include: artifact:`) and `trigger: project:` are not followed.
+- **Commands.** A job's commands are its `before_script` and `script`
+  lines, parsed as POSIX shell. `after_script` is read by R-01 and D-03
+  but does not count as calling `verify`. `allow_failure` is ignored.
+- **Pipeline kinds.** Each job is asked two questions: does it run in a
+  merge request pipeline, and does it run on a push to the default
+  branch? The audit evaluates `workflow:rules`, then the job's `rules:`
+  (first match wins, `when: never` excludes) or its `only`/`except`.
+  These conditions are recognized:
+  - `$CI_PIPELINE_SOURCE ==` or `!=` a quoted literal
+    (`merge_request_event`, `push`, `schedule`, `web`, `api`,
+    `trigger`, `pipeline`, `parent_pipeline`, …);
+  - `$CI_MERGE_REQUEST_IID`, `$CI_COMMIT_BRANCH` and `$CI_COMMIT_TAG`
+    as presence tests;
+  - `$CI_COMMIT_BRANCH` or `$CI_COMMIT_REF_NAME` compared with
+    `$CI_DEFAULT_BRANCH` or with a literal branch name, against the
+    default branch as spec 0052 reads it;
+  - `&&`, `||` and parentheses over these;
+  - `only`/`except` with `merge_requests`, `branches`, `pushes`,
+    `tags`, `schedules` and literal branch names.
+
+  A rule with any other condition, or with `changes:` or `exists:`,
+  does not admit the job for that pipeline kind, and the finding quotes
+  the condition and its line. A job with no rules and no
+  `only`/`except` runs in both kinds: GitLab runs it in every branch
+  pipeline and shows that pipeline on the merge request. Extending the
+  list is MINOR.
+
+The C rules on GitLab CI:
+
+- **C-01**: some job that runs in merge request pipelines calls
+  `verify` (for a list `verify`, jobs covering every command), and
+  likewise for pushes to the default branch. A job gated by `changes:`
+  does not count, as a GitHub `paths` filter does not.
+- **C-02**: every `image:` and `services:` entry (of a job or of
+  `default:`, after resolution, in string or `name:` form) ends in
+  `@sha256:` and 64 hexadecimal characters. Every include that is not
+  followed is pinned: `project:` with a `ref:` of 40 hexadecimal
+  characters, `component:` with a version of 40 hexadecimal
+  characters, `remote:` with `integrity:`. A `template:` include cannot
+  be pinned and fails. No word of a `before_script`, `script` or
+  `after_script` simple command ends in `@latest`.
+- **C-03**: not applicable on GitLab CI. GitLab job tokens have no
+  per-file permissions, and job-token push access is a project setting
+  the audit does not read.
+- **C-04**: a job that runs in merge request pipelines has a simple
+  command starting with the words `vibe audit` and calls no `verify`
+  command. Project settings (pipelines must succeed, protected
+  branches) are not read, as GitHub branch protection is not.
+- **C-05**: a job's platforms come from its `tags:` after
+  `parallel: matrix` expansion. A tag containing `windows` is Windows,
+  `linux` is Linux and `macos` is macOS, ignoring case. A job with no
+  tags and an `image:` is Linux. Anything else is an unknown platform.
 
 ### A: agent guardrails
 
@@ -263,13 +347,49 @@ may override any guardrail, and the audit does not read them.
 | D-02 | An update bot covers dependencies and actions, without automerge | Static: `.github/dependabot.yml` or a Renovate configuration covers each component's ecosystem and `github-actions`, and enables no automerge | SHOULD | spec 0010 |
 | D-03 | CI scans for known vulnerabilities | Static: a workflow runs a recognized scanner: `govulncheck`, `pip-audit`, `pnpm audit`, `npm audit`, `osv-scanner` or `trivy`. Adding one is MINOR. | SHOULD | spec 0010 |
 
+The rows state the reading for GitHub Actions. Since 1.1.0, D-02 also
+recognizes `.gitlab/renovate.json` and `.gitlab/renovate.json5` as
+Renovate configurations, whatever the CI provider. When the C rules
+read GitLab CI (see "C: CI"):
+
+- **D-02**: a Renovate configuration must cover Renovate's `gitlabci`
+  manager instead of `github-actions`, and also `gitlabci-include`
+  when `enabledManagers` is set and the pipeline uses includes.
+  Dependabot cannot satisfy D-02 there. The fix text names Renovate and
+  `renovate.json` on GitLab CI, and Dependabot on GitHub Actions.
+- **D-03**: a job's `before_script`, `script` or `after_script` runs a
+  recognized scanner, or the pipeline includes GitLab's
+  Dependency-Scanning template (`Jobs/Dependency-Scanning*.gitlab-ci.yml`
+  or `Security/Dependency-Scanning*.gitlab-ci.yml`) or the GitLab
+  `dependency-scanning` CI/CD component. Recognizing a template here
+  does not exempt it from C-02.
+
 ### R: removability and repository hygiene
 
 | ID | Rule | Check | Level | Source |
 |---|---|---|---|---|
-| R-01 | Everything but the audit works without vibe | Static: no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04. Execution: with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases are still refused. | MUST | principle 3, spec 0017 |
+| R-01 | Everything but the audit works without vibe | Static: no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 and `vibe --version` in a CI job that calls no entrypoint. Execution: with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases are still refused. | MUST | principle 3, spec 0017 |
 | R-02 | Agents are told the verification entrypoints | Static: `AGENTS.md` exists and contains every `verify` command, and `CLAUDE.md` exists and references `AGENTS.md` | SHOULD | spec 0043 |
 | R-03 | Pull requests report verification | Static: a pull request template exists and has a heading containing "verif" (case-insensitive) | SHOULD | spec 0010 |
+
+- **R-01, `vibe --version`** (since 1.1.0, on any CI provider): a
+  simple command whose words are exactly `vibe --version` is not a call
+  of `vibe` when it is in a CI job that calls no command of any
+  declared entrypoint (`verify`, `verify-fast`, `fmt`, `fmt-check`,
+  `setup`). Unlike "called" above, one command of a list entrypoint is
+  enough: a job that calls any of them is a job that calls an
+  entrypoint. Such a job tests that `vibe` installs; the repository's
+  own checks do not need it. In an entrypoint, in a hook command, and
+  in a CI job that calls an entrypoint, `vibe --version` is still a
+  call. No other spelling is exempt (`vibe version`, or
+  `vibe --version` with more words, is a call), and `vibe-guard` is not
+  `vibe`.
+- **R-01 on GitLab CI**: the CI part reads every job's
+  `before_script`, `script` and `after_script`, except those of a job
+  that satisfies C-04.
+- **R-03** (since 1.1.0): every tracked `.md` file directly under
+  `.gitlab/merge_request_templates/` is a pull request template, on any
+  repository, and is checked like the GitHub templates.
 
 ## Versioning
 
@@ -292,6 +412,34 @@ may override any guardrail, and the audit does not read them.
 
 ### Changes
 
+- **1.1.0** (2026-10-19, spec 0055, issues #74 and #120 Part A). A
+  MINOR release. Each change and why it is MINOR:
+
+  - **The C rules, D-03 and R-01's CI part read GitLab CI** when the
+    repository has no GitHub Actions workflows (see "C: CI"). A newly
+    recognized CI provider. C-03 is not applicable on GitLab CI.
+  - **R-03 recognizes `.gitlab/merge_request_templates/*.md`.** A newly
+    recognized template location.
+  - **D-02 recognizes `.gitlab/renovate.json` and its JSON5 form, and
+    asks GitLab-CI repositories for Renovate's `gitlabci` manager**
+    instead of `github-actions`. A newly recognized update bot location
+    and manager. A GitLab-CI repository whose Dependabot configuration
+    lists `github-actions` passed D-02 under 1.0.1, although nothing it
+    runs is an action, and now fails it. D-02 is a SHOULD rule, so this
+    changes no verdict.
+  - **D-03 recognizes GitLab's Dependency-Scanning template and
+    CI/CD component.** A newly recognized scanner.
+  - **R-01 no longer counts `vibe --version` in a CI job that calls no
+    entrypoint**, on any provider. A relaxed check.
+
+  GitHub Actions repositories keep their 1.0.1 reading, except R-01's
+  relaxation, which can only turn a failure into a pass. No conformant
+  verdict becomes non-conformant. One verdict can move from undecided
+  to not conformant: a GitLab-only repository, whose C rules could not
+  be decided under 1.0.1, is now read, and its verdict is not
+  conformant when its CI fails a C rule or R-01's CI part. Such a
+  repository had no verdict to lose. Repositories that declare 1.0.0
+  or 1.0.1 are audited with 1.1.0 (see "Versioning").
 - **1.0.1** (2026-10-19, pilot #110, spec 0054). A-04 passed a
   `.claude/hooks/policy.json` that `vibe-guard` cannot load: in pilot P2
   a version 2 file that kept the old `tools` key. A-04 now fails such a
@@ -319,12 +467,11 @@ may override any guardrail, and the audit does not read them.
 
 ## Later versions
 
-These are not in v1.0.0:
+These are not in 1.1.0:
 
 - **Refuse agent reads of credential files** through `permissions.deny`.
   This would be a SHOULD rule, so a MINOR release (Q6).
 - **Codex in the A rules.** A MAJOR release, once Codex hooks are stable.
-- **GitLab CI for the C rules.** A MINOR release (Q19).
 
 ## Not in the contract
 

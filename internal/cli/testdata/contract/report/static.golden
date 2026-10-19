@@ -1,4 +1,4 @@
-vibe audit: contract 1.0.1 (vibe test), static checks only
+vibe audit: contract 1.1.0 (vibe test), static checks only
 
   V  Verification entrypoints              1 pass, 3 not run
   H  Local Git hooks                       2 pass
