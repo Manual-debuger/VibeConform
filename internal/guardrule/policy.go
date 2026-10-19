@@ -31,8 +31,7 @@ const (
 )
 
 // Policy is .claude/hooks/policy.json version 2 as vibe-guard reads it
-// (spec 0053, "policy.json version 2"). The contract audit reads only
-// version and exceptions (spec 0051) and does not use ParsePolicy.
+// (spec 0053, "policy.json version 2").
 type Policy struct {
 	Version    int
 	Mode       Mode

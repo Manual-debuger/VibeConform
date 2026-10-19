@@ -11,6 +11,7 @@ import (
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/pins"
 )
 
 func resolveFor(t *testing.T, provider string) map[string][]byte {
@@ -113,13 +114,8 @@ func TestGitLabJobIsPinnedAndSelfContained(t *testing.T) {
 	if j.Needs == nil || len(*j.Needs) != 0 || j.AllowFailure == nil || *j.AllowFailure || j.BeforeScript == nil || len(j.Rules) != 1 {
 		t.Errorf("hardening keys missing: %+v", j)
 	}
-	// The pins are the GitHub workflow's.
-	for _, pin := range []string{`GO_VERSION: "1.27.0"`, `TASK_VERSION: "v3.53.1"`} {
-		if !bytes.Contains(conformanceWorkflow, []byte(pin)) {
-			t.Errorf("conformance.yml no longer pins %s; update gitlab-ci.vibe.yml with it", pin)
-		}
-	}
-	if j.Image != "golang:1.27.0" || j.Variables["TASK_VERSION"] != "v3.53.1" {
+	// The pins are the table's.
+	if j.Image != "golang:"+pins.Current.Go || j.Variables["TASK_VERSION"] != pins.Current.Task {
 		t.Errorf("image %q, TASK_VERSION %q", j.Image, j.Variables["TASK_VERSION"])
 	}
 }

@@ -85,7 +85,9 @@ _Avoid_: package, workspace, sub-project
 
 **Setup skill**:
 The agent skill that gives an adopting repository the properties the
-contract requires, and runs the audit until it passes.
+contract requires, and runs the audit until it passes. It is
+`vibeconform-setup`, embedded in `vibe`; `vibe init --skill` writes it
+into the repository's skill paths, where the repository owns it.
 _Avoid_: installer, generator, template
 
 ## Agent guardrails
@@ -117,6 +119,13 @@ _Avoid_: override, bypass, escape
 A CI job whose name stays stable so that branch protection can require
 it: the gate and the conformance audit. Other job names may change.
 _Avoid_: status check (alone), gate job (for conformance)
+
+**Setup action**:
+The GitHub Action at this repository's root that installs an exact
+version of `vibe` and `vibe-guard` in the conformance job: from a release
+with its checksums checked, or built from source. It never runs the audit
+itself, and `verify` must not use it.
+_Avoid_: installer, setup-vibe, bootstrap step
 
 ## Retired terms
 

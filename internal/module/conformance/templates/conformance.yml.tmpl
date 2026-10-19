@@ -22,10 +22,6 @@ concurrency:
   group: conformance-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  GO_VERSION: "[[.Pins.Go]]"
-  TASK_VERSION: "[[.Pins.Task]]"
-
 jobs:
   audit:
     # Named in full, like CI / gate, so the required-check name branch
@@ -35,27 +31,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
-      # No vibe install step: task audit runs the vibe version recorded in
-      # .vibe/state.yaml when none is on PATH, so CI's verdict cannot change
-      # without a change to this repository (spec 0022).
-      - name: Build vibe from source (self-hosting only)
+      # Exactly the vibe that last synced this repository, so CI's verdict
+      # cannot change without a change to this repository (spec 0022).
+      - name: Read vibe_version
+        id: state
         run: |
-          if [ -d ./cmd/vibe ]; then
-            # This repository provides cmd/vibe, so audit against the
-            # working tree's embedded templates. Running a published
-            # release instead would compare a pull request's regenerated
-            # files against the previous release's templates and report
-            # drift on every template change.
-            # See docs/decisions/0008-self-hosting-probe-in-shipped-templates.md.
-            mkdir -p "$RUNNER_TEMP/bin"
-            go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
-            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          v=$(sed -n 's/^vibe_version: *//p' .vibe/state.yaml | tr -d '\r')
+          if [ -z "$v" ]; then
+            echo ".vibe/state.yaml records no vibe_version; run vibe sync and commit it."
+            exit 1
           fi
-      - name: task audit
-        run: task audit
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      # The setup action (spec 0054) installs that version: from its
+      # release, checksums checked, with no Go; or, for a pseudo-version,
+      # which has no release, built from the tagged source inside the
+      # action. In VibeConform itself, source auto builds vibe from the
+      # checkout instead, so a pull request's template changes are not
+      # compared with the previous release's templates
+      # (docs/decisions/0008-self-hosting-probe-in-shipped-templates.md).
+      - name: Install vibe
+        uses: Manual-debuger/VibeConform@[[.Pins.SetupAction]] # setup action
+        with:
+          version: ${{ steps.state.outputs.version }}
+          tools: vibe
+          source: auto
+      - name: vibe audit
+        run: vibe audit --repo-root .

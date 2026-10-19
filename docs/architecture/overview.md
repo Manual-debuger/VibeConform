@@ -234,7 +234,7 @@ reconcile code rather than inside it:
         contract: ↓                          ↓ standard:
 internal/contract                    the old audit: manifest, standard,
   vibe.yaml version 2                module, resource, reconcile, state
-  the 25 rules of contract 1.0.0
+  the 25 rules of contract 1.0.1
   static checks of tracked files
   report model (plain data)
 ```
@@ -242,7 +242,8 @@ internal/contract                    the old audit: manifest, standard,
 - **Dispatch.** `vibe audit` reads the configuration once and picks the
   engine from its top-level key: `contract` runs the contract audit,
   `standard` the old audit, unchanged. Both or neither is an error. `diff`,
-  `sync` and `init` still speak only the old schema.
+  `sync` and `init` still speak only the old schema; `vibe init --skill`
+  writes the setup skill and reads no configuration.
 - **Dependency direction.** `internal/contract` imports none of the old
   packages (`reconcile`, `state`, `resource`, `standard`, `module`,
   `manifest`), so #112 can delete them without touching it.
@@ -300,9 +301,48 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
 - The dependency is one way: `internal/contract` → `internal/guardrule`
   ← `internal/guard`. Neither new package imports the old ones, and
   tests in each package enforce it. The old `internal/module/agents/claude`
-  imports `internal/guard` for the reference commands when
+  imports `internal/guard` for the reference commands and the version
+  rule (`InstallVersion`: the version the install hint names) when
   `policy.agent_guard` selects `vibe-guard`, an old-to-new direction #112
   removes with the module.
+
+### The setup skill
+
+Spec 0054 adds `internal/setupskill`: the `vibeconform-setup` skill
+directory, embedded with `go:embed`, and `Install`, which `vibe init
+--skill` calls to write it to `.claude/skills/` and `.agents/skills/`.
+
+```text
+cmd/vibe → internal/cli ──→ internal/setupskill ──→ internal/guard
+           (vibe init --skill)   (embedded skill/)    (InstallVersion,
+                                                       reference commands)
+```
+
+- **Imports.** Among this repository's packages, `internal/setupskill`
+  imports only `internal/guard`, for the version rule that fills the
+  skill's one placeholder (the `vibe` version). It imports no old package,
+  so #112 can delete them without touching it; its tests enforce that.
+- **Embedded bytes.** `.gitattributes` forces LF for
+  `internal/setupskill/skill/`, and a test fails on any carriage return
+  in an embedded file, so a CRLF working copy cannot change what a build
+  ships.
+- **Reference files.** The skill's reference implementations are copied
+  from the module templates as single files; the templates stay until
+  #112 deletes them with the template-sync system. The reference hook
+  commands in its `settings.json` equal `internal/guard`'s.
+- **The drift test** (#109) is test code in `internal/cli`
+  (`skill_drift_checker_test.go`), not a package: it checks the
+  skill's `vibe` commands and flags against the real command tree, which
+  only `internal/cli` builds, and loads the reference `vibe.yaml` files
+  through `contract.Parse` in a Git work tree. One function reads a
+  skill as a file system and returns every problem: rule IDs, guard rule
+  IDs, `vibe` and `vibe-guard` commands and flags (`vibe-guard`'s from its
+  help output), paths into the skill, repository files named, the
+  reference `vibe.yaml`, `policy.json` and hook commands, a `rules.md`
+  entry per rule, and `vibe unlock` in `upgrade.md`. A fenced block
+  marked `text` is output, not commands. A second test assembles a
+  repository per stack from the reference files and requires
+  `vibe audit --static --json` to fail no MUST rule.
 
 ## Affected-component graph
 
@@ -407,11 +447,25 @@ internal/
   doctor/                   # vibe doctor checks; imports nothing from internal/ (spec 0028)
   contract/                 # contract audit: vibe.yaml v2, rule registry, static checks, probe copy and probes; imports none of the old packages (spec 0052, 0053)
   guardrule/                # guard rule IDs, policy.json v2, command parsing shared by the audit and vibe-guard; imports nothing from internal/ (spec 0053)
-  guard/                    # vibe-guard: baseline rules, hook/explain/relock, unlock marker; imports only guardrule (spec 0053)
+  guard/                    # vibe-guard: baseline rules, hook/explain/relock, unlock marker, reference commands, version rule; imports only guardrule (spec 0053, 0054)
+  setupskill/               # the embedded vibeconform-setup skill and vibe init --skill; imports only guard (spec 0054)
   cli/                      # command tree; audit/diff/sync share one plan walk; vibe audit dispatches to contract/; vibe unlock
 ```
 
 and `cmd/vibe-guard`, the reference agent guard's `main` (spec 0053).
+
+**The release and the setup action** (spec 0054). One release holds both
+binaries: `.goreleaser.yaml` builds `vibe` and `vibe-guard` for linux,
+darwin and windows on amd64 and arm64, each in its own archive, with one
+`checksums.txt`. A tag push publishes it (`.github/workflows/release.yml`)
+and attests every archive and binary. The jobs after it install the
+release on every hosted platform and verify the attestations. The
+root `action.yml` is the setup action: it installs an exact version of
+either tool from a release (checksums checked) or builds it from source,
+and the generated conformance workflow is its only consumer outside this
+repository. Neither is Go code, so neither appears in the tree above.
+They are repository files that no module generates, like
+`contract-audit.yml`.
 
 Since M2, `examples/typescript` and `examples/python` hold real repositories
 declaring the language standards, synced and committed; since spec 0025,
@@ -475,7 +529,10 @@ external `prod-go/v1` adopter with a `task audit` — and so a CI
 self-hosting build step is conditional as a result; see
 `docs/decisions/0008-self-hosting-probe-in-shipped-templates.md` for why a
 published release is the wrong binary for this repository to audit itself
-with.
+with. Since spec 0054 the GitHub conformance job no longer goes through
+`task audit`: it installs the recorded `vibe_version` with the setup
+action, whose `source: auto` holds the self-hosting probe, and runs
+`vibe audit` directly, with no Go or Task in the job.
 
 The managed target set is fixed and extended, never overridden. A
 repository's own tasks go in a project-owned `Taskfile.local.yml`, which

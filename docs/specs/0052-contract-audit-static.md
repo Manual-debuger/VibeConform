@@ -192,6 +192,11 @@ engine from the configuration it reads.
   0, is "cannot decide; upgrade vibe" (exit 1, Q15). A newer PATCH
   (1.0.n) is audited as 1.0.0, because PATCH changes no verdict; the
   report shows both versions.
+  - Amended 2026-10-19 (spec 0054, contract 1.0.1): spec 0051's PATCH
+    definition now also allows a fix that makes a check match its
+    stated purpose, where no conformant verdict becomes
+    non-conformant. A vibe audits every 1.0.n as the PATCH it
+    implements.
 
 ### `vibe.yaml` version 2 (#98)
 

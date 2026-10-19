@@ -9,57 +9,163 @@ in a new repository, start to finish. This manual is the reference.
 
 ## Installing
 
-### `go install` or `go run`, by module path (no clone needed)
+Every release has two binaries, `vibe` and `vibe-guard`, for Linux, macOS
+and Windows on amd64 and arm64 (spec 0054). Install them from a release
+without Go, or build them from source.
 
-The repository is public, so Go can fetch it unauthenticated. `go install`
-puts a `vibe` binary on `$GOPATH/bin` (usually `~/go/bin`):
+### From a release
+
+A `v*` tag push runs `.github/workflows/release.yml`. GoReleaser publishes
+the release, with no draft step. A tag with a `-alpha.N`, `-beta.N` or
+`-rc.N` suffix is marked "Pre-release", so a preview never becomes "Latest
+release" (`docs/decisions/0007-release-tag-naming.md`). The release has
+one archive per tool and platform, named after the binary:
+
+- `vibe_<version>_<os>_<arch>.tar.gz`, and `.zip` on Windows;
+- `vibe-guard_<version>_<os>_<arch>.tar.gz`, and `.zip` on Windows;
+- `checksums.txt`, the SHA-256 of all 12 archives.
+
+`<version>` is the tag without its leading `v`, `<os>` is `linux`,
+`darwin` or `windows`, and `<arch>` is `amd64` or `arm64`. `vibe-guard`
+has an archive of its own, so you can install the guard without `vibe`.
+
+To install, download the archive and `checksums.txt` from the release
+page, check the checksum before you unpack anything, and put the binary
+on `PATH`:
 
 ```bash
-go install github.com/Manual-debuger/VibeConform/cmd/vibe@latest
+v=v0.12.0-alpha.1
+gh release download "$v" --repo Manual-debuger/VibeConform \
+  --pattern "vibe-guard_${v#v}_linux_amd64.tar.gz" --pattern checksums.txt
+sha256sum --check --ignore-missing checksums.txt
+tar -xzf "vibe-guard_${v#v}_linux_amd64.tar.gz" vibe-guard
 ```
 
-`go run` does the same fetch without leaving a binary behind:
+On macOS, use `shasum -a 256 --check --ignore-missing checksums.txt`.
+
+### Verifying a release
+
+Every archive, every binary inside it and `checksums.txt` has a GitHub
+artifact attestation. It records the commit and the workflow run that
+built the file. `gh attestation verify` checks it:
 
 ```bash
-go run github.com/Manual-debuger/VibeConform/cmd/vibe@latest --help
+gh attestation verify "vibe-guard_${v#v}_linux_amd64.tar.gz" \
+  --repo Manual-debuger/VibeConform
+gh attestation verify vibe-guard --repo Manual-debuger/VibeConform
 ```
 
-Pin an exact tag instead of tracking `@latest` — see
-`docs/decisions/0007-release-tag-naming.md` for what a tag looks like and
-why:
-
-```bash
-go run github.com/Manual-debuger/VibeConform/cmd/vibe@v0.1.0-alpha.1 --help
-```
-
-This previously required git credentials even with a version suffix,
-because the repository was private; it works unauthenticated now.
-
-### Prebuilt binaries
-
-`.github/workflows/release.yml` runs GoReleaser on every `v*` tag push and
-attaches per-OS/arch archives (`.tar.gz` for Linux/macOS, `.zip` for
-Windows) plus a `checksums.txt` to a GitHub Release. `.goreleaser.yaml` sets
-`release.draft: true`, so each run creates that release as a **draft**
-first — nothing is downloadable from it until a maintainer opens it on the
-Releases page and publishes it by hand.
+After each release, the release workflow installs both tools through the
+setup action on every OS and architecture that GitHub hosts. It checks
+that each binary prints the tag, verifies the attestation of every archive
+and binary, and runs `go install` for both tools at the tag. A pull
+request builds every target as a GoReleaser snapshot
+(`.github/workflows/release-snapshot.yml`), so a broken release
+configuration fails before a tag exists.
 
 ### From source
 
-Still works, and is the only path if you want to build from a commit that
-hasn't been tagged:
+For teams that do not allow prebuilt binaries, and for a commit that has
+no tag. `go install` builds a tag (or any commit) from the module proxy:
 
 ```bash
-git clone <this repo>
+go install github.com/Manual-debuger/VibeConform/cmd/vibe@v0.12.0-alpha.1
+go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@v0.12.0-alpha.1
+```
+
+The binaries go to `$GOPATH/bin` (usually `~/go/bin`). `@latest` also
+works. Go picks the newest release, and when there is none, the newest
+pre-release. Pin an exact tag where the version matters.
+
+`go run` fetches and runs without leaving a binary behind:
+
+```bash
+go run github.com/Manual-debuger/VibeConform/cmd/vibe@v0.12.0-alpha.1 --help
+```
+
+From a checkout:
+
+```bash
+git clone https://github.com/Manual-debuger/VibeConform
 cd VibeConform
 go build -o vibe ./cmd/vibe
+go build -o vibe-guard ./cmd/vibe-guard
 ```
 
-Or without building:
+The setup action has the same choice for CI: its `go-install` source
+builds both tools from the tagged source.
 
-```bash
-go run ./cmd/vibe --help
+### The setup action
+
+The setup action is a composite action at this repository's root
+(`action.yml`). It installs an exact version of `vibe` and `vibe-guard`
+in a GitHub Actions job, and it is meant for the conformance job only.
+`verify` must not need `vibe` (contract rule R-01). The action never runs
+`vibe audit`. The job's own `run:` step does. Pin the action by commit
+SHA (C-02):
+
+```yaml
+- name: Install vibe
+  uses: Manual-debuger/VibeConform@<commit SHA> # v0.12.0-alpha.1
+  with:
+    version: v0.12.0-alpha.1
+- name: vibe audit
+  run: vibe audit --repo-root .
 ```
+
+Inputs:
+
+- `version` (required): an exact version, such as `v0.12.0-alpha.1`, or a
+  Go pseudo-version. The action refuses `latest`, an empty value, build
+  metadata and anything that is not semver. Then the job's verdict cannot
+  change without a change to the repository (spec 0022).
+- `tools`: `vibe vibe-guard` by default. Name one to install only that
+  one.
+- `source`:
+  - `release` downloads the archives for the runner's OS and
+    architecture with `checksums.txt`. It checks each archive's SHA-256
+    before it unpacks anything. A mismatch or a missing entry fails the
+    step.
+  - `go-install` sets up Go inside the action (pinned) and runs
+    `go install …/cmd/<tool>@<version>`.
+  - `workspace` builds both tools from the checked-out VibeConform
+    repository, with the Go version its `go.mod` names. This is the
+    self-hosting case of ADR 0008.
+  - `auto` (the default) chooses `workspace` in a checkout of
+    VibeConform itself, `go-install` for a pseudo-version (no release
+    exists for one), and `release` otherwise.
+  When `auto` chooses `workspace`, the action says so in a notice:
+  `version` is then not installed, and the tools are built from the
+  checkout.
+- `verify-attestation`: `false` by default. With `true` and source
+  `release`, the action also runs `gh attestation verify` on each archive
+  with the `token` input.
+- `checksums`: a `checksums.txt` to check the archives against. It
+  replaces the release's own checksum file. Give a path relative to the
+  workspace: the action refuses an absolute path and a path with a `..`
+  part. This input is mainly for tests and air-gapped mirrors. With it,
+  the checksums your repository reviewed decide, not a file on the same
+  release.
+- `token`: the token `gh attestation verify` uses. The default is the
+  job's token (`github.token`).
+
+What the checks prove: the default checksum check proves integrity
+only. Each archive matches the release's own `checksums.txt`, so the
+download was not corrupted or truncated. It does not prove authenticity:
+someone who can change the release can change `checksums.txt` too. Set
+`verify-attestation: true` to add provenance. The attestation proves
+that this repository's release workflow built the archive from the tag.
+
+Outputs:
+
+- `source`: the source the action used, after `auto` is resolved
+  (`release`, `go-install` or `workspace`).
+- `bin-dir`: the directory the binaries are in, in the runner's native
+  path form. It is a directory under `RUNNER_TEMP`, and the action adds
+  it to `PATH`.
+
+`.github/workflows/setup-action.yml` tests the action on Linux, macOS and
+Windows in every pull request.
 
 ## Commands
 
@@ -111,6 +217,46 @@ vibe init prod-go v1 --repo-root ./some/other/repo
   Error: init: new manifest: "standard" is required
   ```
 
+### `vibe init --skill`
+
+Writes the setup skill, `vibeconform-setup`, into the repository (spec
+0054), for the contract instead of the template-sync system. See "The
+setup skill" below for what it does.
+
+```bash
+vibe init --skill
+vibe init --skill --repo-root ./some/other/repo
+```
+
+- It writes the skill to `.claude/skills/vibeconform-setup/` (Claude
+  Code) and `.agents/skills/vibeconform-setup/` (Codex). The two copies
+  are byte-identical.
+- It replaces every file in those two directories with the version
+  embedded in this `vibe`, and removes files there that this version
+  does not have, with the directories they leave empty. Run it again
+  after upgrading `vibe`.
+- It writes nothing else: it reads no `vibe.yaml`, runs no sync, and
+  works with a version 1 configuration, a version 2 one or none.
+  `.claude/skills/` is not a guardrail path, so an agent may run it.
+- It prints each path it removed (`removed <path>`) and wrote
+  (`wrote <path>`).
+- The skill's only placeholder is the `vibe` version. `init --skill`
+  replaces it with the version the `vibe-guard` install hint uses: this
+  `vibe`'s release version, or `latest` for a source build.
+- `--skill` takes no arguments: `vibe init --skill prod-go v1` is an
+  error. `vibe init <standard> <version>` is unchanged.
+
+### `vibe --version`
+
+Prints the `vibe` version and the contract version it implements:
+
+```console
+$ vibe --version
+vibe version v0.12.0-alpha.1 (contract 1.0.0)
+```
+
+The setup skill's upgrade flow reads the contract version from it.
+
 ### `vibe audit`
 
 The conformance gate: checks every resource the declared standard resolves
@@ -125,7 +271,7 @@ configuration it reads picks which:
   this section describes, exactly as before;
 - a top-level `contract:` key (a version 2 `vibe.yaml`, see "`vibe.yaml`
   version 2" below) runs the contract audit, which checks the rules of
-  contract 1.0.0 (spec 0051). See "`vibe audit` on a contract" below.
+  contract 1.0.1 (spec 0051). See "`vibe audit` on a contract" below.
 
 A file with both keys, or with neither, is an error that names the two
 (exit `1`). `vibe diff`, `vibe sync` and `vibe init` read version 1
@@ -249,7 +395,7 @@ as correct. `sync` refuses outright for the same reason; see below.
 
 With a version 2 configuration (a top-level `contract:` key), `vibe
 audit` checks the repository against the rules of the contract version
-it declares: 25 rules in contract 1.0.0, in six categories (spec 0051,
+it declares: 25 rules in contract 1.0.1, in six categories (spec 0051,
 spec 0052). Each rule ends as `pass`, `fail`, `not applicable`, `waived`,
 `cannot decide` or `not run`. A full run decides every part of every
 rule: the static checks, then the execution checks and probes in a
@@ -395,7 +541,7 @@ Verdict: cannot decide. 10 rules did not run (--static).
 The verdict line is `Verdict: conformant`, `Verdict: not conformant` or
 `Verdict: cannot decide. <reason>`. When the configuration declares a
 newer PATCH, such as `1.0.3`, the header says
-`contract 1.0.0 (declared 1.0.3; vibe …)`.
+`contract 1.0.1 (declared 1.0.3; vibe …)`.
 
 **What is listed.** Not-applicable rules, waivers (in force, expired, or
 unused because the rule is not applicable), every exception in
@@ -421,12 +567,18 @@ report:
 
 ```
 Error: vibe.yaml: waivers[0].until: "2026-13-01" is not a date YYYY-MM-DD
-Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements contract 1.0.0, and the configuration declares 1.1.0
+Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements contract 1.0.1, and the configuration declares 1.1.0
 ```
 
-**Contract versions.** This vibe implements contract 1.0.0. A declared
-version must be `X.Y.Z`. A newer PATCH (`1.0.n`) is audited as 1.0.0,
-since a PATCH changes no verdict, and the report shows both versions.
+**Contract versions.** This vibe implements contract 1.0.1. A declared
+version must be `X.Y.Z`. Every PATCH of 1.0 (`1.0.n`, older or newer)
+is audited as 1.0.1, since a PATCH makes no conformant repository
+non-conformant (spec 0051, "Versioning"), and the report
+shows both versions when they differ. A repository set up under 1.0.0
+keeps `contract: 1.0.0`. Spec 0051, "Changes", lists what each version
+changed: in 1.0.1, A-04 fails a `.claude/hooks/policy.json` that
+`vibe-guard` cannot load when a PreToolUse hook runs `vibe-guard hook`,
+and the allow cases A-02 and A-08 then see refused name `policy.json`.
 Another MAJOR, or a MINOR above 0, is "cannot decide; upgrade vibe"
 (exit `1`).
 
@@ -499,7 +651,7 @@ jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "
   absent, so a local file cannot make a repository look conformant.
 - A file a rule needs that does not parse fails that rule, and the
   finding names the file and the parse error.
-- **Not applicable** in contract 1.0.0: C-05 when `platforms` has no
+- **Not applicable** in contract 1.0.1: C-05 when `platforms` has no
   `windows`; every A rule when `agents` has no `claude`; R-02 when
   `agents` is empty, and R-02's `CLAUDE.md` half when `agents` has no
   `claude`.
@@ -910,10 +1062,16 @@ reviewable change to `vibe_version`. It uses `go install` rather than
 `go run` because `go run` reports every non-zero exit as 1, which would
 blur "not conformant" (2) and "could not answer" (1).
 
-The generated `.github/workflows/conformance.yml` runs `task audit` in its
-own job, `Conformance / audit`, separate from `ci.yml`'s `CI / gate`. The
-job has no step that installs `vibe`; step 2 obtains it. Make both checks
-required in branch protection. Nothing else in `Taskfile.yml` depends on
+The generated `.github/workflows/conformance.yml` runs the audit in its
+own job, `Conformance / audit`, separate from `ci.yml`'s `CI / gate`.
+Since spec 0054 the job needs neither Go nor Task. It reads
+`vibe_version` from `.vibe/state.yaml`, installs exactly that version with
+the setup action (see "The setup action" above, pinned by commit SHA
+through the pin table), and runs `vibe audit --repo-root .` itself. The
+verdict is pinned as with step 2: a new VibeConform release cannot change
+it. In VibeConform itself, the action's `source: auto` builds `vibe` from
+the checkout instead (ADR 0008). Make both checks required in branch
+protection. Nothing else in `Taskfile.yml` depends on
 `vibe`: since spec 0017, `task verify` and `task verify-ci` use native
 language tooling only, so a contributor with no `vibe` installed can still
 run the full verification gate.
@@ -1202,6 +1360,21 @@ adopting repository): it runs `task verify` inside each example with no
 `vibe` on `PATH`, then builds `vibe` from source and runs `task audit` as a
 separate step, so a template change that breaks linting fails CI, not just
 a byte-comparison test.
+
+**No setup-go.** The TypeScript and Python examples' workflow files have
+no setup-go step (spec 0054). `ci.yml` installs Task with
+`go-task/setup-task`, pinned by SHA, with Task's checksum checked. The
+monorepo's TypeScript and Python jobs do the same; its Go component's job
+and its `workflows` job keep setup-go, because they need Go. The
+conformance job installs `vibe` with the setup action, and what that needs
+depends on the recorded `vibe_version`:
+
+- a release (an example synced by a released `vibe`): the action
+  downloads the binaries, and no Go is installed at all;
+- a pseudo-version (an example synced by a `vibe` built from source, as
+  the examples in this repository are): no release exists, so the
+  action's `go-install` source sets up Go inside the action and builds
+  `vibe` at that commit. The workflow file still has no setup-go step.
 
 ## What `prod-mono/v1` manages
 
@@ -2171,6 +2344,81 @@ documentation or VibeConform's repository (spec 0041, ADR 0022):
 - It does not list the repository's managed files: `vibe audit` does.
 - Deselecting an agent removes its copy.
 
+## The setup skill
+
+`vibeconform-setup` (spec 0054) takes a repository in any of the
+contract's languages to a conformant `vibe audit` under contract 1.0.1,
+without the template-sync system. `vibe init --skill` writes it; the
+repository owns it from then on. It is a different skill from
+`vibeconform` above, which describes the template-sync model and is
+removed with it (#112).
+
+What the agent does with it, in order:
+
+1. **Detect** the components and their languages (`go.mod`,
+   `pyproject.toml`, `package.json`), the existing task runner, hook
+   manager, CI, update bot, lint and agent configuration, and whether
+   the template-sync system set the repository up. It reads no secret
+   file.
+2. **Migrate** first when the template-sync system is there
+   (`reference/migrate.md`): merge each seam pair into one file, fold
+   `Taskfile.local.yml` into `Taskfile.yml`, remove `.vibe/`,
+   `Taskfile.vibe.yml`, the managed-region markers and the prose about
+   the old system. The old guard keeps working until the new
+   `.claude/settings.json` is in place; its task and script go last.
+3. **Decide the entrypoints**: keep the team's runner (Task, make, just,
+   package scripts), and use Task only when there is none. Write
+   `vibe.yaml` version 2. A monorepo whose CI verifies each component in
+   its own job declares `verify` as the list of those commands.
+4. **Satisfy the rules** one category at a time from
+   `reference/rules.md`, keeping whatever already satisfies a rule. Each
+   configuration is one file; no `*.local.*` or `*.base.*`. The skill's
+   own directories go into the formatter's and linters' ignores. The
+   setup action is pinned to a release, never `latest`.
+   `.claude/hooks/policy.json` comes before `.claude/settings.json`; a
+   guard refuses the agent that file, so the skill hands you a command
+   that writes it, and stops until you have run it.
+5. **Install `vibe-guard`** from the release archive with its SHA-256
+   checked against `checksums.txt`, or with `go install`, and check that
+   a non-interactive shell, as hooks use, finds it.
+6. **Audit loop**: stage the changes (the audit reads tracked files
+   only), `vibe audit --static --json`, then `vibe audit --json`, fixing
+   each finding by its `file` and `fix`, until the verdict is
+   conformant. It stops and reports when a finding needs a person (a
+   missing tool, the guard policy, an unlock, an unsupported CI
+   provider, a waiver) or when two rounds change nothing.
+7. **Report** the verdict, the files written, changed and removed, and
+   the SHOULD rules that still fail.
+
+The skill's files:
+
+| Path | Holds |
+|---|---|
+| `SKILL.md` | The process above, for the agent |
+| `reference/rules.md` | One entry per rule of contract 1.0.1: what satisfies it, which file to start from |
+| `reference/vibe-yaml/` | `vibe.yaml` version 2 for Go, Python, TypeScript and a monorepo |
+| `reference/taskrunner/` | Taskfiles per stack, with `verify`, `verify:fast`, `fmt`, `fmt:check` and the agent hook tasks |
+| `reference/hooks/` | `lefthook.yml` per stack |
+| `reference/ci/` | `ci.yml` (verify on Linux and Windows, a vulnerability scan), `audit.yml` (the audit job with the setup action), `dependabot.yml`, the pull request template |
+| `reference/agents/` | `.claude/settings.json` with the `vibe-guard` hooks, `policy.json` version 2, the `AGENTS.md` Verification section, `CLAUDE.md` |
+| `reference/lint/` | golangci-lint; ruff and pyright; ESLint, Prettier (with a `.prettierignore`) and `tsconfig.json`, each one file. The ESLint, Prettier and Ruff files exclude the skill's own directories |
+| `reference/optional/` | Graphify, VS Code, Zed, language servers, the `AGENTS.md` workflow sections and a docs layout |
+| `reference/migrate.md` | Leaving the template-sync system |
+| `reference/upgrade.md` | The upgrade flow |
+
+The reference files are rendered from the module templates, with each
+seam pair merged and everything specific to `vibe sync` removed. The
+reference hook commands are `internal/guard`'s, so the skill and
+`vibe-guard` cannot disagree.
+
+**Upgrading.** After installing a newer `vibe`, run `vibe init --skill`,
+then ask the agent to upgrade. It compares `contract:` in `vibe.yaml`
+with the contract `vibe --version` names. Within a MAJOR it bumps
+`contract:`, updates `vibe-guard` and the setup action, and runs the
+audit loop. Across a MAJOR it first asks you to run `vibe unlock` in
+your own terminal, because it must change `.claude/settings.json` or
+`.claude/hooks/`.
+
 ## Agent hooks
 
 When the `claude` integration is selected — the default — the standard
@@ -2556,7 +2804,7 @@ restart any running agent session.
 
 ### `vibe-guard`, the reference guard
 
-`vibe-guard` (spec 0053) is the guard contract 1.0.0's guard probes are
+`vibe-guard` (spec 0053) is the guard contract 1.0.1's guard probes are
 written against. It parses commands instead of matching text, so the
 respellings in the limitations above (a quoted command name, `eval`,
 flags after many operands, a variable in a flag) are refused. It is a
@@ -2588,17 +2836,22 @@ every tool call refused.
 
 ```text
 PreToolUse (Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit):
-  command -v vibe-guard >/dev/null 2>&1 || { echo "vibe-guard is not installed; install it: go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@<version>" >&2; exit 2; }; vibe-guard hook
+  command -v vibe-guard >/dev/null 2>&1 || { echo "vibe-guard is not installed; install it: go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@<version>, or download it from https://github.com/Manual-debuger/VibeConform/releases/tag/<version>" >&2; exit 2; }; vibe-guard hook
 Stop:
   vibe-guard relock 2>/dev/null; task verify:fast 1>&2 </dev/null || task -x hook:done
 ```
 
 `command -v` is a shell builtin, so a missing `vibe-guard` refuses every
-call with the install line, even with only the system's `PATH`.
-`<version>` is the version of the `vibe` that synced the settings, so
-the guard installed matches it; a `vibe` built without a fetchable
-version (`dev`, or one with `+dirty`) writes `latest`. Each `vibe`
-version that syncs therefore rewrites this line.
+call with the install line, even with only the system's `PATH`. The line
+names `go install` and the release page, so a developer without Go can
+follow it too (spec 0054). `<version>` is the version of the `vibe` that
+synced the settings, so the guard installed matches it; a `vibe` built
+without a fetchable version (`dev`, one with `+dirty`, or a
+pseudo-version) writes `latest`, and the link is then to the releases
+page, `https://github.com/Manual-debuger/VibeConform/releases`. Each
+`vibe` version that syncs therefore rewrites this line. The rule lives
+in `internal/guard` (`InstallVersion`), beside the reference commands,
+and `vibe init --skill` uses the same rule.
 
 **Commands:**
 
@@ -3019,7 +3272,7 @@ as you gave it.
   pipes or redirections); write a list instead. A missing, empty or
   compound required entrypoint is not a configuration error: V-04 fails,
   and the rest of the report still runs.
-- **Waivers.** `rule` must be a rule ID of contract 1.0.0 and a SHOULD
+- **Waivers.** `rule` must be a rule ID of contract 1.0.1 and a SHOULD
   rule: a MUST rule cannot be waived. `reason` must be non-empty after
   trimming. `until` is a date, `YYYY-MM-DD`, and the waiver is in force
   through the end of that day in UTC. At most one waiver per rule. An

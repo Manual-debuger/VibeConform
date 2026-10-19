@@ -1,10 +1,10 @@
 schema: 4
-vibe_version: v0.11.0-alpha.1.0.20261018055443-5404a9ae7bae
+vibe_version: v0.12.0-alpha.1.0.20261019082702-35f13c19cf7d
 standard: prod-go/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
       ownership: generated
-      sha256: 7f1da97233b07c85b3df7a702c7181eb83a9495af4ba71b6aff245099eb6d247
+      sha256: dd92c6217e47e8d60b1aa602286a9e8f5ecc4a64ada31770422389c9b42e64f1
     - path: .claude/hooks/block-dangerous.sh
       ownership: generated
       sha256: 8c679ecb260a9e182c85c58542e7187eea364f320617a5d2fd23d78ab4e4ed73
@@ -16,13 +16,13 @@ resources:
       sha256: a2ec8b045e297426516a895dc4d58bfba7d9f9ca3665f3bc84e0ae8c1edbe121
     - path: .claude/settings.json
       ownership: generated
-      sha256: 7fe6ec2f300db2c147d07fdc843de29873e7071d4f0320fba897a34e55e2407e
+      sha256: 8c915822fd50d2e25207de3de51bbfb062440232ba684535fbad514f974c6c7d
     - path: .claude/skills/spec/SKILL.md
       ownership: generated
       sha256: 6e73fcab0e36e89b871f8980dd119fb986b6d582d6ae38e33063e6d179256ba9
     - path: .claude/skills/vibeconform/SKILL.md
       ownership: generated
-      sha256: 7f1da97233b07c85b3df7a702c7181eb83a9495af4ba71b6aff245099eb6d247
+      sha256: dd92c6217e47e8d60b1aa602286a9e8f5ecc4a64ada31770422389c9b42e64f1
     - path: .codex/config.toml
       ownership: generated
       sha256: 886d348f8109660e2e05069f7caba033d3035cbb25f1db58b4b80ae9f188c931
@@ -44,7 +44,7 @@ resources:
       sha256: f14a93d5da8a5c9a606277b5e8f232109dd3c1bda0a9194a50f06ebae2f5896e
     - path: .github/workflows/conformance.yml
       ownership: generated
-      sha256: 9125bd605bd97528fe7f157bff2461c48abda862ab67b58f8d92ee187e260714
+      sha256: b89c435cd56893d2c23f8dc6dd37b57c18796bed0c6666900262baadf4534dec
     - path: .gitignore
       section_id: claude
       ownership: managed-section

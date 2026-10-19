@@ -392,6 +392,26 @@ func TestGuardProbeA08(t *testing.T) {
 			t.Errorf("A-08 has %d findings, want 6:\n%s", len(p.Findings), findingText(p))
 		}
 	})
+	// Pilot P2 (contract 1.0.1): vibe-guard refuses every call while it
+	// cannot load policy.json, and the allow cases it refuses point at
+	// policy.json, not at the settings.
+	t.Run("a policy vibe-guard cannot load fails A-02 and A-08 at policy.json", func(t *testing.T) {
+		t.Parallel()
+		rep := audit(t, guardFixture(t, map[string]string{
+			settings:                    guardStopSettings(referenceGuard, "vibe-guard relock"),
+			".claude/hooks/policy.json": `{"version": 2, "tools": [], "rules": [], "exceptions": []}` + "\n",
+		}), []string{"A-02", "A-08"}, bin)
+		for _, id := range []string{"A-02", "A-08"} {
+			assertPart(t, rep, id, contract.Probe, contract.ResultFail,
+				"policy-error",
+				"Fix: make .claude/hooks/policy.json a policy vibe-guard loads")
+			for _, f := range part(t, rep, id, contract.Probe).Findings {
+				if strings.Contains(f.Message, "should be allowed") && f.File != ".claude/hooks/policy.json" {
+					t.Errorf("%s finding names %s, want .claude/hooks/policy.json: %s", id, f.File, f.Message)
+				}
+			}
+		}
+	})
 	t.Run("a Stop hook without vibe-guard relock fails A-08", func(t *testing.T) {
 		t.Parallel()
 		rep := audit(t, guardFixture(t, map[string]string{settings: guardStopSettings(referenceGuard, "true")}),

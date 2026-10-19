@@ -22,30 +22,21 @@ func agentGuard(v string) *module.Context {
 		VibeVersion: testVibeVersion}
 }
 
-// TestVibeGuardInstallVersion: the install hint names the running vibe's
-// version when go install can fetch it, and latest otherwise (spec 0053,
-// "The reference hook commands").
+// TestVibeGuardInstallVersion: the settings' install hint names the
+// version internal/guard's version rule picks for the running vibe
+// (spec 0054, "The install hint"; the rule's cases are in
+// internal/guard).
 func TestVibeGuardInstallVersion(t *testing.T) {
-	for in, want := range map[string]string{
-		"v0.12.0":         "v0.12.0",
-		"v0.12.0-alpha.1": "v0.12.0-alpha.1",
-		// A pseudo-version changes with every commit of a repository
-		// that builds vibe from source, as this one's Conformance /
-		// audit job does; naming it made that job fail on every commit.
-		"v0.11.0-alpha.1.0.20261017172609-46246ad76fbf":       "latest",
-		"v0.11.0-alpha.1.0.20261017172609-46246ad76fbf+dirty": "latest",
-		"dev":     "latest",
-		"(devel)": "latest",
-		"":        "latest",
-		"test":    "latest",
+	for vibeVersion, want := range map[string]string{
+		testVibeVersion: "go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@" + testVibeVersion + ", ",
+		"dev":           "go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@latest, ",
 	} {
-		if got := VibeGuardVersion(in); got != want {
-			t.Errorf("VibeGuardVersion(%q) = %q, want %q", in, got, want)
+		mctx := agentGuard(module.AgentGuardVibeGuard)
+		mctx.VibeVersion = vibeVersion
+		got := resolveContents(t, mctx)[SettingsPath]
+		if !bytes.Contains(got, []byte(want)) {
+			t.Errorf("vibe %s: settings.json does not name %s:\n%s", vibeVersion, want, got)
 		}
-	}
-	got := resolveContents(t, agentGuard(module.AgentGuardVibeGuard))[SettingsPath]
-	if want := "go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@" + testVibeVersion + `\"`; !bytes.Contains(got, []byte(want)) {
-		t.Errorf("settings.json does not name %s:\n%s", want, got)
 	}
 }
 

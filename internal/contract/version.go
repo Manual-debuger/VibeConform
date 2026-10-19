@@ -7,12 +7,13 @@ import (
 )
 
 // Implemented is the contract version this vibe implements.
-const Implemented = "1.0.0"
+const Implemented = "1.0.1"
 
 // Versions is the contract version a configuration declares and the one
 // the audit checks it against. They differ only for a newer PATCH, which
-// changes no verdict and is audited as Implemented (spec 0052, "Contract
-// versions"); the report shows both.
+// makes no conformant repository non-conformant and is audited as
+// Implemented (spec 0051, "Versioning"; spec 0052, "Contract versions");
+// the report shows both.
 type Versions struct {
 	Declared string
 	Audited  string
@@ -34,7 +35,8 @@ func (e *UnsupportedVersionError) Error() string {
 var versionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
 // parseVersion checks an X.Y.Z version and returns its MAJOR and MINOR;
-// PATCH changes no verdict. ok is false for anything else.
+// a PATCH makes no conformant repository non-conformant, so it is not
+// returned. ok is false for anything else.
 func parseVersion(v string) (major, minor int, ok bool) {
 	m := versionPattern.FindStringSubmatch(v)
 	if m == nil {

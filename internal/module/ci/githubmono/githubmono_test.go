@@ -10,6 +10,7 @@ import (
 
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
+	"github.com/Manual-debuger/VibeConform/internal/module/ci/pins"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
@@ -30,6 +31,7 @@ func resolve(t *testing.T, cs []manifest.Component) []resource.Resource {
 
 type step struct {
 	Name             string            `yaml:"name"`
+	Uses             string            `yaml:"uses"`
 	If               string            `yaml:"if"`
 	Run              string            `yaml:"run"`
 	WorkingDirectory string            `yaml:"working-directory"`
@@ -104,6 +106,34 @@ func TestJobPerComponent(t *testing.T) {
 			if s := runs["uv sync"]; s.WorkingDirectory != c.Path {
 				t.Errorf("py job %s installs in %q, want %q", c.ID, s.WorkingDirectory, c.Path)
 			}
+		}
+	}
+}
+
+// TestOnlyGoJobsSetUpGo pins spec 0054: a TypeScript or Python component's
+// job installs Task with go-task/setup-task, pinned by SHA, and no Go.
+func TestOnlyGoJobsSetUpGo(t *testing.T) {
+	wf, _ := parseCI(t, components)
+	for _, c := range components {
+		var setupGo, setupTask bool
+		for _, s := range wf.Jobs[c.ID].Steps {
+			setupGo = setupGo || strings.HasPrefix(s.Uses, "actions/setup-go@") || strings.HasPrefix(s.Run, "go install")
+			if strings.HasPrefix(s.Uses, "go-task/setup-task@") {
+				setupTask = len(strings.TrimPrefix(s.Uses, "go-task/setup-task@")) == 40 &&
+					s.With["version"] == pins.Current.TaskSetup() && s.With["checksum"] == pins.Current.TaskSHA256
+			}
+		}
+		if c.Profile == manifest.ProfileGo {
+			if !setupGo {
+				t.Errorf("go job %s sets up no Go", c.ID)
+			}
+			continue
+		}
+		if setupGo {
+			t.Errorf("%s job %s sets up Go", c.Profile, c.ID)
+		}
+		if !setupTask {
+			t.Errorf("%s job %s does not install Task with a SHA-pinned go-task/setup-task at the table's version and checksum", c.Profile, c.ID)
 		}
 	}
 }

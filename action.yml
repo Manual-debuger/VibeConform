@@ -1,0 +1,320 @@
+name: VibeConform setup
+description: >-
+  Install an exact version of vibe and vibe-guard for a conformance job:
+  from a release with its checksums checked, or built from source.
+author: Manual-debuger
+
+# The setup action (spec 0054). It is meant for the conformance job only:
+# verify must not need vibe (contract rule R-01). It never runs vibe audit;
+# the job's own run: step does. Use it pinned by commit SHA (C-02):
+#
+#   - uses: Manual-debuger/VibeConform@<commit SHA> # <tag>
+#     with:
+#       version: v0.12.0-alpha.1
+#
+# The release archive names below follow .goreleaser.yaml.
+
+inputs:
+  version:
+    description: >-
+      The exact version to install, such as v0.12.0-alpha.1, or a Go
+      pseudo-version. latest, an empty value and anything that is not
+      semver are refused, so the job's verdict cannot change without a
+      change to the repository.
+    required: true
+  tools:
+    description: Which tools to install, separated by spaces.
+    required: false
+    default: vibe vibe-guard
+  source:
+    description: >-
+      auto, release, go-install or workspace. release downloads the
+      archives and checks them against checksums.txt. go-install builds
+      them from the tagged source with go install. workspace builds them
+      from the checked-out VibeConform repository. auto picks workspace in
+      a checkout of VibeConform itself, go-install for a pseudo-version,
+      and release otherwise.
+    required: false
+    default: auto
+  verify-attestation:
+    description: >-
+      true also runs gh attestation verify on each downloaded archive.
+      Applies to source release only.
+    required: false
+    default: "false"
+  checksums:
+    description: >-
+      A checksums.txt in the checkout to check the archives against,
+      instead of the release's own, as a path relative to the workspace.
+      An absolute path and a path with a .. part are refused. Meant for
+      tests and air-gapped mirrors. Applies to source release only.
+    required: false
+    default: ""
+  token:
+    description: The token gh attestation verify uses.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  source:
+    description: The source the action used after resolving auto.
+    value: ${{ steps.resolve.outputs.source }}
+  bin-dir:
+    description: The directory the binaries were installed to; it is on PATH.
+    value: ${{ steps.resolve.outputs.bin-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the inputs
+      id: resolve
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        TOOLS: ${{ inputs.tools }}
+        SOURCE: ${{ inputs.source }}
+        VERIFY_ATTESTATION: ${{ inputs.verify-attestation }}
+        CHECKSUMS: ${{ inputs.checksums }}
+      run: |
+        fail() { echo "::error title=VibeConform setup::$1"; exit 1; }
+
+        semver='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$'
+        pseudo='[0-9]{14}-[0-9a-f]{12}$'
+        case "$VERSION" in
+          "") fail "version is empty. Name an exact release, such as v0.12.0-alpha.1." ;;
+          latest) fail "version: latest is refused. Name an exact release, so that the verdict cannot change without a change to the repository." ;;
+        esac
+        if ! printf '%s\n' "$VERSION" | grep -Eq "$semver"; then
+          fail "version $VERSION is not an exact semver version such as v0.12.0-alpha.1."
+        fi
+
+        tools=""
+        for tool in $TOOLS; do
+          case "$tool" in
+            vibe | vibe-guard) tools="$tools $tool" ;;
+            *) fail "tools names $tool; only vibe and vibe-guard can be installed." ;;
+          esac
+        done
+        [ -n "$tools" ] || fail "tools is empty."
+
+        case "$VERIFY_ATTESTATION" in
+          true | false) ;;
+          *) fail "verify-attestation is $VERIFY_ATTESTATION; use true or false." ;;
+        esac
+
+        # checksums names a file in the checkout: a relative path that stays
+        # inside GITHUB_WORKSPACE. An absolute path or a .. part is refused.
+        if [ -n "$CHECKSUMS" ]; then
+          case "$CHECKSUMS" in
+            /* | \\* | [A-Za-z]:*) fail "checksums is $CHECKSUMS, an absolute path. Name a file in the checkout, relative to the workspace." ;;
+          esac
+          case "/$CHECKSUMS/" in
+            */../* | *\\..\\* | */..\\* | *\\../*) fail "checksums is $CHECKSUMS, which leaves the checkout. Name a file in the checkout, relative to the workspace." ;;
+          esac
+        fi
+
+        source="$SOURCE"
+        case "$source" in
+          auto)
+            if [ -d "$GITHUB_WORKSPACE/cmd/vibe" ] && [ -f "$GITHUB_WORKSPACE/go.mod" ] &&
+              tr -d '\r' < "$GITHUB_WORKSPACE/go.mod" | grep -Eq '^module github\.com/Manual-debuger/VibeConform[[:space:]]*$'; then
+              source=workspace
+              echo "::notice title=VibeConform setup::source auto chose workspace in this checkout of VibeConform: the tools are built from the checkout, and version $VERSION is not installed."
+            elif printf '%s\n' "$VERSION" | grep -Eq "$pseudo"; then
+              source=go-install
+            else
+              source=release
+            fi
+            ;;
+          release | go-install | workspace) ;;
+          *) fail "source is $source; use auto, release, go-install or workspace." ;;
+        esac
+        if [ "$source" = release ] && printf '%s\n' "$VERSION" | grep -Eq "$pseudo"; then
+          fail "version $VERSION is a pseudo-version, which has no release. Use source go-install."
+        fi
+        if [ "$source" != release ] && { [ "$VERIFY_ATTESTATION" = true ] || [ -n "$CHECKSUMS" ]; }; then
+          echo "::notice title=VibeConform setup::verify-attestation and checksums apply to source release only; source is $source."
+        fi
+
+        # The steps below run in bash, which gets the directory in its own
+        # form (/d/a/_temp/… on Windows); bin-dir is the runner's native form.
+        tmp="$RUNNER_TEMP"
+        native="$RUNNER_TEMP/vibeconform-$VERSION/bin"
+        if [ "$RUNNER_OS" = Windows ] && command -v cygpath > /dev/null 2>&1; then
+          tmp=$(cygpath -u "$RUNNER_TEMP")
+          native=$(cygpath -w "$tmp/vibeconform-$VERSION/bin")
+        fi
+        bin="$tmp/vibeconform-$VERSION/bin"
+        mkdir -p "$bin"
+        echo "VibeConform setup: installing$tools $VERSION from source $source."
+        {
+          echo "source=$source"
+          echo "tools=${tools# }"
+          echo "bin=$bin"
+          echo "bin-dir=$native"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Install from the release
+      if: steps.resolve.outputs.source == 'release'
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        TOOLS: ${{ steps.resolve.outputs.tools }}
+        BIN: ${{ steps.resolve.outputs.bin }}
+        VERIFY_ATTESTATION: ${{ inputs.verify-attestation }}
+        CHECKSUMS: ${{ inputs.checksums }}
+        GH_TOKEN: ${{ inputs.token }}
+        REPO: Manual-debuger/VibeConform
+      run: |
+        fail() { echo "::error title=VibeConform setup::$1"; exit 1; }
+
+        case "$RUNNER_OS" in
+          Linux) os=linux ;;
+          macOS) os=darwin ;;
+          Windows) os=windows ;;
+          *) fail "no release for runner OS $RUNNER_OS." ;;
+        esac
+        case "$RUNNER_ARCH" in
+          X64) arch=amd64 ;;
+          ARM64) arch=arm64 ;;
+          *) fail "no release for runner architecture $RUNNER_ARCH." ;;
+        esac
+        ext=tar.gz
+        exe=""
+        if [ "$os" = windows ]; then
+          ext=zip
+          exe=.exe
+        fi
+
+        sha256() {
+          if command -v sha256sum > /dev/null 2>&1; then
+            sha256sum "$1" | cut -d ' ' -f 1
+          else
+            shasum -a 256 "$1" | cut -d ' ' -f 1
+          fi
+        }
+
+        work="${BIN%/bin}/download"
+        mkdir -p "$work"
+        base="https://github.com/$REPO/releases/download/$VERSION"
+
+        sums="$work/checksums.txt"
+        if [ -n "$CHECKSUMS" ]; then
+          # The resolve step refused an absolute path and a .. part.
+          workspace="$GITHUB_WORKSPACE"
+          if [ "$RUNNER_OS" = Windows ] && command -v cygpath > /dev/null 2>&1; then
+            workspace=$(cygpath -u "$GITHUB_WORKSPACE")
+          fi
+          [ -f "$workspace/$CHECKSUMS" ] || fail "checksums file $CHECKSUMS not found in the checkout."
+          cp "$workspace/$CHECKSUMS" "$sums" || fail "could not copy checksums file $CHECKSUMS."
+        else
+          curl -fsSL --retry 3 -o "$sums" "$base/checksums.txt" ||
+            fail "could not download checksums.txt of release $VERSION. Is $VERSION a published release?"
+        fi
+
+        for tool in $TOOLS; do
+          archive="${tool}_${VERSION#v}_${os}_${arch}.${ext}"
+          curl -fsSL --retry 3 -o "$work/$archive" "$base/$archive" ||
+            fail "could not download $archive from release $VERSION."
+
+          # The checksum is checked before anything is unpacked.
+          want=$(awk -v name="$archive" '$2 == name { print $1 }' "$sums")
+          [ -n "$want" ] || fail "checksums.txt has no entry for $archive."
+          got=$(sha256 "$work/$archive")
+          [ "$got" = "$want" ] || fail "checksum mismatch for $archive: got $got, checksums.txt says $want."
+          echo "$archive: checksum OK"
+
+          if [ "$VERIFY_ATTESTATION" = true ]; then
+            gh attestation verify "$work/$archive" --repo "$REPO" --source-ref "refs/tags/$VERSION" ||
+              fail "gh attestation verify failed for $archive."
+          fi
+
+          dest="$work/$tool"
+          rm -rf "$dest"
+          mkdir -p "$dest"
+          if [ "$ext" = zip ]; then
+            # Only Windows archives are zips. pwsh is a native program: it
+            # gets Windows paths, through the environment rather than
+            # inside its command text, so no path needs quoting there.
+            ARCHIVE_NATIVE=$(cygpath -w "$work/$archive") DEST_NATIVE=$(cygpath -w "$dest") \
+              pwsh -NoProfile -NonInteractive -Command \
+              'Expand-Archive -LiteralPath $env:ARCHIVE_NATIVE -DestinationPath $env:DEST_NATIVE -Force' ||
+              fail "could not unpack $archive."
+          else
+            tar -xzf "$work/$archive" -C "$dest"
+          fi
+          [ -f "$dest/$tool$exe" ] || fail "$archive holds no $tool$exe."
+          cp "$dest/$tool$exe" "$BIN/$tool$exe"
+          chmod +x "$BIN/$tool$exe"
+        done
+
+    - name: Set up Go for go install
+      if: steps.resolve.outputs.source == 'go-install'
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: "1.27.0"
+        cache: false
+
+    - name: Build with go install
+      if: steps.resolve.outputs.source == 'go-install'
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        TOOLS: ${{ steps.resolve.outputs.tools }}
+        BIN: ${{ steps.resolve.outputs.bin }}
+        GOBIN_NATIVE: ${{ steps.resolve.outputs.bin-dir }}
+      run: |
+        # go is a native program: give it the runner's own path form.
+        for tool in $TOOLS; do
+          GOBIN="$GOBIN_NATIVE" go install "github.com/Manual-debuger/VibeConform/cmd/$tool@$VERSION" || {
+            echo "::error title=VibeConform setup::go install of $tool@$VERSION failed."
+            exit 1
+          }
+        done
+
+    - name: Set up Go for the workspace build
+      if: steps.resolve.outputs.source == 'workspace'
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: ${{ github.workspace }}/go.mod
+        cache: false
+
+    # ADR 0008's self-hosting case: VibeConform audits itself with the vibe
+    # its working tree builds, so a template change is not compared with
+    # the previous release's templates.
+    - name: Build from the checkout
+      if: steps.resolve.outputs.source == 'workspace'
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        TOOLS: ${{ steps.resolve.outputs.tools }}
+        BIN: ${{ steps.resolve.outputs.bin }}
+      run: |
+        exe=""
+        if [ "$RUNNER_OS" = Windows ]; then exe=.exe; fi
+        for tool in $TOOLS; do
+          go build -o "$BIN/$tool$exe" "./cmd/$tool" || {
+            echo "::error title=VibeConform setup::building $tool from the checkout failed."
+            exit 1
+          }
+        done
+
+    - name: Add the binaries to PATH
+      shell: bash
+      env:
+        BIN: ${{ steps.resolve.outputs.bin }}
+        TOOLS: ${{ steps.resolve.outputs.tools }}
+      run: |
+        dir="$BIN"
+        if [ "$RUNNER_OS" = Windows ] && command -v cygpath > /dev/null 2>&1; then
+          dir=$(cygpath -w "$BIN")
+        fi
+        echo "$dir" >> "$GITHUB_PATH"
+        exe=""
+        if [ "$RUNNER_OS" = Windows ]; then exe=.exe; fi
+        for tool in $TOOLS; do
+          case "$tool" in
+            vibe) "$BIN/vibe$exe" --version ;;
+            vibe-guard) "$BIN/vibe-guard$exe" version ;;
+          esac
+        done

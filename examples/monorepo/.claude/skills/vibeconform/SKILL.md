@@ -108,7 +108,7 @@ VibeConform decodes the file strictly: an unknown key is an error.
   `gitlab` or `none`. This repository uses `github`.
 - CI: `.github/workflows/ci.yml` runs one job per component and ends
   in the `CI / gate` check. `.github/workflows/conformance.yml` runs
-  `task audit` as `Conformance / audit`. Both must be required checks.
+  `vibe audit` as `Conformance / audit`. Both must be required checks.
 
 ## Removing VibeConform
 

@@ -69,6 +69,15 @@ consequence below describes the situation before that change. In a
 TypeScript or Python repository the branch is now inert, not absent: it
 costs one `if` and saves keeping three workflow templates.
 
+**Update (spec 0054).** The probe moved again, out of the workflow into
+the setup action (`action.yml`). The conformance workflow installs the
+recorded `vibe_version` with the action's `source: auto`, which builds
+`vibe` from the checkout only when `go.mod` declares this module and
+`cmd/vibe` exists, and otherwise installs the recorded version from its
+release (or with `go install` for a pseudo-version). Because the probe
+now checks the module path, an adopter's unrelated `cmd/vibe` package no
+longer takes the from-source branch.
+
 ## Consequences
 
 - The probe is Go-only. A TypeScript or Python repository never provides a

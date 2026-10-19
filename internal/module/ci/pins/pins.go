@@ -7,6 +7,7 @@ package pins
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"text/template"
 )
 
@@ -29,6 +30,10 @@ type Table struct {
 	Actionlint  string
 	Node        string
 	Python      string
+	// SetupAction is the commit of this repository whose action.yml the
+	// GitHub conformance workflow uses (spec 0054), pinned by SHA (C-02).
+	// Bump it when action.yml changes in a way the workflow needs.
+	SetupAction string
 }
 
 // Current is the table the generated CI uses. Modules read it when they
@@ -43,6 +48,14 @@ var Current = Table{
 	Actionlint:   "v1.7.12",
 	Node:         "22",
 	Python:       "3.12",
+	SetupAction:  "9a45d0632a509aaa73d99b371e7305ee0f71c2f5",
+}
+
+// TaskSetup is Task as go-task/setup-task takes it: the same release,
+// without the leading v, which the action adds itself. Templates name it
+// as [[.Pins.TaskSetup]].
+func (t Table) TaskSetup() string {
+	return strings.TrimPrefix(t.Task, "v")
 }
 
 // Parse parses a CI template. Its [[ ]] delimiters leave GitHub's ${{ }}

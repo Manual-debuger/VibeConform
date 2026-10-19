@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -20,13 +21,15 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/conformance"
 )
 
-// fields returns the table's entries by field name.
+// fields returns the table's entries by name: its fields and TaskSetup,
+// which is derived from Task.
 func fields(t pins.Table) map[string]string {
 	v := reflect.ValueOf(t)
 	out := map[string]string{}
 	for i := range v.NumField() {
 		out[v.Type().Field(i).Name] = v.Field(i).String()
 	}
+	out["TaskSetup"] = t.TaskSetup()
 	return out
 }
 
@@ -129,6 +132,9 @@ func TestRenderedPins(t *testing.T) {
 		// Delimited, so no sentinel is a prefix of another (Task, TaskSHA256).
 		sv.Field(i).SetString("<pin:" + sv.Type().Field(i).Name + ">")
 	}
+	// Task carries its leading v, so TaskSetup (Task without it) renders
+	// as a sentinel of its own, <pin:Task>, which Task's contains.
+	sentinels.Task = "v<pin:Task>"
 	pins.Current = sentinels
 	t.Cleanup(func() { pins.Current = real })
 	got := renderAll(t)
@@ -137,10 +143,14 @@ func TestRenderedPins(t *testing.T) {
 	realValues := fields(real)
 	for file, content := range got {
 		restored := string(content)
+		// Checked before any replacement: TaskSetup's sentinel is inside
+		// Task's.
 		for name, sentinel := range fields(sentinels) {
 			if strings.Contains(restored, sentinel) {
 				used[name] = true
 			}
+		}
+		for name, sentinel := range fields(sentinels) {
 			restored = strings.ReplaceAll(restored, sentinel, realValues[name])
 		}
 		if restored != string(want[file]) {
@@ -160,4 +170,24 @@ func keys(m map[string][]byte) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// TestTaskSetupIsTask: go-task/setup-task takes Task's version without the
+// leading v (it adds one), and the two entries name the same release.
+func TestTaskSetupIsTask(t *testing.T) {
+	if got := (pins.Table{Task: "v3.53.1"}).TaskSetup(); got != "3.53.1" {
+		t.Errorf("TaskSetup of Task v3.53.1 = %q, want 3.53.1", got)
+	}
+	if pins.Current.Task != "v"+pins.Current.TaskSetup() {
+		t.Errorf("Task = %q, TaskSetup = %q; TaskSetup must be Task without its leading v",
+			pins.Current.Task, pins.Current.TaskSetup())
+	}
+}
+
+// TestSetupActionIsACommitSHA: the conformance workflow uses the setup
+// action pinned by a full commit SHA (spec 0054, C-02).
+func TestSetupActionIsACommitSHA(t *testing.T) {
+	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(pins.Current.SetupAction) {
+		t.Errorf("SetupAction = %q, want a full commit SHA", pins.Current.SetupAction)
+	}
 }

@@ -1,0 +1,15 @@
+# Lefthook: the format check at commit time, verification at push time.
+# CI is the full gate; these hooks are a fast local first line of defense.
+# Install once per clone with "lefthook install".
+
+pre-commit:
+  commands:
+    fmt-check:
+      glob: "*.py"
+      run: task fmt:check
+      fail_text: "Run 'task fmt' to format the Python files."
+
+pre-push:
+  commands:
+    verify-fast:
+      run: task verify:fast
