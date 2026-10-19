@@ -99,24 +99,18 @@ jobs:
           version: ${{ github.ref_name }}
           source: release
           verify-attestation: "true"
-      # The binaries are run by the path the action reports, so this checks
-      # the files it installed; command -v checks that they are on PATH.
+      # The binaries are run by name, as a user runs them; command -v shows
+      # which files PATH resolves to. R-01 exempts vibe --version in a job
+      # that calls no entrypoint (contract 1.1.0).
       - name: Both tools are on PATH and print the tag
         shell: bash
         env:
           TAG: ${{ github.ref_name }}
-          BIN: ${{ steps.setup.outputs.bin-dir }}
         run: |
-          bin="$BIN"
-          exe=""
-          if [ "$RUNNER_OS" = Windows ]; then
-            bin=$(cygpath -u "$BIN")
-            exe=.exe
-          fi
           command -v vibe
           command -v vibe-guard
-          "$bin/vibe$exe" --version | tee "$RUNNER_TEMP/vibe-version.txt"
-          "$bin/vibe-guard$exe" version | tee "$RUNNER_TEMP/vibe-guard-version.txt"
+          vibe --version | tee "$RUNNER_TEMP/vibe-version.txt"
+          vibe-guard version | tee "$RUNNER_TEMP/vibe-guard-version.txt"
           grep -qF "$TAG" "$RUNNER_TEMP/vibe-version.txt"
           grep -qF "$TAG" "$RUNNER_TEMP/vibe-guard-version.txt"
 
@@ -183,5 +177,6 @@ jobs:
         run: |
           GOBIN="$RUNNER_TEMP/bin" go install "github.com/Manual-debuger/VibeConform/cmd/vibe-guard@$TAG"
           GOBIN="$RUNNER_TEMP/bin" go install "github.com/Manual-debuger/VibeConform/cmd/vibe@$TAG"
-          "$RUNNER_TEMP/bin/vibe-guard" version | grep -qF "$TAG"
-          "$RUNNER_TEMP/bin/vibe" --version | grep -qF "$TAG"
+          export PATH="$RUNNER_TEMP/bin:$PATH"
+          vibe-guard version | grep -qF "$TAG"
+          vibe --version | grep -qF "$TAG"
