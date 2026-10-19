@@ -28,8 +28,8 @@ func TestCIWorkflowNeedsNoGo(t *testing.T) {
 		if !pin.MatchString(job) {
 			t.Errorf("a job runs task without a SHA-pinned go-task/setup-task:\n%s", job)
 		}
-		if !strings.Contains(job, `version: "`+pins.Current.TaskSetup+`"`) {
-			t.Errorf("a job's setup-task is not at Task %s:\n%s", pins.Current.TaskSetup, job)
+		if !strings.Contains(job, `version: "`+pins.Current.TaskSetup()+`"`) {
+			t.Errorf("a job's setup-task is not at Task %s:\n%s", pins.Current.TaskSetup(), job)
 		}
 		if !strings.Contains(job, `checksum: "`+pins.Current.TaskSHA256+`"`) {
 			t.Errorf("a job's setup-task does not check Task's checksum:\n%s", job)

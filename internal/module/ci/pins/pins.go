@@ -7,6 +7,7 @@ package pins
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"text/template"
 )
 
@@ -20,10 +21,7 @@ type Table struct {
 	Task string
 	// TaskSHA256 is the checksum of Task's task_linux_amd64.tar.gz release
 	// archive at version Task. Change both together.
-	TaskSHA256 string
-	// TaskSetup is Task as go-task/setup-task takes it: the same release,
-	// without the leading v, which the action adds itself.
-	TaskSetup    string
+	TaskSHA256   string
 	GolangciLint string
 	// Goimports is a golang.org/x/tools version, the module goimports is
 	// installed from.
@@ -44,7 +42,6 @@ var Current = Table{
 	Go:           "1.27.0",
 	Task:         "v3.53.1",
 	TaskSHA256:   "a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7",
-	TaskSetup:    "3.53.1",
 	GolangciLint: "v2.13.2",
 	Goimports:    "v0.51.0",
 	Govulncheck:  "v1.8.0",
@@ -52,6 +49,13 @@ var Current = Table{
 	Node:         "22",
 	Python:       "3.12",
 	SetupAction:  "32514425a6693842f13177086897a2ca6e9beffc",
+}
+
+// TaskSetup is Task as go-task/setup-task takes it: the same release,
+// without the leading v, which the action adds itself. Templates name it
+// as [[.Pins.TaskSetup]].
+func (t Table) TaskSetup() string {
+	return strings.TrimPrefix(t.Task, "v")
 }
 
 // Parse parses a CI template. Its [[ ]] delimiters leave GitHub's ${{ }}
