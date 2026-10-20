@@ -2,6 +2,12 @@
 
 Status: accepted (2026-09-24). Not yet implemented.
 
+*Note 2026-10-20:* spec 0056 (`docs/specs/0056-faster-agent-hooks.md`)
+amends sections 4.3 and 4.4 and the "Overlapping async runs" known
+limitation. `hook:check` skips edits outside the repository and of files
+git ignores, and in `prod-go` `hook:check` and `verify:fast` run the tests
+in short mode. The text below is unchanged; read it with spec 0056.
+
 ## Problem
 
 Every standard composes `agent-config`, and `agent-config` configures
@@ -252,6 +258,10 @@ format check there would fail on the race, not on the code. Formatting is
 **Behaviour.** Advisory. It never blocks anything, and exits 2 on failure
 so the result reaches the model.
 
+*Amended 2026-10-20 (spec 0056):* `hook:check` reads the edited path from
+the payload and runs nothing for a path outside the repository or ignored
+by git. In `prod-go` its test step is `test:short` (`go test -short`).
+
 #### 4.4 `Stop` → affected definition-of-done verification (`hook:done`)
 
 **Trigger.** When the agent ends its turn. Synchronous, `timeout: 600`.
@@ -261,6 +271,9 @@ so the result reaches the model.
 (with `security`, `mod:verify`, `workflows:lint` on `prod-go`) stays the
 full gate that CI runs. When nothing changed, every step hits a warm cache
 and the gate is fast.
+
+*Amended 2026-10-20 (spec 0056):* in `prod-go`, `verify:fast` runs the
+tests in short mode (`go test -short`). `task verify` still runs them all.
 
 **Behaviour.** On failure it exits 2, which blocks the stop and shows the
 output to the model. In Claude Code the model sees the reason and keeps
@@ -362,7 +375,8 @@ After upgrading `vibe`, in a repository on any standard:
   cold and is unaffected.
 - **Overlapping async runs.** Quick successive edits start overlapping
   `hook:check` runs. Codex caps them at eight per session. This spec
-  doesn't debounce them.
+  doesn't debounce them. *Amended 2026-10-20:* spec 0056 cuts their cost
+  (path filter, Go short mode) and still doesn't debounce them.
 - **The nearest Taskfile wins**, as for the guard (spec 0021).
 - **A file is formatted under the agent.** After `hook:format` the agent's
   copy is stale until it re-reads the file.
