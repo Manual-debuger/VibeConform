@@ -186,10 +186,8 @@ func (g taskGraph) walk(t *testing.T, component, name string, seen map[string]bo
 			out = append(out, g.walk(t, component, s.dep, seen)...)
 			continue
 		}
-		for line := range strings.Lines(s.shell) {
-			if f := strings.Fields(line); len(f) >= 2 && f[0] == "go" && f[1] == "test" {
-				out = append(out, goTest{component, strings.TrimSpace(line)})
-			}
+		for _, cmd := range module.GoTestCommands(s.shell) {
+			out = append(out, goTest{component, cmd})
 		}
 		if m := checkTasks.FindStringSubmatch(s.shell); m != nil {
 			for _, called := range strings.Fields(m[1]) {
@@ -322,10 +320,10 @@ func TestGoPrePushRunsFullTests(t *testing.T) {
 					t.Fatalf("pre-push %s runs from %s; this test reads root commands only", cmdName, filepath.ToSlash(c.Root))
 				}
 				var tests []goTest
-				switch f := strings.Fields(c.Run); {
-				case len(f) >= 2 && f[0] == "go" && f[1] == "test":
-					tests = []goTest{{"", c.Run}}
-				case len(f) >= 2 && f[0] == "task":
+				for _, cmd := range module.GoTestCommands(c.Run) {
+					tests = append(tests, goTest{"", cmd})
+				}
+				if f := strings.Fields(c.Run); len(f) >= 2 && f[0] == "task" {
 					for _, called := range f[1:] {
 						if !strings.HasPrefix(called, "-") {
 							tests = append(tests, g.goTests(t, called)...)

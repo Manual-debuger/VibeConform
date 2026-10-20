@@ -2581,8 +2581,11 @@ VibeConform computes:
   including packages that depend on your change. golangci-lint caches its
   analysis. Don't add `-count=1` to `test`: it turns the cache off.
 - **Go short mode:** `verify:fast` and `hook:check` run `task test:short`,
-  which is `go test -short ./...`. A test that checks `testing.Short()`
-  can skip itself there, so the slowest tests run only in full mode.
+  which is `go test -short ./...` without its `ok` and `[no test files]`
+  lines: it prints the failures, every other line too, and keeps
+  `go test`'s exit code. It filters in Task's own shell, so it needs no
+  `grep`. A test that checks `testing.Short()` can skip itself there, so
+  the slowest tests run only in full mode.
   `task test`, `task verify`, the pre-push hook and CI run every test.
   Full Go runs (`task test`, `task test:race`, and the pre-push `go test`)
   have `-timeout 30m`, because a slow suite outgrows `go test`'s
