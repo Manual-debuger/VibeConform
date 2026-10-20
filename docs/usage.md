@@ -2569,7 +2569,7 @@ which you can also run yourself:
 
 | Standard | `task verify:fast` runs | Only in `task verify` |
 |---|---|---|
-| `prod-go` | `fmt:check`, `typecheck`, `lint`, `test` | `security`, `mod:verify`, `workflows:lint` |
+| `prod-go` | `fmt:check`, `typecheck`, `lint`, `test:short` | `security`, `mod:verify`, `workflows:lint`, the tests short mode skips |
 | `prod-ts` | same as `verify` | none |
 | `prod-py` | same as `verify` | none |
 
@@ -2580,6 +2580,19 @@ VibeConform computes:
   package, or anything it imports, changed. So only affected tests rerun,
   including packages that depend on your change. golangci-lint caches its
   analysis. Don't add `-count=1` to `test`: it turns the cache off.
+- **Go short mode:** `verify:fast` and `hook:check` run `task test:short`,
+  which is `go test -short ./...`. A test that checks `testing.Short()`
+  can skip itself there, so the slowest tests run only in full mode.
+  `task test`, `task verify`, the pre-push hook and CI run every test.
+  Full Go runs (`task test`, `task test:race`, and the pre-push `go test`)
+  have `-timeout 30m`, because a slow suite outgrows `go test`'s
+  ten-minute default; nobody needs `GOFLAGS` to push. In a `prod-mono`
+  repository the same holds for each Go component's tasks, and pre-push
+  runs each Go component's `test` after `verify:fast`. Which of this
+  repository's own tests skip in short mode is still being settled
+  (spec 0056); they are the ones that start many subprocesses.
+  Short mode is Go only: pytest and the TypeScript test runners have no
+  common equivalent.
 - **TypeScript:** ESLint `--cache`, Prettier `--cache`, and
   `tsc --incremental` keep their caches under `node_modules/.cache/`,
   which a Node repository already ignores. ESLint's cache doesn't track
@@ -2661,16 +2674,33 @@ the agent's copy of the file is out of date until it reads the file again.
 ### `hook:check` (after each edit, in the background)
 
 Runs `typecheck`, `lint`, and `test` (in the standard's `verify` order),
-without blocking the agent. It leaves out `fmt:check` because Claude Code
-runs an event's hooks in parallel, so it starts while `hook:format` may
-still be writing the file.
+without blocking the agent. In `prod-go` the test step is `test:short`
+(`go test -short`), as in `verify:fast`. It leaves out `fmt:check` because
+Claude Code runs an event's hooks in parallel, so it starts while
+`hook:format` may still be writing the file.
+
+It first reads the edited path from the hook payload on stdin
+(`tool_input.file_path`, or `notebook_path` for a notebook edit) and asks
+`git check-ignore` about it. It runs nothing and exits 0 when the edit
+cannot change the checks' result:
+
+- the path is outside the repository (the agent's memory, its
+  scratchpad), or
+- git ignores the path.
+
+A tracked file, or an untracked file git doesn't ignore, gets the checks.
+So does an edit whose payload has no path it can read (a malformed
+payload, a tool with no path), and any edit outside a git repository.
+This holds in every standard. It uses only Task's shell and git, no
+`jq`.
 
 Claude Code runs it with `asyncRewake`: on failure (exit 2) it wakes the
 session straight away and shows the output as a system reminder. A plain
 `async` hook would only deliver JSON `additionalContext` or
 `systemMessage` output, and only on the next turn.
 
-Quick successive edits start overlapping runs.
+Quick successive edits start overlapping runs. The path filter and Go
+short mode make each run cheaper; nothing debounces them (spec 0056).
 
 ### `hook:done` (end of turn)
 
