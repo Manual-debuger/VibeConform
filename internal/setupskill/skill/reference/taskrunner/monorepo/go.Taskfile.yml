@@ -29,15 +29,25 @@ tasks:
     cmds:
       - go build ./...
 
+  # Every test. go test's own timeout is ten minutes, which a slow suite
+  # outgrows; 30 minutes means nobody needs GOFLAGS to run it or push.
   test:
     desc: Run the test suite.
     cmds:
-      - go test ./...
+      - go test -timeout 30m ./...
 
   test:race:
     desc: Run the test suite with the race detector.
     cmds:
-      - go test -race ./...
+      - go test -race -timeout 30m ./...
+
+  # What verify:fast and the agents' background check run: go test -short
+  # skips the tests that check testing.Short() and run only in task test.
+  test:short:
+    desc: Run the test suite in short mode (go test -short); "task test"
+      runs every test.
+    cmds:
+      - go test -short ./...
 
   mod:verify:
     desc: Ensure go.mod/go.sum are tidy and modules are verified.
@@ -63,9 +73,10 @@ tasks:
       - task: security
 
   verify:fast:
-    desc: Fast incremental subset of verify (format, build, lint, test).
+    desc: Fast incremental subset of verify (format, build, lint, tests in
+      short mode).
     cmds:
       - task: fmt:check
       - task: typecheck
       - task: lint
-      - task: test
+      - task: test:short

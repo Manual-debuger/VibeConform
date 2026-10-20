@@ -13,9 +13,9 @@ import (
 // verifyFastSteps is spec 0023's section 2 table: the part of verify that
 // is cheap and incremental, in verify's own order. The Stop hook and the
 // async check both run verify:fast, so a slow or network-bound step added
-// here slows every agent turn.
+// here slows every agent turn. Go runs its tests in short mode (spec 0056).
 var verifyFastSteps = map[string][]string{
-	"repotooling/templates/Taskfile.yml":   {"fmt:check", "typecheck", "lint", "test"},
+	"repotooling/templates/Taskfile.yml":   {"fmt:check", "typecheck", "lint", "test:short"},
 	"tsrepotooling/templates/Taskfile.yml": {"fmt:check", "lint", "typecheck", "test"},
 	"pyrepotooling/templates/Taskfile.yml": {"fmt:check", "lint", "typecheck", "test"},
 }
@@ -80,6 +80,11 @@ func TestVerifyFastIsTheIncrementalSubset(t *testing.T) {
 				verifySteps = append(verifySteps, c.dep)
 			}
 			for _, step := range got {
+				// Short mode runs a subset of what test runs, which
+				// TestGoFullTestsHaveTimeout pins.
+				if step == "test:short" {
+					step = "test"
+				}
 				if !slices.Contains(verifySteps, step) {
 					t.Errorf("verify:fast runs %s, which verify does not", step)
 				}

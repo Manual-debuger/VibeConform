@@ -12,7 +12,11 @@ pre-commit:
       run: task fmt:check
       fail_text: "Run 'task fmt' to format every component."
 
+# verify:fast runs Go tests in short mode, so pre-push runs the Go
+# component's full tests as well.
 pre-push:
   commands:
     verify-fast:
       run: task verify:fast
+    api-test:
+      run: task api:test
