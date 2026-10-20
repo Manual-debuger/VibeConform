@@ -2587,8 +2587,8 @@ VibeConform computes:
   `grep`. A test that checks `testing.Short()` can skip itself there, so
   the slowest tests run only in full mode.
   `task test`, `task verify`, the pre-push hook and CI run every test.
-  Full Go runs (`task test`, `task test:race`, and the pre-push `go test`)
-  have `-timeout 30m`, because a slow suite outgrows `go test`'s
+  Full Go runs (`task test`, which the pre-push hook calls, and
+  `task test:race`) have `-timeout 30m`, because a slow suite outgrows `go test`'s
   ten-minute default; nobody needs `GOFLAGS` to push. In a `prod-mono`
   repository the same holds for each Go component's tasks, and pre-push
   runs each Go component's `test` after `verify:fast`. In this
@@ -2600,6 +2600,17 @@ VibeConform computes:
   the Stop-hook matrix (`internal/module`). Each skip message names
   `task verify`, which runs them. Short mode is Go only: pytest and the TypeScript test runners have no
   common equivalent.
+- **golangci-lint waits for its lock:** golangci-lint takes one lock in
+  the OS temp directory, shared by every checkout on the machine, and a
+  second run normally exits 3 with "parallel golangci-lint is running".
+  `hook:check` runs in the background after every edit, and agents can
+  work in several worktrees at once, so runs overlap. The generated
+  `.golangci.yml` and the setup skill's Go lint reference set
+  `run.allow-serial-runners: true` (spec 0056), so
+  a run that finds the lock taken waits for it instead. The setting is in
+  the config file, so it covers every caller: hooks, lefthook, CI and
+  manual runs. Overlapping runs run one after another; nothing debounces
+  them.
 - **TypeScript:** ESLint `--cache`, Prettier `--cache`, and
   `tsc --incremental` keep their caches under `node_modules/.cache/`,
   which a Node repository already ignores. ESLint's cache doesn't track

@@ -319,10 +319,13 @@ func TestGoPrePushRunsFullTests(t *testing.T) {
 				if c.Root != "" {
 					t.Fatalf("pre-push %s runs from %s; this test reads root commands only", cmdName, filepath.ToSlash(c.Root))
 				}
-				var tests []goTest
-				for _, cmd := range module.GoTestCommands(c.Run) {
-					tests = append(tests, goTest{"", cmd})
+				// Hooks call tasks instead of duplicating command lists
+				// (docs/architecture/principles.md), so the 30-minute
+				// timeout lives in task test alone.
+				if direct := module.GoTestCommands(c.Run); len(direct) > 0 {
+					t.Errorf("pre-push %s runs %q directly; call the test task instead", cmdName, direct)
 				}
+				var tests []goTest
 				if f := strings.Fields(c.Run); len(f) >= 2 && f[0] == "task" {
 					for _, called := range f[1:] {
 						if !strings.HasPrefix(called, "-") {
