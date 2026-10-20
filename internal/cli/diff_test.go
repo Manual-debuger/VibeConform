@@ -39,6 +39,7 @@ func writeManifestFor(t *testing.T, dir, standard, version string) {
 }
 
 func TestDiffCmdReportsCreateWhenFileMissing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeManifest(t, dir)
 
@@ -60,6 +61,7 @@ func TestDiffCmdReportsCreateWhenFileMissing(t *testing.T) {
 }
 
 func TestDiffCmdReportsNoChangeWhenFileMatchesTarget(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeManifest(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, ".golangci.yml"), goToolingContent(t), 0o644); err != nil {
@@ -81,6 +83,7 @@ func TestDiffCmdReportsNoChangeWhenFileMatchesTarget(t *testing.T) {
 }
 
 func TestDiffCmdReportsConflictWhenFileDiffersWithNoPriorState(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeManifest(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, ".golangci.yml"), []byte("hand-authored: true\n"), 0o644); err != nil {
@@ -102,6 +105,7 @@ func TestDiffCmdReportsConflictWhenFileDiffersWithNoPriorState(t *testing.T) {
 }
 
 func TestDiffCmdFailsIfManifestMissing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	root := NewRootCmd("test")
@@ -115,6 +119,7 @@ func TestDiffCmdFailsIfManifestMissing(t *testing.T) {
 }
 
 func TestDiffCmdFailsIfStandardUnknown(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte("standard: prod-go\nversion: v99\n"), 0o644); err != nil {
 		t.Fatalf("seeding vibe.yaml: %v", err)
@@ -134,6 +139,7 @@ func TestDiffCmdFailsIfStandardUnknown(t *testing.T) {
 // that takes none, or a component standard with none, is an error before
 // anything resolves, never a silently ignored field.
 func TestPlanRefusesComponentMismatch(t *testing.T) {
+	t.Parallel()
 	cases := map[string]struct{ manifest, want string }{
 		"prod-go with components": {
 			"standard: prod-go\nversion: v1\ncomponents:\n  - {id: api, path: api, profile: go}\n",

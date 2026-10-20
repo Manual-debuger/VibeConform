@@ -301,6 +301,7 @@ func TestNoGitIsAWarning(t *testing.T) {
 
 // TestGitCheckIgnored runs the real check against a real work tree.
 func TestGitCheckIgnored(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not on PATH")
 	}

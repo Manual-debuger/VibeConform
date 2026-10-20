@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.13.0-alpha.1.0.20261020123048-0323b58af217
+vibe_version: v0.13.0-alpha.1.0.20261020152749-2062dff844a2
 standard: prod-go/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
@@ -51,7 +51,7 @@ resources:
       sha256: c33cbf71360fbc0d95e26f68883e43a31b7f8d4c9a2fa527f4299a92cc15a3c5
     - path: .golangci.yml
       ownership: generated
-      sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
+      sha256: 5e9bec78943c3a57bccbdac6992ed233df55e2f8c878a6929ffb28400129a7c1
     - path: AGENTS.md
       section_id: workflow
       ownership: managed-section
@@ -65,7 +65,7 @@ resources:
       sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     - path: Taskfile.yml
       ownership: generated
-      sha256: bcb5650d6a02fdd5e08a5e0f2e21dfc3cfa13b487f449381ae6d2d5928a19d99
+      sha256: f313690a9c5e78ef66fd2a3e695929e4655fb03cdb41726cccb6547888ad5204
     - path: docs/README.md
       section_id: docs
       ownership: managed-section

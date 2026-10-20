@@ -45,6 +45,10 @@ type contractSeams struct {
 	// probeEnv is the environment the probe runs inherit; nil means this
 	// process's. Tests narrow PATH with it.
 	probeEnv []string
+	// openRepo lists the audited repository's tracked files; nil means
+	// contract.OpenRepo. Tests hand in the file list of a fixture they
+	// built, so that a fixture needs no git.
+	openRepo func(ctx context.Context, root string) (*contract.Repo, error)
 }
 
 // dispatchAudit picks the audit from the configuration it reads: a
@@ -122,7 +126,11 @@ func runContractAudit(cmd *cobra.Command, f auditFlags, label string, data []byt
 	// deleted.
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
-	repo, err := contract.OpenRepo(ctx, f.repoRoot)
+	openRepo := contract.OpenRepo
+	if f.seams.openRepo != nil {
+		openRepo = f.seams.openRepo
+	}
+	repo, err := openRepo(ctx, f.repoRoot)
 	if err != nil {
 		return err
 	}

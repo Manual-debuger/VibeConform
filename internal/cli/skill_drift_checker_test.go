@@ -754,7 +754,44 @@ func (c *skillChecker) checkReferenceConfigs() {
 	}
 }
 
+// referenceConfigLoad is the one load of a reference vibe.yaml content.
+type referenceConfigLoad struct {
+	once   sync.Once
+	err    error
+	builds int
+}
+
+// referenceConfigLoads holds a load per stack and content: the drift
+// fixtures share the reference files, and building a Git repository for
+// each would start thousands of git processes (spec 0056).
+var referenceConfigLoads sync.Map
+
+func referenceConfigKey(f skillFile) string { return pathpkg.Base(f.path) + "\x00" + f.text }
+
+// loadReferenceConfig loads f as buildReferenceConfig does, once for each
+// stack and content.
 func loadReferenceConfig(f skillFile) error {
+	v, _ := referenceConfigLoads.LoadOrStore(referenceConfigKey(f), &referenceConfigLoad{})
+	l := v.(*referenceConfigLoad)
+	l.once.Do(func() { l.err = buildReferenceConfig(f, &l.builds) })
+	return l.err
+}
+
+// referenceConfigBuilds is how many Git repositories were built for f's
+// stack and content.
+func referenceConfigBuilds(f skillFile) int {
+	v, ok := referenceConfigLoads.Load(referenceConfigKey(f))
+	if !ok {
+		return 0
+	}
+	l := v.(*referenceConfigLoad)
+	l.once.Do(func() {})
+	return l.builds
+}
+
+// buildReferenceConfig parses f in a Git work tree holding the manifests
+// it needs, and counts that repository in builds.
+func buildReferenceConfig(f skillFile, builds *int) error {
 	data := []byte(f.text)
 	schema, err := contract.DetectSchema("vibe.yaml", data)
 	if err != nil {
@@ -784,6 +821,7 @@ func loadReferenceConfig(f skillFile) error {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
+	*builds++
 	if err := writeGitTree(dir, files); err != nil {
 		return err
 	}

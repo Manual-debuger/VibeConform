@@ -52,6 +52,7 @@ func TestAuditCmdConformantRepo(t *testing.T) {
 }
 
 func TestAuditCmdReportsMissingResource(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeManifest(t, dir)
 
@@ -135,6 +136,7 @@ func TestAuditCmdReportsLocalDriftWhenFileEdited(t *testing.T) {
 }
 
 func TestAuditCmdReportsConflict(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeManifest(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, ".golangci.yml"), []byte("hand-authored: true\n"), 0o600); err != nil {
@@ -150,6 +152,7 @@ func TestAuditCmdReportsConflict(t *testing.T) {
 }
 
 func TestAuditCmdFailsIfManifestMissing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	out, err := runAuditIn(t, dir)
@@ -159,6 +162,7 @@ func TestAuditCmdFailsIfManifestMissing(t *testing.T) {
 }
 
 func TestAuditCmdFailsIfStandardUnknown(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte("standard: prod-go\nversion: v99\n"), 0o600); err != nil {
 		t.Fatalf("seeding vibe.yaml: %v", err)

@@ -66,6 +66,7 @@ func renderText(t *testing.T, rep *contract.Report, version string) string {
 // and repository hygiene", which widens the name column; and the
 // "Cannot decide" section is always printed.
 func TestContractTextReportSpecSample(t *testing.T) {
+	t.Parallel()
 	notRun := func(kind contract.PartKind) contract.PartOutcome { return part(kind, contract.ResultNotRun) }
 	pass := func(kind contract.PartKind) contract.PartOutcome { return part(kind, contract.ResultPass) }
 	waived := outcome(contract.ResultWaived, part(contract.Static, contract.ResultWaived))
@@ -142,6 +143,7 @@ Verdict: cannot decide. 10 rules did not run (--static); 1 MUST rule already fai
 
 // Every kind of entry the report has, on a full audit (no --static).
 func TestContractTextReportEverySection(t *testing.T) {
+	t.Parallel()
 	notApplicable := func(why string) contract.RuleResult {
 		rr := outcome(contract.ResultNotApplicable, part(contract.Static, contract.ResultNotApplicable,
 			contract.Finding{File: "vibe.yaml", Message: "not applicable: " + why}))
@@ -236,6 +238,7 @@ func withWaiver(rr contract.RuleResult, w *contract.WaiverStatus) contract.RuleR
 }
 
 func TestContractTextReportVerdicts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		verdict contract.Verdict
 		want    string

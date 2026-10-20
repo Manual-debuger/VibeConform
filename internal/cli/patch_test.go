@@ -223,6 +223,7 @@ func TestVSCodeDeselectKeepsModifiedElement(t *testing.T) {
 }
 
 func TestVSCodeInvalidFileIsAConflict(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeVibeYAML(t, dir, tsVSCode)
 	writeTasksJSON(t, dir, "{ not json")
