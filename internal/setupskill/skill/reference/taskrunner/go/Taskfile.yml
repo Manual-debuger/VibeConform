@@ -51,8 +51,12 @@ tasks:
     cmds:
       - govulncheck ./...
 
+  # Skipped (Task's status: holds) where there is no .github/workflows, as
+  # on GitLab CI, whose reference CI does not install actionlint.
   workflows:lint:
     desc: Validate GitHub Actions workflow files.
+    status:
+      - test ! -d .github/workflows
     cmds:
       - actionlint
 

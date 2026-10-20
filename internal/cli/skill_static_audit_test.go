@@ -3,11 +3,14 @@ package cli
 import (
 	"encoding/json"
 	"maps"
+	pathpkg "path"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/setupskill"
+	"gopkg.in/yaml.v3"
 )
 
 // The reference implementations pass the static audit (spec 0054, "The
@@ -148,6 +151,146 @@ func TestReferenceImplementationsPassTheStaticAudit(t *testing.T) {
 			})
 		}
 	}
+}
+
+// githubOnlyTools are tools that check GitHub Actions only, which the
+// GitLab reference CI does not install.
+var githubOnlyTools = []string{"actionlint"}
+
+// TestReferenceVerifyCallsOnlyTheProvidersTools: the verify task of a
+// reference repository on GitLab CI runs no GitHub-only tool, so the
+// GitLab reference CI's task verify does not fail on a missing
+// actionlint (the gitlab.com run of spec 0055), while the GitHub one
+// still runs it where the Taskfile names it.
+func TestReferenceVerifyCallsOnlyTheProvidersTools(t *testing.T) {
+	for _, provider := range referenceProviders {
+		for _, stack := range referenceStacks {
+			t.Run(provider+"/"+stack, func(t *testing.T) {
+				files := referenceRepo(t, stack, provider)
+				ran := verifyCommands(t, files)
+				for _, tool := range githubOnlyTools {
+					named := false
+					for name, content := range files {
+						if strings.HasSuffix(name, "Taskfile.yml") && strings.Contains(content, tool) {
+							named = true
+						}
+					}
+					switch {
+					case provider == providerGitLab && ran[tool]:
+						t.Errorf("task verify runs %s, which only checks GitHub Actions and the GitLab CI does not install", tool)
+					case provider == providerGitHub && named && !ran[tool]:
+						t.Errorf("task verify does not run %s, which the Taskfile names", tool)
+					}
+				}
+			})
+		}
+	}
+}
+
+// taskfile is the part of a Taskfile.yml verifyCommands reads.
+type taskfile struct {
+	Includes map[string]struct {
+		Taskfile string `yaml:"taskfile"`
+		Dir      string `yaml:"dir"`
+	} `yaml:"includes"`
+	Tasks map[string]struct {
+		Cmds   []yaml.Node `yaml:"cmds"`
+		Deps   []yaml.Node `yaml:"deps"`
+		Status []string    `yaml:"status"`
+	} `yaml:"tasks"`
+}
+
+// skipStatus is a status command that holds when a path is missing.
+var skipStatus = regexp.MustCompile(`^(?:test|\[) ! -[de] (\S+?)(?: \])?$`)
+
+// verifyCommands are the commands, by their first word, that task verify
+// of the repository files runs. A task is skipped when its status holds:
+// only status commands of the form "test ! -d <path>" are evaluated,
+// against files; any other status is taken not to hold.
+func verifyCommands(t *testing.T, files map[string]string) map[string]bool {
+	t.Helper()
+	ran := map[string]bool{}
+	load := func(path string) taskfile {
+		var tf taskfile
+		content, ok := files[path]
+		if !ok {
+			t.Fatalf("%s is missing", path)
+		}
+		if err := yaml.Unmarshal([]byte(content), &tf); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		return tf
+	}
+	missing := func(dir, p string) bool {
+		p = pathpkg.Join(dir, p)
+		for name := range files {
+			if name == p || strings.HasPrefix(name, p+"/") {
+				return false
+			}
+		}
+		return true
+	}
+	var run func(dir, file, name string)
+	run = func(dir, file, name string) {
+		tf := load(file)
+		if ns, rest, ok := strings.Cut(name, ":"); ok {
+			if inc, ok := tf.Includes[ns]; ok {
+				run(pathpkg.Join(dir, inc.Dir), pathpkg.Clean(pathpkg.Join(pathpkg.Dir(file), inc.Taskfile)), rest)
+				return
+			}
+		}
+		task, ok := tf.Tasks[name]
+		if !ok {
+			t.Fatalf("%s has no task %q", file, name)
+		}
+		skipped := len(task.Status) > 0
+		for _, s := range task.Status {
+			m := skipStatus.FindStringSubmatch(strings.TrimSpace(s))
+			if m == nil || !missing(dir, m[1]) {
+				skipped = false
+			}
+		}
+		if skipped {
+			return
+		}
+		for _, n := range task.Deps {
+			if n.Kind == yaml.ScalarNode {
+				run(dir, file, n.Value)
+				continue
+			}
+			var ref struct {
+				Task string `yaml:"task"`
+			}
+			if err := n.Decode(&ref); err != nil {
+				t.Fatalf("%s: task %s: %v", file, name, err)
+			}
+			run(dir, file, ref.Task)
+		}
+		for _, n := range task.Cmds {
+			cmd := n.Value
+			if n.Kind == yaml.MappingNode {
+				var ref struct {
+					Task string `yaml:"task"`
+					Cmd  string `yaml:"cmd"`
+				}
+				if err := n.Decode(&ref); err != nil {
+					t.Fatalf("%s: task %s: %v", file, name, err)
+				}
+				if ref.Task != "" {
+					run(dir, file, ref.Task)
+					continue
+				}
+				cmd = ref.Cmd
+			}
+			for _, simple := range commandSeparators.Split(cmd, -1) {
+				if words := strings.Fields(simple); len(words) > 0 {
+					ran[words[0]] = true
+				}
+			}
+		}
+	}
+	run(".", "Taskfile.yml", "verify")
+	return ran
 }
 
 // TestGitLabReferencePlantedProblems: each GitLab reference CI with one

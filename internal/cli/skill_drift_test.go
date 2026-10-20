@@ -97,6 +97,12 @@ func TestSkillDriftFixtures(t *testing.T) {
 		{"missing GitLab reference for one stack", func(*testing.T) func(fstest.MapFS) {
 			return func(files fstest.MapFS) { delete(files, "reference/ci/typescript/.gitlab-ci.yml") }
 		}, "reference/ci/typescript/.gitlab-ci.yml"},
+		{"a GitLab job runs pnpm on a component from the root", func(t *testing.T) func(fstest.MapFS) {
+			return replaceIn(t, "reference/ci/monorepo/.gitlab-ci.yml", "    - (cd apps/web && pnpm install --frozen-lockfile)\n", "    - pnpm --dir apps/web install --frozen-lockfile\n")
+		}, "pnpm --dir apps/web"},
+		{"a workflow step runs uv on a component from the root", func(t *testing.T) func(fstest.MapFS) {
+			return replaceIn(t, "reference/ci/monorepo/ci.yml", "(cd services/worker && uv sync --frozen)", "uv sync --frozen --project=services/worker")
+		}, "--project"},
 		{"unknown vibe-guard command", func(*testing.T) func(fstest.MapFS) {
 			return appendTo("SKILL.md", "Check with `vibe-guard status`.")
 		}, `"status"`},

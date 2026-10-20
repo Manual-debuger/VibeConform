@@ -68,6 +68,9 @@ func checkSkill(skill fs.FS) []string {
 		if pathpkg.Base(f.path) == ".gitlab-ci.yml" {
 			c.checkGitLabCommands(f)
 		}
+		if strings.HasPrefix(f.path, "reference/ci/") && pathpkg.Ext(f.path) == ".yml" {
+			c.checkComponentDirectories(f)
+		}
 	}
 	c.checkRulesGuidance()
 	c.checkReferenceConfigs()
@@ -274,6 +277,70 @@ func (c *skillChecker) checkGitLabCommands(f skillFile) {
 		}
 	}
 	walk(&doc, false)
+}
+
+// ciScriptKeys are the keys of a reference CI file whose values are shell:
+// a GitLab job's scripts and a GitHub Actions step's run.
+var ciScriptKeys = append([]string{"run"}, gitlabScriptKeys...)
+
+// directoryFlags are, by tool, the flags that run it on another directory
+// than the current one. Corepack picks the pnpm version, and uv and Go
+// their pins, from the directory a command starts in, so a reference CI
+// that runs one from the root with one of these flags gets the root's
+// version instead of the component's pin (the gitlab.com run of spec 0055:
+// pnpm --dir apps/web install got Corepack's default pnpm).
+var directoryFlags = map[string][]string{
+	"pnpm": {"--dir", "-C", "--prefix"},
+	"npm":  {"--prefix", "-C"},
+	"uv":   {"--directory", "--project"},
+	"go":   {"-C"},
+}
+
+// checkComponentDirectories: no command of a reference CI file runs pnpm,
+// npm, uv or Go on a component through a directory flag; a reference
+// changes into the component's directory instead.
+func (c *skillChecker) checkComponentDirectories(f skillFile) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(f.text), &doc); err != nil {
+		c.problem(f.path, "is not YAML: %v", err)
+		return
+	}
+	var walk func(n *yaml.Node, script bool)
+	walk = func(n *yaml.Node, script bool) {
+		switch n.Kind {
+		case yaml.ScalarNode:
+			if script {
+				c.checkDirectoryFlags(f.path, n.Value)
+			}
+		case yaml.MappingNode:
+			for i := 0; i+1 < len(n.Content); i += 2 {
+				walk(n.Content[i+1], slices.Contains(ciScriptKeys, n.Content[i].Value))
+			}
+		default:
+			for _, child := range n.Content {
+				walk(child, script)
+			}
+		}
+	}
+	walk(&doc, false)
+}
+
+func (c *skillChecker) checkDirectoryFlags(file, text string) {
+	for _, simple := range commandSeparators.Split(text, -1) {
+		words := strings.Fields(simple)
+		if len(words) == 0 {
+			continue
+		}
+		flags := directoryFlags[words[0]]
+		for _, w := range words[1:] {
+			name, _, _ := strings.Cut(w, "=")
+			if slices.Contains(flags, name) {
+				c.problem(file, "`%s` runs %s from another directory with %s, so it misses the component's version pin: change into the component's directory instead",
+					strings.TrimSpace(simple), words[0], name)
+				break
+			}
+		}
+	}
 }
 
 // commandSeparators split a command line into simple commands.
