@@ -13,6 +13,8 @@ version: "3"
 tasks:
   build:
     desc: Build the vibe binary into ./bin, stamped so its version orders.
+    # {{exeExt}} is ".exe" on Windows: Task's shell runs bin/vibe.exe by
+    # that name, and an extensionless bin/vibe there is not executable.
     cmds:
       # An unstamped build reports "dev", which is not valid semver, so
       # state.CompareWriters cannot order it and spec 0019's downgrade guard
@@ -42,8 +44,27 @@ tasks:
         esac
         version="$base$ts-$sha"
         git diff --quiet HEAD 2>/dev/null || version="$version+dirty"
-        go build -ldflags "-X main.version=$version" -o bin/vibe ./cmd/vibe
-        echo "built bin/vibe $version"
+        go build -ldflags "-X main.version=$version" -o bin/vibe{{exeExt}} ./cmd/vibe
+        echo "built bin/vibe{{exeExt}} $version"
+
+  sync:
+    desc: Rebuild vibe from this checkout, then sync this repository and its examples.
+    # go:embed resolves at build time, so the vibe that syncs a template
+    # change has to be built after it. A root that vibe audit already finds
+    # conformant is not synced: sync would rewrite only the vibe_version that
+    # .vibe/state.yaml records, which the stamp changes with every commit,
+    # so a clean tree stays clean. Stops at the first sync that fails.
+    cmds:
+      - task: build
+      - |
+        for d in . examples/monorepo examples/python examples/typescript; do
+          if ./bin/vibe{{exeExt}} audit --repo-root "$d" >/dev/null 2>&1; then
+            echo "$d: conformant, not synced"
+            continue
+          fi
+          echo "$d: vibe sync"
+          ./bin/vibe{{exeExt}} sync --repo-root "$d" || exit $?
+        done
 
   run:
     desc: 'Run the CLI, e.g. task run -- --help.'
