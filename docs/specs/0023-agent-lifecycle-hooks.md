@@ -6,7 +6,11 @@ Status: accepted (2026-09-24). Not yet implemented.
 amends sections 4.3 and 4.4 and the "Overlapping async runs" known
 limitation. `hook:check` skips edits outside the repository and of files
 git ignores, and in `prod-go` `hook:check` and `verify:fast` run the tests
-in short mode. The text below is unchanged; read it with spec 0056.
+in short mode. So do the tasks of each Go component in `prod-mono`.
+`test:short` prints only what an agent needs: it drops `go test`'s `ok`
+and `[no test files]` lines and keeps its exit code. golangci-lint waits
+for another run's lock instead of failing. The text below is unchanged;
+read it with spec 0056.
 
 ## Problem
 
@@ -261,6 +265,9 @@ so the result reaches the model.
 *Amended 2026-10-20 (spec 0056):* `hook:check` reads the edited path from
 the payload and runs nothing for a path outside the repository or ignored
 by git. In `prod-go` its test step is `test:short` (`go test -short`).
+So is the test step of each Go component in `prod-mono`. `test:short`
+drops `go test`'s `ok` and `[no test files]` lines and keeps its exit
+code (spec 0056 Desired Behavior 10).
 
 #### 4.4 `Stop` → affected definition-of-done verification (`hook:done`)
 
@@ -274,6 +281,9 @@ and the gate is fast.
 
 *Amended 2026-10-20 (spec 0056):* in `prod-go`, `verify:fast` runs the
 tests in short mode (`go test -short`). `task verify` still runs them all.
+In `prod-mono` the same holds for each Go component. The Stop hook shows
+the quiet `test:short` output: failures without the `ok` lines (spec
+0056 Desired Behavior 10).
 
 **Behaviour.** On failure it exits 2, which blocks the stop and shows the
 output to the model. In Claude Code the model sees the reason and keeps
@@ -377,6 +387,9 @@ After upgrading `vibe`, in a repository on any standard:
   `hook:check` runs. Codex caps them at eight per session. This spec
   doesn't debounce them. *Amended 2026-10-20:* spec 0056 cuts their cost
   (path filter, Go short mode) and still doesn't debounce them.
+  Overlapping golangci-lint runs wait for one another's lock instead of
+  failing with exit 3 (`run.allow-serial-runners`, spec 0056 Desired
+  Behavior 9); each queued run still runs.
 - **The nearest Taskfile wins**, as for the guard (spec 0021).
 - **A file is formatted under the agent.** After `hook:format` the agent's
   copy is stale until it re-reads the file.
