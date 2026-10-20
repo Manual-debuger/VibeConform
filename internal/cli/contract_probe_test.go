@@ -179,6 +179,9 @@ func setTempDir(t *testing.T) string {
 // same after a full audit, and the probe copy is gone (spec 0053,
 // acceptance criterion 2).
 func TestContractAuditNeverWrites(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	dir := probeFixture(t,
 		// An untracked and an ignored file stay out of the copy and stay
 		// where they are.
@@ -214,6 +217,9 @@ func TestContractAuditNeverWrites(t *testing.T) {
 }
 
 func TestContractAuditKeepProbeCopy(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	dir := probeFixture(t)
 	tmp := setTempDir(t)
 	// One probe part is enough to make the copy.
@@ -229,6 +235,9 @@ func TestContractAuditKeepProbeCopy(t *testing.T) {
 }
 
 func TestContractAuditProgress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	dir := probeFixture(t)
 	a07 := contractSeams{rules: registryRules(t, "A-07")}
 	r := runVibeAuditSeams(t, a07, "--repo-root", dir)

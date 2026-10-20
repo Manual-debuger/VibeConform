@@ -274,6 +274,9 @@ func casesNamed(t *testing.T, rep *contract.Report) []string {
 
 // A-02 and A-03 with the reference guard and variants of it.
 func TestGuardProbesVibeGuard(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	requireBash(t)
 	bin := builtVibeGuard(t)
@@ -364,6 +367,9 @@ func TestGuardProbesVibeGuard(t *testing.T) {
 // cases in their unlock states, and a Stop hook that must remove the
 // marker.
 func TestGuardProbeA08(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	requireBash(t)
 	bin := builtVibeGuard(t)
@@ -430,6 +436,9 @@ func TestGuardProbeA08(t *testing.T) {
 // from their corpus; the cases #105 and #106 added that they miss are
 // listed exactly. A-02 runs, and A-08, which they fail.
 func TestGuardProbesOldGuards(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	requireBash(t)
 	// The cases #105 added that the old guards' regular expressions do
