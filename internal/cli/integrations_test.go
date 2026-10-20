@@ -30,6 +30,7 @@ func planPaths(p *repoPlan) []string {
 // context and module list, and an explicit selection drops a deselected
 // agent's resources.
 func TestPlanSelectsIntegrations(t *testing.T) {
+	t.Parallel()
 	p, err := planFor(t, "standard: prod-go\nversion: v1\nintegrations:\n  agents: [claude]\n")
 	if err != nil {
 		t.Fatal(err)
@@ -52,6 +53,7 @@ func TestPlanSelectsIntegrations(t *testing.T) {
 // 0026's C1/C2 split rests on: a vibe.yaml without integrations: must keep
 // both agents, the guard, and every hook:* task, for every standard.
 func TestPlanDefaultsKeepAgentsAndHooks(t *testing.T) {
+	t.Parallel()
 	manifests := map[string]string{
 		"prod-go":   "standard: prod-go\nversion: v1\n",
 		"prod-ts":   "standard: prod-ts\nversion: v1\n",
@@ -95,6 +97,7 @@ func TestPlanDefaultsKeepAgentsAndHooks(t *testing.T) {
 }
 
 func TestPlanRejectsUnknownIntegration(t *testing.T) {
+	t.Parallel()
 	_, err := planFor(t, "standard: prod-go\nversion: v1\nintegrations:\n  agents: [cursor]\n")
 	if err == nil || !strings.Contains(err.Error(), "unknown agents integration (valid: claude, codex)") {
 		t.Fatalf("error %v", err)
@@ -102,6 +105,7 @@ func TestPlanRejectsUnknownIntegration(t *testing.T) {
 }
 
 func TestPlanProfiles(t *testing.T) {
+	t.Parallel()
 	p, err := planFor(t, "standard: prod-ts\nversion: v1\n")
 	if err != nil {
 		t.Fatal(err)

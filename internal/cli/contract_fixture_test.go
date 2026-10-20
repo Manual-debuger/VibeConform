@@ -2,11 +2,15 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
@@ -66,16 +70,46 @@ func withUntracked(path, content string) fixtureEdit {
 	return fixtureEdit{path: path, content: content, untracked: true}
 }
 
-// contractFixture builds a fixture repository from the baseline with
-// edits applied and returns its root.
+// contractFixture builds a fixture from the baseline with edits applied
+// and returns its root. See fixtureFrom for when it is a Git repository.
 func contractFixture(t *testing.T, edits ...fixtureEdit) string {
 	t.Helper()
 	return fixtureFrom(t, baselineFixture, edits...)
 }
 
-// fixtureFrom builds a fixture repository from the tree src with edits
-// applied and returns its root.
+// contractGitFixture builds a fixture from the baseline that is always a
+// Git repository, for the tests that read git itself: the default branch,
+// git failures, the golden reports.
+func contractGitFixture(t *testing.T, edits ...fixtureEdit) string {
+	t.Helper()
+	return buildFixture(t, baselineFixture, true, edits)
+}
+
+// fixtureFrom builds a fixture from the tree src with edits applied and
+// returns its root. Starting git costs a table case most of its time
+// (spec 0056), so a fixture whose files are all tracked is a plain
+// directory whose file list the audit gets through the repository seam
+// (listedFixtures). A fixture with an untracked file or a .gitignore is a
+// Git repository, because only git decides what it tracks.
 func fixtureFrom(t *testing.T, src string, edits ...fixtureEdit) string {
+	t.Helper()
+	return buildFixture(t, src, false, edits)
+}
+
+// listedFixtures maps the root of each fixture built without git to its
+// files, slash separated.
+var listedFixtures sync.Map
+
+// openFixtureRepo is the audit's repository seam in tests: a fixture built
+// without git gets its file list, any other directory contract.OpenRepo.
+func openFixtureRepo(ctx context.Context, root string) (*contract.Repo, error) {
+	if files, ok := listedFixtures.Load(filepath.Clean(root)); ok {
+		return contract.NewRepo(root, files.([]string)), nil
+	}
+	return contract.OpenRepo(ctx, root)
+}
+
+func buildFixture(t *testing.T, src string, git bool, edits []fixtureEdit) string {
 	t.Helper()
 	dir := t.TempDir()
 	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
@@ -103,7 +137,15 @@ func fixtureFrom(t *testing.T, src string, edits ...fixtureEdit) string {
 	for _, e := range edits {
 		if !e.untracked {
 			applyFixtureEdit(t, dir, e)
+		} else {
+			git = true
 		}
+	}
+	files := fixtureFiles(t, dir)
+	if !git && !slices.ContainsFunc(files, func(f string) bool { return path.Base(f) == ".gitignore" }) {
+		listedFixtures.Store(filepath.Clean(dir), files)
+		t.Cleanup(func() { listedFixtures.Delete(filepath.Clean(dir)) })
+		return dir
 	}
 	fixtureGit(t, dir, "init", "-q")
 	fixtureGit(t, dir, "-c", "core.autocrlf=false", "add", "-A")
@@ -113,6 +155,28 @@ func fixtureFrom(t *testing.T, src string, edits ...fixtureEdit) string {
 		}
 	}
 	return dir
+}
+
+// fixtureFiles lists the files under dir, slash separated and relative to
+// it: what git add -A would track in a tree without a .gitignore.
+func fixtureFiles(t *testing.T, dir string) []string {
+	t.Helper()
+	var files []string
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(dir, p)
+		if err != nil {
+			return err
+		}
+		files = append(files, filepath.ToSlash(rel))
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("listing the fixture: %v", err)
+	}
+	return files
 }
 
 func applyFixtureEdit(t *testing.T, dir string, e fixtureEdit) {
@@ -190,6 +254,9 @@ func probeEnvWithPath(t *testing.T, path string) []string {
 func runVibeAuditSeams(t *testing.T, seams contractSeams, args ...string) auditResult {
 	t.Helper()
 	seams.seen = watchReports(t)
+	if seams.openRepo == nil {
+		seams.openRepo = openFixtureRepo
+	}
 	root := newRootCmd("test", seams)
 	var out, errOut bytes.Buffer
 	root.SetOut(&out)
@@ -199,7 +266,39 @@ func runVibeAuditSeams(t *testing.T, seams contractSeams, args ...string) auditR
 	return auditResult{stdout: out.String(), stderr: errOut.String(), code: ExitCode(err)}
 }
 
+// A fixture whose files are all tracked is no Git repository: the audit
+// gets its file list through the repository seam, so a table case starts
+// no git (spec 0056). The audit still reads it as the baseline.
+func TestListedFixtureIsAuditedWithoutGit(t *testing.T) {
+	t.Parallel()
+	dir := contractFixture(t)
+	if _, err := os.Stat(filepath.Join(dir, ".git")); !os.IsNotExist(err) {
+		t.Fatalf("the fixture has a .git (%v), want a plain directory", err)
+	}
+	rep, _ := auditJSON(t, dir, "--static")
+	assertRule(t, rep, "R-02", "pass")
+}
+
+// A fixture with an untracked file, or one with a .gitignore, is a Git
+// repository: only git decides what such a fixture tracks.
+func TestFixtureThatNeedsGitIsARepository(t *testing.T) {
+	t.Parallel()
+	for name, edit := range map[string]fixtureEdit{
+		"untracked": withUntracked("notes.txt", "x\n"),
+		"gitignore": withFile(".gitignore", "build/\n"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			dir := contractFixture(t, edit)
+			if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+				t.Errorf("the fixture has no .git: %v", err)
+			}
+		})
+	}
+}
+
 func TestFixturePathMapsDotClaude(t *testing.T) {
+	t.Parallel()
 	in := filepath.Join("dot-claude", "hooks", "policy.json")
 	if got, want := fixturePath(in), filepath.Join(".claude", "hooks", "policy.json"); got != want {
 		t.Errorf("fixturePath(%q) = %q, want %q", in, got, want)

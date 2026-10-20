@@ -188,6 +188,7 @@ func TestSyncReportsMissingLefthookOnlyOnce(t *testing.T) {
 // TestRegisteredModulesDeclareTheirTools guards the declarations themselves,
 // which are the part a future module is most likely to forget.
 func TestRegisteredModulesDeclareTheirTools(t *testing.T) {
+	t.Parallel()
 	s, err := standard.Lookup("prod-go", "v1")
 	if err != nil {
 		t.Fatalf("looking up prod-go/v1: %v", err)

@@ -124,9 +124,11 @@ func (r staticReport) findings(id string) (contract.Result, string) {
 var gitlabDecided = []string{"C-01", "C-02", "C-04", "C-05", "D-02", "D-03", "R-03"}
 
 func TestReferenceImplementationsPassTheStaticAudit(t *testing.T) {
+	t.Parallel()
 	for _, provider := range referenceProviders {
 		for _, stack := range referenceStacks {
 			t.Run(provider+"/"+stack, func(t *testing.T) {
+				t.Parallel()
 				report := auditReference(t, referenceRepo(t, stack, provider))
 				for _, r := range report.Rules {
 					if r.Level == contract.Must && r.Result == contract.ResultFail {
@@ -163,6 +165,7 @@ var githubOnlyTools = []string{"actionlint"}
 // actionlint (the gitlab.com run of spec 0055), while the GitHub one
 // still runs it where the Taskfile names it.
 func TestReferenceVerifyCallsOnlyTheProvidersTools(t *testing.T) {
+	t.Parallel()
 	for _, provider := range referenceProviders {
 		for _, stack := range referenceStacks {
 			t.Run(provider+"/"+stack, func(t *testing.T) {
@@ -298,6 +301,7 @@ func verifyCommands(t *testing.T, files map[string]string) map[string]bool {
 // so the static audit test above would catch the reference drifting that
 // way.
 func TestGitLabReferencePlantedProblems(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, old, new string
 		rule, finding  string

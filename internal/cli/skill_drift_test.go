@@ -3,6 +3,7 @@ package cli
 import (
 	"io/fs"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 
@@ -16,6 +17,7 @@ import (
 // skill with one planted problem, which must be the only one found.
 
 func TestEmbeddedSkillHasNoDrift(t *testing.T) {
+	t.Parallel()
 	for _, p := range checkSkill(setupskill.FS()) {
 		t.Error(p)
 	}
@@ -61,7 +63,35 @@ func replaceIn(t *testing.T, file, old, new string) func(fstest.MapFS) {
 	}
 }
 
+// The drift fixtures share the reference vibe.yaml files, so the checker
+// builds the Git repository for one content once, and every load of that
+// content gets the same answer (spec 0056).
+func TestReferenceConfigBuiltOncePerContent(t *testing.T) {
+	t.Parallel()
+	data, err := fs.ReadFile(setupskill.FS(), "reference/vibe-yaml/go.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A comment no other test writes makes the content this test's own.
+	f := skillFile{path: "reference/vibe-yaml/go.yaml", text: string(data) + "# " + t.Name() + "\n"}
+	var wg sync.WaitGroup
+	errs := make([]error, 4)
+	for i := range errs {
+		wg.Go(func() { errs[i] = loadReferenceConfig(f) })
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("load %d: %v", i, err)
+		}
+	}
+	if got := referenceConfigBuilds(f); got != 1 {
+		t.Errorf("the repository for one content was built %d times, want 1", got)
+	}
+}
+
 func TestSkillDriftFixtures(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		edit func(t *testing.T) func(fstest.MapFS)

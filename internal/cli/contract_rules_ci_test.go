@@ -191,7 +191,7 @@ func TestRuleC01DefaultBranch(t *testing.T) {
 	}
 	withOrigin := func(t *testing.T, branch string, edits ...fixtureEdit) string {
 		t.Helper()
-		dir := contractFixture(t, edits...)
+		dir := contractGitFixture(t, edits...)
 		fixtureGit(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/"+branch)
 		return dir
 	}
@@ -210,13 +210,13 @@ func TestRuleC01DefaultBranch(t *testing.T) {
 		}
 	})
 	t.Run("no origin/HEAD, the report says main was assumed", func(t *testing.T) {
-		r := runVibeAudit(t, "--repo-root", contractFixture(t), "--static")
+		r := runVibeAudit(t, "--repo-root", contractGitFixture(t), "--static")
 		if !strings.Contains(r.stdout, "assume the default branch is main") {
 			t.Errorf("report does not say main was assumed:\n%s", r.stdout)
 		}
 	})
 	t.Run("no origin/HEAD, the report says master was assumed", func(t *testing.T) {
-		r := runVibeAudit(t, "--repo-root", contractFixture(t, onPush("master"), withoutFile(auditFile)), "--static")
+		r := runVibeAudit(t, "--repo-root", contractGitFixture(t, onPush("master"), withoutFile(auditFile)), "--static")
 		if !strings.Contains(r.stdout, "assume the default branch is master") {
 			t.Errorf("report does not say master was assumed:\n%s", r.stdout)
 		}

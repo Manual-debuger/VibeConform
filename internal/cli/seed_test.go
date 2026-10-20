@@ -227,6 +227,7 @@ func TestSeedGitignored(t *testing.T) {
 
 // TestPlanResourceRefusesMismatchedBase: Base belongs to Seeded alone.
 func TestPlanResourceRefusesMismatchedBase(t *testing.T) {
+	t.Parallel()
 	for _, r := range []resource.Resource{
 		{Path: "a", Ownership: resource.Seeded, Content: []byte("x")},
 		{Path: "a", Ownership: resource.Generated, Content: []byte("x"), Base: "b"},

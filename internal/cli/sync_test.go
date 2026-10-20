@@ -186,6 +186,7 @@ func TestSyncCmdAppliesResourceModes(t *testing.T) {
 // now that no shipped resource declares a mode: Resource.Mode still exists
 // (docs/decisions/0006-resource-file-mode.md), so sync must still honor it.
 func TestWriteResourceAppliesDeclaredMode(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows does not model Unix permission bits; this would test the platform, not sync")
 	}
@@ -442,6 +443,7 @@ func TestSyncCmdSurvivesHookRegistrationFailure(t *testing.T) {
 }
 
 func TestPlanManagesLefthook(t *testing.T) {
+	t.Parallel()
 	lefthook := resourcePlan{
 		Resource:  resource.Resource{Path: lefthookResourcePath, Ownership: resource.Generated},
 		Decision:  reconcile.NoChange,
@@ -479,6 +481,7 @@ func TestPlanManagesLefthook(t *testing.T) {
 // echo above the line that says what went wrong, and pads every line out to
 // a fixed width, so neither the first line nor the last is the useful one.
 func TestTrimOutput(t *testing.T) {
+	t.Parallel()
 	lefthookFailure := "│  > git rev-parse --show-toplevel                                  \n" +
 		"│    fatal: not a git repository (or any of the parent directories): .git   \n" +
 		"│                                                                          \n" +
