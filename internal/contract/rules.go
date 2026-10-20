@@ -40,8 +40,10 @@ var categoryInfo = []struct {
 	{CategoryHooks, "Local Git hooks", "Recognized hook managers: lefthook (`lefthook.yml`, `.lefthook.yml`), " +
 		"pre-commit (`.pre-commit-config.yaml`) and husky (`.husky/`). Adding one is MINOR. " +
 		"A repository that uses another manager gets \"not recognized\" on both rules."},
-	{CategoryCI, "CI", "Contract v1 supports GitHub Actions only (Q19). If the repository has CI configuration " +
-		"for another provider and no `.github/workflows/`, the C rules cannot be decided."},
+	{CategoryCI, "CI", "The C rules read GitHub Actions or GitLab CI (GitLab CI since 1.1.0). " +
+		"GitHub Actions wins: when the repository has workflows in `.github/workflows/`, the C rules read them only. " +
+		"GitLab CI (`.gitlab-ci.yml`) is read when there are none. If the repository has CI configuration " +
+		"for another provider and neither, the C rules cannot be decided. The report names the provider it read."},
 	{CategoryAgents, "Agent guardrails", "The A rules cover Claude Code only. Codex is exempt; bringing it in is MAJOR. " +
 		"Personal, uncommitted settings (`.claude/settings.local.json`) may override any guardrail, " +
 		"and the audit does not read them."},
@@ -123,8 +125,9 @@ type Rule struct {
 	NotApplicableWhen string
 	Parts             []Part
 	// applies decides applicability; nil means the rule always applies.
-	// It returns why the rule is not applicable.
-	applies func(cfg *Config) (bool, string)
+	// It returns why the rule is not applicable. It sees the repository,
+	// not only the configuration: C-03 is not applicable on GitLab CI.
+	applies func(env *Env) (bool, string)
 }
 
 // Waivable reports whether a waiver may suspend the rule: only SHOULD
@@ -152,13 +155,28 @@ func (r Rule) Kinds() []PartKind {
 	return kinds
 }
 
-// Applies reports whether the rule applies to a configuration, and why
-// not when it does not.
-func (r Rule) Applies(cfg *Config) (bool, string) {
+// Applies reports whether the rule applies to the audited repository and
+// its configuration, and why not when it does not.
+func (r Rule) Applies(env *Env) (bool, string) {
 	if r.applies == nil {
 		return true, ""
 	}
-	return r.applies(cfg)
+	return r.applies(env)
+}
+
+// onConfig is an applicability that reads only the configuration.
+func onConfig(f func(cfg *Config) (bool, string)) func(env *Env) (bool, string) {
+	return func(env *Env) (bool, string) { return f(env.Config) }
+}
+
+// notOnGitLab is C-03's applicability: GitLab CI has no workflow
+// permissions to read (spec 0055, Q6).
+func notOnGitLab(env *Env) (bool, string) {
+	if _, gitlab := env.gitLabCI(); gitlab {
+		return false, "the C rules read GitLab CI: GitLab job tokens have no per-file permissions, " +
+			"and job-token push access is a project setting the audit does not read"
+	}
+	return true, ""
 }
 
 func static(check string, run CheckFunc) Part {
@@ -285,11 +303,13 @@ var rules = []Rule{
 		Title: "Workflow permissions default to read",
 		Check: "Static: every workflow has top-level `permissions` that grant no write scope (`contents: read`, " +
 			"`read-all` or `{}`). Jobs may widen them.",
-		Source: "spec 0010",
+		Source:            "spec 0010",
+		NotApplicableWhen: "when the C rules read GitLab CI",
 		Parts: []Part{
 			static("every workflow has top-level `permissions` that grant no write scope (`contents: read`, "+
 				"`read-all` or `{}`). Jobs may widen them.", checkC03),
 		},
+		applies: notOnGitLab,
 	},
 	{
 		ID: "C-04", Level: Must, Category: CategoryCI,
@@ -311,7 +331,7 @@ var rules = []Rule{
 			static("the steps that call `verify` run on a Linux runner and on a Windows runner, after matrix "+
 				"expansion. Not applicable when `platforms` does not include `windows`.", checkC05),
 		},
-		applies: needsWindows,
+		applies: onConfig(needsWindows),
 	},
 	{
 		ID: "A-01", Level: Must, Category: CategoryAgents,
@@ -322,7 +342,7 @@ var rules = []Rule{
 		Parts: []Part{
 			static("in `.claude/settings.json`, PreToolUse hooks match each of `Bash`, `PowerShell`, `Write`, `Edit` and `MultiEdit`", checkA01),
 		},
-		applies: needsClaude,
+		applies: onConfig(needsClaude),
 	},
 	{
 		ID: "A-02", Level: Must, Category: CategoryAgents,
@@ -337,7 +357,7 @@ var rules = []Rule{
 				"is satisfied as described under \"Guard policy and exceptions\". Every allow case must be allowed. "+
 				"A hook \"refuses\" by exiting 2.", checkA02),
 		},
-		applies: needsClaude,
+		applies: onConfig(needsClaude),
 	},
 	{
 		ID: "A-03", Level: Must, Category: CategoryAgents,
@@ -350,7 +370,7 @@ var rules = []Rule{
 			probeRun("every deny case is still refused in two situations: with `PATH` reduced to the operating "+
 				"system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON", checkA03),
 		},
-		applies: needsClaude,
+		applies: onConfig(needsClaude),
 	},
 	{
 		ID: "A-04", Level: Must, Category: CategoryAgents,
@@ -365,7 +385,7 @@ var rules = []Rule{
 				"has a non-empty reason; when a PreToolUse hook runs `vibe-guard hook`, vibe-guard can load it; "+
 				"the audit lists them. Tightening is not restricted.", checkA04),
 		},
-		applies: needsClaude,
+		applies: onConfig(needsClaude),
 	},
 	{
 		ID: "A-05", Level: Must, Category: CategoryAgents,
@@ -379,7 +399,7 @@ var rules = []Rule{
 			{Kind: Probe, Check: "with a planted defect, the Stop hook exits 2 for a payload with `stop_hook_active: false`, " +
 				"and exits 0 for one with `stop_hook_active: true`", Run: checkA05Probe},
 		},
-		applies: needsClaude,
+		applies: onConfig(needsClaude),
 	},
 	{
 		ID: "A-06", Level: Should, Category: CategoryAgents,
@@ -388,7 +408,7 @@ var rules = []Rule{
 		Source:            "spec 0023",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts:             []Part{static("a PostToolUse hook that matches `Write` and `Edit` calls `fmt`", checkA06)},
-		applies:           needsClaude,
+		applies:           onConfig(needsClaude),
 	},
 	{
 		ID: "A-07", Level: Should, Category: CategoryAgents,
@@ -402,7 +422,7 @@ var rules = []Rule{
 			// with #102's execution checks.
 			executionRun("running it in the probe copy exits 0, and `git status --porcelain` stays empty.", checkA07Execution),
 		},
-		applies: needsClaude,
+		applies: onConfig(needsClaude),
 	},
 	{
 		ID: "A-08", Level: Must, Category: CategoryAgents,
@@ -419,7 +439,7 @@ var rules = []Rule{
 				"`vibe unlock`, and any `Write` or `Bash` that creates the marker, are refused. After the Stop hook "+
 				"runs, the marker is gone.", checkA08),
 		},
-		applies: needsClaude,
+		applies: onConfig(needsClaude),
 	},
 	{
 		ID: "D-01", Level: Must, Category: CategoryDependencies,
@@ -463,12 +483,14 @@ var rules = []Rule{
 	{
 		ID: "R-01", Level: Must, Category: CategoryRemovability,
 		Title: "Everything but the audit works without vibe",
-		Check: "Static: no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04. " +
+		Check: "Static: no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 " +
+			"and `vibe --version` in a CI job that calls no entrypoint. " +
 			"Execution: with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases " +
 			"are still refused.",
 		Source: "principle 3, spec 0017",
 		Parts: []Part{
-			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04.", checkR01),
+			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 "+
+				"and `vibe --version` in a CI job that calls no entrypoint.", checkR01),
 			executionRun("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
 				"are still refused.", checkR01Execution),
 		},
@@ -482,7 +504,7 @@ var rules = []Rule{
 		Parts: []Part{
 			static("`AGENTS.md` exists and contains every `verify` command, and `CLAUDE.md` exists and references `AGENTS.md`", checkR02),
 		},
-		applies: needsAgents,
+		applies: onConfig(needsAgents),
 	},
 	{
 		ID: "R-03", Level: Should, Category: CategoryRemovability,

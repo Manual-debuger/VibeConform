@@ -1,4 +1,4 @@
-contract: 1.0.1
+contract: 1.1.0
 platforms: [linux, windows]
 agents: []
 entrypoints:

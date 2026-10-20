@@ -197,6 +197,11 @@ engine from the configuration it reads.
     stated purpose, where no conformant verdict becomes
     non-conformant. A vibe audits every 1.0.n as the PATCH it
     implements.
+  - Amended 2026-10-19 (spec 0055, contract 1.1.0): this vibe
+    implements contract 1.1.0. A declared 1.0.n or 1.1.n is audited as
+    1.1.0, since a vibe implements the latest MINOR of its MAJOR (spec
+    0051, "Versioning"). MINOR above 1 is "cannot decide; upgrade
+    vibe".
 
 ### `vibe.yaml` version 2 (#98)
 
@@ -305,9 +310,11 @@ MINOR contract change (spec 0051, decision 5); none adds a requirement
 beyond spec 0051.
 
 - **GitHub workflows**: tracked `.github/workflows/*.yml` and `*.yaml`.
-  - The C rules and D-03 cannot be decided when there are no GitHub
-    workflows and a tracked file of another provider exists:
-    `.gitlab-ci.yml`, `.circleci/config.yml`, `Jenkinsfile`,
+  - Since contract 1.1.0, the C rules, D-03 and R-01's CI part read
+    GitLab CI when there are no GitHub workflows and `.gitlab-ci.yml` is
+    tracked (see **GitLab CI** below). They cannot be decided when there
+    are no GitHub workflows, no `.gitlab-ci.yml`, and a tracked file of
+    another provider exists: `.circleci/config.yml`, `Jenkinsfile`,
     `azure-pipelines.yml`, `.travis.yml`, `bitbucket-pipelines.yml`,
     `.buildkite/`, `.drone.yml`. With no CI configuration at all, they
     fail (Q19).
@@ -349,6 +356,15 @@ beyond spec 0051.
   - **D-03**: a simple command whose first word is `govulncheck`,
     `pip-audit`, `osv-scanner` or `trivy`, or whose first two words are
     `pnpm audit` or `npm audit`, in any workflow.
+- **GitLab CI** (contract 1.1.0): tracked `.gitlab-ci.yml`, read only
+  when there are no GitHub workflows. How it is resolved (anchors,
+  merge keys, local includes, `default:`, `extends:`, `!reference`,
+  child pipelines with `strategy: depend`), which commands count, the
+  recognized `rules:` and `only`/`except` conditions, and the GitLab
+  reading of C-01 to C-05, D-02, D-03 and R-01 are stated in spec
+  0051, "Reading GitLab CI" under "C: CI" and the paragraphs after the
+  D and R tables. Spec 0055 records why. The default branch is read as
+  for GitHub workflows above.
 - **Hook managers** (H rules). Only tracked files count.
   - lefthook: `lefthook.yml` or `.lefthook.yml`, the `run` of
     `commands`, of `jobs` (including nested groups) and of `scripts`
@@ -392,7 +408,8 @@ beyond spec 0051.
     `directories` (with Dependabot's globs) covers the component's
     path. One entry has ecosystem `github-actions`. Automerge is enabled
     when a workflow runs `gh pr merge` with `--auto`.
-  - Renovate: `renovate.json`, `.github/renovate.json`, `.renovaterc`,
+  - Renovate: `renovate.json`, `.github/renovate.json`,
+    `.gitlab/renovate.json` (contract 1.1.0), `.renovaterc`,
     `.renovaterc.json`, the JSON5 forms read as JWCC with the existing
     `hujson` dependency (a file it cannot read makes D-02 `cannot
     decide`), or the `renovate` key of a root `package.json`. Coverage
@@ -407,6 +424,9 @@ beyond spec 0051.
     implementation, approved 2026-10-17: the name match alone failed a
     repository that turns automerge off). Other presets are not
     resolved.
+  - When the C rules read GitLab CI (contract 1.1.0), coverage needs
+    Renovate's `gitlabci` manager instead of `github-actions`, and
+    Dependabot does not satisfy D-02 (spec 0051, after the D table).
 - **R-01 (static part)**: no entrypoint, hook command or CI step calls
   `vibe` (a simple command whose first word is `vibe`), except in a job
   that satisfies C-04. #99 does not list it, but it is static, so this
@@ -414,11 +434,17 @@ beyond spec 0051.
   them (same files, `extends` merging, `entry` with `args`, strict
   settings), for every Git hook of githooks(5) a recognized manager
   configures (husky: `.husky/<hook>`) and every Claude Code hook event.
+  Since contract 1.1.0, `vibe --version` in a CI job that calls no
+  entrypoint is not a call, on any provider; on GitLab CI the CI part
+  reads `before_script`, `script` and `after_script` (spec 0051, after
+  the R table).
 - **R-02**: `AGENTS.md` contains each `verify` command as a substring,
   and `CLAUDE.md` contains the string `AGENTS.md`.
 - **R-03**: every tracked pull request template
   (`pull_request_template.md` in the root, `.github/` or `docs/`, case
-  insensitive, or any file under `.github/PULL_REQUEST_TEMPLATE/`) has
+  insensitive, or any file under `.github/PULL_REQUEST_TEMPLATE/`, or,
+  since contract 1.1.0, any `.md` file directly under
+  `.gitlab/merge_request_templates/`; spec 0051, after the R table) has
   an ATX heading containing "verif", case-insensitive.
 
 ### Report (#100)

@@ -388,7 +388,7 @@ func TestRuleA04(t *testing.T) {
 			`{"rule": "git-push-force", "match": "^git push --force origin feat/", "reason": "rebasing feature branches"},
 			 {"rule": "guardrail-settings", "match": "x", "reason": "y", "note": "other keys are the guard's"}`)}},
 		{name: "version 1", want: "fail", edits: []fixtureEdit{policy("1", "")},
-			findings: []string{policyFile + ": has version 1; contract 1.0.1 needs version 2", "Fix: "}},
+			findings: []string{policyFile + ": has version 1; contract 1.1.0 needs version 2", "Fix: "}},
 		{name: "no version", want: "fail", edits: []fixtureEdit{withFile(policyFile, `{"rules": []}`)},
 			findings: []string{policyFile + ": has no version"}},
 		{name: "version is a string", want: "fail", edits: []fixtureEdit{policy(`"2"`, "")},
@@ -708,6 +708,80 @@ func TestRuleD02(t *testing.T) {
 		{name: "renovate third-party automerge preset counts", want: "fail",
 			edits:    renovate("renovate.json", `{"extends": ["github>acme/renovate-config:automergeDisabled"]}`),
 			findings: []string{`extends the automerge preset "github>acme/renovate-config:automergeDisabled"`}},
+	})
+}
+
+// D-02 on GitLab CI (spec 0055, D-02; regression for pilot finding F-14):
+// Renovate covers each component and gitlabci, and gitlabci-include when
+// enabledManagers is set and the pipeline has includes it does not follow.
+// Dependabot cannot satisfy D-02 there, and the fix text names Renovate.
+func TestRuleD02GitLab(t *testing.T) {
+	t.Parallel()
+	const projectInclude = "include:\n  - project: acme/ci\n    ref: v1.2.0\n    file: /templates/go.yml\n\n"
+	gl := func(more ...fixtureEdit) []fixtureEdit { return gitlab(glBase, more...) }
+	runRuleCases(t, "D-02", []ruleCase{
+		{name: "renovate.json without enabledManagers", want: "pass",
+			edits: gl(renovate("renovate.json", `{"extends": ["config:recommended"]}`)...)},
+		{name: "enabledManagers covers the component and gitlabci", want: "pass",
+			edits: gl(renovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`)...)},
+		{name: "enabledManagers covers the monorepo and gitlabci", want: "pass",
+			edits: gl(edits(monorepo(), renovate("renovate.json", `{"enabledManagers": ["gomod", "npm", "pep621", "gitlabci"]}`))...)},
+		{name: "enabledManagers leaves out gitlabci", want: "fail",
+			edits: gl(renovate("renovate.json", `{"enabledManagers": ["gomod", "github-actions"]}`)...),
+			findings: []string{"renovate.json: enabledManagers leaves out gitlabci",
+				"Fix: add gitlabci to enabledManagers"}},
+		{name: "enabledManagers leaves out a component", want: "fail",
+			edits:    gl(renovate("renovate.json", `{"enabledManagers": ["gitlabci"]}`)...),
+			findings: []string{"renovate.json: enabledManagers leaves out gomod, which component . needs"}},
+		{name: "dependabot only", want: "fail", edits: gl(),
+			findings: []string{dependabotFile + ": Dependabot", "GitLab CI", "Fix: add renovate.json", "gitlabci"}},
+		{name: "dependabot does not cover what renovate leaves out", want: "fail",
+			edits:    gl(withFile("renovate.json", `{"enabledManagers": ["gitlabci"]}`)),
+			findings: []string{"renovate.json: enabledManagers leaves out gomod"}},
+		{name: "dependabot beside a covering renovate", want: "pass",
+			edits: gl(withFile("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`))},
+		{name: "no update bot", want: "fail", edits: gl(withoutFile(dependabotFile)),
+			findings: []string{"renovate.json: no update bot (Renovate) is configured", "Fix: add renovate.json", "gitlabci"}},
+		{name: ".gitlab/renovate.json", want: "pass",
+			edits: gl(renovate(".gitlab/renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`)...)},
+		{name: ".gitlab/renovate.json5", want: "pass",
+			edits: gl(renovate(".gitlab/renovate.json5", "{\n  // reviewed\n  \"enabledManagers\": [\"gomod\", \"gitlabci\",],\n}\n")...)},
+		{name: ".gitlab/renovate.json is judged", want: "fail",
+			edits:    gl(renovate(".gitlab/renovate.json", `{"enabledManagers": ["gomod"]}`)...),
+			findings: []string{".gitlab/renovate.json: enabledManagers leaves out gitlabci"}},
+		{name: "includes and enabledManagers without gitlabci-include", want: "fail",
+			edits: gitlab(projectInclude+glBase, renovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`)...),
+			findings: []string{"renovate.json: enabledManagers leaves out gitlabci-include", "line 2",
+				"Fix: add gitlabci-include to enabledManagers"}},
+		{name: "includes and enabledManagers with gitlabci-include", want: "pass",
+			edits: gitlab(projectInclude+glBase, renovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci", "gitlabci-include"]}`)...)},
+		{name: "includes without enabledManagers", want: "pass",
+			edits: gitlab(projectInclude+glBase, renovate("renovate.json", `{}`)...)},
+		{name: "a local include needs no gitlabci-include", want: "pass",
+			edits: gitlab("include:\n  - local: ci/lint.yml\n\n"+glBase, edits(
+				[]fixtureEdit{withFile("ci/lint.yml", "lint:\n  script: echo lint\n")},
+				renovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`))...)},
+		// gitlabci-include updates project: includes only.
+		{name: "component, template and remote includes need no gitlabci-include", want: "pass",
+			edits: gitlab("include:\n  - component: gitlab.com/acme/lint/lint@1.0.0\n  - template: Jobs/SAST.gitlab-ci.yml\n"+
+				"  - remote: https://example.com/ci.yml\n\n"+glBase,
+				renovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`)...)},
+		{name: "a project include after other kinds is the one named", want: "fail",
+			edits: gitlab("include:\n  - template: Jobs/SAST.gitlab-ci.yml\n  - project: acme/ci\n    file: /go.yml\n\n"+glBase,
+				renovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`)...),
+			findings: []string{"enabledManagers leaves out gitlabci-include", "project include at .gitlab-ci.yml line 3"}},
+	})
+}
+
+// D-02 on GitHub Actions does not read the GitLab Renovate location as
+// anything but a Renovate location: it still needs github-actions.
+func TestRuleD02GitLabRenovateOnGitHub(t *testing.T) {
+	t.Parallel()
+	runRuleCases(t, "D-02", []ruleCase{
+		{name: ".gitlab/renovate.json on GitHub", want: "pass", edits: renovate(".gitlab/renovate.json", `{}`)},
+		{name: ".gitlab/renovate.json on GitHub needs github-actions", want: "fail",
+			edits:    renovate(".gitlab/renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`),
+			findings: []string{".gitlab/renovate.json: enabledManagers leaves out github-actions"}},
 	})
 }
 

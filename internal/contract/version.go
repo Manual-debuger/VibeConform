@@ -7,13 +7,14 @@ import (
 )
 
 // Implemented is the contract version this vibe implements.
-const Implemented = "1.0.1"
+const Implemented = "1.1.0"
 
 // Versions is the contract version a configuration declares and the one
-// the audit checks it against. They differ only for a newer PATCH, which
-// makes no conformant repository non-conformant and is audited as
-// Implemented (spec 0051, "Versioning"; spec 0052, "Contract versions");
-// the report shows both.
+// the audit checks it against. They differ for an older MINOR of the same
+// MAJOR, such as 1.0.0 or 1.0.1, and for a newer PATCH: both are audited
+// as Implemented, since a vibe implements the latest MINOR of its MAJOR
+// and a PATCH makes no conformant repository non-conformant (spec 0051,
+// "Versioning"; spec 0052, "Contract versions"); the report shows both.
 type Versions struct {
 	Declared string
 	Audited  string
@@ -55,5 +56,6 @@ func parseVersion(v string) (major, minor int, ok bool) {
 // supported reports whether a well-formed declared version can be audited
 // with Implemented: the same MAJOR and no newer MINOR.
 func supported(major, minor int) bool {
-	return major == 1 && minor == 0
+	implMajor, implMinor, _ := parseVersion(Implemented)
+	return major == implMajor && minor <= implMinor
 }

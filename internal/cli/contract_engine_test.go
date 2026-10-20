@@ -21,8 +21,9 @@ type jsonReport struct {
 		Declared string `json:"declared"`
 		Audited  string `json:"audited"`
 	} `json:"contract"`
-	Summary map[string]map[string]int `json:"summary"`
-	Rules   []jsonRule                `json:"rules"`
+	Summary    map[string]map[string]int `json:"summary"`
+	Rules      []jsonRule                `json:"rules"`
+	CIProvider string                    `json:"ci_provider"`
 }
 
 type jsonRule struct {
@@ -273,20 +274,31 @@ func TestContractAuditApplicabilityAndWaivers(t *testing.T) {
 			t.Errorf("text report does not say the waiver is unused:\n%s", r.stdout)
 		}
 	})
-	t.Run("newer PATCH audited as 1.0.1", func(t *testing.T) {
+	t.Run("newer PATCH audited as 1.1.0", func(t *testing.T) {
 		rep, _ := auditJSON(t, contractFixture(t,
-			withFile("vibe.yaml", configWith(section{"contract", "contract: 1.0.7\n"}))), "--static")
-		if rep.Contract.Declared != "1.0.7" || rep.Contract.Audited != "1.0.1" {
-			t.Errorf("contract = %+v, want 1.0.7 declared, 1.0.1 audited", rep.Contract)
+			withFile("vibe.yaml", configWith(section{"contract", "contract: 1.1.7\n"}))), "--static")
+		if rep.Contract.Declared != "1.1.7" || rep.Contract.Audited != "1.1.0" {
+			t.Errorf("contract = %+v, want 1.1.7 declared, 1.1.0 audited", rep.Contract)
 		}
 	})
+	// A vibe audits every repository that declares its MAJOR with the
+	// latest MINOR it implements (spec 0051, "Versioning"; spec 0055).
+	for _, declared := range []string{"1.0.0", "1.0.1"} {
+		t.Run("older MINOR "+declared+" audited as 1.1.0", func(t *testing.T) {
+			rep, _ := auditJSON(t, contractFixture(t,
+				withFile("vibe.yaml", configWith(section{"contract", "contract: " + declared + "\n"}))), "--static")
+			if rep.Contract.Declared != declared || rep.Contract.Audited != "1.1.0" {
+				t.Errorf("contract = %+v, want %s declared, 1.1.0 audited", rep.Contract, declared)
+			}
+		})
+	}
 }
 
 func TestContractAuditTextReport(t *testing.T) {
 	t.Parallel()
 	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--static")
 	assertExit(t, r, 1)
-	if !strings.HasPrefix(r.stdout, "vibe audit: contract 1.0.1 (vibe test), static checks only\n") {
+	if !strings.HasPrefix(r.stdout, "vibe audit: contract 1.1.0 (vibe test), static checks only\n") {
 		t.Errorf("header:\n%s", r.stdout)
 	}
 	if !strings.Contains(r.stdout, "\nVerdict: cannot decide. ") {
@@ -306,8 +318,8 @@ func TestContractAuditReportsEveryRule(t *testing.T) {
 	if rep.Vibe != "test" {
 		t.Errorf("vibe = %q, want the running version", rep.Vibe)
 	}
-	if rep.Contract.Declared != "1.0.1" || rep.Contract.Audited != "1.0.1" {
-		t.Errorf("contract = %+v, want 1.0.1 declared and audited", rep.Contract)
+	if rep.Contract.Declared != "1.1.0" || rep.Contract.Audited != "1.1.0" {
+		t.Errorf("contract = %+v, want 1.1.0 declared and audited", rep.Contract)
 	}
 	want := []string{
 		"V-01", "V-02", "V-03", "V-04", "H-01", "H-02", "C-01", "C-02", "C-03", "C-04", "C-05",

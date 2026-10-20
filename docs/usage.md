@@ -252,7 +252,7 @@ Prints the `vibe` version and the contract version it implements:
 
 ```console
 $ vibe --version
-vibe version v0.12.0-alpha.1 (contract 1.0.0)
+vibe version v… (contract 1.1.0)
 ```
 
 The setup skill's upgrade flow reads the contract version from it.
@@ -271,7 +271,7 @@ configuration it reads picks which:
   this section describes, exactly as before;
 - a top-level `contract:` key (a version 2 `vibe.yaml`, see "`vibe.yaml`
   version 2" below) runs the contract audit, which checks the rules of
-  contract 1.0.1 (spec 0051). See "`vibe audit` on a contract" below.
+  contract 1.1.0 (spec 0051). See "`vibe audit` on a contract" below.
 
 A file with both keys, or with neither, is an error that names the two
 (exit `1`). `vibe diff`, `vibe sync` and `vibe init` read version 1
@@ -395,8 +395,8 @@ as correct. `sync` refuses outright for the same reason; see below.
 
 With a version 2 configuration (a top-level `contract:` key), `vibe
 audit` checks the repository against the rules of the contract version
-it declares: 25 rules in contract 1.0.1, in six categories (spec 0051,
-spec 0052). Each rule ends as `pass`, `fail`, `not applicable`, `waived`,
+it declares: 25 rules in contract 1.1.0, in six categories (spec 0051,
+spec 0052, spec 0055). Each rule ends as `pass`, `fail`, `not applicable`, `waived`,
 `cannot decide` or `not run`. A full run decides every part of every
 rule: the static checks, then the execution checks and probes in a
 temporary probe copy (spec 0053). `--static` reports the execution and
@@ -477,9 +477,12 @@ C-02: Toolchains and actions are pinned
   Waivable:        no, a MUST rule cannot be waived
 
 Rationale:
-  Source: spec 0044. Contract v1 supports GitHub Actions only (Q19). If the
-  repository has CI configuration for another provider and no
-  `.github/workflows/`, the C rules cannot be decided.
+  Source: spec 0044. The C rules read GitHub Actions or GitLab CI (GitLab CI
+  since 1.1.0). GitHub Actions wins: when the repository has workflows in
+  `.github/workflows/`, the C rules read them only. GitLab CI
+  (`.gitlab-ci.yml`) is read when there are none. If the repository has CI
+  configuration for another provider and neither, the C rules cannot be
+  decided. The report names the provider it read.
 
 Check:
   Static, across every workflow (not only generated ones): every `uses:`
@@ -498,7 +501,7 @@ fix. On a repository whose only failures are two SHOULD rules, for
 example (long lines shortened):
 
 ```
-vibe audit: contract 1.0.0 (vibe v0.12.0), static checks only
+vibe audit: contract 1.1.0 (vibe …), static checks only
 
   V  Verification entrypoints              1 pass, 3 not run
   H  Local Git hooks                       2 pass
@@ -533,6 +536,7 @@ Guard exceptions
 Local guardrail adjustments
   (none)
 
+CI provider read: GitHub Actions
 Note: the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is main
 
 Verdict: cannot decide. 10 rules did not run (--static).
@@ -540,8 +544,11 @@ Verdict: cannot decide. 10 rules did not run (--static).
 
 The verdict line is `Verdict: conformant`, `Verdict: not conformant` or
 `Verdict: cannot decide. <reason>`. When the configuration declares a
-newer PATCH, such as `1.0.3`, the header says
-`contract 1.0.1 (declared 1.0.3; vibe …)`.
+different version that this vibe audits, such as `1.0.1` or `1.1.3`,
+the header says `contract 1.1.0 (declared 1.0.1; vibe …)`. The line
+`CI provider read:` names the CI provider the C rules, D-03 and R-01
+read (`GitHub Actions` or `GitLab CI`); it is left out when they read
+none.
 
 **What is listed.** Not-applicable rules, waivers (in force, expired, or
 unused because the rule is not applicable), every exception in
@@ -567,19 +574,29 @@ report:
 
 ```
 Error: vibe.yaml: waivers[0].until: "2026-13-01" is not a date YYYY-MM-DD
-Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements contract 1.0.1, and the configuration declares 1.1.0
+Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements contract 1.1.0, and the configuration declares 1.2.0
 ```
 
-**Contract versions.** This vibe implements contract 1.0.1. A declared
-version must be `X.Y.Z`. Every PATCH of 1.0 (`1.0.n`, older or newer)
-is audited as 1.0.1, since a PATCH makes no conformant repository
-non-conformant (spec 0051, "Versioning"), and the report
-shows both versions when they differ. A repository set up under 1.0.0
-keeps `contract: 1.0.0`. Spec 0051, "Changes", lists what each version
-changed: in 1.0.1, A-04 fails a `.claude/hooks/policy.json` that
-`vibe-guard` cannot load when a PreToolUse hook runs `vibe-guard hook`,
-and the allow cases A-02 and A-08 then see refused name `policy.json`.
-Another MAJOR, or a MINOR above 0, is "cannot decide; upgrade vibe"
+**Contract versions.** This vibe implements contract 1.1.0. A declared
+version must be `X.Y.Z`. A vibe implements the latest MINOR of its
+MAJOR, so every declared `1.0.n` and `1.1.n` (older or newer PATCH) is
+audited as 1.1.0 (spec 0051, "Versioning"), and the report shows both
+versions when they differ. A repository set up under 1.0.0 or 1.0.1
+keeps its `contract:` line. Spec 0051, "Changes", lists what each
+version changed:
+
+- 1.0.1: A-04 fails a `.claude/hooks/policy.json` that `vibe-guard`
+  cannot load when a PreToolUse hook runs `vibe-guard hook`, and the
+  allow cases A-02 and A-08 then see refused name `policy.json`.
+- 1.1.0 (spec 0055): the C rules, D-03 and R-01 read GitLab CI when the
+  repository has no GitHub Actions workflows (see "GitLab CI" below);
+  R-03 recognizes GitLab merge request templates; D-02 recognizes
+  Renovate's GitLab locations and asks GitLab CI repositories for its
+  `gitlabci` manager; R-01 no longer counts `vibe --version` in a CI
+  job that calls no entrypoint. A GitHub Actions repository keeps its
+  1.0.1 results, apart from that R-01 relaxation.
+
+Another MAJOR, or a MINOR above 1, is "cannot decide; upgrade vibe"
 (exit `1`).
 
 **JSON.** `--json` prints one object. `schema` versions this shape,
@@ -589,7 +606,7 @@ separately from the contract; it is `1`.
 {
   "schema": 1,
   "vibe": "v0.12.0",
-  "contract": {"declared": "1.0.0", "audited": "1.0.0"},
+  "contract": {"declared": "1.0.0", "audited": "1.1.0"},
   "static_only": true,
   "verdict": "undecided",
   "reason": "10 rules did not run (--static)",
@@ -607,7 +624,8 @@ separately from the contract; it is `1`.
   ],
   "guard_exceptions": [{"rule": "…", "match": "…", "reason": "…"}],
   "guard_exception_uses": [{"rule": "…", "match": "…", "case": "…"}],
-  "local_adjustments": [{"file": "…", "kind": "exception", "rule": "…", "pattern": "…", "reason": "…"}]
+  "local_adjustments": [{"file": "…", "kind": "exception", "rule": "…", "pattern": "…", "reason": "…"}],
+  "ci_provider": "github_actions"
 }
 ```
 
@@ -624,6 +642,10 @@ separately from the contract; it is `1`.
   of `policy.json` let through in A-02's probe (spec 0053). It is a new
   key; `schema` stays `1`. The text report lists the same cases under
   each exception ("let through: …").
+- `ci_provider` is the CI provider the C rules, D-03 and R-01 read:
+  `github_actions`, `gitlab_ci`, or `null` when they read none (spec
+  0055). It is a new key; `schema` stays `1`. The text report's line
+  `CI provider read:` says the same.
 
 This repository's `Contract / audit` job
 (`.github/workflows/contract-audit.yml`) runs the full audit on every
@@ -651,21 +673,111 @@ jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "
   absent, so a local file cannot make a repository look conformant.
 - A file a rule needs that does not parse fails that rule, and the
   finding names the file and the parse error.
-- **Not applicable** in contract 1.0.1: C-05 when `platforms` has no
-  `windows`; every A rule when `agents` has no `claude`; R-02 when
-  `agents` is empty, and R-02's `CLAUDE.md` half when `agents` has no
-  `claude`.
+- **Not applicable** in contract 1.1.0: C-03 when the C rules read
+  GitLab CI; C-05 when `platforms` has no `windows`; every A rule when
+  `agents` has no `claude`; R-02 when `agents` is empty, and R-02's
+  `CLAUDE.md` half when `agents` has no `claude`.
 - Commands are parsed as POSIX shell (ADR 0026). A command is "called"
-  when a simple command anywhere in a hook, CI `run:` step or entrypoint
-  has exactly its words, after quote removal. A string passed to
-  `sh -c` is not parsed again.
-- Only GitHub Actions workflows are read. With none and another
-  provider's file tracked (`.gitlab-ci.yml` and others), the C rules and
-  D-03 are "cannot decide"; with no CI configuration at all, they fail.
-  Without `refs/remotes/origin/HEAD`, the CI rules assume `main` or
-  `master` is the default branch and say so in a note.
+  when a simple command anywhere in a hook, CI command (a GitHub `run:`
+  step, a GitLab `before_script` or `script` line) or entrypoint has
+  exactly its words, after quote removal. A string passed to `sh -c` is
+  not parsed again.
+- **Which CI provider is read.** GitHub Actions wins: when tracked
+  `.github/workflows/*.yml` files exist, the C rules, D-03 and R-01's
+  CI part read them only, as in 1.0.1. GitLab CI is read when there are
+  none and `.gitlab-ci.yml` is tracked. With neither and another
+  provider's file tracked (`.circleci/config.yml`, `Jenkinsfile`,
+  `azure-pipelines.yml` and others), those rules are "cannot decide";
+  with no CI configuration at all, they fail. The report names the
+  provider read (`CI provider read:`, `ci_provider`). Without
+  `refs/remotes/origin/HEAD`, the CI rules assume `main` or `master` is
+  the default branch and say so in a note.
+- **R-01 and `vibe --version`** (since 1.1.0, on either provider). A
+  command whose words are exactly `vibe --version` is not a call of
+  `vibe` in a CI job that calls no command of any declared entrypoint
+  (`verify`, `verify-fast`, `fmt`, `fmt-check`, `setup`): such a job
+  tests that `vibe` installs. In an entrypoint, a hook command, or a CI
+  job that calls an entrypoint, it is still a call, and no other
+  spelling is exempt.
 - The recognition rules (hook managers, update bots, scanners, runners,
-  trigger filters) are in spec 0052, "Recognition rules".
+  trigger filters) are in spec 0052, "Recognition rules"; the GitLab
+  readings of each rule are in spec 0051, "C: CI", and after the D and
+  R tables.
+
+**GitLab CI** (contract 1.1.0, spec 0055). The audit resolves
+`.gitlab-ci.yml` statically, the way GitLab does: YAML anchors and merge
+keys, `include: local` (with wildcard paths) merged in GitLab's order,
+`default:`, `extends:` and `!reference` tags that point at local keys.
+Keys that start with `.` are templates, not jobs. A file that does not
+parse, an `extends:` or `!reference` that points at nothing, or a cycle
+fails every rule that reads the CI. It reads no project setting
+(pipelines must succeed, protected branches, job-token scope), as it
+reads no GitHub branch protection.
+
+- **Includes.** Only `local:` includes are followed. `project:`,
+  `remote:`, `component:` and `template:` includes are not; their jobs
+  count as calling nothing. A local include with `rules:` is followed
+  only for the pipeline kinds its rules admit.
+- **Child pipelines.** A job with `trigger: include:` naming local files
+  is followed when it has `strategy: depend` (or `strategy: mirror`), so
+  that the parent pipeline mirrors the child's status. The child's jobs
+  are read with the trigger job's rules as their outer condition. A
+  child without such a strategy, a dynamic child (`include: artifact:`)
+  and `trigger: project:` are not followed.
+- **Commands.** A job's commands are its `before_script` and `script`
+  lines. `after_script` is read by R-01 and D-03 but does not count as
+  calling `verify`, since its failure does not fail the job.
+  `allow_failure` is ignored.
+- **Pipeline kinds.** The audit asks two questions of each job: does it
+  run in a merge request pipeline, and does it run on a push to the
+  default branch? It evaluates `workflow:rules`, then the job's `rules:`
+  (first match wins, `when: never` excludes) or its `only`/`except`. A
+  job with no rules and no `only`/`except` runs in both kinds: GitLab
+  shows its branch pipeline on the merge request. The conditions it
+  reads form a closed list:
+  - `$CI_PIPELINE_SOURCE ==` or `!=` a quoted literal
+    (`merge_request_event`, `push`, `schedule`, …);
+  - `$CI_MERGE_REQUEST_IID`, `$CI_COMMIT_BRANCH` and `$CI_COMMIT_TAG`
+    as presence tests;
+  - `$CI_COMMIT_BRANCH` or `$CI_COMMIT_REF_NAME` compared with
+    `$CI_DEFAULT_BRANCH` or with a quoted branch name;
+  - `&&`, `||` and parentheses over these;
+  - `only`/`except` with `merge_requests`, `branches`, `pushes`, `tags`,
+    `schedules` and branch names.
+
+  A rule with any other condition, or with `changes:` or `exists:`,
+  does not admit the job for that pipeline kind. With `when: never` it
+  leaves the job out (it might exclude it); without, the audit passes
+  over it and a later rule may still admit the job. When none does, the
+  finding quotes the first such condition and its line. So a job gated
+  by `changes:` does not count for C-01, as a GitHub `paths` filter
+  does not. `workflow:rules` and include rules are read the same way.
+- **The rules.** C-01 and C-04 ask their questions of the jobs that run
+  for each pipeline kind. C-02 requires every `image:` and `services:`
+  entry to end in `@sha256:` and a digest, every unfollowed include to
+  be pinned (`project:` with a 40-character `ref:`, `component:` with a
+  40-character version, `remote:` with `integrity:`), fails every
+  `template:` include, and fails any script word ending in `@latest`.
+  C-03 is not applicable: GitLab job tokens have no per-file
+  permissions. C-05 reads a job's platforms from its `tags:` after
+  `parallel: matrix` expansion (a tag containing `windows`, `linux` or
+  `macos`, ignoring case); a job with no tags and an `image:` is Linux.
+  D-03 also accepts an include of GitLab's Dependency-Scanning template
+  or the `dependency-scanning` CI/CD component, which C-02 still checks.
+  R-01 reads every job's scripts except those of the job that satisfies
+  C-04.
+- **D-02 on GitLab CI.** The update bot must be Renovate: Dependabot
+  does not run on GitLab and cannot satisfy D-02 there. The Renovate
+  configuration covers each component's manager and `gitlabci` instead
+  of `github-actions`, and, when it lists `enabledManagers` and the
+  pipeline has `project:` includes (the ones Renovate's
+  `gitlabci-include` manager updates), `gitlabci-include`.
+  `.gitlab/renovate.json` and `.gitlab/renovate.json5` are recognized
+  Renovate locations on any repository. The fix text names Renovate on
+  GitLab CI and Dependabot on GitHub Actions.
+- **R-03.** Every tracked `.md` file directly under
+  `.gitlab/merge_request_templates/` is a pull request template, on any
+  repository, checked like the GitHub templates.
 
 ### `vibe diff`
 
@@ -2347,7 +2459,7 @@ documentation or VibeConform's repository (spec 0041, ADR 0022):
 ## The setup skill
 
 `vibeconform-setup` (spec 0054) takes a repository in any of the
-contract's languages to a conformant `vibe audit` under contract 1.0.1,
+contract's languages to a conformant `vibe audit` under contract 1.1.0,
 without the template-sync system. `vibe init --skill` writes it; the
 repository owns it from then on. It is a different skill from
 `vibeconform` above, which describes the template-sync model and is
@@ -2395,11 +2507,11 @@ The skill's files:
 | Path | Holds |
 |---|---|
 | `SKILL.md` | The process above, for the agent |
-| `reference/rules.md` | One entry per rule of contract 1.0.1: what satisfies it, which file to start from |
+| `reference/rules.md` | One entry per rule of contract 1.1.0: what satisfies it on GitHub Actions and on GitLab CI, which file to start from |
 | `reference/vibe-yaml/` | `vibe.yaml` version 2 for Go, Python, TypeScript and a monorepo |
 | `reference/taskrunner/` | Taskfiles per stack, with `verify`, `verify:fast`, `fmt`, `fmt:check` and the agent hook tasks |
 | `reference/hooks/` | `lefthook.yml` per stack |
-| `reference/ci/` | `ci.yml` (verify on Linux and Windows, a vulnerability scan), `audit.yml` (the audit job with the setup action), `dependabot.yml`, the pull request template |
+| `reference/ci/` | `ci.yml` (verify on Linux and Windows, a vulnerability scan), `audit.yml` (the audit job with the setup action), `dependabot.yml`, the pull request template; per stack, a `.gitlab-ci.yml` for GitLab CI, and `renovate.json`, the update bot on GitLab (spec 0055) |
 | `reference/agents/` | `.claude/settings.json` with the `vibe-guard` hooks, `policy.json` version 2, the `AGENTS.md` Verification section, `CLAUDE.md` |
 | `reference/lint/` | golangci-lint; ruff and pyright; ESLint, Prettier (with a `.prettierignore`) and `tsconfig.json`, each one file. The ESLint, Prettier and Ruff files exclude the skill's own directories |
 | `reference/optional/` | Graphify, VS Code, Zed, language servers, the `AGENTS.md` workflow sections and a docs layout |
@@ -2804,7 +2916,7 @@ restart any running agent session.
 
 ### `vibe-guard`, the reference guard
 
-`vibe-guard` (spec 0053) is the guard contract 1.0.1's guard probes are
+`vibe-guard` (spec 0053) is the guard contract 1.1.0's guard probes are
 written against. It parses commands instead of matching text, so the
 respellings in the limitations above (a quoted command name, `eval`,
 flags after many operands, a variable in a flag) are refused. It is a
@@ -3214,7 +3326,7 @@ commits its version 2 configuration as `vibe.v2.yaml`, which #111 will
 rename:
 
 ```yaml
-contract: 1.0.0
+contract: 1.1.0
 platforms: [linux, windows]
 agents: [claude, codex]
 # No components: one Go component at the root, found from go.mod.
@@ -3234,9 +3346,9 @@ entrypoints:
 
 | Field | Required | Meaning |
 |---|---|---|
-| `contract` | yes | The contract version, `X.Y.Z`, such as `1.0.0` |
+| `contract` | yes | The contract version, `X.Y.Z`, such as `1.1.0` |
 | `platforms` | yes | Non-empty list of distinct values from `linux`, `windows`, `macos` |
-| `agents` | yes | List of distinct values from `claude`, `codex`; may be empty (`[]`). Contract 1.0.0 has no Codex rules |
+| `agents` | yes | List of distinct values from `claude`, `codex`; may be empty (`[]`). Contract 1.1.0 has no Codex rules |
 | `components` | no | List of `{path, language}`; `language` is `go`, `python` or `typescript` |
 | `entrypoints` | yes | `verify`, `verify-fast`, `fmt`, `fmt-check`; `setup` is optional |
 | `waivers` | no | List of `{rule, reason, until}` |
@@ -3272,7 +3384,7 @@ as you gave it.
   pipes or redirections); write a list instead. A missing, empty or
   compound required entrypoint is not a configuration error: V-04 fails,
   and the rest of the report still runs.
-- **Waivers.** `rule` must be a rule ID of contract 1.0.1 and a SHOULD
+- **Waivers.** `rule` must be a rule ID of contract 1.1.0 and a SHOULD
   rule: a MUST rule cannot be waived. `reason` must be non-empty after
   trimming. `until` is a date, `YYYY-MM-DD`, and the waiver is in force
   through the end of that day in UTC. At most one waiver per rule. An

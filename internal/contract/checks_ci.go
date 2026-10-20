@@ -10,43 +10,35 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// The static checks that read GitHub Actions workflows: C-01 to C-05,
-// D-03 and R-01's static part (spec 0052, "Recognition rules"). Each
-// starts from ciRead, which applies env.GitHubCI() and turns every
-// workflow that does not parse into a failure of the rule; the rule then
-// reads the workflows that parsed. Triggers and the default branch are in
-// workflow_triggers.go, runners and matrices in workflow_runners.go.
+// The static checks that read CI: C-01 to C-05, D-03 and R-01's static
+// part (spec 0052, "Recognition rules"; spec 0055 for GitLab CI). Each
+// starts from ciRead, which applies env.CI() and turns every CI file that
+// does not parse or resolve into a failure of the rule; the rule then
+// reads the rest. GitHub triggers and the default branch are in
+// workflow_triggers.go, runners and matrices in workflow_runners.go; the
+// GitLab pipeline model is in gitlab_ci.go and gitlab_rules.go.
 
-// ciRead returns the parsed workflows for a rule that reads GitHub
-// Actions. When ok is false the rule's result is res: no GitHub CI. When
-// ok is true, res holds a failure for each workflow that does not parse
-// (or passes), and the rule merges its own result into it.
-func ciRead(env *Env) (parsed []*Workflow, res PartResult, ok bool) {
-	ws, res, ok := env.GitHubCI()
+// ciRead returns the CI for a rule that reads it. When ok is false the
+// rule's result is res: no CI the audit reads. When ok is true, res holds
+// a failure for each file that does not parse (or passes), and the rule
+// merges its own result into it.
+func ciRead(env *Env) (ci *CI, res PartResult, ok bool) {
+	ci, res, ok = env.CI()
 	if !ok {
 		return nil, res, false
 	}
-	var broken []Finding
-	for _, wf := range ws.Files {
-		if wf.Err != nil {
-			broken = append(broken, ParseFailure(wf.File, wf.Err))
-			continue
-		}
-		parsed = append(parsed, wf)
-	}
-	if len(broken) > 0 {
-		return parsed, Fail(broken...), true
-	}
-	return parsed, Pass(), true
+	return ci, failIf(ci.Broken), true
 }
 
 // checkC03: every workflow has top-level permissions of read-all, {} or a
-// map whose every value is read or none.
+// map whose every value is read or none. On GitLab CI the rule is not
+// applicable, which the registry decides before it runs.
 func checkC03(env *Env) PartResult {
-	parsed, res, ok := ciRead(env)
-	if !ok {
+	ci, res, ok := ciRead(env)
+	if !ok || ci.Provider == CIGitLab {
 		return res
 	}
+	parsed := ci.Workflows
 	const fix = "set top-level `permissions: contents: read` (or `read-all`, or `{}`) and grant write scopes in the job that needs them"
 	var findings []Finding
 	for _, wf := range parsed {
@@ -107,10 +99,14 @@ func checkC01(env *Env) PartResult {
 	if missing != nil {
 		return Fail(*missing)
 	}
-	parsed, res, ok := ciRead(env)
+	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
 	}
+	if ci.Provider == CIGitLab {
+		return Merge(res, gitlabC01(env, ci, verify))
+	}
+	parsed := ci.Workflows
 	branch := defaultBranch(env, parsed)
 	var findings []Finding
 	for _, ev := range []struct{ event, what string }{
@@ -153,10 +149,14 @@ var pinnedRef = regexp.MustCompile(`@[0-9a-fA-F]{40}$`)
 // path ends in @ and 40 hexadecimal characters, and no word of a run:
 // step ends in @latest, in every workflow.
 func checkC02(env *Env) PartResult {
-	parsed, res, ok := ciRead(env)
+	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
 	}
+	if ci.Provider == CIGitLab {
+		return Merge(res, gitlabC02(ci))
+	}
+	parsed := ci.Workflows
 	const pinFix = "pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)"
 	var findings []Finding
 	for _, wf := range parsed {
@@ -197,10 +197,14 @@ func checkC04(env *Env) PartResult {
 	if missing != nil {
 		return Fail(*missing)
 	}
-	parsed, res, ok := ciRead(env)
+	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
 	}
+	if ci.Provider == CIGitLab {
+		return Merge(res, gitlabC04(env, ci, verify))
+	}
+	parsed := ci.Workflows
 	branch := defaultBranch(env, parsed)
 	if len(auditJobs(parsed, branch, verify)) > 0 {
 		return res
@@ -266,10 +270,14 @@ func checkC05(env *Env) PartResult {
 	if missing != nil {
 		return Fail(*missing)
 	}
-	parsed, res, ok := ciRead(env)
+	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
 	}
+	if ci.Provider == CIGitLab {
+		return Merge(res, gitlabC05(ci, verify))
+	}
+	parsed := ci.Workflows
 	var findings []Finding
 	for _, c := range verify {
 		var platforms, unknown, where []string
@@ -337,10 +345,14 @@ var scanners = [][]string{
 
 // checkD03: some workflow step runs a recognized scanner.
 func checkD03(env *Env) PartResult {
-	parsed, res, ok := ciRead(env)
+	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
 	}
+	if ci.Provider == CIGitLab {
+		return Merge(res, gitlabD03(ci))
+	}
+	parsed := ci.Workflows
 	for _, wf := range parsed {
 		for _, j := range wf.Jobs {
 			for _, c := range j.Commands() {
@@ -359,18 +371,20 @@ func checkD03(env *Env) PartResult {
 
 // checkR01 is R-01's static part: no entrypoint, hook command or CI step
 // has a simple command whose first word is vibe, except in a job that
-// satisfies C-04. Without GitHub workflows only the entrypoints and hook
-// commands are read; a workflow that does not parse fails it.
+// satisfies C-04, and except vibe --version in a CI job that calls no
+// entrypoint (spec 0055). On GitLab CI every job's before_script, script
+// and after_script are read. Without CI only the entrypoints and hook
+// commands are read; a CI file that does not parse fails it.
 func checkR01(env *Env) PartResult {
 	calls := entrypointVibeCalls(env)
 	hookCalls, res := hookVibeCalls(env)
 	calls = append(calls, hookCalls...)
-	if parsed, ciRes, ok := ciRead(env); ok {
+	if ci, ciRes, ok := ciRead(env); ok {
 		res = Merge(res, ciRes)
-		// With verify missing (V-04 fails), any vibe audit job of a pull
-		// request workflow is the audit job.
+		// With verify missing (V-04 fails), any vibe audit job that runs
+		// for pull (merge) requests is the audit job.
 		verify, _ := env.Entrypoint(EntrypointVerify)
-		calls = append(calls, ciVibeCalls(parsed, auditJobs(parsed, defaultBranch(env, parsed), verify))...)
+		calls = append(calls, ciVibeCalls(env, ci, ciAuditJobs(ci.Run(env, KindMergeRequest), verify))...)
 	}
 	var findings []Finding
 	for _, c := range calls {

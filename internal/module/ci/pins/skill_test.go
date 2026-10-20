@@ -21,7 +21,7 @@ var (
 	// usesRE matches a uses: line pinned by commit SHA.
 	usesRE = regexp.MustCompile(`(?m)uses:\s*([^@\s]+)@([0-9a-f]{40})`)
 	// envRE matches a quoted version in a workflow's env: block.
-	envRE = regexp.MustCompile(`(?m)^\s*([A-Z_]+_VERSION):\s*"([^"]*)"`)
+	envRE = regexp.MustCompile(`(?m)^\s*([A-Z_]+_(?:VERSION|RELEASE)):\s*"([^"]*)"`)
 	// installRE matches a go install with a literal version.
 	installRE = regexp.MustCompile(`go install ([^@\s]+)@([^\s$]+)`)
 	// setupTaskRE matches go-task/setup-task's version input.
@@ -92,6 +92,15 @@ func TestSkillCIMatchesPins(t *testing.T) {
 			}
 		}
 		for _, m := range envRE.FindAllStringSubmatch(content, -1) {
+			// The GitLab references need an exact Node release (for
+			// Chocolatey and nodejs.org) of the major the table pins.
+			if m[1] == "NODE_RELEASE" {
+				checked["env"]++
+				if !strings.HasPrefix(m[2], pins.Current.Node+".") {
+					t.Errorf("%s sets NODE_RELEASE to %q; the pin table says Node %q", file, m[2], pins.Current.Node)
+				}
+				continue
+			}
 			want, ok := env[m[1]]
 			if !ok {
 				continue

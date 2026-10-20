@@ -41,29 +41,22 @@ jobs:
         uses: ./
         with:
           version: ${{ env.RELEASE_VERSION }}
-      # The binaries are run by the path the action reports, so each check
-      # covers the files it installed; command -v checks that they are on
-      # PATH.
+      # The binaries are run by name, as a user runs them; command -v shows
+      # which files PATH resolves to. R-01 exempts vibe --version in a job
+      # that calls no entrypoint (contract 1.1.0).
       - name: auto resolved to workspace and both tools run
         shell: bash
         env:
           SOURCE: ${{ steps.auto.outputs.source }}
-          BIN: ${{ steps.auto.outputs.bin-dir }}
         run: |
           if [ "$SOURCE" != workspace ]; then
             echo "source auto resolved to $SOURCE in this checkout, want workspace"
             exit 1
           fi
-          bin="$BIN"
-          exe=""
-          if [ "$RUNNER_OS" = Windows ]; then
-            bin=$(cygpath -u "$BIN")
-            exe=.exe
-          fi
           command -v vibe
           command -v vibe-guard
-          "$bin/vibe$exe" --version
-          "$bin/vibe-guard$exe" version
+          vibe --version
+          vibe-guard version
       - name: Setup action, version latest
         id: latest
         continue-on-error: true
@@ -127,16 +120,9 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ steps.state.outputs.version }}
-          BIN: ${{ steps.setup.outputs.bin-dir }}
         run: |
-          bin="$BIN"
-          exe=""
-          if [ "$RUNNER_OS" = Windows ]; then
-            bin=$(cygpath -u "$BIN")
-            exe=.exe
-          fi
-          "$bin/vibe$exe" --version | grep -F "$VERSION"
-          "$bin/vibe-guard$exe" version | grep -F "$VERSION"
+          vibe --version | grep -F "$VERSION"
+          vibe-guard version | grep -F "$VERSION"
 
   probe:
     name: Setup action / release exists
@@ -185,17 +171,9 @@ jobs:
           verify-attestation: "true"
       - name: Both tools print the version
         shell: bash
-        env:
-          BIN: ${{ steps.setup.outputs.bin-dir }}
         run: |
-          bin="$BIN"
-          exe=""
-          if [ "$RUNNER_OS" = Windows ]; then
-            bin=$(cygpath -u "$BIN")
-            exe=.exe
-          fi
-          "$bin/vibe$exe" --version | grep -F "$RELEASE_VERSION"
-          "$bin/vibe-guard$exe" version | grep -F "$RELEASE_VERSION"
+          vibe --version | grep -F "$RELEASE_VERSION"
+          vibe-guard version | grep -F "$RELEASE_VERSION"
       - name: A tampered checksums.txt
         shell: bash
         env:

@@ -40,6 +40,7 @@ type renovateFile struct {
 var renovateFiles = []renovateFile{
 	{"renovate.json", false}, {"renovate.json5", true},
 	{".github/renovate.json", false}, {".github/renovate.json5", true},
+	{".gitlab/renovate.json", false}, {".gitlab/renovate.json5", true},
 	{".renovaterc", false}, {".renovaterc.json", false}, {".renovaterc.json5", true},
 }
 
@@ -54,6 +55,13 @@ var renovateManagers = map[string][]string{
 
 const githubActions = "github-actions"
 
+// Renovate's GitLab CI managers (spec 0051, after the D table): gitlabci
+// updates .gitlab-ci.yml, gitlabci-include its project: includes.
+const (
+	gitlabCIManager      = "gitlabci"
+	gitlabIncludeManager = "gitlabci-include"
+)
+
 // updateBot is one update bot's configuration as D-02 judges it.
 type updateBot struct {
 	// File is the configuration file findings name.
@@ -62,21 +70,31 @@ type updateBot struct {
 	// does not parse, cannot decide when the audit cannot read it.
 	Problem *PartResult
 	// Uncovered maps a component's index to the finding that says the
-	// bot does not cover it; Actions to the one for github-actions, or
-	// nil when the bot covers them.
+	// bot does not cover it; CI holds the findings for the CI's own
+	// dependencies (github-actions, or gitlabci on GitLab CI), and is
+	// empty when the bot covers them.
 	Uncovered map[int]Finding
-	Actions   *Finding
+	CI        []Finding
 	// Automerge holds a finding per place that enables automerge.
 	Automerge []Finding
 }
 
+// renovateFix is the fix for a GitLab CI repository without a Renovate
+// configuration that D-02 accepts.
+const renovateFix = "add renovate.json with Renovate covering each component's manager and gitlabci " +
+	"(and gitlabci-include when you list enabledManagers and .gitlab-ci.yml has project: includes), without automerge"
+
 // checkD02: Dependabot or Renovate covers each component's ecosystem and
 // github-actions, and enables no automerge. With both bots configured,
-// either may cover a component, and automerge in either fails it.
+// either may cover a component, and automerge in either fails it. When
+// the C rules read GitLab CI, only Renovate counts, and it must cover
+// gitlabci instead of github-actions (spec 0055, D-02).
 func checkD02(env *Env) PartResult {
+	_, gitlab := env.gitLabCI()
 	var bots []*updateBot
-	if b := dependabot(env); b != nil {
-		bots = append(bots, b)
+	dependabotBot := dependabot(env)
+	if dependabotBot != nil && !gitlab {
+		bots = append(bots, dependabotBot)
 	}
 	b, pkgProblem := renovate(env)
 	if b != nil {
@@ -85,6 +103,20 @@ func checkD02(env *Env) PartResult {
 	if len(bots) == 0 {
 		if pkgProblem != nil {
 			return *pkgProblem
+		}
+		if gitlab {
+			if dependabotBot != nil {
+				return Fail(Finding{
+					File:    dependabotBot.File,
+					Message: "Dependabot does not run on GitLab, so it cannot satisfy D-02 when the CI is GitLab CI",
+					Fix:     renovateFix,
+				})
+			}
+			return Fail(Finding{
+				File:    renovateFiles[0].file,
+				Message: "no update bot (Renovate) is configured",
+				Fix:     renovateFix,
+			})
 		}
 		return Fail(Finding{
 			File:    dependabotFiles[0],
@@ -110,13 +142,8 @@ func checkD02(env *Env) PartResult {
 			findings = append(findings, f)
 		}
 	}
-	if f, all := uncoveredByAll(bots, func(b *updateBot) (Finding, bool) {
-		if b.Actions == nil {
-			return Finding{}, false
-		}
-		return *b.Actions, true
-	}); all {
-		findings = append(findings, f)
+	if fs, all := uncoveredByAll(bots, func(b *updateBot) ([]Finding, bool) { return b.CI, len(b.CI) > 0 }); all {
+		findings = append(findings, fs...)
 	}
 	for _, b := range bots {
 		findings = append(findings, b.Automerge...)
@@ -129,12 +156,12 @@ func checkD02(env *Env) PartResult {
 
 // uncoveredByAll reports whether no bot covers a requirement, with the
 // first bot's finding.
-func uncoveredByAll(bots []*updateBot, uncovered func(*updateBot) (Finding, bool)) (Finding, bool) {
-	var first Finding
+func uncoveredByAll[T any](bots []*updateBot, uncovered func(*updateBot) (T, bool)) (T, bool) {
+	var first, none T
 	for i, b := range bots {
 		f, ok := uncovered(b)
 		if !ok {
-			return Finding{}, false
+			return none, false
 		}
 		if i == 0 {
 			first = f
@@ -175,11 +202,11 @@ func dependabot(env *Env) *updateBot {
 		}
 	}
 	if !slices.ContainsFunc(updates, func(u dependabotUpdate) bool { return u.ecosystem == githubActions }) {
-		b.Actions = &Finding{
+		b.CI = []Finding{{
 			File:    file,
 			Message: "no updates entry has package-ecosystem github-actions",
 			Fix:     "add an updates entry with package-ecosystem: github-actions and directory: /",
-		}
+		}}
 	}
 	b.Automerge = workflowAutomerge(env)
 	return b
@@ -385,7 +412,9 @@ func readRenovateFile(env *Env, rf renovateFile) (map[string]any, *PartResult) {
 
 // judgeRenovate decides coverage and automerge for a Renovate
 // configuration. Coverage holds unless enabledManagers leaves out a
-// component's manager or github-actions. Automerge is any automerge:
+// component's manager or github-actions; on GitLab CI, gitlabci, and
+// gitlabci-include when the pipeline has project: includes (the ones
+// that manager updates). Automerge is any automerge:
 // true, or an extends preset whose name contains "automerge", except
 // Renovate's built-in presets that do not enable it (renovateNotAutomerge).
 // Other presets are not resolved.
@@ -407,11 +436,31 @@ func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) {
 				}
 			}
 		}
-		if !slices.Contains(enabled, githubActions) {
-			b.Actions = &Finding{
-				File:    b.File,
-				Message: "enabledManagers leaves out github-actions",
-				Fix:     "add github-actions to enabledManagers",
+		if ci, gitlab := env.gitLabCI(); !gitlab {
+			if !slices.Contains(enabled, githubActions) {
+				b.CI = append(b.CI, Finding{
+					File:    b.File,
+					Message: "enabledManagers leaves out github-actions",
+					Fix:     "add github-actions to enabledManagers",
+				})
+			}
+		} else {
+			if !slices.Contains(enabled, gitlabCIManager) {
+				b.CI = append(b.CI, Finding{
+					File:    b.File,
+					Message: "enabledManagers leaves out gitlabci, which updates the images and components of " + gitlabCIFile,
+					Fix:     "add gitlabci to enabledManagers",
+				})
+			}
+			i := slices.IndexFunc(ci.Includes, func(in CIInclude) bool { return in.Kind == IncludeProject })
+			if i >= 0 && !slices.Contains(enabled, gitlabIncludeManager) {
+				in := ci.Includes[i]
+				b.CI = append(b.CI, Finding{
+					File: b.File,
+					Message: fmt.Sprintf("enabledManagers leaves out gitlabci-include, which updates includes such as the %s include at %s line %d",
+						in.Kind, in.File, in.Line),
+					Fix: "add gitlabci-include to enabledManagers",
+				})
 			}
 		}
 	}

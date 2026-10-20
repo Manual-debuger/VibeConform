@@ -1,4 +1,4 @@
-vibe audit: contract 1.0.1 (vibe test)
+vibe audit: contract 1.1.0 (vibe test)
 
   V  Verification entrypoints              1 FAIL, 3 cannot decide
   H  Local Git hooks                       2 pass
@@ -54,6 +54,7 @@ Guard exceptions
 Local guardrail adjustments
   (none)
 
+CI provider read: GitHub Actions
 Note: the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is main
 
 Verdict: cannot decide. 9 rules cannot be decided; 1 MUST rule already fails.

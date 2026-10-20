@@ -68,8 +68,8 @@ _Avoid_: exemption, suppression, ignore
 
 **Not applicable**:
 The state of a rule that does not apply to an adopting repository because
-of what the repository declares, such as a Linux-only platform. It is
-reported, not checked.
+of what the repository declares, such as a Linux-only platform, or
+because of the CI provider it uses. It is reported, not checked.
 _Avoid_: skipped, waived
 
 **Adopting repository**:
@@ -114,6 +114,18 @@ guardrail settings. An agent cannot grant it to itself. The person runs
 _Avoid_: override, bypass, escape
 
 ## CI
+
+**CI provider**:
+The CI service whose configuration the audit reads for the CI rules:
+GitHub Actions or GitLab CI. A repository has one CI provider as the
+audit sees it; when both are configured, GitHub Actions is the one read.
+_Avoid_: CI platform, CI system, forge, host
+
+**Pipeline kind**:
+One of the two situations the CI rules ask a job about: a merge request
+(a pull request on GitHub) and a push to the default branch. A job either
+runs for a pipeline kind or does not.
+_Avoid_: event, trigger, pipeline source, pipeline type
 
 **Required check**:
 A CI job whose name stays stable so that branch protection can require

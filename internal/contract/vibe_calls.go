@@ -90,19 +90,51 @@ func hookVibeCalls(env *Env) ([]vibeCall, PartResult) {
 	return calls, res
 }
 
-// ciVibeCalls reads every CI step of every parsed workflow, except the
-// jobs in exempt.
-func ciVibeCalls(parsed []*Workflow, exempt []ciJob) []vibeCall {
+// ciVibeCalls reads every script of every CI job (GitHub run: steps;
+// GitLab before_script, script and after_script), except the jobs in
+// exempt. In a job that calls no declared entrypoint, a command that is
+// exactly vibe --version tests the installed binary and is not a call of
+// vibe (spec 0055, "R-01 and tool-installation tests").
+func ciVibeCalls(env *Env, ci *CI, exempt []*CIJob) []vibeCall {
 	var out []vibeCall
-	for _, wf := range parsed {
-		for _, j := range wf.Jobs {
-			if slices.ContainsFunc(exempt, func(e ciJob) bool { return e.job == j }) {
-				continue
-			}
-			for _, s := range j.Steps {
-				out = append(out, callsVibe(wf.File, fmt.Sprintf("line %d: job %s, step %d", s.Line, j.ID, s.Index+1), s.Run.Commands)...)
+	for _, j := range ci.Jobs {
+		if slices.ContainsFunc(exempt, func(e *CIJob) bool { return e.Key() == j.Key() }) {
+			continue
+		}
+		var all []Command
+		for _, s := range j.Scripts {
+			all = append(all, s.Commands...)
+		}
+		testsTools := !callsAnEntrypoint(env, all)
+		for _, s := range j.Scripts {
+			for _, c := range callsVibe(s.File, fmt.Sprintf("line %d: %s", s.Line, s.Where), s.Commands) {
+				if testsTools && c.cmd.Calls(vibeVersion) {
+					continue
+				}
+				out = append(out, c)
 			}
 		}
 	}
 	return out
+}
+
+// vibeVersion is the one vibe command a tool-installation test may run.
+var vibeVersion = Command{Words: []Word{{Text: "vibe", Literal: true}, {Text: "--version", Literal: true}}}
+
+// callsAnEntrypoint reports whether some command in cmds calls a command
+// of a declared entrypoint. Calling one command of a list entrypoint is
+// enough: the job then runs what the entrypoint runs, and vibe there is
+// not only a tool-installation test.
+func callsAnEntrypoint(env *Env, cmds []Command) bool {
+	for _, name := range entrypointNames {
+		if _, ok := env.Config.Entrypoints[name]; !ok {
+			continue
+		}
+		for _, want := range env.entrypoint(name).commands {
+			if CallsAny(cmds, want) {
+				return true
+			}
+		}
+	}
+	return false
 }

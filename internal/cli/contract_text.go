@@ -57,8 +57,11 @@ func writeContractText(w io.Writer, rep *contract.Report, vibeVersion string) er
 		fmt.Fprintf(&b, "  %s: %s %s \"%s\"%s\n", l.File, kind, l.Rule, l.Pattern, reasonSuffix(l.Reason))
 	})
 
-	if len(rep.Notes) > 0 {
+	if len(rep.Notes) > 0 || rep.CIProvider != "" {
 		b.WriteString("\n")
+		if rep.CIProvider != "" {
+			fmt.Fprintf(&b, "CI provider read: %s\n", rep.CIProvider.Name())
+		}
 		for _, n := range rep.Notes {
 			fmt.Fprintf(&b, "Note: %s\n", n)
 		}

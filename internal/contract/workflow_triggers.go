@@ -208,8 +208,14 @@ func decideDefaultBranch(env *Env, parsed []*Workflow) string {
 			branch, best = b, n
 		}
 	}
-	env.Note("the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is %s", branch)
+	noteAssumedBranch(env, branch)
 	return branch
+}
+
+// noteAssumedBranch tells the report which default branch the CI rules
+// assumed.
+func noteAssumedBranch(env *Env, branch string) {
+	env.Note("the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is %s", branch)
 }
 
 // countTriggered counts the workflow triggers (pull_request or push) that

@@ -175,10 +175,10 @@ func TestRuleC01(t *testing.T) {
 			findings: []string{"no CI configuration"}},
 		{name: "another CI provider", want: "undecided",
 			edits: []fixtureEdit{withoutFile(ciFile), withoutFile(auditFile),
-				withFile(".gitlab-ci.yml", "test:\n  script: task verify\n")},
-			findings: []string{".gitlab-ci.yml: ", "GitHub Actions"}},
+				withFile("azure-pipelines.yml", "steps:\n  - script: task verify\n")},
+			findings: []string{"azure-pipelines.yml: ", "GitHub Actions"}},
 		{name: "another CI provider beside GitHub workflows", want: "pass",
-			edits: []fixtureEdit{withFile(".gitlab-ci.yml", "test:\n  script: task verify\n")}},
+			edits: []fixtureEdit{withFile("azure-pipelines.yml", "steps:\n  - script: task verify\n")}},
 	})
 }
 
@@ -328,6 +328,31 @@ func TestRuleR01(t *testing.T) {
 		{name: "baseline", want: "pass"},
 		{name: "vibe by path is not a call of vibe", want: "pass", edits: []fixtureEdit{
 			ciWith(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("sync", "ubuntu-latest", "|\n          \"$RUNNER_TEMP/bin/vibe\" sync"))}},
+		// vibe --version tests an installed binary (spec 0055, #120 Part
+		// A): exempt only in a CI job that calls no entrypoint.
+		{name: "vibe --version in a job that calls no entrypoint", want: "pass", edits: []fixtureEdit{
+			ciWith(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("install", "ubuntu-latest", "go install ./cmd/vibe", "vibe --version | tee version.txt"))}},
+		{name: "vibe --version in a job that calls verify", want: "fail", edits: []fixtureEdit{
+			ciWith(ciPRAndPush, ciJob("v", "ubuntu-latest", "vibe --version", "task verify"))},
+			findings: []string{ciFile + ": ", "job v", "`vibe --version`"}},
+		{name: "vibe --version in a job that calls one command of a list verify", want: "fail", edits: []fixtureEdit{listVerify,
+			ciWith(ciPRAndPush, ciJob("lint", "ubuntu-latest", "task lint")+ciJob("test", "ubuntu-latest", "vibe --version", "task test"))},
+			findings: []string{ciFile + ": ", "job test", "`vibe --version`"}},
+		{name: "vibe --version in a job that calls fmt-check", want: "fail", edits: []fixtureEdit{
+			ciWith(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("fmt", "ubuntu-latest", "vibe --version", "task fmt:check"))},
+			findings: []string{"job fmt", "`vibe --version`"}},
+		{name: "vibe --version with more words is a call", want: "fail", edits: []fixtureEdit{
+			ciWith(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("install", "ubuntu-latest", "vibe --version --json"))},
+			findings: []string{"`vibe --version --json`"}},
+		{name: "vibe version is a call", want: "fail", edits: []fixtureEdit{
+			ciWith(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("install", "ubuntu-latest", "vibe version"))},
+			findings: []string{"`vibe version`"}},
+		{name: "vibe --version in an entrypoint", want: "fail",
+			edits:    []fixtureEdit{entrypoints("  verify: task verify\n  setup: vibe --version\n" + others)},
+			findings: []string{"vibe.yaml: ", "entrypoints.setup", "`vibe --version`"}},
+		{name: "vibe --version in a hook", want: "fail",
+			edits:    []fixtureEdit{withFile(".husky/pre-commit", "vibe --version\n")},
+			findings: []string{".husky/pre-commit: ", "`vibe --version`"}},
 		{name: "a verify entrypoint that calls vibe", want: "fail",
 			edits:    []fixtureEdit{entrypoints("  verify: vibe verify\n" + others)},
 			findings: []string{"vibe.yaml: ", "entrypoints.verify", "`vibe verify`"}},

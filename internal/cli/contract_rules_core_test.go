@@ -76,6 +76,16 @@ func TestRuleR03(t *testing.T) {
 			edits: []fixtureEdit{withoutFile(tmpl), withFile("docs/pull_request_template.md", "### VERIFICATION\n")}},
 		{name: "template directory", want: "pass",
 			edits: []fixtureEdit{withoutFile(tmpl), withFile(".github/PULL_REQUEST_TEMPLATE/feature.md", "## Verified by\n")}},
+		// Regression for pilot finding F-13: a GitLab merge request
+		// template was not recognized (spec 0055, R-03 (Q11)).
+		{name: "GitLab merge request template only", want: "pass",
+			edits: []fixtureEdit{withoutFile(tmpl), withFile(".gitlab/merge_request_templates/Default.md", "## Verification\n")}},
+		{name: "GitLab merge request template without the heading", want: "fail",
+			edits:    []fixtureEdit{withFile(".gitlab/merge_request_templates/Default.md", "## Summary\n")},
+			findings: []string{".gitlab/merge_request_templates/Default.md: "}},
+		{name: "a .md in a subdirectory of the GitLab templates is not a template", want: "fail",
+			edits:    []fixtureEdit{withoutFile(tmpl), withFile(".gitlab/merge_request_templates/old/Default.md", "## Verification\n")},
+			findings: []string{tmpl + ": ", "no pull request template is tracked"}},
 		{name: "no template", want: "fail",
 			edits:    []fixtureEdit{withoutFile(tmpl)},
 			findings: []string{tmpl + ": ", "Verification"}},
