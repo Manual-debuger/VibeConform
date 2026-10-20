@@ -43,11 +43,22 @@ tasks:
 
   # What verify:fast and the agents' background check run: go test -short
   # skips the tests that check testing.Short() and run only in task test.
+  # It prints only what an agent needs: go test's "ok" and "[no test
+  # files]" lines are dropped, every other line is kept, and the exit code
+  # is go test's. The filter is Task's own shell, not grep, which a Windows
+  # machine can lack. Silent, so Task does not echo the script.
   test:short:
     desc: Run the test suite in short mode (go test -short); "task test"
       runs every test.
+    silent: true
     cmds:
-      - go test -short ./...
+      - |
+        rc=0
+        out=$(go test -short ./... 2>&1) || rc=$?
+        printf '%s\n' "$out" | while IFS= read -r l; do
+          case "$l" in 'ok '*|'? '*) ;; *) printf '%s\n' "$l" ;; esac
+        done
+        exit $rc
 
   mod:verify:
     desc: Ensure go.mod/go.sum are tidy and modules are verified.

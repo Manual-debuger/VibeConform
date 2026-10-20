@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.13.0-alpha.1.0.20261020123048-0323b58af217
+vibe_version: v0.13.0-alpha.1.0.20261020144849-d7ddc03f6035+dirty
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go
@@ -105,7 +105,7 @@ resources:
       sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
     - path: services/api/Taskfile.yml
       ownership: generated
-      sha256: 842e8c8dedcd3acca264084c7bb926941f00eda06a2501aab458f449ff53f7d9
+      sha256: 36a6328baa1676c74bce858ce59e53b653bcefd2a2a9cf2adc78fa7717c2bad0
     - path: services/worker/Taskfile.yml
       ownership: generated
       sha256: 4554e745ed37a1ecf65c7dc149e8810ae95a324b9eddbe1d6e0b85e3f9b40810
