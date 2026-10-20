@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.12.0-alpha.1.0.20261019082702-35f13c19cf7d
+vibe_version: v0.13.0-alpha.1.0.20261020093625-dfec6be0d711
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go
@@ -79,7 +79,7 @@ resources:
       sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     - path: Taskfile.yml
       ownership: generated
-      sha256: 5e550f2e2b6dea1e1647c9b601756a0a0dcf992408c3e46d302d4f27f8553520
+      sha256: a5c860a7d8c83a711a45d85cdcac19ae0ad32e4ac0f62a235b10ee3075c87167
     - path: apps/web/.prettierignore
       section_id: generated
       ownership: managed-section
