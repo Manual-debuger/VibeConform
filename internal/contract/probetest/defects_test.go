@@ -41,6 +41,9 @@ var (
 // Every defect sample of a language is caught by its usual tools, and a
 // verify without its test step names "test".
 func TestRuleV01OtherLanguages(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	cases := []struct {
 		language, tool, fixture string
@@ -90,6 +93,9 @@ func TestRuleV01OtherLanguages(t *testing.T) {
 // The passing and the no-tests cases of V-01, V-02 and A-05 share one
 // audit each: every audit runs verify or verify-fast several times.
 func TestDefectProbes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	t.Run("entrypoints and a Stop hook that catch every defect pass", func(t *testing.T) {
 		t.Parallel()
@@ -115,6 +121,9 @@ func TestDefectProbes(t *testing.T) {
 // times; the rules read different entrypoints and hooks, so the cases do
 // not mix.
 func TestDefectProbeFailures(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	t.Run("verify and verify-fast without the test step, and a Stop hook that never blocks", func(t *testing.T) {
 		t.Parallel()

@@ -19,6 +19,9 @@ var inherit = contract.ProbeOptions{}
 // A-07, execution part: every SessionStart hook that matches startup
 // exits 0 in the reset copy and changes no file.
 func TestRuleA07Execution(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	t.Run("a hook that prints facts passes", func(t *testing.T) {
 		t.Parallel()
@@ -70,6 +73,9 @@ func TestRuleA07Execution(t *testing.T) {
 // V-03: with the format defect planted, fmt-check leaves only the planted
 // file in git status, unchanged.
 func TestRuleV03(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	t.Run("a fmt-check that only lists passes", func(t *testing.T) {
 		t.Parallel()
@@ -101,6 +107,9 @@ func TestRuleV03(t *testing.T) {
 // D-01: each component's lockfile matches its manifest, with the tools
 // installed here. The cases that need no tool are in internal/cli.
 func TestRuleD01(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	t.Run("go mod tidy changes nothing", func(t *testing.T) {
 		t.Parallel()
@@ -127,6 +136,9 @@ func TestRuleD01(t *testing.T) {
 // R-01, execution part: with vibe replaced by the shim, verify passes;
 // every call of vibe is listed.
 func TestRuleR01Execution(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	// Without Claude Code there is no A-02 half.
 	noAgents := section{"agents", "agents: []\n"}
@@ -166,6 +178,9 @@ func TestRuleR01Execution(t *testing.T) {
 // setup runs once, first; when it fails, no execution or probe part can
 // be decided.
 func TestProbeSetup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	t.Run("a failing setup leaves every part undecided", func(t *testing.T) {
 		t.Parallel()
