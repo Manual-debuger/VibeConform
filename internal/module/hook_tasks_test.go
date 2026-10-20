@@ -413,6 +413,9 @@ func hookShells(t *testing.T) []string {
 // exit 0. The stub reads its stdin, as a tool may: the payload must still
 // reach hook:done.
 func TestHookStopBlocksOnce(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the Stop-hook matrix; task verify runs it")
+	}
 	taskOnPath(t)
 	command := stopCommand(t)
 	for _, sh := range hookShells(t) {

@@ -222,9 +222,12 @@ func guardTemplate(t *testing.T, module, file string) string {
 }
 
 // TestGuardCorpusGo runs the prod-go guard. Go is always present where this
-// test runs, so it never skips: the reference implementation is always
-// checked.
+// test runs, so only short mode skips it: task verify always checks the
+// reference implementation.
 func TestGuardCorpusGo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
+	}
 	dir := guardDir(t)
 	bin := filepath.Join(dir, "guard")
 	if runtime.GOOS == "windows" {
@@ -266,6 +269,9 @@ func TestGoRunReportsGuardDenyAsOne(t *testing.T) {
 
 // TestGuardCorpusNode runs the prod-ts guard when node is installed.
 func TestGuardCorpusNode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
+	}
 	node := requireTool(t, "node")
 	runCorpus(t, guardDir(t), "policy.json", "policy.local.json", node, guardTemplate(t, "tsrepotooling", "guard.mjs"), "policy.json")
 }
@@ -273,6 +279,9 @@ func TestGuardCorpusNode(t *testing.T) {
 // TestGuardCorpusPython runs the prod-py guard when uv is installed, the
 // same way hook:guard does.
 func TestGuardCorpusPython(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
+	}
 	uv := requireTool(t, "uv")
 	runCorpus(t, guardDir(t), "policy.json", "policy.local.json", uv, "run", "--no-project", "python",
 		guardTemplate(t, "pyrepotooling", "guard.py"), "policy.json")

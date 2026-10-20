@@ -57,6 +57,9 @@ func explainArgs(c contract.GuardCase) []string {
 // case's rule ID, every allow case is allowed silently, and "vibe-guard
 // explain" gives the same decision and rule (#105's done-when).
 func TestCorpus(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
+	}
 	for _, c := range contract.GuardCorpus() {
 		t.Run(c.Name, func(t *testing.T) {
 			t.Parallel()
