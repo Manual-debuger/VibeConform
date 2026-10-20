@@ -10,6 +10,7 @@ import (
 )
 
 func TestExitCode(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		err  error
@@ -36,6 +37,7 @@ func TestExitCode(t *testing.T) {
 }
 
 func TestNonConformantErrorMessage(t *testing.T) {
+	t.Parallel()
 	err := &nonConformantError{drifted: 2, outOfDate: 3, conflicts: 1}
 	if want := "not conformant: 2 drifted, 3 out of date, 1 conflicts"; err.Error() != want {
 		t.Errorf("Error() = %q, want %q", err.Error(), want)
@@ -47,6 +49,7 @@ func TestNonConformantErrorMessage(t *testing.T) {
 // — but distinct from 2, so a conformance job can decide for itself whether
 // that should fail the build. Anything worse than out-of-date outranks it.
 func TestExitCodeSeparatesOutOfDateFromDrift(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		err  *nonConformantError
@@ -72,6 +75,7 @@ func TestExitCodeSeparatesOutOfDateFromDrift(t *testing.T) {
 // is the install that is behind, and 2 or 3 would both blame the wrong
 // thing.
 func TestStaleBinaryExitsAsCouldNotAnswer(t *testing.T) {
+	t.Parallel()
 	err := &staleBinaryError{recorded: "v0.3.0", running: "v0.2.0"}
 	if got := ExitCode(err); got != 1 {
 		t.Errorf("ExitCode = %d, want 1", got)

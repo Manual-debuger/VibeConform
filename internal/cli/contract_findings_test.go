@@ -71,14 +71,15 @@ func failureProblems(rep *contract.Report) []string {
 // failing cases are covered without being listed anywhere.
 func TestFailingFixturesAreWatched(t *testing.T) {
 	before := reportsWatched.Load()
-	runVibeAudit(t, "--repo-root", contractFixture(t, withoutFile(".github/pull_request_template.md")), "--static")
-	auditJSON(t, contractFixture(t, withoutFile("AGENTS.md")), "--static")
+	runVibeAudit(t, "--repo-root", contractGitFixture(t, withoutFile(".github/pull_request_template.md")), "--static")
+	auditJSON(t, contractGitFixture(t, withoutFile("AGENTS.md")), "--static")
 	if got := reportsWatched.Load() - before; got != 2 {
 		t.Errorf("%d reports were checked for failures without a file or a fix, want 2", got)
 	}
 }
 
 func TestFailureProblems(t *testing.T) {
+	t.Parallel()
 	rule, _ := contract.LookupRule("R-01")
 	fail := func(findings ...contract.Finding) contract.PartOutcome {
 		return contract.PartOutcome{Kind: contract.Static, Result: contract.ResultFail, Findings: findings}

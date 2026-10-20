@@ -262,6 +262,10 @@ internal/contract                    the old audit: manifest, standard,
   repository in the system's temporary directory, holding the same
   files, reset between runs and deleted at the end. Entrypoints run
   without a shell, hooks through `bash -c`, each with a time limit.
+  `vibe audit` always lists the tracked files with git (`OpenRepo`); the
+  CLI's tests hand a fixture's known file list in through a repository
+  seam (`contract.NewRepo`), so a rule-table case starts no git (spec
+  0056).
 - **One CI model, two readers** (spec 0055). The C rules, D-03 and
   R-01 read the repository's CI through one provider-neutral model
   (`ci_model.go`): the CI provider read, its jobs with their commands

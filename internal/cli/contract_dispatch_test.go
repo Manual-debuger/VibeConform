@@ -66,7 +66,7 @@ func TestContractAuditOutsideWorkTree(t *testing.T) {
 // .git/config, like a dubious-ownership refusal, read as ErrNotWorkTree).
 func TestContractAuditGitFailureIsNotNotWorkTree(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t)
+	dir := contractGitFixture(t)
 	cfg := filepath.Join(dir, ".git", "config")
 	f, err := os.OpenFile(cfg, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -92,7 +92,7 @@ func TestContractAuditGitFailureIsNotNotWorkTree(t *testing.T) {
 // fallback (regression: every error read as "no origin/HEAD").
 func TestContractAuditOriginHEADGitFailure(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t)
+	dir := contractGitFixture(t)
 	ref := filepath.Join(dir, ".git", "refs", "remotes", "origin", "HEAD")
 	if err := os.MkdirAll(filepath.Dir(ref), 0o755); err != nil {
 		t.Fatal(err)
@@ -111,7 +111,7 @@ func TestContractAuditOriginHEADGitFailure(t *testing.T) {
 
 func TestContractAuditRepoRootMustBeTopLevel(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t, withFile("sub/vibe.yaml", "contract: 1.0.0\n"))
+	dir := contractGitFixture(t, withFile("sub/vibe.yaml", "contract: 1.0.0\n"))
 	r := runVibeAudit(t, "--repo-root", filepath.Join(dir, "sub"))
 	assertExit(t, r, 1)
 	assertStderr(t, r, "top level of its Git work tree")

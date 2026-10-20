@@ -10,6 +10,7 @@ import (
 )
 
 func TestInitCmdWritesManifest(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	root := NewRootCmd("test")
@@ -36,6 +37,7 @@ func TestInitCmdWritesManifest(t *testing.T) {
 }
 
 func TestInitCmdFailsIfManifestExists(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	existing := filepath.Join(dir, "vibe.yaml")
 	if err := os.WriteFile(existing, []byte("standard: prod-go\nversion: v1\n"), 0o644); err != nil {
@@ -61,6 +63,7 @@ func TestInitCmdFailsIfManifestExists(t *testing.T) {
 }
 
 func TestInitCmdRequiresTwoArgs(t *testing.T) {
+	t.Parallel()
 	root := NewRootCmd("test")
 	root.SetOut(&bytes.Buffer{})
 	root.SetErr(&bytes.Buffer{})

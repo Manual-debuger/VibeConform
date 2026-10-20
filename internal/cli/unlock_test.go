@@ -70,6 +70,7 @@ func assertExpiryIn(t *testing.T, at time.Time, before time.Time, d time.Duratio
 // line, fifteen minutes ahead, to vibe-unlock in the common Git
 // directory, and prints the expiry and that the next Stop locks again.
 func TestUnlockDefaultsToFifteenMinutes(t *testing.T) {
+	t.Parallel()
 	dir := gitInit(t)
 	before := time.Now()
 	r := runVibeUnlock(t, "--repo-root", dir)
@@ -91,6 +92,7 @@ func TestUnlockDefaultsToFifteenMinutes(t *testing.T) {
 // TestUnlockMinutesAndReplace: --minutes sets the expiry, and a second
 // unlock replaces the first.
 func TestUnlockMinutesAndReplace(t *testing.T) {
+	t.Parallel()
 	dir := gitInit(t)
 	if r := runVibeUnlock(t, "--repo-root", dir, "--minutes", "240"); r.err != nil {
 		t.Fatalf("vibe unlock: %v", r.err)
@@ -105,6 +107,7 @@ func TestUnlockMinutesAndReplace(t *testing.T) {
 // TestUnlockMinutesOutOfRange: N must be 1 to 240; nothing is written
 // otherwise.
 func TestUnlockMinutesOutOfRange(t *testing.T) {
+	t.Parallel()
 	for _, n := range []string{"0", "241", "-5", "x"} {
 		t.Run(n, func(t *testing.T) {
 			dir := gitInit(t)
@@ -123,6 +126,7 @@ func TestUnlockMinutesOutOfRange(t *testing.T) {
 // marker goes into the main repository's Git directory, which every
 // worktree shares.
 func TestUnlockLinkedWorktreeSharesCommonDir(t *testing.T) {
+	t.Parallel()
 	dir := gitInit(t)
 	fixtureGit(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init")
 	wt := filepath.Join(t.TempDir(), "wt")
@@ -137,6 +141,7 @@ func TestUnlockLinkedWorktreeSharesCommonDir(t *testing.T) {
 // TestUnlockOutsideGit: a directory that is not a Git repository is an
 // error, and nothing is written.
 func TestUnlockOutsideGit(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not on PATH")
 	}

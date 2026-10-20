@@ -109,6 +109,18 @@ func OpenRepo(ctx context.Context, root string) (*Repo, error) {
 	return r, nil
 }
 
+// NewRepo is a Repo whose tracked files the caller already knows, as a
+// test knows the files of a fixture it built: files are slash separated,
+// relative to root and present in the working tree. It runs no git, and
+// the repository has no refs/remotes/origin/HEAD. The audit itself opens
+// repositories with OpenRepo.
+func NewRepo(root string, files []string) *Repo {
+	r := &Repo{root: root, files: slices.Clone(files)}
+	slices.Sort(r.files)
+	r.files = slices.Compact(r.files)
+	return r
+}
+
 // Root returns the directory the repository was opened at.
 func (r *Repo) Root() string { return r.root }
 

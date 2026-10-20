@@ -11,6 +11,7 @@ import (
 // error from pointing at a stale or removed document, as it once pointed at
 // an old milestone plan long after that milestone closed.
 func TestNotImplementedPointsAtExistingDoc(t *testing.T) {
+	t.Parallel()
 	if _, err := os.Stat(filepath.Join("..", "..", filepath.FromSlash(notImplementedDoc))); err != nil {
 		t.Fatalf("errNotImplemented points at %s: %v", notImplementedDoc, err)
 	}

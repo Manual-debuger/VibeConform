@@ -287,12 +287,14 @@ func TestRuleD01(t *testing.T) {
 }
 
 func TestContractAuditProbeTimeoutMustBePositive(t *testing.T) {
+	t.Parallel()
 	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--probe-timeout", "0s")
 	assertExit(t, r, 1)
 	assertStderr(t, r, "--probe-timeout must be a positive duration")
 }
 
 func TestContractAuditProbeFlagsNeedV2(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeVibeYAML(t, dir, goDefaults)
 	for _, flag := range [][]string{{"--probe-timeout", "1m"}, {"--keep-probe-copy"}} {

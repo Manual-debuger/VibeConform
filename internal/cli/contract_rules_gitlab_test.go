@@ -402,13 +402,13 @@ func TestRuleC01GitLabDefaultBranch(t *testing.T) {
 		return gitlab(glOnly(glVerify("verify", glRules(glMR, `$CI_COMMIT_BRANCH == "`+b+`"`))))
 	}
 	t.Run("origin/HEAD names trunk", func(t *testing.T) {
-		dir := contractFixture(t, onBranch("trunk")...)
+		dir := contractGitFixture(t, onBranch("trunk")...)
 		fixtureGit(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
 		rep, _ := auditJSON(t, dir, "--static")
 		assertRule(t, rep, "C-01", "pass")
 	})
 	t.Run("master is assumed when the conditions name it more often", func(t *testing.T) {
-		dir := contractFixture(t, gitlab(glOnly(glVerify("verify", glRules(glMR, `$CI_COMMIT_BRANCH == "master"`))+
+		dir := contractGitFixture(t, gitlab(glOnly(glVerify("verify", glRules(glMR, `$CI_COMMIT_BRANCH == "master"`))+
 			glVerify("v2", glRules(`$CI_COMMIT_BRANCH == "master"`))))...)
 		r := runVibeAudit(t, "--repo-root", dir, "--static")
 		if !strings.Contains(r.stdout, "assume the default branch is master") {
@@ -418,7 +418,7 @@ func TestRuleC01GitLabDefaultBranch(t *testing.T) {
 	t.Run("main on a tie", func(t *testing.T) {
 		tie := gitlab(glVerify("verify", glRules(glMR, `$CI_COMMIT_BRANCH == "master"`)) +
 			glAudit(glRules(glMR, `$CI_COMMIT_BRANCH == "main"`)))
-		rep, _ := auditJSON(t, contractFixture(t, tie...), "--static")
+		rep, _ := auditJSON(t, contractGitFixture(t, tie...), "--static")
 		assertRule(t, rep, "C-01", "fail", "pushes to main")
 	})
 }

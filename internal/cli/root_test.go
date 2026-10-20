@@ -7,6 +7,7 @@ import (
 )
 
 func TestRootCmdHelp(t *testing.T) {
+	t.Parallel()
 	root := NewRootCmd("test")
 	var out bytes.Buffer
 	root.SetOut(&out)
@@ -24,6 +25,7 @@ func TestRootCmdHelp(t *testing.T) {
 }
 
 func TestRootCmdVersion(t *testing.T) {
+	t.Parallel()
 	root := NewRootCmd("v0.0.0-test")
 	var out bytes.Buffer
 	root.SetOut(&out)
@@ -40,6 +42,7 @@ func TestRootCmdVersion(t *testing.T) {
 }
 
 func TestSubcommandsNotYetImplemented(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"check"} {
 		root := NewRootCmd("test")
 		root.SetArgs([]string{name})
