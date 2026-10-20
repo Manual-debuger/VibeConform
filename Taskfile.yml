@@ -50,15 +50,26 @@ tasks:
     cmds:
       - go build ./...
 
+  # Every test. go test's own timeout is ten minutes, which a slow suite
+  # outgrows; 30 minutes means nobody needs GOFLAGS to run it or push
+  # (spec 0056).
   test:
     desc: Run the test suite.
     cmds:
-      - go test ./...
+      - go test -timeout 30m ./...
 
   test:race:
     desc: Run the test suite with the race detector.
     cmds:
-      - go test -race ./...
+      - go test -race -timeout 30m ./...
+
+  # What verify:fast and the agents' background check run: go test -short
+  # skips the tests that check testing.Short() and run only in task test.
+  test:short:
+    desc: Run the test suite in short mode (go test -short); "task test"
+      runs every test.
+    cmds:
+      - go test -short ./...
 
   mod:verify:
     desc: Ensure go.mod/go.sum are tidy and modules are verified.
@@ -199,7 +210,7 @@ tasks:
           git check-ignore -q -- "$p" 2>/dev/null || rc=$?
           [ "$rc" -eq 1 ] || exit 0
         fi
-        task -s typecheck lint test 1>&2 || exit 2
+        task -s typecheck lint test:short 1>&2 || exit 2
 
   # When the agent ends its turn: the same checks, as a gate. The settings'
   # Stop hook calls verify:fast itself, so the contract audit sees it
@@ -238,17 +249,19 @@ tasks:
 
   # The agents' Stop hook and background check run this after edits (spec
   # 0023), so it keeps only what is cheap and incremental: go test's cache
-  # reruns only packages that changed or import something that did, and
-  # golangci-lint caches its analysis. security (network), mod:verify, and
-  # workflows:lint stay in verify, which CI runs.
+  # reruns only packages that changed or import something that did, short
+  # mode skips the slow tests (spec 0056), and golangci-lint caches its
+  # analysis. security (network), mod:verify, and workflows:lint stay in
+  # verify, which CI runs, and so do the tests short mode skips.
   verify:fast:
-    desc: Fast incremental subset of verify (format, build, lint, test);
-      what the agents' Stop hook runs. "task verify" is still the full gate.
+    desc: Fast incremental subset of verify (format, build, lint, tests in
+      short mode); what the agents' Stop hook runs. "task verify" is still
+      the full gate.
     cmds:
       - task: fmt:check
       - task: typecheck
       - task: lint
-      - task: test
+      - task: test:short
 
   verify-ci:
     desc: Alias used by CI so the workflow and local docs never drift.

@@ -168,7 +168,7 @@ tasks:
           git check-ignore -q -- "$p" 2>/dev/null || rc=$?
           [ "$rc" -eq 1 ] || exit 0
         fi
-        task -s api:typecheck api:lint api:test web:typecheck web:lint web:test worker:typecheck worker:lint worker:test 1>&2 || exit 2
+        task -s api:typecheck api:lint api:test:short web:typecheck web:lint web:test worker:typecheck worker:lint worker:test 1>&2 || exit 2
 
   # Runs only when the Stop hook's verify:fast fails:
   # "task verify:fast 1>&2 </dev/null || task -x hook:done". It blocks the
@@ -197,7 +197,7 @@ tasks:
       - task: workflows:lint
 
   # What the agents' Stop hook and pre-push run: every component's own
-  # verify:fast.
+  # verify:fast. Pre-push also runs the Go component's full tests.
   verify:fast:
     desc: Every component's fast incremental verification.
     cmds:

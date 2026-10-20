@@ -38,8 +38,12 @@ pre-commit:
       glob: "*.py"
       run: task lint
 
+# verify:fast runs Go tests in short mode, so pre-push runs each Go
+# component's full tests as well.
 pre-push:
   parallel: false
   commands:
     verify-fast:
       run: task verify:fast
+    api-test:
+      run: task api:test

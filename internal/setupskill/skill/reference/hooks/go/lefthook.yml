@@ -9,7 +9,11 @@ pre-commit:
       run: task fmt:check
       fail_text: "Run 'task fmt' to format the Go files."
 
+# verify:fast runs the tests in short mode, so pre-push runs the full
+# tests as well.
 pre-push:
   commands:
     verify-fast:
       run: task verify:fast
+    test:
+      run: task test

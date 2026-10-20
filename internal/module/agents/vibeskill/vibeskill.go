@@ -177,8 +177,9 @@ const (
 	goPart = "## Standard: `prod-go/v1`\n" +
 		"\n" +
 		"- Tasks: `fmt`, `fmt:check`, `lint`, `typecheck`, `test`, `test:race`,\n" +
-		"  `mod:verify`, `security`, `workflows:lint`, `verify`, `verify:fast`,\n" +
-		"  `verify-ci` and `audit`.\n" +
+		"  `test:short`, `mod:verify`, `security`, `workflows:lint`, `verify`,\n" +
+		"  `verify:fast`, `verify-ci` and `audit`. `verify:fast` runs the tests\n" +
+		"  in short mode (`go test -short`); `test` and `verify` run them all.\n" +
 		"  They call `go`, `goimports`, `golangci-lint`, `govulncheck` and\n" +
 		"  `actionlint`.\n" +
 		"- `generated:` is not accepted. golangci-lint skips a file with a\n" +
