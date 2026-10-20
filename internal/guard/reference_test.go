@@ -84,6 +84,9 @@ func referenceHook(t *testing.T, bash, path string, r repo, stdin string) result
 // the reference PreToolUse command refuses every corpus case, allow
 // cases included, and says how to install the guard (#105's done-when).
 func TestReferenceHookWithoutVibeGuard(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
+	}
 	bash := findBash(t)
 	empty := t.TempDir()
 	for _, c := range contract.GuardCorpus() {
@@ -101,6 +104,9 @@ func TestReferenceHookWithoutVibeGuard(t *testing.T) {
 // TestReferenceHookWithVibeGuard: with only vibe-guard on PATH, the
 // reference command decides the corpus as vibe-guard does.
 func TestReferenceHookWithVibeGuard(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
+	}
 	bash := findBash(t)
 	dir := filepath.Dir(guardBin)
 	if filepath.Base(guardBin) != "vibe-guard"+exeSuffix() {

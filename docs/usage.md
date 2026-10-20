@@ -2590,10 +2590,14 @@ VibeConform computes:
   have `-timeout 30m`, because a slow suite outgrows `go test`'s
   ten-minute default; nobody needs `GOFLAGS` to push. In a `prod-mono`
   repository the same holds for each Go component's tasks, and pre-push
-  runs each Go component's `test` after `verify:fast`. Which of this
-  repository's own tests skip in short mode is still being settled
-  (spec 0056); they are the ones that start many subprocesses.
-  Short mode is Go only: pytest and the TypeScript test runners have no
+  runs each Go component's `test` after `verify:fast`. In this
+  repository, short mode skips three kinds of test (spec 0056): the
+  tests that run the contract probes (`internal/contract/probetest`,
+  the guard probes in `internal/contract`, the probe tests of
+  `internal/cli`), the tests that run the guard corpus through
+  subprocesses (`internal/guard`, `internal/module/agents/claude`), and
+  the Stop-hook matrix (`internal/module`). Each skip message names
+  `task verify`, which runs them. Short mode is Go only: pytest and the TypeScript test runners have no
   common equivalent.
 - **TypeScript:** ESLint `--cache`, Prettier `--cache`, and
   `tsc --incremental` keep their caches under `node_modules/.cache/`,
