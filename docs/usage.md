@@ -2584,7 +2584,8 @@ VibeConform computes:
   which is `go test -short ./...` without its `ok` and `[no test files]`
   lines: it prints the failures, every other line too, and keeps
   `go test`'s exit code. It filters in Task's own shell, so it needs no
-  `grep`. A test that checks `testing.Short()` can skip itself there, so the slowest tests run only in full mode.
+  `grep`. A test that checks `testing.Short()` can skip itself there, so
+  the slowest tests run only in full mode.
   `task test`, `task verify`, the pre-push hook and CI run every test.
   Full Go runs (`task test`, `task test:race`, and the pre-push `go test`)
   have `-timeout 30m`, because a slow suite outgrows `go test`'s
