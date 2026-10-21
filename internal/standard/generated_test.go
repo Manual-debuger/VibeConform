@@ -64,7 +64,9 @@ func TestGeneratedRendering(t *testing.T) {
 	generated := []string{"src/contracts/**", "src/api.gen.ts"}
 	allowed := map[string][]string{
 		"prod-py": {"ruff.base.toml"},
-		"prod-ts": {"eslint.base.config.js", "lefthook.yml", ".prettierignore"},
+		// lefthook.yml no longer passes staged files to ESLint, so it no
+		// longer changes (spec 0057: pre-commit runs task fmt:check).
+		"prod-ts": {"eslint.base.config.js", ".prettierignore"},
 		"prod-mono": {
 			"services/worker/ruff.base.toml",
 			"apps/web/eslint.base.config.js", "apps/web/.prettierignore",
@@ -118,10 +120,6 @@ func TestGeneratedRendering(t *testing.T) {
 					wantSection := "# Managed by VibeConform: generated: in vibe.yaml. Not formatted.\nsrc/contracts/**\nsrc/api.gen.ts\n"
 					if content != wantSection {
 						t.Errorf("%s section = %q, want %q", path, content, wantSection)
-					}
-				case path == "lefthook.yml" && k.name == "prod-ts":
-					if strings.Replace(content, "eslint --no-warn-ignored {staged_files}", "eslint {staged_files}", 1) != base[path] {
-						t.Errorf("lefthook.yml differs by more than --no-warn-ignored:\n%s", content)
 					}
 				}
 			}

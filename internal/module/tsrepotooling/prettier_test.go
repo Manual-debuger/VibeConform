@@ -58,16 +58,6 @@ type renderedTaskfile struct {
 	} `yaml:"tasks"`
 }
 
-type renderedLefthook struct {
-	PreCommit struct {
-		Commands map[string]struct {
-			Glob    string   `yaml:"glob"`
-			Exclude []string `yaml:"exclude"`
-			Run     string   `yaml:"run"`
-		} `yaml:"commands"`
-	} `yaml:"pre-commit"`
-}
-
 // scripts joins a task's shell commands, skipping task calls.
 func scripts(cmds []any) string {
 	var out []string
@@ -122,12 +112,10 @@ func TestPrettierLeavesOwnedEditorFilesAlone(t *testing.T) {
 				}
 			}
 
-			var lh renderedLefthook
-			if err := yaml.Unmarshal(lefthook, &lh); err != nil {
-				t.Fatalf("lefthook.yml: %v", err)
-			}
-			if got := lh.PreCommit.Commands["prettier"].Exclude; strings.Join(got, "\n") != strings.Join(tc.excluded, "\n") {
-				t.Errorf("lefthook prettier exclude = %v, want %v", got, tc.excluded)
+			// pre-commit runs fmt:check, which carries the exclusions
+			// (spec 0057), so lefthook.yml is the template unchanged.
+			if !bytes.Equal(lefthook, lefthookConfig) {
+				t.Errorf("lefthook.yml differs from the embedded template:\n%s", lefthook)
 			}
 		})
 	}
@@ -162,9 +150,6 @@ func TestExcludeFromPrettierRefusesUnknownTemplates(t *testing.T) {
 	duplicated := append(append([]byte{}, taskfile...), taskfile...)
 	if _, err := excludeFromPrettierTaskfile(duplicated, paths, true); err == nil {
 		t.Error("a Taskfile with every anchor twice was accepted")
-	}
-	if _, err := excludeFromPrettierLefthook(bytes.ReplaceAll(lefthookConfig, []byte("glob:"), []byte("files:")), paths); err == nil {
-		t.Error("a lefthook.yml without the prettier glob was accepted")
 	}
 	if got, err := excludeFromPrettierTaskfile(missing, nil, true); err != nil || !bytes.Equal(got, missing) {
 		t.Errorf("no paths must return the input unchanged; got err %v", err)

@@ -1,31 +1,26 @@
-# Lefthook: fast checks at commit time, stronger checks at push time.
+# Lefthook: the format check at commit time, fast verification at push time.
 # CI (.github/workflows/ci.yml) is the authoritative full verification gate;
 # these hooks are a fast local first line of defense, not a substitute.
+# Each hook calls a Taskfile entrypoint, so the checks live in one place.
 
 pre-commit:
-  parallel: true
   commands:
-    gofmt:
+    fmt-check:
       glob: "*.go"
-      run: gofmt -l {staged_files}
-      fail_text: "Run 'task fmt' to format staged Go files."
-    goimports:
-      glob: "*.go"
-      run: goimports -l {staged_files}
-      fail_text: "Run 'task fmt' to fix staged Go imports."
-    go-vet:
-      glob: "*.go"
-      run: go vet ./...
+      run: task fmt:check
+      fail_text: "Run 'task fmt' to format the Go files."
 
+# verify:fast: the format check, build, lint and the tests in short mode.
+# The full suite is CI's; "task test" runs it by hand.
+#
+# A pre-push hook started from a linked worktree exports GIT_DIR, so a
+# test that runs git would act on the real repository instead of its
+# fixture. unset clears Git's repository variables first; lefthook runs
+# run: with sh on every platform.
 pre-push:
-  parallel: false
   commands:
-    lint:
-      run: golangci-lint run
-    # Every test, short mode's slow ones too. task test carries the
-    # 30-minute timeout: the suite can outgrow go test's ten-minute default.
-    test:
-      run: task test
+    verify-fast:
+      run: unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; task verify:fast
 
 post-commit:
   commands:
