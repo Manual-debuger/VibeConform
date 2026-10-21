@@ -1570,8 +1570,10 @@ task fmt               # every component's formatter
 
 `Taskfile.local.yml` works exactly as in the other standards. Run
 `fmt:changed` from inside the component (`cd apps/web && task
-fmt:changed`), as `hook:format` does: through the root include, Task's
-built-in `xargs`, which Windows uses, ignores the include's directory.
+fmt:changed`), as `hook:format` does: Task's built-in `xargs`, which
+Windows uses, starts the formatter in the directory `task` was started
+from, so through the root include, or from a subdirectory of the
+component, the file names don't resolve.
 
 **Git hooks.** Pre-commit runs `task fmt:check` and `task lint` inside
 each component with a staged file of its language, so a commit touching
@@ -2704,6 +2706,14 @@ ESLint's findings still arrive through `hook:check`.
 It prints nothing when it succeeds. A formatter that fails, on a syntax
 error for instance, exits 2 and the agent sees the error. After it runs,
 the agent's copy of the file is out of date until it reads the file again.
+
+The work is the `fmt:changed` task's, which you can run yourself from the
+repository root. `hook:format` starts it as a `task` process of its own,
+in the root, so it works from any directory of the repository the
+agent's session is in (#129): Task's built-in `xargs`, which Windows
+uses, starts the formatter in the directory `task` was started from,
+where the root-relative file names don't resolve. Run `fmt:changed`
+from the root for the same reason.
 
 ### `hook:check` (after each edit, in the background)
 

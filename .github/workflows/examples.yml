@@ -199,14 +199,17 @@ jobs:
         working-directory: examples/monorepo
         run: task hook:context
       # An untracked, unformatted file in every component: hook:format must
-      # format each one from its own directory, on both platforms.
+      # format each one from its own directory, on both platforms. It runs
+      # from services/, a directory that is not a component's, as an agent
+      # whose session is there would (#129); the next step runs it from
+      # the root.
       - name: task hook:format
         working-directory: examples/monorepo
         run: |
           printf 'package api\n\nfunc  X() {}\n' > services/api/x.go
           printf 'export const   y = 1\n' > apps/web/src/y.ts
           printf 'x  =  1\n' > services/worker/src/example/x.py
-          task -x hook:format
+          (cd services && task -x hook:format)
           task fmt:check
           rm services/api/x.go apps/web/src/y.ts services/worker/src/example/x.py
       # Spec 0037: the committed generated files fail Prettier/ESLint and
