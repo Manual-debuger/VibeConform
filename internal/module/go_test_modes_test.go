@@ -15,7 +15,7 @@ import (
 )
 
 // Spec 0056 Desired Behavior 2 and 3, for every Taskfile that runs go test:
-// the fast checks (verify:fast, hook:check) run the tests in short mode, and
+// the fast check (verify:fast) runs the tests in short mode, and
 // the full runs (test, test:race, verify, and the pre-push hook) run every
 // test with an explicit 30-minute timeout, so nobody needs GOFLAGS to push.
 
@@ -234,23 +234,25 @@ func sortedCopy(ids []string) []string {
 	return ids
 }
 
-// TestGoFastChecksRunShortTests: verify:fast and hook:check run every Go
-// component's tests, in short mode (spec 0056 Desired Behavior 2).
+// TestGoFastChecksRunShortTests: verify:fast runs every Go component's
+// tests, in short mode (spec 0056 Desired Behavior 2), and hook:check runs
+// none (spec 0057 Desired Behavior 1).
 func TestGoFastChecksRunShortTests(t *testing.T) {
 	for name, setup := range goTaskSetups {
 		t.Run(name, func(t *testing.T) {
 			s := setup(t)
 			g := s.graph(t)
-			for _, task := range []string{"verify:fast", "hook:check"} {
-				tests := g.goTests(t, task)
-				if got, want := components(tests), sortedCopy(s.goComponents); !slices.Equal(got, want) {
-					t.Errorf("%s runs go test in %q, want %q", task, got, want)
+			tests := g.goTests(t, "verify:fast")
+			if got, want := components(tests), sortedCopy(s.goComponents); !slices.Equal(got, want) {
+				t.Errorf("verify:fast runs go test in %q, want %q", got, want)
+			}
+			for _, gt := range tests {
+				if _, short := goFlag(gt.command, "-short"); !short {
+					t.Errorf("verify:fast runs %q in %q without -short", gt.command, gt.component)
 				}
-				for _, gt := range tests {
-					if _, short := goFlag(gt.command, "-short"); !short {
-						t.Errorf("%s runs %q in %q without -short", task, gt.command, gt.component)
-					}
-				}
+			}
+			if tests := g.goTests(t, "hook:check"); len(tests) > 0 {
+				t.Errorf("hook:check runs go test: %q; the Stop gate runs the tests", tests)
 			}
 		})
 	}

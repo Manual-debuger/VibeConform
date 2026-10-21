@@ -13,7 +13,7 @@ import (
 )
 
 // TestHookShortTestsPrintOnlyFailures pins spec 0056 Desired Behavior 10
-// for every Go setup: test:short, which the Stop hook and hook:check run,
+// for every Go setup: test:short, which the Stop hook runs,
 // drops go test's "ok" and "[no test files]" lines, keeps every other line
 // and keeps go test's exit code. It runs the real task in a scratch module
 // with a passing package, a failing one and one without tests, then
