@@ -319,43 +319,50 @@ func TestHookContextListsOnlyDeclaredRuntimes(t *testing.T) {
 	}
 }
 
-// TestLefthook: one pre-commit check pair per component, run from its
-// directory on its own language's files.
+// TestLefthook: pre-commit runs the root's fmt:check, which checks every
+// component, when a staged file is of a declared component's language;
+// pre-push clears Git's repository variables and runs verify:fast
+// (spec 0057).
 func TestLefthook(t *testing.T) {
-	var doc struct {
-		PreCommit struct {
-			Commands map[string]struct {
-				Root string `yaml:"root"`
-				Glob string `yaml:"glob"`
-				Run  string `yaml:"run"`
-			} `yaml:"commands"`
-		} `yaml:"pre-commit"`
-		PrePush struct {
-			Commands map[string]struct {
-				Run string `yaml:"run"`
-			} `yaml:"commands"`
-		} `yaml:"pre-push"`
-	}
-	if err := yaml.Unmarshal(resolve(t, allProfiles)["lefthook.yml"].Content, &doc); err != nil {
-		t.Fatal(err)
-	}
-	if n := len(doc.PreCommit.Commands); n != 2*len(allProfiles) {
-		t.Errorf("%d pre-commit commands, want %d", n, 2*len(allProfiles))
-	}
-	for _, c := range allProfiles {
-		for suffix, run := range map[string]string{"-fmt": "task fmt:check", "-lint": "task lint"} {
-			cmd, ok := doc.PreCommit.Commands[c.ID+suffix]
-			if !ok {
-				t.Errorf("no pre-commit %s%s", c.ID, suffix)
-				continue
+	for _, tc := range []struct {
+		name       string
+		components []manifest.Component
+		glob       string
+	}{
+		{"all profiles", allProfiles, "*.{go,js,jsx,ts,tsx,json,css,md,py}"},
+		{"python only", allProfiles[2:], "*.py"},
+		{"go and python", []manifest.Component{allProfiles[0], allProfiles[2]}, "*.{go,py}"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var doc struct {
+				PreCommit struct {
+					Commands map[string]struct {
+						Root string `yaml:"root"`
+						Glob string `yaml:"glob"`
+						Run  string `yaml:"run"`
+					} `yaml:"commands"`
+				} `yaml:"pre-commit"`
+				PrePush struct {
+					Commands map[string]struct {
+						Run string `yaml:"run"`
+					} `yaml:"commands"`
+				} `yaml:"pre-push"`
 			}
-			if cmd.Root != c.Path+"/" || cmd.Glob != profiles[c.Profile].glob || cmd.Run != run {
-				t.Errorf("pre-commit %s%s = %+v", c.ID, suffix, cmd)
+			if err := yaml.Unmarshal(resolve(t, tc.components)["lefthook.yml"].Content, &doc); err != nil {
+				t.Fatal(err)
 			}
-		}
-	}
-	if doc.PrePush.Commands["verify-fast"].Run != "task verify:fast" {
-		t.Errorf("pre-push = %+v, want task verify:fast", doc.PrePush.Commands)
+			if n := len(doc.PreCommit.Commands); n != 1 {
+				t.Errorf("%d pre-commit commands, want 1", n)
+			}
+			cmd := doc.PreCommit.Commands["fmt-check"]
+			if cmd.Root != "" || cmd.Glob != tc.glob || cmd.Run != "task fmt:check" {
+				t.Errorf("pre-commit fmt-check = %+v, want glob %q and run task fmt:check from the root", cmd, tc.glob)
+			}
+			want := "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; task verify:fast"
+			if len(doc.PrePush.Commands) != 1 || doc.PrePush.Commands["verify-fast"].Run != want {
+				t.Errorf("pre-push = %+v, want only %q", doc.PrePush.Commands, want)
+			}
+		})
 	}
 }
 
