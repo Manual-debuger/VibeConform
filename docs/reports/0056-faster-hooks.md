@@ -115,17 +115,20 @@ against main.
 The session ran up to five implementer agents in parallel worktrees. What
 got in their way:
 
-| # | Friction | Status after spec 0056 |
+Items 2, 4, 6, 8 and 9 were left open by spec 0056 and are resolved by
+spec 0057 (#130), which decides what each hook stage runs.
+
+| # | Friction | Status |
 |---|---|---|
 | 1 | golangci-lint takes one machine-wide lock; a second run exited 3 | Fixed: `allow-serial-runners` |
-| 2 | A sub-agent's async `hook:check` failure (`asyncRewake`) wakes the parent session. TDD red phases make these routine; the orchestrator got about 20 of them. | Open |
+| 2 | A sub-agent's async `hook:check` failure (`asyncRewake`) wakes the parent session. TDD red phases make these routine; the orchestrator got about 20 of them. | Resolved by spec 0057: `hook:check` runs nothing for a payload with an `agent_id`, and runs no tests at all |
 | 3 | Every edit in every worktree runs typecheck, the full lint and the short tests | Reduced: path filter and short mode. Still the full set for any edit inside a repository. |
-| 4 | The orchestrator's Stop gate (`verify:fast`) competes with the agents for the machine and spoiled two timing runs | Open |
+| 4 | The orchestrator's Stop gate (`verify:fast`) competes with the agents for the machine and spoiled two timing runs | Resolved by spec 0057: the Stop gate skips `verify:fast` when the tree equals the last green run (the green stamp) |
 | 5 | Every sync rewrites `vibe_version` (a timestamp and a commit) in `.vibe/state.yaml`, so parallel branches always conflict there | Reduced: `task sync` re-syncs, and restores a change to `vibe_version` alone |
-| 6 | A `vibe` on PATH that is older than the build that synced the branch refuses an audit verdict (spec 0019). Every agent had to put its own `bin/` first. | Open |
+| 6 | A `vibe` on PATH that is older than the build that synced the branch refuses an audit verdict (spec 0019). Every agent had to put its own `bin/` first. | Resolved by spec 0057: in VibeConform's own repository, `task audit` runs the checkout's vibe from source |
 | 7 | vibe-guard refuses improvised rebuild-and-sync commands (`dynamic-command`) | Fixed: `task sync` |
-| 8 | A pre-push from a linked worktree leaks `GIT_DIR` into tests that use git | Open (worked around by pushing only from the main checkout) |
-| 9 | A sync from a dirty tree records a `+dirty` `vibe_version`, which CI cannot install | Open (corrected by hand twice in this PR) |
+| 8 | A pre-push from a linked worktree leaks `GIT_DIR` into tests that use git | Resolved by spec 0057: pre-push unsets `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` and `GIT_COMMON_DIR` before `task verify:fast` |
+| 9 | A sync from a dirty tree records a `+dirty` `vibe_version`, which CI cannot install | Resolved by spec 0057: when the setup action builds from VibeConform's own workspace, the recorded version is information only |
 | 10 | A worktree that was just created failed git's identity check once, under load | Not reproduced |
 
 Items 2, 4, 6, 8 and 9 are the input for the next spec. That spec decides
