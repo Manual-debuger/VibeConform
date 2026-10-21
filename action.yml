@@ -20,7 +20,8 @@ inputs:
       The exact version to install, such as v0.12.0-alpha.1, or a Go
       pseudo-version. latest, an empty value and anything that is not
       semver are refused, so the job's verdict cannot change without a
-      change to the repository.
+      change to the repository. With source workspace the tools are built
+      from the checkout, and the version is information only.
     required: true
   tools:
     description: Which tools to install, separated by spaces.
@@ -80,13 +81,6 @@ runs:
 
         semver='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$'
         pseudo='[0-9]{14}-[0-9a-f]{12}$'
-        case "$VERSION" in
-          "") fail "version is empty. Name an exact release, such as v0.12.0-alpha.1." ;;
-          latest) fail "version: latest is refused. Name an exact release, so that the verdict cannot change without a change to the repository." ;;
-        esac
-        if ! printf '%s\n' "$VERSION" | grep -Eq "$semver"; then
-          fail "version $VERSION is not an exact semver version such as v0.12.0-alpha.1."
-        fi
 
         tools=""
         for tool in $TOOLS; do
@@ -119,7 +113,7 @@ runs:
             if [ -d "$GITHUB_WORKSPACE/cmd/vibe" ] && [ -f "$GITHUB_WORKSPACE/go.mod" ] &&
               tr -d '\r' < "$GITHUB_WORKSPACE/go.mod" | grep -Eq '^module github\.com/Manual-debuger/VibeConform[[:space:]]*$'; then
               source=workspace
-              echo "::notice title=VibeConform setup::source auto chose workspace in this checkout of VibeConform: the tools are built from the checkout, and version $VERSION is not installed."
+              echo "::notice title=VibeConform setup::source auto chose workspace in this checkout of VibeConform."
             elif printf '%s\n' "$VERSION" | grep -Eq "$pseudo"; then
               source=go-install
             else
@@ -129,8 +123,28 @@ runs:
           release | go-install | workspace) ;;
           *) fail "source is $source; use auto, release, go-install or workspace." ;;
         esac
-        if [ "$source" = release ] && printf '%s\n' "$VERSION" | grep -Eq "$pseudo"; then
-          fail "version $VERSION is a pseudo-version, which has no release. Use source go-install."
+
+        # The source is decided before the version is checked (spec 0057).
+        # The workspace source builds the tools from the checkout, so the
+        # version is information only and any value is accepted, dev and
+        # +dirty included: VibeConform records whatever vibe synced it.
+        # Every other source installs exactly that version, so it must be
+        # one that can be fetched.
+        label="$VERSION"
+        if [ "$source" = workspace ]; then
+          echo "::notice title=VibeConform setup::source workspace builds the tools from the checkout; version $VERSION is information only and is not installed."
+          label=workspace
+        else
+          case "$VERSION" in
+            "") fail "version is empty. Name an exact release, such as v0.12.0-alpha.1." ;;
+            latest) fail "version: latest is refused. Name an exact release, so that the verdict cannot change without a change to the repository." ;;
+          esac
+          if ! printf '%s\n' "$VERSION" | grep -Eq "$semver"; then
+            fail "version $VERSION is not an exact semver version such as v0.12.0-alpha.1."
+          fi
+          if [ "$source" = release ] && printf '%s\n' "$VERSION" | grep -Eq "$pseudo"; then
+            fail "version $VERSION is a pseudo-version, which has no release. Use source go-install."
+          fi
         fi
         if [ "$source" != release ] && { [ "$VERIFY_ATTESTATION" = true ] || [ -n "$CHECKSUMS" ]; }; then
           echo "::notice title=VibeConform setup::verify-attestation and checksums apply to source release only; source is $source."
@@ -139,12 +153,12 @@ runs:
         # The steps below run in bash, which gets the directory in its own
         # form (/d/a/_temp/… on Windows); bin-dir is the runner's native form.
         tmp="$RUNNER_TEMP"
-        native="$RUNNER_TEMP/vibeconform-$VERSION/bin"
+        native="$RUNNER_TEMP/vibeconform-$label/bin"
         if [ "$RUNNER_OS" = Windows ] && command -v cygpath > /dev/null 2>&1; then
           tmp=$(cygpath -u "$RUNNER_TEMP")
-          native=$(cygpath -w "$tmp/vibeconform-$VERSION/bin")
+          native=$(cygpath -w "$tmp/vibeconform-$label/bin")
         fi
-        bin="$tmp/vibeconform-$VERSION/bin"
+        bin="$tmp/vibeconform-$label/bin"
         mkdir -p "$bin"
         echo "VibeConform setup: installing$tools $VERSION from source $source."
         {
