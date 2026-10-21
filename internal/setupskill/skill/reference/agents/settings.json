@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "vibe-guard relock 2>/dev/null; task verify:fast 1>&2 </dev/null || task -x hook:done",
+            "command": "vibe-guard relock 2>/dev/null; task -x hook:stamp:check >/dev/null 2>&1 </dev/null || { task verify:fast 1>&2 </dev/null && task -x hook:stamp:save >/dev/null 2>&1 </dev/null; } || task -x hook:done",
             "timeout": 600
           }
         ]

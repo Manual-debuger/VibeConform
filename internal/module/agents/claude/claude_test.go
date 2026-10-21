@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 	"github.com/Manual-debuger/VibeConform/internal/state"
@@ -189,29 +190,38 @@ func TestAgentConfigsCallTaskWithExitCode(t *testing.T) {
 	}
 }
 
-// redirection matches a shell redirection word such as 1>&2 or </dev/null.
-var redirection = regexp.MustCompile(`^[0-9]*(<|>|>>|>&|<&)\S*$`)
-
 // TestStopHookCallsVerifyFast pins contract rule A-05's static part (spec
 // 0051): the Stop hook calls verify-fast, here `task verify:fast`, as a
-// simple command whose words, without redirections, are exactly those (spec
-// 0052). Only when it fails does hook:done run, through Task's -x like
-// every other hook task, to decide between blocking the stop (exit 2) and
-// letting a second stop through (spec 0023).
+// simple command whose words, without redirections, are exactly those, as
+// the contract audit parses it (spec 0052). Besides it, the Stop hook
+// calls only the green stamp's tasks (spec 0057) and hook:done, each
+// through Task's -x like every other hook task. What the gate does is
+// TestStopGateGreenStamp's (internal/module).
 func TestStopHookCallsVerifyFast(t *testing.T) {
+	verifyFast, err := contract.ParseSimpleCommand("task verify:fast")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var stops int
 	for _, h := range hookHandlers(t, ".claude/settings.json", settings) {
 		if h.event != "Stop" {
 			continue
 		}
 		stops++
-		first, rest, ok := strings.Cut(h.command, " || ")
-		if !ok || rest != DoneCommand {
-			t.Errorf("Stop runs %q, want `task verify:fast ... || %s`", h.command, DoneCommand)
+		cmds, err := contract.ParseCommands(h.command)
+		if err != nil {
+			t.Fatalf("Stop command %q does not parse as POSIX shell: %v", h.command, err)
 		}
-		words := slices.DeleteFunc(strings.Fields(first), redirection.MatchString)
-		if !slices.Equal(words, []string{"task", "verify:fast"}) {
-			t.Errorf("Stop's first command has the words %q without redirections, want [task verify:fast]", words)
+		if !contract.CallsAny(cmds, verifyFast) {
+			t.Errorf("Stop runs %q, which calls no `task verify:fast`", h.command)
+		}
+		var got []string
+		for _, c := range cmds {
+			got = append(got, c.String())
+		}
+		want := []string{"task -x hook:stamp:check", "task verify:fast", "task -x hook:stamp:save", "task -x hook:done"}
+		if !slices.Equal(got, want) {
+			t.Errorf("Stop calls %q, want %q", got, want)
 		}
 	}
 	if stops != 1 {
