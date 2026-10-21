@@ -78,13 +78,15 @@ func TestHookTasksShape(t *testing.T) {
 			// tools' output (go test prints failures on stdout) to stderr,
 			// which is what an agent shows the model on exit 2.
 			//
-			// hook:check runs verify:fast's steps except fmt:check: agents
-			// run every hook matching an event in parallel, so it starts
-			// while hook:format may still be rewriting the file, and a
-			// format check then would fail on a race, not on the code.
+			// hook:check runs verify:fast's steps except fmt:check and the
+			// tests (spec 0057): agents run every hook matching an event in
+			// parallel, so it starts while hook:format may still be
+			// rewriting the file, and a format check then would fail on a
+			// race, not on the code; and an edit in the middle of a change
+			// rarely passes the tests, which the Stop gate runs.
 			var checkSteps []string
 			for _, step := range verifyFastSteps[path] {
-				if step != "fmt:check" {
+				if step != "fmt:check" && step != "test" && step != "test:short" {
 					checkSteps = append(checkSteps, step)
 				}
 			}

@@ -258,10 +258,14 @@ func TestRootTaskfile(t *testing.T) {
 		if !strings.Contains(format, "(cd "+c.Path+" && task -s fmt:changed) || rc=2") {
 			t.Errorf("hook:format does not format %s from its own directory:\n%s", c.ID, format)
 		}
-		for _, step := range []string{"typecheck", "lint", "test"} {
+		for _, step := range []string{"typecheck", "lint"} {
 			if !strings.Contains(check, " "+c.ID+":"+step) {
 				t.Errorf("hook:check does not run %s:%s", c.ID, step)
 			}
+		}
+		// The Stop gate runs the tests, not each edit (spec 0057).
+		if strings.Contains(check, " "+c.ID+":test") {
+			t.Errorf("hook:check runs %s's tests", c.ID)
 		}
 	}
 }
