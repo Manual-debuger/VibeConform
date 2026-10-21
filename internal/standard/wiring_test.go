@@ -11,6 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/module/agents/claude"
@@ -21,9 +22,6 @@ import (
 // read as a Claude Code / Codex style {"hooks": {event: [{hooks: [...]}]}}
 // document.
 var agentConfigs = []string{".claude/settings.json", ".codex/hooks.json"}
-
-// redirection matches a shell redirection word such as 1>&2 or </dev/null.
-var redirection = regexp.MustCompile(`^[0-9]*(<|>|>>|>&|<&)\S*$`)
 
 // TestAgentConfigWiring checks the one dependency between modules that the
 // module model cannot express (spec 0021). claude-config's settings run
@@ -88,13 +86,20 @@ func TestAgentConfigWiring(t *testing.T) {
 			// Every hook an agent module runs must name tasks this
 			// standard's Taskfile defines (spec 0023 extends this from
 			// hook:guard to every event). A command is one Task call, or
-			// several joined by "||", as the Stop hook's verify:fast and
-			// hook:done (spec 0052); a hook:* task is called with -x.
+			// several in a list, as the Stop gate's stamp tasks,
+			// verify:fast and hook:done (specs 0052, 0057); a hook:* task
+			// is called with -x.
 			for module, paths := range configs {
 				for _, config := range paths {
 					for _, command := range configCommands(t, resources[config]) {
-						for call := range strings.SplitSeq(command, " || ") {
-							words := slices.DeleteFunc(strings.Fields(call), redirection.MatchString)
+						calls, err := contract.ParseCommands(command)
+						if err != nil {
+							t.Errorf("%s: %s runs %q, which does not parse as POSIX shell: %v", module, config, command, err)
+							continue
+						}
+						for _, c := range calls {
+							call := c.String()
+							words := strings.Fields(call)
 							var name string
 							switch {
 							case len(words) == 3 && words[0] == "task" && words[1] == "-x":

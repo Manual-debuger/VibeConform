@@ -53,15 +53,27 @@ const (
 	// DoneCommand decides, after verify:fast failed at the end of a turn,
 	// whether the stop is blocked (exit 2) or, the second time, let through.
 	DoneCommand = "task -x hook:done"
-	// StopCommand runs when the agent ends its turn, as a gate. It calls
-	// verify:fast itself, as a simple command, so the contract audit sees
-	// the Stop hook call it (rule A-05, spec 0052); Task without -x is
-	// enough there, since only failure matters. 1>&2 moves the tools'
-	// output to stderr, which is what Claude Code shows the model on exit
-	// 2. </dev/null keeps every tool off the hook payload, which hook:done
-	// reads for stop_hook_active. The syntax is POSIX: Claude Code runs hook
-	// commands in sh or bash on Linux and in Git Bash on Windows.
-	StopCommand = "task verify:fast 1>&2 </dev/null || " + DoneCommand
+	// StampCheckCommand exits 0 when the tree is the one the last green
+	// verify:fast saw (the green stamp, spec 0057). Its output is dropped:
+	// a mismatch is not an error, and under GitHub Actions Task prints an
+	// annotation to stdout for any failed task.
+	StampCheckCommand = "task -x hook:stamp:check >/dev/null 2>&1 </dev/null"
+	// StampSaveCommand records the green stamp; it always exits 0.
+	StampSaveCommand = "task -x hook:stamp:save >/dev/null 2>&1 </dev/null"
+	// VerifyFastCommand is the gate's verify:fast call. It is a simple
+	// command, so the contract audit sees the Stop hook call verify:fast
+	// (rule A-05, spec 0052); Task without -x is enough there, since only
+	// failure matters. 1>&2 moves the tools' output to stderr, which is
+	// what Claude Code shows the model on exit 2.
+	VerifyFastCommand = "task verify:fast 1>&2 </dev/null"
+	// StopCommand runs when the agent ends its turn, as a gate: when the
+	// tree matches the green stamp it ends there; otherwise verify:fast
+	// runs, and records the stamp when it passes, or hook:done decides
+	// whether its failure blocks the stop. Every call before hook:done
+	// reads </dev/null, so the hook payload, which hook:done reads for
+	// stop_hook_active, stays on stdin. The syntax is POSIX: Claude Code
+	// runs hook commands in sh or bash on Linux and in Git Bash on Windows.
+	StopCommand = StampCheckCommand + " || { " + VerifyFastCommand + " && " + StampSaveCommand + "; } || " + DoneCommand
 )
 
 //go:embed templates/settings.json

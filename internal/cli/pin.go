@@ -17,8 +17,12 @@ import (
 //
 // A warning, never a failure, for the same reason as warnMissingTools: the
 // files sync writes are correct. Skipped when the repository provides
-// cmd/vibe, the self-hosting test the conformance workflow's probe also
-// uses (ADR 0008): there CI builds vibe from source and never pins.
+// cmd/vibe, which in practice is VibeConform itself (ADR 0008). There the
+// conformance job's setup action resolves its source to workspace, builds
+// vibe from the checkout and takes the recorded version as information
+// only, so dev and +dirty pass CI; task audit builds ./cmd/vibe too (spec
+// 0057). The setup action and task audit also check go.mod's module path;
+// this check is looser, which costs at most a missing warning.
 func warnUnpinnable(w io.Writer, repoRoot, version string) {
 	if state.Pinnable(version) {
 		return

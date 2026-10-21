@@ -31,8 +31,13 @@ func ReferencePreToolUse(version string) string {
 }
 
 // ReferenceStop is the reference Stop command: the relock runs first,
-// whatever verify-fast does.
-const ReferenceStop = "vibe-guard relock 2>/dev/null; task verify:fast 1>&2 </dev/null || task -x hook:done"
+// whatever verify-fast does, then the generated Stop gate (claude-config's
+// StopCommand, spec 0057), which skips verify-fast when the tree matches
+// the green stamp.
+const ReferenceStop = "vibe-guard relock 2>/dev/null; " +
+	"task -x hook:stamp:check >/dev/null 2>&1 </dev/null || " +
+	"{ task verify:fast 1>&2 </dev/null && task -x hook:stamp:save >/dev/null 2>&1 </dev/null; } || " +
+	"task -x hook:done"
 
 // InstallVersion is the version the PreToolUse command's install hint
 // names for a vibe of version vibeVersion (spec 0053, "The reference hook

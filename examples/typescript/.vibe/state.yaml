@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.13.0-alpha.1.0.20261020152749-2062dff844a2
+vibe_version: v0.13.0-alpha.1.0.20261021050426-16f0a773c7f6+dirty
 standard: prod-ts/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
@@ -19,7 +19,7 @@ resources:
       sha256: 7100219083e830d4ad20fea998cbe421e1125d694be3c92694acde96ce1d0d54
     - path: .claude/settings.json
       ownership: generated
-      sha256: 3504a64df5ce098a0e58b938e643816c0d9f75bcbf0906cd95da72e1833dc354
+      sha256: 51f0b8cfe1ad911b4cbc0b69afc2e794aea452329cf034187fb9de5a3f9f983f
     - path: .claude/skills/vibeconform/SKILL.md
       ownership: generated
       sha256: 0be705fe5acc076bbd65005fb0c6db6157d969e3089dd09ecbced4af649eb444
@@ -44,7 +44,7 @@ resources:
       sha256: ef95589d7dfd2fe1b04cbfd2056af6b6bed133a11e0b1e60395077945dcbfc3f
     - path: .github/workflows/conformance.yml
       ownership: generated
-      sha256: b89c435cd56893d2c23f8dc6dd37b57c18796bed0c6666900262baadf4534dec
+      sha256: d3d9e5be89a12515faebc025866cd47c3d8eba1de108e2a5966ec159fcdc8e34
     - path: .gitignore
       section_id: claude
       ownership: managed-section
@@ -79,16 +79,16 @@ resources:
       sha256: 7137d2717d93d624268b7666b9229ef1e76c86d0a2592651138fe62c781c3b33
     - path: Taskfile.vibe.yml
       ownership: generated
-      sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
+      sha256: a935c26782c0eaae4af5ebb7ccf6c31a7953f3fadba920d24ad2bcb5a769cace
     - path: Taskfile.yml
       ownership: generated
-      sha256: 6753cc5f9528766a45fed15dfa48baaf3ca1540ce7c9aa85a5f20246116cb4d3
+      sha256: add9dd39f916bf9b71c45f08d98c46f48c54e92bda42e15ac49d8848fd5f07d7
     - path: eslint.base.config.js
       ownership: generated
       sha256: 65567117c90f56996c174bd642be3845ecb564399ea34b71309e22dc6a66dcd3
     - path: lefthook.yml
       ownership: generated
-      sha256: 39b94a660f43bd2e546c4b19a56d8611b4e6b87248d6481335909bca1f227038
+      sha256: 90083c7bcf9dd98bf563a02ff1e04fa7d2334844e7ed61e9c4f88f02c7fbbd41
     - path: tsconfig.base.json
       ownership: generated
       sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217

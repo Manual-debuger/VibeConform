@@ -52,8 +52,9 @@ var (
 type profile struct {
 	// taskfile is the component's Taskfile.yml.
 	taskfile []byte
-	// glob selects the files lefthook's pre-commit checks run for.
-	glob string
+	// exts are the extensions of the files the component's fmt:check
+	// covers; lefthook's pre-commit runs for a staged file with one of them.
+	exts []string
 	// guard is the single-language repo-tooling module whose guard, and
 	// hook:guard command, a repository with this profile uses.
 	guard module.Module
@@ -66,7 +67,7 @@ type profile struct {
 var profiles = map[manifest.Profile]profile{
 	manifest.ProfileGo: {
 		taskfile:     goTaskfile,
-		glob:         "*.go",
+		exts:         []string{"go"},
 		guard:        repotooling.New(),
 		guardCommand: "go run .claude/hooks/guard.go .claude/hooks/policy.json",
 		tools: []module.Tool{
@@ -77,7 +78,7 @@ var profiles = map[manifest.Profile]profile{
 	},
 	manifest.ProfileTS: {
 		taskfile:     tsTaskfile,
-		glob:         "*.{js,jsx,ts,tsx,json,css,md}",
+		exts:         []string{"js", "jsx", "ts", "tsx", "json", "css", "md"},
 		guard:        tsrepotooling.New(),
 		guardCommand: "node .claude/hooks/guard.mjs .claude/hooks/policy.json",
 		tools: []module.Tool{
@@ -86,7 +87,7 @@ var profiles = map[manifest.Profile]profile{
 	},
 	manifest.ProfilePy: {
 		taskfile:     pyTaskfile,
-		glob:         "*.py",
+		exts:         []string{"py"},
 		guard:        pyrepotooling.New(),
 		guardCommand: "uv run --no-project python .claude/hooks/guard.py .claude/hooks/policy.json",
 		tools: []module.Tool{
@@ -160,10 +161,6 @@ func (monorepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([
 	used := declared(components)
 	guardProfile := profiles[used[0]]
 
-	type lefthookComponent struct {
-		manifest.Component
-		Glob string
-	}
 	data := struct {
 		Components   []manifest.Component
 		FanOut       any
@@ -187,11 +184,7 @@ func (monorepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([
 		return nil, err
 	}
 
-	lh := make([]lefthookComponent, 0, len(components))
-	for _, c := range components {
-		lh = append(lh, lefthookComponent{Component: c, Glob: profiles[c.Profile].glob})
-	}
-	hooks, err := render(lefthook, struct{ Components []lefthookComponent }{lh})
+	hooks, err := render(lefthook, struct{ Glob string }{preCommitGlob(used)})
 	if err != nil {
 		return nil, err
 	}
@@ -238,6 +231,19 @@ func declared(components []manifest.Component) []manifest.Profile {
 		}
 	}
 	return used
+}
+
+// preCommitGlob matches the files of every declared profile, in the order
+// of manifest.Profiles: "*.go" for one extension, "*.{go,py}" for more.
+func preCommitGlob(used []manifest.Profile) string {
+	var exts []string
+	for _, p := range used {
+		exts = append(exts, profiles[p].exts...)
+	}
+	if len(exts) == 1 {
+		return "*." + exts[0]
+	}
+	return "*.{" + strings.Join(exts, ",") + "}"
 }
 
 // guardResource takes the guard from the single-language repo-tooling

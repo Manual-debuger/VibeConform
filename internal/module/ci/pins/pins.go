@@ -48,7 +48,7 @@ var Current = Table{
 	Actionlint:   "v1.7.12",
 	Node:         "22",
 	Python:       "3.12",
-	SetupAction:  "9a45d0632a509aaa73d99b371e7305ee0f71c2f5",
+	SetupAction:  "2890f68098db08a6bdcb5daa0d6a06fedeef1fd7",
 }
 
 // TaskSetup is Task as go-task/setup-task takes it: the same release,

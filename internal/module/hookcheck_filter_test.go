@@ -66,6 +66,13 @@ func readSource(path string) func(t *testing.T) []byte {
 // and "1>&2".
 var checkTasks = regexp.MustCompile(`task -s((?: [\w:-]+)+) 1>&2`)
 
+// testTaskNames are the test tasks of every standard and of the monorepo
+// components hookCheckSources render (api, web, worker).
+var testTaskNames = []string{
+	"test", "test:short",
+	"api:test", "api:test:short", "web:test", "worker:test",
+}
+
 // hookCheckRepo is a scratch git repository holding hook:check and a stub
 // for each task it runs. A stub prints "checked: <name>", so the output
 // shows whether the checks ran.
@@ -111,6 +118,11 @@ func newHookCheckRepo(t *testing.T, taskfile []byte, withGit bool) hookCheckRepo
 	tasks := map[string]any{"hook:check": doc.Tasks["hook:check"]}
 	for _, name := range repo.stubs {
 		tasks[name] = map[string]any{"silent": true, "cmds": []string{"echo 'checked: " + name + "'"}}
+	}
+	// Every test task is a stub that fails, so a hook:check that ran one
+	// would exit 2 (spec 0057 Desired Behavior 1).
+	for _, name := range testTaskNames {
+		tasks[name] = map[string]any{"silent": true, "cmds": []string{"echo 'tested: " + name + "' && exit 1"}}
 	}
 	out, err := yaml.Marshal(map[string]any{"version": "3", "tasks": tasks})
 	if err != nil {

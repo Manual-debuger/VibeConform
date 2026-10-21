@@ -167,11 +167,16 @@ tasks:
         [ -n "$(list)" ] || exit 0
         list | xargs -0 pnpm exec prettier --write --cache --log-level warn || exit 2
 
-  # After each file edit, in the background: verify:fast's incremental
-  # checks, except fmt:check. Agents run all of an event's hooks in
-  # parallel, so this starts while hook:format may still be writing the
-  # file; hook:done checks formatting at the end of the turn. The tools'
-  # output goes to stderr, which is what the agent is shown.
+  # After each file edit, in the background: the typecheck and the lint,
+  # no tests and no fmt:check (spec 0057). An edit in the middle of a
+  # change rarely passes the tests; the Stop gate's verify:fast runs them,
+  # and checks formatting, at the end of the turn. Agents run all of an
+  # event's hooks in parallel, so a format check here would race
+  # hook:format. The tools' output goes to stderr, which is what the agent
+  # is shown.
+  # A payload with a non-empty agent_id comes from a sub-agent, and runs
+  # nothing: asyncRewake would wake the parent session with the sub-agent's
+  # failures, and a test-first red phase fails on purpose.
   # An edit outside the repository (the agent's memory, its scratchpad) or
   # of a file git ignores cannot change the checks' result, so it runs
   # nothing (spec 0056). The path comes from the payload's file_path or
@@ -184,6 +189,10 @@ tasks:
     cmds:
       - |
         in="$(cat)"
+        case "$in" in
+          *'"agent_id":""'*|*'"agent_id": ""'*) ;;
+          *'"agent_id":"'*|*'"agent_id": "'*) exit 0 ;;
+        esac
         p=""
         case "$in" in
           *'"file_path":"'*) p="${in#*\"file_path\":\"}" ;;
@@ -200,7 +209,50 @@ tasks:
           git check-ignore -q -- "$p" 2>/dev/null || rc=$?
           [ "$rc" -eq 1 ] || exit 0
         fi
-        task -s lint typecheck test 1>&2 || exit 2
+        task -s lint typecheck 1>&2 || exit 2
+
+  # The green stamp (spec 0057): the Stop hook skips verify:fast when the
+  # tree is the one its last green run saw. hook:stamp:check exits 0 when
+  # the tree's hash equals the stamp and 1 otherwise: outside a Git
+  # repository, before the first commit, with no stamp, or when a git call
+  # fails, so a doubt always runs the checks. hook:stamp:save records the
+  # hash after a green verify:fast and always exits 0. The hash covers
+  # HEAD, the binary diff against HEAD (staged or not), and the untracked
+  # files git does not ignore, names and contents: a copy of the index
+  # marks them intent-to-add, so the diff shows them and git stores no
+  # object. The stamp sits in the worktree's own Git directory, so it never
+  # shows in git status and each linked worktree has its own. Neither task
+  # reads stdin, which the Stop hook keeps for hook:done.
+  hook:stamp:check:
+    silent: true
+    cmds:
+      - |
+        stamp="$(git rev-parse --path-format=absolute --git-path green-stamp 2>/dev/null)" || exit 1
+        [ -f "$stamp" ] || exit 1
+        w="$stamp.$$"
+        h=""
+        cp "$(git rev-parse --path-format=absolute --git-path index)" "$w.index" 2>/dev/null || true
+        if GIT_INDEX_FILE="$w.index" git add --intent-to-add -- :/ >/dev/null 2>&1 &&
+          { git rev-parse --verify HEAD && GIT_INDEX_FILE="$w.index" git diff --binary --no-ext-diff --no-textconv --no-color HEAD; } >"$w" 2>/dev/null; then
+          h="$(git hash-object --no-filters -- "$w" 2>/dev/null || true)"
+        fi
+        rm -f "$w" "$w.index"
+        [ -n "$h" ] && [ "$h" = "$(cat "$stamp")" ]
+
+  hook:stamp:save:
+    silent: true
+    cmds:
+      - |
+        stamp="$(git rev-parse --path-format=absolute --git-path green-stamp 2>/dev/null)" || exit 0
+        w="$stamp.$$"
+        h=""
+        cp "$(git rev-parse --path-format=absolute --git-path index)" "$w.index" 2>/dev/null || true
+        if GIT_INDEX_FILE="$w.index" git add --intent-to-add -- :/ >/dev/null 2>&1 &&
+          { git rev-parse --verify HEAD && GIT_INDEX_FILE="$w.index" git diff --binary --no-ext-diff --no-textconv --no-color HEAD; } >"$w" 2>/dev/null; then
+          h="$(git hash-object --no-filters -- "$w" 2>/dev/null || true)"
+        fi
+        rm -f "$w" "$w.index"
+        [ -z "$h" ] || printf '%s\n' "$h" >"$stamp" || true
 
   # When the agent ends its turn: the same checks, as a gate. The settings'
   # Stop hook calls verify:fast itself, so the contract audit sees it

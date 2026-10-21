@@ -78,7 +78,25 @@ release (or with `go install` for a pseudo-version). Because the probe
 now checks the module path, an adopter's unrelated `cmd/vibe` package no
 longer takes the from-source branch.
 
+**Update (spec 0057).** The generated `audit` task (`Taskfile.vibe.yml`)
+is the second application. Before it looks for `vibe` on PATH, it runs
+the same probe: `cmd/vibe` exists and `go.mod` declares VibeConform's
+module. If so, it builds `./cmd/vibe` (an unstamped `dev` build, into the
+worktree's Git directory) and audits with it, so a contributor needs no
+current `vibe` on PATH. This amends spec 0019's invariant that the audit
+reaches vibe only from PATH or the pinned module: the third way exists
+only in VibeConform's own checkout. Every adopter gets the fallback,
+unchanged: vibe from PATH, else the recorded version, and an older vibe
+is still refused. The setup action's resolution also moved ahead of its
+version check: with the workspace source the recorded version is
+information only, so a sync from uncommitted changes (`+dirty`) no
+longer fails this repository's CI.
+
 ## Consequences
+
+The first two bullets describe the probe as spec 0018 introduced it.
+Since specs 0022 and 0054 it ships to every standard and checks the
+module path; the updates above say how.
 
 - The probe is Go-only. A TypeScript or Python repository never provides a
   Go `cmd/vibe` package, so adding the same branch to `githubts`/`githubpy`
@@ -86,14 +104,15 @@ longer takes the from-source branch.
   CI templates already differ in their language jobs; each install step is
   the simplest form correct for its language.
 - An adopter whose Go repository happens to contain an unrelated
-  `cmd/vibe` package takes the from-source branch and fails at `go build`
-  with a compiler error. This is the accepted trade: loud, immediate, and
-  rare. Probing for VibeConform's module path instead would buy precision
-  at a cost in template complexity the risk does not justify.
+  `cmd/vibe` package took the from-source branch and failed at `go build`.
+  Spec 0018 accepted that as loud and rare; since spec 0054 the probe also
+  checks the module path, so such a repository takes the fallback.
 - Nothing prevents a future template from taking the licence here and
   omitting the fallback. The rule is a review-time agreement; the thing to
   look for in a template diff is a repository-local path with no `else`.
-- This repository's `conformance` job is the only place the `if` branch is
-  ever exercised, which means it is also the only proof the branch works.
-  A change to that step is not verified by tests — it is verified by the
-  job running green on the pull request that makes it.
+- This repository's `conformance` job is the only place the setup
+  action's workspace branch is ever exercised, which means it is also the
+  only proof the branch works. A change to that step is not verified by
+  tests — it is verified by the job running green on the pull request that
+  makes it. The `audit` task's branch is different: a fixture with the
+  module path runs it in `TestAuditSelfBuildOnlyInVibeConform`.

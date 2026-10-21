@@ -57,18 +57,43 @@ jobs:
           command -v vibe-guard
           vibe --version
           vibe-guard version
+      # The workspace source takes the version as information only, so a
+      # sync from uncommitted changes (+dirty) or an unstamped build (dev)
+      # still passes here (spec 0057).
+      - name: Setup action, workspace with version dev
+        uses: ./
+        with:
+          version: dev
+          tools: vibe
+      - name: Setup action, workspace with a +dirty version
+        uses: ./
+        with:
+          version: v0.13.0-alpha.1.0.20261021034323-9feec23d7f18+dirty
+          source: workspace
+          tools: vibe
+      # Every other source still checks the version. In this checkout auto
+      # resolves to workspace, so the refusals name their source.
       - name: Setup action, version latest
         id: latest
         continue-on-error: true
         uses: ./
         with:
           version: latest
+          source: release
       - name: Setup action, version not semver
         id: loose
         continue-on-error: true
         uses: ./
         with:
           version: v0.12
+          source: release
+      - name: Setup action, +dirty version from a release
+        id: dirty
+        continue-on-error: true
+        uses: ./
+        with:
+          version: v0.13.0-alpha.1+dirty
+          source: release
       # checksums is a path relative to the workspace: an absolute path is
       # refused before anything downloads.
       - name: Setup action, absolute checksums path
@@ -85,15 +110,18 @@ jobs:
           LATEST: ${{ steps.latest.outcome }}
           LOOSE: ${{ steps.loose.outcome }}
           ABSOLUTE: ${{ steps.absolute.outcome }}
+          DIRTY: ${{ steps.dirty.outcome }}
         run: |
-          if [ "$LATEST" != failure ] || [ "$LOOSE" != failure ] || [ "$ABSOLUTE" != failure ]; then
-            echo "version latest: $LATEST, version v0.12: $LOOSE, absolute checksums: $ABSOLUTE; all must fail"
+          if [ "$LATEST" != failure ] || [ "$LOOSE" != failure ] || [ "$ABSOLUTE" != failure ] || [ "$DIRTY" != failure ]; then
+            echo "version latest: $LATEST, version v0.12: $LOOSE, absolute checksums: $ABSOLUTE, +dirty release: $DIRTY; all must fail"
             exit 1
           fi
 
   # source: go-install builds from the tagged source, here at the
   # pseudo-version .vibe/state.yaml records, as an example synced by a
-  # source build does.
+  # source build does. A sync from uncommitted changes records it with
+  # +dirty (spec 0057), which no module proxy serves, so the job installs
+  # the commit's pseudo-version without it.
   go-install:
     name: Setup action / go-install (${{ matrix.os }})
     strategy:
@@ -109,7 +137,7 @@ jobs:
         shell: bash
         run: |
           v=$(sed -n 's/^vibe_version: *//p' .vibe/state.yaml | tr -d '\r')
-          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "version=${v%%+*}" >> "$GITHUB_OUTPUT"
       - name: Setup action, source go-install
         id: setup
         uses: ./

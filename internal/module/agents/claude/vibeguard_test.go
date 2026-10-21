@@ -79,6 +79,16 @@ func TestAgentGuardRuntimeUnchanged(t *testing.T) {
 	}
 }
 
+// TestReferenceStopIsRelockThenStopCommand: internal/guard's reference
+// Stop command is the relock, then this module's Stop gate unchanged, so
+// the green stamp (spec 0057) works the same with either guard.
+// internal/guard cannot import this package, so it spells the command out.
+func TestReferenceStopIsRelockThenStopCommand(t *testing.T) {
+	if want := "vibe-guard relock 2>/dev/null; " + StopCommand; guard.ReferenceStop != want {
+		t.Errorf("guard.ReferenceStop =\n%s\nwant\n%s", guard.ReferenceStop, want)
+	}
+}
+
 // TestAgentGuardVibeGuard: with policy.agent_guard vibe-guard the
 // settings run internal/guard's reference commands, every other hook is
 // the template's, and policy.json is an empty version 2 policy that

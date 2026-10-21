@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -181,6 +182,49 @@ func TestTaskSetupIsTask(t *testing.T) {
 	if pins.Current.Task != "v"+pins.Current.TaskSetup() {
 		t.Errorf("Task = %q, TaskSetup = %q; TaskSetup must be Task without its leading v",
 			pins.Current.Task, pins.Current.TaskSetup())
+	}
+}
+
+// TestSetupActionPinHasTheCurrentActionYml: the pinned commit's
+// action.yml is this checkout's. PR #131 changed action.yml without
+// moving the pin, and its conformance job ran the old action, which
+// refused the +dirty version the change was meant to accept. The pin has
+// to name a commit before the one that sets it, so the test holds at a
+// branch's tip, not at every commit. It skips when the pinned commit is
+// not in this clone, as in CI's shallow checkout.
+func TestSetupActionPinHasTheCurrentActionYml(t *testing.T) {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not on PATH")
+	}
+	root := filepath.Join("..", "..", "..", "..")
+	run := func(args ...string) ([]byte, error) {
+		// #nosec G204 -- fixed arguments and the pinned SHA
+		cmd := exec.Command(git, append([]string{"-C", root}, args...)...)
+		// A hook running the tests may export GIT_DIR; this test means
+		// the checkout it sits in.
+		for _, kv := range os.Environ() {
+			if !strings.HasPrefix(kv, "GIT_") {
+				cmd.Env = append(cmd.Env, kv)
+			}
+		}
+		return cmd.Output()
+	}
+	if _, err := run("cat-file", "-e", pins.Current.SetupAction+"^{commit}"); err != nil {
+		t.Skipf("commit %s is not in this clone", pins.Current.SetupAction)
+	}
+	pinned, err := run("show", pins.Current.SetupAction+":action.yml")
+	if err != nil {
+		t.Fatalf("git show %s:action.yml: %v", pins.Current.SetupAction, err)
+	}
+	current, err := os.ReadFile(filepath.Join(root, "action.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalize := func(b []byte) string { return strings.ReplaceAll(string(b), "\r\n", "\n") }
+	if normalize(pinned) != normalize(current) {
+		t.Errorf("action.yml differs from the one at the pinned commit %s; "+
+			"commit the change, then pin SetupAction to that commit", pins.Current.SetupAction)
 	}
 }
 

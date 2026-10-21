@@ -19,7 +19,6 @@ const (
 	// list hook:format's changed files.
 	hookFormatDiff   = `'*.md' 2>/dev/null`
 	hookFormatOthers = `--others --exclude-standard -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md'` + "\n"
-	lefthookGlob     = `      glob: "*.{js,jsx,ts,tsx,json,css,md}"` + "\n"
 )
 
 // excludeFromPrettierTaskfile adds a negated pattern per path to fmt and
@@ -52,20 +51,6 @@ func excludeFromPrettierTaskfile(taskfile []byte, paths []string, hooks bool) ([
 		}
 	}
 	return taskfile, nil
-}
-
-// excludeFromPrettierLefthook adds an exclude list to the prettier
-// pre-commit command.
-func excludeFromPrettierLefthook(lefthook []byte, paths []string) ([]byte, error) {
-	if len(paths) == 0 {
-		return lefthook, nil
-	}
-	var list strings.Builder
-	list.WriteString(lefthookGlob + "      exclude:\n")
-	for _, p := range paths {
-		fmt.Fprintf(&list, "        - %q\n", p)
-	}
-	return replaceOnce(lefthook, "lefthook.yml", lefthookGlob, list.String())
 }
 
 // replaceOnce edits a template to keep Prettier off owned editor files.

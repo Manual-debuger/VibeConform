@@ -15,9 +15,10 @@ import (
 )
 
 // Spec 0056 Desired Behavior 2 and 3, for every Taskfile that runs go test:
-// the fast checks (verify:fast, hook:check) run the tests in short mode, and
-// the full runs (test, test:race, verify, and the pre-push hook) run every
-// test with an explicit 30-minute timeout, so nobody needs GOFLAGS to push.
+// the fast check (verify:fast) runs the tests in short mode, and
+// the full runs (test, test:race, verify) run every test with an explicit
+// 30-minute timeout. Since spec 0057 the pre-push hook runs verify:fast,
+// so its tests are the short ones.
 
 // goTimeout is the timeout every full go test run passes. Go's default is
 // ten minutes, which this repository's suite outgrew (#125).
@@ -234,23 +235,25 @@ func sortedCopy(ids []string) []string {
 	return ids
 }
 
-// TestGoFastChecksRunShortTests: verify:fast and hook:check run every Go
-// component's tests, in short mode (spec 0056 Desired Behavior 2).
+// TestGoFastChecksRunShortTests: verify:fast runs every Go component's
+// tests, in short mode (spec 0056 Desired Behavior 2), and hook:check runs
+// none (spec 0057 Desired Behavior 1).
 func TestGoFastChecksRunShortTests(t *testing.T) {
 	for name, setup := range goTaskSetups {
 		t.Run(name, func(t *testing.T) {
 			s := setup(t)
 			g := s.graph(t)
-			for _, task := range []string{"verify:fast", "hook:check"} {
-				tests := g.goTests(t, task)
-				if got, want := components(tests), sortedCopy(s.goComponents); !slices.Equal(got, want) {
-					t.Errorf("%s runs go test in %q, want %q", task, got, want)
+			tests := g.goTests(t, "verify:fast")
+			if got, want := components(tests), sortedCopy(s.goComponents); !slices.Equal(got, want) {
+				t.Errorf("verify:fast runs go test in %q, want %q", got, want)
+			}
+			for _, gt := range tests {
+				if _, short := goFlag(gt.command, "-short"); !short {
+					t.Errorf("verify:fast runs %q in %q without -short", gt.command, gt.component)
 				}
-				for _, gt := range tests {
-					if _, short := goFlag(gt.command, "-short"); !short {
-						t.Errorf("%s runs %q in %q without -short", task, gt.command, gt.component)
-					}
-				}
+			}
+			if tests := g.goTests(t, "hook:check"); len(tests) > 0 {
+				t.Errorf("hook:check runs go test: %q; the Stop gate runs the tests", tests)
 			}
 		})
 	}
@@ -294,11 +297,11 @@ func assertFullTests(t *testing.T, what string, tests []goTest, want []string) {
 	}
 }
 
-// TestGoPrePushRunsFullTests: the pre-push hook runs every Go component's
-// full tests with the 30-minute timeout, so pushing needs no GOFLAGS (spec
-// 0056 Desired Behavior 3, and the constraint that pre-push keeps running
-// the full suite even where it also runs verify:fast).
-func TestGoPrePushRunsFullTests(t *testing.T) {
+// TestGoPrePushRunsShortTests: the pre-push hook runs every Go component's
+// tests in short mode, through verify:fast, and no full run: the full
+// suite is CI's (spec 0057 Desired Behavior 9 and 10, which replace spec
+// 0056 Desired Behavior 3's full pre-push run).
+func TestGoPrePushRunsShortTests(t *testing.T) {
 	for name, setup := range goTaskSetups {
 		t.Run(name, func(t *testing.T) {
 			s := setup(t)
@@ -314,7 +317,7 @@ func TestGoPrePushRunsFullTests(t *testing.T) {
 			if err := yaml.Unmarshal(s.lefthook, &hooks); err != nil {
 				t.Fatalf("parsing lefthook.yml: %v", err)
 			}
-			var full []goTest
+			var tests []goTest
 			for cmdName, c := range hooks.PrePush.Commands {
 				if c.Root != "" {
 					t.Fatalf("pre-push %s runs from %s; this test reads root commands only", cmdName, filepath.ToSlash(c.Root))
@@ -325,21 +328,27 @@ func TestGoPrePushRunsFullTests(t *testing.T) {
 				if direct := module.GoTestCommands(c.Run); len(direct) > 0 {
 					t.Errorf("pre-push %s runs %q directly; call the test task instead", cmdName, direct)
 				}
-				var tests []goTest
-				if f := strings.Fields(c.Run); len(f) >= 2 && f[0] == "task" {
+				// The run is a list such as "unset …; task verify:fast".
+				for _, simple := range strings.FieldsFunc(c.Run, func(r rune) bool { return r == ';' || r == '&' || r == '|' }) {
+					f := strings.Fields(simple)
+					if len(f) < 2 || f[0] != "task" {
+						continue
+					}
 					for _, called := range f[1:] {
 						if !strings.HasPrefix(called, "-") {
 							tests = append(tests, g.goTests(t, called)...)
 						}
 					}
 				}
-				for _, gt := range tests {
-					if _, short := goFlag(gt.command, "-short"); !short {
-						full = append(full, gt)
-					}
+			}
+			if got, want := components(tests), sortedCopy(s.goComponents); !slices.Equal(got, want) {
+				t.Errorf("pre-push runs go test in %q, want %q", got, want)
+			}
+			for _, gt := range tests {
+				if _, short := goFlag(gt.command, "-short"); !short {
+					t.Errorf("pre-push runs %q in %q without -short; the full suite is CI's", gt.command, gt.component)
 				}
 			}
-			assertFullTests(t, "pre-push", full, s.goComponents)
 		})
 	}
 }

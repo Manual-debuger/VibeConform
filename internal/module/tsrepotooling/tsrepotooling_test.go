@@ -123,19 +123,10 @@ func TestTaskfileUsesCaches(t *testing.T) {
 	}
 }
 
-// TestLefthookUsesPnpm is TestTaskfileUsesPnpm for the git hooks.
-func TestLefthookUsesPnpm(t *testing.T) {
+// TestLefthookUsesNoNpm: the git hooks call the Taskfile (spec 0057),
+// whose tasks use pnpm, and never npm or npx themselves.
+func TestLefthookUsesNoNpm(t *testing.T) {
 	assertNoNpm(t, "lefthook.yml", lefthookConfig)
-	for _, want := range []string{
-		"pnpm exec prettier --check {staged_files}",
-		"pnpm exec eslint {staged_files}",
-		"pnpm exec tsc --noEmit",
-		"pnpm test",
-	} {
-		if !bytes.Contains(lefthookConfig, []byte(want)) {
-			t.Errorf("lefthook.yml does not run %q", want)
-		}
-	}
 }
 
 // npmOrNpx matches npm or npx as whole words, so "pnpm" does not count.

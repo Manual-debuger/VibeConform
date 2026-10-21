@@ -1,52 +1,27 @@
-# Lefthook: fast checks at commit time, stronger checks at push time.
+# Lefthook: the format check at commit time, fast verification at push time.
 # CI (.github/workflows/ci.yml) is the authoritative full verification gate;
 # these hooks are a fast local first line of defense, not a substitute.
-#
-# Pre-commit checks run per component, from the component's directory
-# (root:), and only when a staged file of its language is inside it, so a
-# commit touching one component checks only that one. Each runs the
-# component's own Taskfile.yml tasks. See docs/specs/0025-prod-mono.md.
+# Each hook calls a root Taskfile entrypoint, which runs it for every
+# component, so the checks live in one place.
 
 pre-commit:
-  parallel: true
   commands:
-    api-fmt:
-      root: "services/api/"
-      glob: "*.go"
+    fmt-check:
+      glob: "*.{go,js,jsx,ts,tsx,json,css,md,py}"
       run: task fmt:check
-      fail_text: "Run 'task api:fmt' to format api."
-    api-lint:
-      root: "services/api/"
-      glob: "*.go"
-      run: task lint
-    web-fmt:
-      root: "apps/web/"
-      glob: "*.{js,jsx,ts,tsx,json,css,md}"
-      run: task fmt:check
-      fail_text: "Run 'task web:fmt' to format web."
-    web-lint:
-      root: "apps/web/"
-      glob: "*.{js,jsx,ts,tsx,json,css,md}"
-      run: task lint
-    worker-fmt:
-      root: "services/worker/"
-      glob: "*.py"
-      run: task fmt:check
-      fail_text: "Run 'task worker:fmt' to format worker."
-    worker-lint:
-      root: "services/worker/"
-      glob: "*.py"
-      run: task lint
+      fail_text: "Run 'task fmt' to format every component."
 
-# verify:fast runs Go tests in short mode, so pre-push runs each Go
-# component's full tests as well.
+# verify:fast: every component's own verify:fast. The full suite is CI's;
+# "task test" runs it by hand.
+#
+# A pre-push hook started from a linked worktree exports GIT_DIR, so a
+# test that runs git would act on the real repository instead of its
+# fixture. unset clears Git's repository variables first; lefthook runs
+# run: with sh on every platform.
 pre-push:
-  parallel: false
   commands:
     verify-fast:
-      run: task verify:fast
-    api-test:
-      run: task api:test
+      run: unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; task verify:fast
 
 post-commit:
   commands:
