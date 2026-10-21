@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.13.0-alpha.1.0.20261021050426-16f0a773c7f6+dirty
+vibe_version: v0.13.0-alpha.1.0.20261021061603-86e83e3b0d16+dirty
 standard: prod-py/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
@@ -74,7 +74,7 @@ resources:
       sha256: a935c26782c0eaae4af5ebb7ccf6c31a7953f3fadba920d24ad2bcb5a769cace
     - path: Taskfile.yml
       ownership: generated
-      sha256: b61eee576dfb1d2d4065cc89ca4a89779f2a988780906434a9256fe639dca7a9
+      sha256: a6623723ccfb8c1629389951222828b076677b66e02357f8c80a6df99b02d5a1
     - path: docs/README.md
       section_id: docs
       ownership: managed-section
