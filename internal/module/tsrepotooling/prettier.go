@@ -15,16 +15,16 @@ import (
 // templates. See docs/specs/0026-optional-integrations.md §10.
 const (
 	prettierGlob = `"**/*.{js,jsx,ts,tsx,json,css,md}"`
-	// hookFormatDiff and hookFormatOthers end the two git commands that
-	// list hook:format's changed files.
-	hookFormatDiff   = `'*.md' 2>/dev/null`
-	hookFormatOthers = `--others --exclude-standard -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md'` + "\n"
+	// changedDiff and changedOthers end the two git commands that list
+	// fmt:changed's files, the ones hook:format formats.
+	changedDiff   = `'*.md' 2>/dev/null`
+	changedOthers = `--others --exclude-standard -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md'` + "\n"
 )
 
 // excludeFromPrettierTaskfile adds a negated pattern per path to fmt and
-// fmt:check and, when the template still has its hook block, an exclude
-// pathspec per path to both of hook:format's git commands.
-func excludeFromPrettierTaskfile(taskfile []byte, paths []string, hooks bool) ([]byte, error) {
+// fmt:check, and an exclude pathspec per path to both of fmt:changed's git
+// commands.
+func excludeFromPrettierTaskfile(taskfile []byte, paths []string) ([]byte, error) {
 	if len(paths) == 0 {
 		return taskfile, nil
 	}
@@ -37,12 +37,8 @@ func excludeFromPrettierTaskfile(taskfile []byte, paths []string, hooks bool) ([
 	edits := [][2]string{
 		{"prettier --write --cache " + prettierGlob, "prettier --write --cache " + prettierGlob + negated.String()},
 		{"prettier --check --cache " + prettierGlob, "prettier --check --cache " + prettierGlob + negated.String()},
-	}
-	if hooks {
-		edits = append(edits,
-			[2]string{hookFormatDiff, `'*.md'` + pathspecs.String() + ` 2>/dev/null`},
-			[2]string{hookFormatOthers, strings.TrimSuffix(hookFormatOthers, "\n") + pathspecs.String() + "\n"},
-		)
+		{changedDiff, `'*.md'` + pathspecs.String() + ` 2>/dev/null`},
+		{changedOthers, strings.TrimSuffix(changedOthers, "\n") + pathspecs.String() + "\n"},
 	}
 	for _, e := range edits {
 		var err error

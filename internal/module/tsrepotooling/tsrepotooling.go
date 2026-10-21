@@ -75,10 +75,11 @@ func (tsrepotoolingModule) Resolve(_ context.Context, mctx *module.Context) ([]r
 		taskfile = stripped
 	}
 	// Prettier rewrites the layout of the elements an editor integration
-	// owns, so fmt, fmt:check, and hook:format leave those files alone
-	// (spec 0026 §10). lefthook's pre-commit runs fmt:check (spec 0057).
+	// owns, so fmt, fmt:check, and fmt:changed (hook:format's) leave those
+	// files alone (spec 0026 §10). lefthook's pre-commit runs fmt:check
+	// (spec 0057).
 	owned := editors.OwnedPathsOf(integrationsOf(mctx))
-	taskfile, err := excludeFromPrettierTaskfile(taskfile, owned, hooks)
+	taskfile, err := excludeFromPrettierTaskfile(taskfile, owned)
 	if err != nil {
 		return nil, err
 	}
