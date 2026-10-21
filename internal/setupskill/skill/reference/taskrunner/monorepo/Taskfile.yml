@@ -140,10 +140,35 @@ tasks:
   # After each file edit, in the background: verify:fast's checks except
   # fmt:check, which the PostToolUse hook's fmt covers. Output goes to stderr, which is
   # what the agent is shown.
+  # An edit outside the repository (the agent's memory, its scratchpad) or
+  # of a file git ignores cannot change the checks' result, so it runs
+  # nothing. The path comes from the payload's file_path or notebook_path,
+  # JSON-escaped; git reads doubled backslashes as one. git check-ignore
+  # exits 0 for an ignored path, 1 for any other path in the repository
+  # and 128 outside it. Without a path (a malformed payload, a tool with no
+  # path) or a repository, the checks run.
   hook:check:
     silent: true
     cmds:
-      - task -s api:typecheck api:lint api:test web:typecheck web:lint web:test worker:typecheck worker:lint worker:test 1>&2 || exit 2
+      - |
+        in="$(cat)"
+        p=""
+        case "$in" in
+          *'"file_path":"'*) p="${in#*\"file_path\":\"}" ;;
+          *'"file_path": "'*) p="${in#*\"file_path\": \"}" ;;
+          *'"notebook_path":"'*) p="${in#*\"notebook_path\":\"}" ;;
+          *'"notebook_path": "'*) p="${in#*\"notebook_path\": \"}" ;;
+        esac
+        case "$p" in
+          *'"'*) p="${p%%\"*}" ;;
+          *) p="" ;;
+        esac
+        if [ -n "$p" ] && git rev-parse --git-dir >/dev/null 2>&1; then
+          rc=0
+          git check-ignore -q -- "$p" 2>/dev/null || rc=$?
+          [ "$rc" -eq 1 ] || exit 0
+        fi
+        task -s api:typecheck api:lint api:test:short web:typecheck web:lint web:test worker:typecheck worker:lint worker:test 1>&2 || exit 2
 
   # Runs only when the Stop hook's verify:fast fails:
   # "task verify:fast 1>&2 </dev/null || task -x hook:done". It blocks the
@@ -172,7 +197,7 @@ tasks:
       - task: workflows:lint
 
   # What the agents' Stop hook and pre-push run: every component's own
-  # verify:fast.
+  # verify:fast. Pre-push also runs the Go component's full tests.
   verify:fast:
     desc: Every component's fast incremental verification.
     cmds:

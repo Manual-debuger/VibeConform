@@ -29,15 +29,36 @@ tasks:
     cmds:
       - go build ./...
 
+  # Every test. go test's own timeout is ten minutes, which a slow suite
+  # outgrows; 30 minutes means nobody needs GOFLAGS to run it or push.
   test:
     desc: Run the test suite.
     cmds:
-      - go test ./...
+      - go test -timeout 30m ./...
 
   test:race:
     desc: Run the test suite with the race detector.
     cmds:
-      - go test -race ./...
+      - go test -race -timeout 30m ./...
+
+  # What verify:fast and the agents' background check run: go test -short
+  # skips the tests that check testing.Short() and run only in task test.
+  # It prints only what an agent needs: go test's "ok" and "[no test
+  # files]" lines are dropped, every other line is kept, and the exit code
+  # is go test's. The filter is Task's own shell, not grep, which a Windows
+  # machine can lack. Silent, so Task does not echo the script.
+  test:short:
+    desc: Run the test suite in short mode (go test -short); "task test"
+      runs every test.
+    silent: true
+    cmds:
+      - |
+        rc=0
+        out=$(go test -short ./... 2>&1) || rc=$?
+        printf '%s\n' "$out" | while IFS= read -r l; do
+          case "$l" in 'ok '*|'? '*) ;; *) printf '%s\n' "$l" ;; esac
+        done
+        exit $rc
 
   mod:verify:
     desc: Ensure go.mod/go.sum are tidy and modules are verified.
@@ -63,9 +84,10 @@ tasks:
       - task: security
 
   verify:fast:
-    desc: Fast incremental subset of verify (format, build, lint, test).
+    desc: Fast incremental subset of verify (format, build, lint, tests in
+      short mode).
     cmds:
       - task: fmt:check
       - task: typecheck
       - task: lint
-      - task: test
+      - task: test:short

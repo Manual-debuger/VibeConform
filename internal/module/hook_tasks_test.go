@@ -404,6 +404,13 @@ func hookShells(t *testing.T) []string {
 	return shells
 }
 
+// stopParallel is how many TestHookStopBlocksOnce cases run at once. Each
+// case starts a shell, Task and a stub, and process starts are what the
+// test spends its time on. On the reference machine more than about 4 at
+// once is no faster (spec 0056 6a); it only slows the other packages go
+// test runs beside this one.
+const stopParallel = 4
+
 // TestHookStopBlocksOnce runs the settings' Stop command, in each POSIX
 // shell on PATH, against each template's hook:done and a verify:fast stub.
 // A failing check blocks the stop (exit 2, reason on stderr), except when
@@ -413,20 +420,30 @@ func hookShells(t *testing.T) []string {
 // exit 0. The stub reads its stdin, as a tool may: the payload must still
 // reach hook:done.
 func TestHookStopBlocksOnce(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the Stop-hook matrix; task verify runs it")
+	}
 	taskOnPath(t)
 	command := stopCommand(t)
+	corpus := loadStopCorpus(t)
+	slots := make(chan struct{}, stopParallel)
 	for _, sh := range hookShells(t) {
 		for _, path := range repoToolingTaskfiles {
 			for _, passing := range []bool{false, true} {
-				dir := t.TempDir()
 				stub := map[string]any{"cmds": []string{"cat >/dev/null; echo 'verify:fast failed: TestAdd' && exit 1"}}
 				if passing {
 					stub = map[string]any{"cmds": []string{"cat >/dev/null; echo ok"}}
 				}
-				hookTaskfile(t, dir, path, "hook:done", map[string]any{"verify:fast": stub})
 
-				for _, tc := range loadStopCorpus(t) {
+				for _, tc := range corpus {
 					t.Run(fmt.Sprintf("%s/%s/passing=%v/%s", filepath.Base(sh), path, passing, tc.Name), func(t *testing.T) {
+						t.Parallel()
+						slots <- struct{}{}
+						defer func() { <-slots }()
+						// Each case gets its own directory, so no case runs
+						// against what another one's task run left there.
+						dir := t.TempDir()
+						hookTaskfile(t, dir, path, "hook:done", map[string]any{"verify:fast": stub})
 						code, stdout, stderr := runCommand(t, dir, tc.Stdin, sh, "-c", command) // as Claude Code runs a hook command
 						want := 0
 						if !passing && !tc.Active {

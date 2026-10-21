@@ -358,6 +358,7 @@ func TestSectionPrune(t *testing.T) {
 }
 
 func TestSectionResourceValidation(t *testing.T) {
+	t.Parallel()
 	for name, r := range map[string]resource.Resource{
 		"no id":            {Path: "a", Ownership: resource.ManagedSection},
 		"id on a file":     {Path: "a", Ownership: resource.Generated, SectionID: "x"},

@@ -28,6 +28,7 @@ import (
 var examples = []string{"typescript", "python", "monorepo"}
 
 func TestExamplesAreConformant(t *testing.T) {
+	t.Parallel()
 	for _, example := range examples {
 		t.Run(example, func(t *testing.T) {
 			root := filepath.Join("..", "..", "examples", example)
@@ -67,6 +68,7 @@ func TestExamplesAreConformant(t *testing.T) {
 // forgotten when a standard is added: a standard nothing syncs is a standard
 // nothing checks.
 func TestExamplesCoverEveryLanguageStandard(t *testing.T) {
+	t.Parallel()
 	wantByExample := map[string]string{"typescript": "prod-ts", "python": "prod-py", "monorepo": "prod-mono"}
 	for _, example := range examples {
 		root := filepath.Join("..", "..", "examples", example)
@@ -83,6 +85,7 @@ func TestExamplesCoverEveryLanguageStandard(t *testing.T) {
 // TestPlanCarriesComponents: modules and the missing-tool check both see
 // vibe.yaml's components through the plan's context.
 func TestPlanCarriesComponents(t *testing.T) {
+	t.Parallel()
 	p, err := buildPlan(filepath.Join("..", "..", "examples", "monorepo"), "test")
 	if err != nil {
 		t.Fatal(err)

@@ -30,7 +30,8 @@ func TestMain(m *testing.M) {
 	for _, v := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"} {
 		_ = os.Unsetenv(v)
 	}
-	os.Exit(m.Run())
+	lookPath = memoLookPath(exec.LookPath)
+	os.Exit(checkTestLog(m.Run()))
 }
 
 func writeVibeYAML(t *testing.T, dir, body string) {
@@ -301,6 +302,7 @@ func TestNoGitIsAWarning(t *testing.T) {
 
 // TestGitCheckIgnored runs the real check against a real work tree.
 func TestGitCheckIgnored(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not on PATH")
 	}

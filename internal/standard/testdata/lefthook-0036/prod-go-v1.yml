@@ -22,5 +22,7 @@ pre-push:
   commands:
     lint:
       run: golangci-lint run
+    # Every test, short mode's slow ones too. task test carries the
+    # 30-minute timeout: the suite can outgrow go test's ten-minute default.
     test:
-      run: go test ./...
+      run: task test

@@ -64,6 +64,9 @@ func TestProbePartsLight(t *testing.T) {
 // Bash itself (https://code.claude.com/docs/en/env-vars), so the audit
 // does too. Before, every hook part was undecided.
 func TestProbeIgnoresAnInvalidGitBashPath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
 	t.Parallel()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not on PATH")

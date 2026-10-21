@@ -170,6 +170,7 @@ func TestDoctorWithoutManifest(t *testing.T) {
 // offers has a doctor row, so a new agent cannot ship without doctor
 // saying whether its hooks can run.
 func TestAgentHookConfigsCoverCatalog(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"prod-go", "prod-ts", "prod-py", "prod-mono"} {
 		s, err := standard.Lookup(name, "v1")
 		if err != nil {
@@ -189,6 +190,7 @@ func TestAgentHookConfigsCoverCatalog(t *testing.T) {
 // TestDoctorHookBinaries: the claude line names task and the runtime the
 // standard's guard starts, taken from each committed repository.
 func TestDoctorHookBinaries(t *testing.T) {
+	t.Parallel()
 	for root, want := range map[string][]string{
 		// This repository runs vibe-guard (policy.agent_guard, spec 0053).
 		filepath.Join("..", ".."):                           {"task", "vibe-guard"},

@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.12.0-alpha.1.0.20261019082702-35f13c19cf7d
+vibe_version: v0.13.0-alpha.1.0.20261020152749-2062dff844a2
 standard: prod-mono/v1
 resources:
     - path: .claude/hooks/guard.go
@@ -79,7 +79,7 @@ resources:
       sha256: ce79ab8c7b692c5574ebfa935a3212ed7a59f9d90c20f664c53d67392007d14e
     - path: Taskfile.yml
       ownership: generated
-      sha256: 5e550f2e2b6dea1e1647c9b601756a0a0dcf992408c3e46d302d4f27f8553520
+      sha256: a975c6c98ac7197dfe5754a2ed88930b5aa2c1f7cd49e90db3675e8c9b1483b5
     - path: apps/web/.prettierignore
       section_id: generated
       ownership: managed-section
@@ -99,13 +99,13 @@ resources:
       sha256: bbb0fd2859f457f9e55ed02d4ca67c058389fdee833f4586842aff6b4bbc7217
     - path: lefthook.yml
       ownership: generated
-      sha256: 1579ae0b387213615dc3883c6555c4b599fff3df5d85618d1ff868d8ef6cda6f
+      sha256: 978f7fde3863d4783fc2bcda4f39373d5a5c4b678a96bb3bba5720dc0adb1c5d
     - path: services/api/.golangci.yml
       ownership: generated
-      sha256: c83dbd895d37fd0a99262ffc49f33260ddabfec25bd6c94e7265e8f6e06feec9
+      sha256: 5e9bec78943c3a57bccbdac6992ed233df55e2f8c878a6929ffb28400129a7c1
     - path: services/api/Taskfile.yml
       ownership: generated
-      sha256: aecde63c51a3ff2af11416ba65d0ab4929f752d90306817453c125639d95770a
+      sha256: 36a6328baa1676c74bce858ce59e53b653bcefd2a2a9cf2adc78fa7717c2bad0
     - path: services/worker/Taskfile.yml
       ownership: generated
       sha256: 4554e745ed37a1ecf65c7dc149e8810ae95a324b9eddbe1d6e0b85e3f9b40810

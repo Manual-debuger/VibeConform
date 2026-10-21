@@ -48,7 +48,7 @@ func TestContractReportGolden(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r := runVibeAudit(t, append([]string{"--repo-root", contractFixture(t, tc.edits...)}, tc.args...)...)
+			r := runVibeAudit(t, append([]string{"--repo-root", contractGitFixture(t, tc.edits...)}, tc.args...)...)
 			assertExit(t, r, 1)
 			golden := filepath.Join("testdata", "contract", "report", tc.name+".golden")
 			if *updateGoldens {

@@ -50,6 +50,7 @@ func skillTree(t *testing.T, dir string) map[string]string {
 // to both skill paths, byte-identical, with the vibe version in place of
 // the placeholder, and prints each path it wrote.
 func TestInitSkillWritesBothCopies(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, err := initSkill(t, "v0.12.0-alpha.1", dir)
 	if err != nil {
@@ -89,6 +90,7 @@ func TestInitSkillWritesBothCopies(t *testing.T) {
 // TestInitSkillVersionRule: a vibe that is not a release writes latest,
 // by internal/guard's version rule (spec 0054, "Placeholders").
 func TestInitSkillVersionRule(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if out, err := initSkill(t, "v0.11.0-alpha.1.0.20261017172609-46246ad76fbf", dir); err != nil {
 		t.Fatalf("vibe init --skill: %v\n%s", err, out)
@@ -103,6 +105,7 @@ func TestInitSkillVersionRule(t *testing.T) {
 // replaced and files the embedded skill does not have are removed, with
 // each removal printed.
 func TestInitSkillOverwritesAndPrunes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, d := range skillDirs {
 		writeTestFile(t, filepath.Join(dir, d, "SKILL.md"), "an old skill\n")
@@ -133,6 +136,7 @@ func TestInitSkillOverwritesAndPrunes(t *testing.T) {
 // tree is unchanged, whatever configuration the repository has (a v1
 // vibe.yaml here), and no sync runs.
 func TestInitSkillWritesNothingElse(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "vibe.yaml"), "standard: prod-go\nversion: v1\n")
 	writeTestFile(t, filepath.Join(dir, ".claude", "settings.json"), "{}\n")
@@ -170,6 +174,7 @@ func inSkillDir(p string) bool {
 // TestInitSkillRefusesPositionalArgs: --skill together with a standard
 // and version is an error, and writes nothing.
 func TestInitSkillRefusesPositionalArgs(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if _, err := initSkill(t, "v0.12.0", dir, "prod-go", "v1"); err == nil {
 		t.Fatal("vibe init --skill prod-go v1 succeeded, want an error")

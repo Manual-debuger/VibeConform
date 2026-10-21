@@ -131,14 +131,45 @@ func (c corpusCase) input() []byte {
 	return c.Payload
 }
 
-// runCorpus feeds every case to the command and checks the exit code:
-// 2 with a reason on stderr for deny, 0 with no output for allow. policy is
-// the policy file the guard reads, and local where it looks for
-// policy.local.json, both relative to dir.
+// corpusParallel is how many corpus cases runParallelCorpus runs at once.
+// Each case starts a guard process, and process starts are what these
+// tests spend their time on. On the reference machine more than about 4
+// at once is no faster (spec 0056 6a); it only slows the other packages
+// go test runs beside this one.
+const corpusParallel = 4
+
+// runParallelCorpus runs the corpus as runCorpus does, with each case in
+// its own copy of guardDir and up to corpusParallel cases at once. A case
+// writes its policy variant and local file into its directory, so cases
+// never share one.
+func runParallelCorpus(t *testing.T, argv ...string) {
+	t.Helper()
+	slots := make(chan struct{}, corpusParallel)
+	runCases(t, func(t *testing.T) string {
+		t.Parallel()
+		slots <- struct{}{}
+		t.Cleanup(func() { <-slots })
+		return guardDir(t)
+	}, "policy.json", "policy.local.json", argv...)
+}
+
+// runCorpus feeds every case to the command, one at a time in dir, and
+// checks the exit code: 2 with a reason on stderr for deny, 0 with no
+// output for allow. policy is the policy file the guard reads, and local
+// where it looks for policy.local.json, both relative to dir. The cases
+// take turns because each one rewrites those files in dir.
 func runCorpus(t *testing.T, dir, policy, local string, argv ...string) {
+	t.Helper()
+	runCases(t, func(*testing.T) string { return dir }, policy, local, argv...)
+}
+
+// runCases runs each corpus case as a subtest, in the directory caseDir
+// returns for that subtest.
+func runCases(t *testing.T, caseDir func(t *testing.T) string, policy, local string, argv ...string) {
 	t.Helper()
 	for _, tc := range loadCorpus(t) {
 		t.Run(tc.Name, func(t *testing.T) {
+			dir := caseDir(t)
 			writePolicy(t, filepath.Join(dir, filepath.FromSlash(policy)), tc.Policy)
 			writeLocal(t, filepath.Join(dir, filepath.FromSlash(local)), tc.localFile())
 			// #nosec G204 -- argv is fixed by the calling test, never user input
@@ -222,11 +253,13 @@ func guardTemplate(t *testing.T, module, file string) string {
 }
 
 // TestGuardCorpusGo runs the prod-go guard. Go is always present where this
-// test runs, so it never skips: the reference implementation is always
-// checked.
+// test runs, so only short mode skips it: task verify always checks the
+// reference implementation.
 func TestGuardCorpusGo(t *testing.T) {
-	dir := guardDir(t)
-	bin := filepath.Join(dir, "guard")
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
+	}
+	bin := filepath.Join(t.TempDir(), "guard")
 	if runtime.GOOS == "windows" {
 		bin += ".exe"
 	}
@@ -236,7 +269,7 @@ func TestGuardCorpusGo(t *testing.T) {
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building guard.go: %v\n%s", err, out)
 	}
-	runCorpus(t, dir, "policy.json", "policy.local.json", bin, "policy.json")
+	runParallelCorpus(t, bin, "policy.json")
 }
 
 // TestGoRunReportsGuardDenyAsOne pins why every hook:guard command ends in
@@ -266,15 +299,21 @@ func TestGoRunReportsGuardDenyAsOne(t *testing.T) {
 
 // TestGuardCorpusNode runs the prod-ts guard when node is installed.
 func TestGuardCorpusNode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
+	}
 	node := requireTool(t, "node")
-	runCorpus(t, guardDir(t), "policy.json", "policy.local.json", node, guardTemplate(t, "tsrepotooling", "guard.mjs"), "policy.json")
+	runParallelCorpus(t, node, guardTemplate(t, "tsrepotooling", "guard.mjs"), "policy.json")
 }
 
 // TestGuardCorpusPython runs the prod-py guard when uv is installed, the
 // same way hook:guard does.
 func TestGuardCorpusPython(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
+	}
 	uv := requireTool(t, "uv")
-	runCorpus(t, guardDir(t), "policy.json", "policy.local.json", uv, "run", "--no-project", "python",
+	runParallelCorpus(t, uv, "run", "--no-project", "python",
 		guardTemplate(t, "pyrepotooling", "guard.py"), "policy.json")
 }
 

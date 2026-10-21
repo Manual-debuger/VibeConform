@@ -27,8 +27,16 @@ pre-commit:
       run: task lint
 [[- end]]
 
+# verify:fast runs Go tests in short mode, so pre-push runs each Go
+# component's full tests as well.
 pre-push:
   parallel: false
   commands:
     verify-fast:
       run: task verify:fast
+[[- range .Components]]
+[[- if eq .Profile "go"]]
+    [[.ID]]-test:
+      run: task [[.ID]]:test
+[[- end]]
+[[- end]]

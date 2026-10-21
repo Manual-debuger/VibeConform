@@ -99,8 +99,9 @@ VibeConform decodes the file strictly: an unknown key is an error.
 ## Standard: `prod-go/v1`
 
 - Tasks: `fmt`, `fmt:check`, `lint`, `typecheck`, `test`, `test:race`,
-  `mod:verify`, `security`, `workflows:lint`, `verify`, `verify:fast`,
-  `verify-ci` and `audit`.
+  `test:short`, `mod:verify`, `security`, `workflows:lint`, `verify`,
+  `verify:fast`, `verify-ci` and `audit`. `verify:fast` runs the tests
+  in short mode (`go test -short`); `test` and `verify` run them all.
   They call `go`, `goimports`, `golangci-lint`, `govulncheck` and
   `actionlint`.
 - `generated:` is not accepted. golangci-lint skips a file with a

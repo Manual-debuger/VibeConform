@@ -3,6 +3,7 @@ package module
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -13,9 +14,9 @@ import (
 // verifyFastSteps is spec 0023's section 2 table: the part of verify that
 // is cheap and incremental, in verify's own order. The Stop hook and the
 // async check both run verify:fast, so a slow or network-bound step added
-// here slows every agent turn.
+// here slows every agent turn. Go runs its tests in short mode (spec 0056).
 var verifyFastSteps = map[string][]string{
-	"repotooling/templates/Taskfile.yml":   {"fmt:check", "typecheck", "lint", "test"},
+	"repotooling/templates/Taskfile.yml":   {"fmt:check", "typecheck", "lint", "test:short"},
 	"tsrepotooling/templates/Taskfile.yml": {"fmt:check", "lint", "typecheck", "test"},
 	"pyrepotooling/templates/Taskfile.yml": {"fmt:check", "lint", "typecheck", "test"},
 }
@@ -80,6 +81,11 @@ func TestVerifyFastIsTheIncrementalSubset(t *testing.T) {
 				verifySteps = append(verifySteps, c.dep)
 			}
 			for _, step := range got {
+				// Short mode runs a subset of what test runs, which
+				// TestGoFullTestsHaveTimeout pins.
+				if step == "test:short" {
+					step = "test"
+				}
 				if !slices.Contains(verifySteps, step) {
 					t.Errorf("verify:fast runs %s, which verify does not", step)
 				}
@@ -97,28 +103,88 @@ var uncacheableTestFlags = []string{"-count", "-coverprofile", "-cpuprofile", "-
 
 // TestGoTestStaysCacheable pins that verify:fast's go test keeps the test
 // cache: package arguments (a bare go test is never cached) and no flag
-// outside the cacheable set.
+// outside the cacheable set. It checks the go test inside test:short's
+// output filter (spec 0056 Desired Behavior 10) too.
 func TestGoTestStaysCacheable(t *testing.T) {
 	doc, _ := readTaskfile(t, "repotooling/templates/Taskfile.yml")
 
 	found := false
-	for _, cmd := range doc.shellClosure(t, "verify:fast") {
-		fields := strings.Fields(cmd)
-		if len(fields) < 2 || fields[0] != "go" || fields[1] != "test" {
-			continue
-		}
-		found = true
-		if !slices.ContainsFunc(fields[2:], func(f string) bool { return strings.HasPrefix(f, "./") || f == "." }) {
-			t.Errorf("%q passes no package argument; go test without one is never cached", cmd)
-		}
-		for _, f := range fields[2:] {
-			name, _, _ := strings.Cut(f, "=")
-			if slices.Contains(uncacheableTestFlags, name) {
-				t.Errorf("%q passes %s, which disables the test cache", cmd, name)
+	for _, script := range doc.shellClosure(t, "verify:fast") {
+		for _, cmd := range goTestCommands(script) {
+			fields := strings.Fields(cmd)
+			found = true
+			if !slices.ContainsFunc(fields[2:], func(f string) bool { return strings.HasPrefix(f, "./") || f == "." }) {
+				t.Errorf("%q passes no package argument; go test without one is never cached", cmd)
+			}
+			for _, f := range fields[2:] {
+				name, _, _ := strings.Cut(f, "=")
+				if slices.Contains(uncacheableTestFlags, name) {
+					t.Errorf("%q passes %s, which disables the test cache", cmd, name)
+				}
 			}
 		}
 	}
 	if !found {
 		t.Fatal("verify:fast runs no go test; the affected-tests guarantee depends on it")
+	}
+}
+
+// goTestCommands returns each go test invocation in a shell script: "go
+// test" and its arguments, up to the end of its simple command. It finds
+// one inside a command substitution, as in test:short's filter
+// ("out=$(go test -short ./... 2>&1) || rc=$?"). A closing parenthesis, a
+// ";" or a control operator ends the invocation, redirections are left
+// out, and a comment is not read.
+func goTestCommands(script string) []string {
+	var cmds []string
+	for line := range strings.Lines(script) {
+		fields := strings.Fields(line)
+		for i := 0; i+1 < len(fields); i++ {
+			word := fields[i]
+			if strings.HasPrefix(word, "#") {
+				break
+			}
+			if j := strings.LastIndex(word, "$("); j >= 0 {
+				word = word[j+2:]
+			}
+			if word != "go" || fields[i+1] != "test" {
+				continue
+			}
+			cmd := []string{"go", "test"}
+			for _, arg := range fields[i+2:] {
+				if slices.Contains([]string{"|", "||", "&&", ";", "&"}, arg) || strings.HasPrefix(arg, "#") {
+					break
+				}
+				arg, closed := strings.CutSuffix(arg, ")")
+				arg, ended := strings.CutSuffix(arg, ";")
+				if arg != "" && !shellRedirection.MatchString(arg) {
+					cmd = append(cmd, arg)
+				}
+				if closed || ended {
+					break
+				}
+			}
+			cmds = append(cmds, strings.Join(cmd, " "))
+		}
+	}
+	return cmds
+}
+
+// shellRedirection matches a redirection word such as "2>&1" or ">out".
+var shellRedirection = regexp.MustCompile(`^[0-9]*[<>]`)
+
+func TestGoTestCommands(t *testing.T) {
+	for script, want := range map[string][]string{
+		"go test -short ./...":                                        {"go test -short ./..."},
+		"go test -timeout 30m ./...\n":                                {"go test -timeout 30m ./..."},
+		"rc=0\nout=$(go test -short ./... 2>&1) || rc=$?\nexit $rc\n": {"go test -short ./..."},
+		"go test ./a; go test -race ./b":                              {"go test ./a", "go test -race ./b"},
+		"go test -json ./... | tee out.json":                          {"go test -json ./..."},
+		"# go test ./...\necho go vet":                                nil,
+		"go build ./...":                                              nil,
+	} {
+		if got := goTestCommands(script); !slices.Equal(got, want) {
+			t.Errorf("goTestCommands(%q) = %q, want %q", script, got, want)
+		}
 	}
 }
