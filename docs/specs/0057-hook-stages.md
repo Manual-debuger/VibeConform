@@ -1,6 +1,6 @@
 # Spec 0057: What each hook stage runs
 
-Status: draft (2026-10-21), awaiting approval. Scope settled with the user
+Status: draft (2026-10-21), awaiting approval. Issue #130. Scope settled with the user
 in a grilling session on 2026-10-21 (decisions Q1–Q16 below). Builds on
 spec 0056 (#127, PR #128) and amends spec 0023 (agent lifecycle hooks),
 spec 0019 (the audit's vibe version) and ADR 0008. The `hook:format`
