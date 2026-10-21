@@ -31,7 +31,8 @@ func TestMain(m *testing.M) {
 // hookTasks are the tasks spec 0023 adds for the agents to call. Like
 // hook:guard, none has a desc (agents call them, people don't) and each is
 // silent (Task would otherwise echo the script into the agent's context).
-var hookTasks = []string{"hook:context", "hook:format", "hook:check", "hook:done"}
+// Spec 0057 adds the green stamp's two.
+var hookTasks = []string{"hook:context", "hook:format", "hook:check", "hook:stamp:check", "hook:stamp:save", "hook:done"}
 
 // hookScript returns a hook task's single shell command.
 func hookScript(t *testing.T, tf describedTaskfile, name string) string {
@@ -297,6 +298,31 @@ func hookTaskfile(t *testing.T, dir, path, hook string, stubs map[string]any) {
 	}
 }
 
+// templateTasks returns the named tasks of a template, as hookTaskfile's
+// stubs.
+func templateTasks(t *testing.T, path string, names ...string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(filepath.FromSlash(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Tasks map[string]any `yaml:"tasks"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]any{}
+	for _, name := range names {
+		task, ok := doc.Tasks[name]
+		if !ok {
+			t.Fatalf("%s defines no %s", path, name)
+		}
+		out[name] = task
+	}
+	return out
+}
+
 // runTask runs `task -x <name>` in dir, with nothing on stdin, and returns
 // the exit code and output.
 func runTask(t *testing.T, task, dir, name string) (code int, stdout, stderr string) {
@@ -442,8 +468,12 @@ func TestHookStopBlocksOnce(t *testing.T) {
 						defer func() { <-slots }()
 						// Each case gets its own directory, so no case runs
 						// against what another one's task run left there.
+						// The directory is no Git repository, so the green
+						// stamp never matches and verify:fast always runs.
 						dir := t.TempDir()
-						hookTaskfile(t, dir, path, "hook:done", map[string]any{"verify:fast": stub})
+						stubs := templateTasks(t, path, "hook:stamp:check", "hook:stamp:save")
+						stubs["verify:fast"] = stub
+						hookTaskfile(t, dir, path, "hook:done", stubs)
 						code, stdout, stderr := runCommand(t, dir, tc.Stdin, sh, "-c", command) // as Claude Code runs a hook command
 						want := 0
 						if !passing && !tc.Active {
