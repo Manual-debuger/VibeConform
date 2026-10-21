@@ -225,8 +225,12 @@ open:
   keeps its 30-minute timeout for people and CI.
 - **The `audit` task's self-build branch** (Q8) runs before the PATH
   branch, guarded by both the `cmd/vibe` directory and the module line in
-  `go.mod`. It runs vibe with `go run ./cmd/vibe`, so the binary always
-  matches the checkout. This deliberately amends spec 0019's invariant
+  `go.mod`. It runs vibe built from `./cmd/vibe`, so the binary always
+  matches the checkout. *Amended during implementation:* `go build
+  -buildvcs=false` into the worktree's Git directory, then the binary,
+  instead of `go run`, which reports every non-zero exit as 1 and would
+  blur "not conformant" (2) with "could not answer" (1). The build reports
+  `dev`, which the version check never refuses. This deliberately amends spec 0019's invariant
   "the audit reaches vibe only from PATH or the pinned module": the third
   path exists only in VibeConform's own repository. ADR 0008 is the
   precedent; its text gains this case.

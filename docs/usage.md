@@ -907,8 +907,11 @@ Sync with a released vibe (go install github.com/Manual-debuger/VibeConform/cmd/
 ```
 
 It is skipped in a repository that contains `cmd/vibe`. That means
-VibeConform itself, whose conformance job builds `vibe` from source instead
-of pinning it (`docs/decisions/0008-self-hosting-probe-in-shipped-templates.md`).
+VibeConform itself: its conformance job builds `vibe` from the checkout,
+and its `task audit` does the same, so neither fetches the recorded
+version, and a `dev` or `+dirty` one is fine there
+(`docs/decisions/0008-self-hosting-probe-in-shipped-templates.md`, spec
+0057).
 
 **Flags:**
 
@@ -1156,6 +1159,12 @@ Deliberately **not** managed, and left for you to maintain by hand:
 `audit` task, in `Taskfile.vibe.yml`, which `Taskfile.yml` includes
 optionally. It takes the first of these that applies (spec 0022):
 
+0. In VibeConform's own checkout only, where `cmd/vibe` exists and
+   `go.mod` declares VibeConform's module, it builds `./cmd/vibe` and
+   runs that (spec 0057, ADR 0008). The build goes into the worktree's
+   Git directory and reports the version `dev`, which the version check
+   never refuses. Your repository's `go.mod` declares another module, so
+   this step never applies to it.
 1. If `vibe` is on `PATH`, it runs `vibe audit --repo-root .`.
 2. Otherwise it reads `vibe_version` from `.vibe/state.yaml`. It installs
    exactly that version with
@@ -1818,9 +1827,9 @@ imports.
 
 The exclusion is ordinary tool configuration, so it holds wherever the
 tool runs: `task fmt`, `fmt:check`, `lint` and `verify`, the agents'
-`hook:format` and `hook:check`, lefthook (where files are passed
-explicitly, hence `force-exclude`, and `--no-warn-ignored` on `prod-ts`'s
-ESLint pre-commit command), and your editor. When every file ruff is
+`hook:format` (where files are passed explicitly, hence `force-exclude`)
+and `hook:check`, lefthook's pre-commit, which runs `fmt:check`, and
+your editor. When every file ruff is
 given is excluded, it prints `warning: No Python files found under the
 given path(s)` and exits 0.
 
@@ -2546,8 +2555,8 @@ every OS. The Stop hook also calls `task verify:fast` itself (see
 | Session start | `hook:context` | prints a few lines of facts into the agent's context | no |
 | Before a shell command or file edit | `hook:guard` | denies destructive commands and secret-file edits | yes |
 | After a file edit | `hook:format` | formats the changed files, with cheap fixes | no (tool already ran) |
-| After a file edit, in the background | `hook:check` | runs the incremental checks | no |
-| When the agent ends its turn | `hook:done` | gates the stop on `task verify:fast`, which the hook runs first | yes, once per stop |
+| After a file edit, in the background | `hook:check` | runs the typecheck and the lint, no tests; nothing in a sub-agent | no |
+| When the agent ends its turn | `hook:done` | gates the stop on `task verify:fast`, which the hook runs first, unless the tree is unchanged since its last green run | yes, once per stop |
 
 Nothing on these paths calls `vibe`, so all five keep working after you
 remove VibeConform. Every `hook:*` name is reserved like `verify`:
@@ -2564,8 +2573,9 @@ exit 2.
 
 ### `verify:fast` and the tool caches
 
-`hook:check` and the Stop hook run the fast, incremental part of `verify`,
-which you can also run yourself:
+The Stop hook and the pre-push hook run the fast, incremental part of
+`verify`, which you can also run yourself (`hook:check` runs only its
+typecheck and lint):
 
 | Standard | `task verify:fast` runs | Only in `task verify` |
 |---|---|---|
@@ -2580,18 +2590,24 @@ VibeConform computes:
   package, or anything it imports, changed. So only affected tests rerun,
   including packages that depend on your change. golangci-lint caches its
   analysis. Don't add `-count=1` to `test`: it turns the cache off.
-- **Go short mode:** `verify:fast` and `hook:check` run `task test:short`,
+- **Go's test cache has a cost of its own:** to decide whether a cached
+  result still holds, `go test` hashes every file and environment
+  variable each package's test touched, which it records in the test
+  log. A test that stats hundreds of thousands of paths makes that check
+  take minutes, on a cache hit too (spec 0056 found one at 661,000
+  entries). The cache stays on (spec 0057); if a package's cached run is
+  slow, look at what its tests walk, rather than adding `-count=1`.
+- **Go short mode:** `verify:fast` runs `task test:short`,
   which is `go test -short ./...` without its `ok` and `[no test files]`
   lines: it prints the failures, every other line too, and keeps
   `go test`'s exit code. It filters in Task's own shell, so it needs no
   `grep`. A test that checks `testing.Short()` can skip itself there, so
   the slowest tests run only in full mode.
-  `task test`, `task verify`, the pre-push hook and CI run every test.
-  Full Go runs (`task test`, which the pre-push hook calls, and
-  `task test:race`) have `-timeout 30m`, because a slow suite outgrows `go test`'s
-  ten-minute default; nobody needs `GOFLAGS` to push. In a `prod-mono`
-  repository the same holds for each Go component's tasks, and pre-push
-  runs each Go component's `test` after `verify:fast`. In this
+  `task test`, `task verify` and CI run every test; the pre-push hook
+  runs `verify:fast`, so its tests are the short ones (spec 0057).
+  Full Go runs (`task test` and `task test:race`) have `-timeout 30m`,
+  because a slow suite outgrows `go test`'s ten-minute default. In a
+  `prod-mono` repository the same holds for each Go component's tasks. In this
   repository, short mode skips three kinds of test (spec 0056): the
   tests that run the contract probes (`internal/contract/probetest`,
   the guard probes in `internal/contract`, the probe tests of
@@ -2691,13 +2707,20 @@ the agent's copy of the file is out of date until it reads the file again.
 
 ### `hook:check` (after each edit, in the background)
 
-Runs `typecheck`, `lint`, and `test` (in the standard's `verify` order),
-without blocking the agent. In `prod-go` the test step is `test:short`
-(`go test -short`), as in `verify:fast`. It leaves out `fmt:check` because
-Claude Code runs an event's hooks in parallel, so it starts while
-`hook:format` may still be writing the file.
+Runs `typecheck` and `lint` (in the standard's `verify` order), without
+blocking the agent. It runs no tests (spec 0057): an edit in the middle
+of a change rarely passes them, and the Stop hook runs them at the end of
+the turn. It leaves out `fmt:check` because Claude Code runs an event's
+hooks in parallel, so it starts while `hook:format` may still be writing
+the file.
 
-It first reads the edited path from the hook payload on stdin
+**Nothing runs in a sub-agent.** When the hook payload has a non-empty
+`agent_id`, the edit came from a sub-agent, and `hook:check` exits 0 at
+once. A failure would wake the parent session, not the sub-agent, and a
+test-first sub-agent's red phase fails on purpose. A sub-agent's work is
+checked by its parent's Stop hook. There is no `SubagentStop` gate.
+
+Otherwise it reads the edited path from the hook payload on stdin
 (`tool_input.file_path`, or `notebook_path` for a notebook edit) and asks
 `git check-ignore` about it. It runs nothing and exits 0 when the edit
 cannot change the checks' result:
@@ -2717,26 +2740,44 @@ session straight away and shows the output as a system reminder. A plain
 `async` hook would only deliver JSON `additionalContext` or
 `systemMessage` output, and only on the next turn.
 
-Quick successive edits start overlapping runs. The path filter and Go
-short mode make each run cheaper; nothing debounces them (spec 0056).
+Quick successive edits start overlapping runs. The path filter makes
+each run cheaper; nothing debounces them (spec 0056).
 
 ### `hook:done` (end of turn)
 
 The Stop hook's command is
 
 ```sh
-task verify:fast 1>&2 </dev/null || task -x hook:done
+task -x hook:stamp:check >/dev/null 2>&1 </dev/null ||
+  { task verify:fast 1>&2 </dev/null && task -x hook:stamp:save >/dev/null 2>&1 </dev/null; } ||
+  task -x hook:done
 ```
 
-It runs `task verify:fast`, with the tools' output on stderr, where Claude
-Code shows it to the model. If that passes, the stop goes through. If it
-fails, `hook:done` exits 2 and the agent can't stop: Claude Code keeps
-working with the failure as its reason. The settings call `verify:fast`
-directly, rather than through `hook:done`, so `vibe audit` can see that
-the Stop hook runs it (contract rule A-05, spec 0052). `</dev/null` keeps
-the tools away from the hook's payload, which `hook:done` reads. The
-command is POSIX shell: Claude Code runs hook commands in `sh` or `bash`
-on Linux and in Git Bash on Windows.
+(on one line in the settings). It runs `task verify:fast`, with the
+tools' output on stderr, where Claude Code shows it to the model. If that
+passes, the stop goes through. If it fails, `hook:done` exits 2 and the
+agent can't stop: Claude Code keeps working with the failure as its
+reason. The settings call `verify:fast` directly, rather than through
+`hook:done`, so `vibe audit` can see that the Stop hook runs it (contract
+rule A-05, spec 0052). `</dev/null` keeps every task but `hook:done` away
+from the hook's payload, which `hook:done` reads. The command is POSIX
+shell: Claude Code runs hook commands in `sh` or `bash` on Linux and in
+Git Bash on Windows.
+
+**The green stamp** (spec 0057). After a green `verify:fast`,
+`hook:stamp:save` records a hash of the tree: HEAD, the changes against
+it (staged or not), and the names and contents of untracked files git
+doesn't ignore. The next stop starts with `hook:stamp:check`: when the
+tree still has that hash, the stop goes through without running
+`verify:fast`. A turn that only read files, planned, or waited for
+sub-agents then costs nothing. Any edit, staged file, new untracked file
+or commit changes the hash, so the checks run again. A failing run never
+records a stamp, so a failure always runs again. The stamp is the file
+`green-stamp` in the worktree's own Git directory
+(`git rev-parse --git-path green-stamp`): it never shows in `git status`,
+and each linked worktree keeps its own. Outside a Git repository there is
+no stamp, and every stop runs the checks. The pre-push hook doesn't read
+the stamp. Delete the file to force a run.
 
 It blocks **once per stop**. If the agent stops again with the checks
 still failing, the payload's `stop_hook_active` is `true`, and the stop
@@ -2746,8 +2787,8 @@ also has its own cap of eight blocks. It's a deliberate
 soft spot: CI is still the authoritative gate, and `task audit` isn't part
 of it at all.
 
-To try it by hand, give the command a payload on stdin. `hook:done` reads
-stdin, so with nothing piped it waits:
+To try the gate by hand, give the part after the stamp check a payload
+on stdin. `hook:done` reads stdin, so with nothing piped it waits:
 
 ```console
 $ echo '{"stop_hook_active": false}' | sh -c 'task verify:fast 1>&2 </dev/null || task -x hook:done'; echo $?
@@ -3210,6 +3251,32 @@ above that floor; only a local install can be too old.
 See `docs/decisions/0009-managed-file-local-extension.md` for why the
 standard stops at the verification interface.
 
+## Git hooks
+
+Every standard generates the same two lefthook hooks, and each calls an
+entrypoint rather than a tool (spec 0057), so the checks live in the
+Taskfile alone and contract rule H-02 passes:
+
+| Hook | Runs | When |
+|---|---|---|
+| pre-commit | `task fmt:check` | a staged file has an extension `task fmt` covers |
+| pre-push | `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; task verify:fast` | every push |
+
+pre-push runs the fast verification, not the full suite: in `prod-go`
+the tests run in short mode. CI's test jobs are the full gate, and
+`task test` runs every test by hand. pre-push doesn't read the agents'
+green stamp; it always runs.
+
+**Why `unset`.** A hook that Git starts from a linked worktree gets
+`GIT_DIR` exported to it. A test that runs `git` in a temporary fixture
+would then act on your real repository. pre-push clears Git's repository
+variables before `verify:fast`, so your tests don't each have to.
+lefthook runs `run:` with `sh` on every platform, Windows included.
+
+In `prod-mono` both hooks call the root Taskfile, which runs each
+component's `fmt:check` or `verify:fast`; pre-commit fires for any
+component's file extensions.
+
 ## Adding your own Git hooks: `lefthook.local.yml`
 
 `lefthook.yml` is fully generated too. Put repository-specific Git hooks
@@ -3304,13 +3371,14 @@ The rebuild is not optional and is the classic way to waste an afternoon:
 `go:embed` resolves at build time, so a stale binary syncs the *old*
 template and every root still reports conformant.
 
-A related trap, now that `task audit` resolves `vibe` from `PATH` rather
-than compiling one: if an older `vibe` is installed in `~/go/bin` from a
-previous `go install`, `task audit` picks *that* up rather than the one you
-just built. Since spec 0019 this is caught rather than silently believed —
-`audit` declines to give a verdict and `sync` refuses to write, both naming
-the two versions. Upgrade or remove the stale install; `./bin/vibe audit`
-run directly is the quickest way to confirm which binary is answering.
+In this repository `task audit` doesn't use the `vibe` on `PATH` at all:
+it builds `./cmd/vibe` from the checkout (spec 0057), so an older `vibe`
+in `~/go/bin` doesn't stop it. A plain `vibe audit` or `vibe sync` with
+that older binary is still caught, as in any repository (spec 0019):
+`audit` declines to give a verdict and `sync` refuses to write, both
+naming the two versions. Use `./bin/vibe`, or upgrade the stale install.
+A sync from uncommitted changes records a `+dirty` `vibe_version`; that
+is fine here, because CI builds `vibe` from the checkout too.
 
 `task build` stamps the binary it produces with a version derived from git,
 which is what makes that comparison possible at all. An unstamped build
