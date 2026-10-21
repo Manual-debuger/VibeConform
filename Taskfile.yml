@@ -188,11 +188,16 @@ tasks:
         list | xargs -0 goimports -w || exit 2
         list | xargs -0 gofmt -w || exit 2
 
-  # After each file edit, in the background: verify:fast's incremental
-  # checks, except fmt:check. Agents run all of an event's hooks in
-  # parallel, so this starts while hook:format may still be writing the
-  # file; hook:done checks formatting at the end of the turn. The tools'
-  # output goes to stderr, which is what the agent is shown.
+  # After each file edit, in the background: the typecheck and the lint,
+  # no tests and no fmt:check (spec 0057). An edit in the middle of a
+  # change rarely passes the tests; the Stop gate's verify:fast runs them,
+  # and checks formatting, at the end of the turn. Agents run all of an
+  # event's hooks in parallel, so a format check here would race
+  # hook:format. The tools' output goes to stderr, which is what the agent
+  # is shown.
+  # A payload with a non-empty agent_id comes from a sub-agent, and runs
+  # nothing: asyncRewake would wake the parent session with the sub-agent's
+  # failures, and a test-first red phase fails on purpose.
   # An edit outside the repository (the agent's memory, its scratchpad) or
   # of a file git ignores cannot change the checks' result, so it runs
   # nothing (spec 0056). The path comes from the payload's file_path or
@@ -205,6 +210,10 @@ tasks:
     cmds:
       - |
         in="$(cat)"
+        case "$in" in
+          *'"agent_id":""'*|*'"agent_id": ""'*) ;;
+          *'"agent_id":"'*|*'"agent_id": "'*) exit 0 ;;
+        esac
         p=""
         case "$in" in
           *'"file_path":"'*) p="${in#*\"file_path\":\"}" ;;
@@ -221,7 +230,7 @@ tasks:
           git check-ignore -q -- "$p" 2>/dev/null || rc=$?
           [ "$rc" -eq 1 ] || exit 0
         fi
-        task -s typecheck lint test:short 1>&2 || exit 2
+        task -s typecheck lint 1>&2 || exit 2
 
   # When the agent ends its turn: the same checks, as a gate. The settings'
   # Stop hook calls verify:fast itself, so the contract audit sees it
