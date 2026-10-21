@@ -46,6 +46,29 @@ tasks:
     cmds:
       - pnpm exec prettier --check --cache "**/*.{js,jsx,ts,tsx,json,css,md}"
 
+  # What the agents' hook:format runs after each edit (spec 0023): only the
+  # files git reports as changed or new (tracked changes plus untracked
+  # files it doesn't ignore), not the whole repository, with fmt's
+  # extensions. No eslint --fix here: with pnpm exec's own startup it takes
+  # about two seconds per edit, over the budget spec 0023 sets, so ESLint's
+  # findings come from hook:check instead. NUL-separated names keep paths
+  # with spaces intact, and the list is checked first because GNU xargs
+  # runs its command even with no input. Run it from this directory, as
+  # hook:format does: Task's built-in xargs, which Windows uses, starts the
+  # formatter in the directory task was started from, not in this one, and
+  # the paths are relative to this one.
+  fmt:changed:
+    desc: Format only the changed and untracked files.
+    silent: true
+    cmds:
+      - |
+        list() {
+          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md' 2>/dev/null || true
+          git ls-files -z --others --exclude-standard -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md'
+        }
+        [ -n "$(list)" ] || exit 0
+        list | xargs -0 pnpm exec prettier --write --cache --log-level warn || exit 2
+
   # ESLint's cache does not track dependencies between files, so a
   # type-aware rule can report a stale result locally until the file itself
   # changes. CI starts cold and is unaffected.
@@ -148,24 +171,14 @@ tasks:
           echo "$dirstat"
         fi
 
-  # After each file edit: format the changed files git reports (tracked
-  # changes plus untracked files it doesn't ignore), not the whole
-  # repository, with fmt's extensions. No eslint --fix here: with pnpm
-  # exec's own startup it takes about two seconds per edit, over the
-  # budget spec 0023 sets, so ESLint's findings come from hook:check
-  # instead. NUL-separated names keep paths with spaces intact, and the
-  # list is checked first because GNU xargs runs its command even with no
-  # input.
+  # After each file edit: format the changed files (fmt:changed). It runs as
+  # its own task process, started in this directory: the agent's working
+  # directory can be a subdirectory, and Task's built-in xargs would start
+  # the formatter there, where the listed paths do not resolve (#129).
   hook:format:
     silent: true
     cmds:
-      - |
-        list() {
-          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md' 2>/dev/null || true
-          git ls-files -z --others --exclude-standard -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md'
-        }
-        [ -n "$(list)" ] || exit 0
-        list | xargs -0 pnpm exec prettier --write --cache --log-level warn || exit 2
+      - task -s fmt:changed || exit 2
 
   # After each file edit, in the background: the typecheck and the lint,
   # no tests and no fmt:check (spec 0057). An edit in the middle of a

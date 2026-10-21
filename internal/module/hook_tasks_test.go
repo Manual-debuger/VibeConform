@@ -123,12 +123,17 @@ var pathspec = regexp.MustCompile(`'(\*\.[a-z]+)'`)
 // (tracked changes relative to the Taskfile's directory, plus untracked
 // files git doesn't ignore), the list is NUL-separated so paths with spaces
 // survive, an empty list runs nothing (GNU xargs would otherwise run the
-// formatter with no arguments), and every tool failure is exit 2.
+// formatter with no arguments), and every tool failure is exit 2. The list
+// and the formatters are fmt:changed's, which hook:format runs as a task
+// process of its own, started in the Taskfile's directory (#129).
 func TestHookFormatScope(t *testing.T) {
 	for _, path := range repoToolingTaskfiles {
 		t.Run(path, func(t *testing.T) {
 			_, tf := readTaskfile(t, path)
-			script := hookScript(t, tf, "hook:format")
+			if got, want := hookScript(t, tf, "hook:format"), "task -s fmt:changed || exit 2"; got != want {
+				t.Errorf("hook:format runs %q, want %q", got, want)
+			}
+			script := hookScript(t, tf, "fmt:changed")
 
 			for _, want := range []string{
 				"git diff -z --relative --name-only --diff-filter=d HEAD --",
@@ -136,7 +141,7 @@ func TestHookFormatScope(t *testing.T) {
 				`[ -n "$(list)" ] || exit 0`,
 			} {
 				if !strings.Contains(script, want) {
-					t.Errorf("hook:format does not contain %q", want)
+					t.Errorf("fmt:changed does not contain %q", want)
 				}
 			}
 
@@ -157,7 +162,7 @@ func TestHookFormatScope(t *testing.T) {
 				}
 			}
 			if selectors != 2 {
-				t.Errorf("hook:format has %d git file selectors, want 2 (changed and untracked)", selectors)
+				t.Errorf("fmt:changed has %d git file selectors, want 2 (changed and untracked)", selectors)
 			}
 
 			runs := 0
@@ -175,7 +180,7 @@ func TestHookFormatScope(t *testing.T) {
 				}
 			}
 			if runs == 0 {
-				t.Error("hook:format runs no tool")
+				t.Error("fmt:changed runs no tool")
 			}
 		})
 	}
@@ -710,7 +715,7 @@ func TestHookFormatGo(t *testing.T) {
 		t.Skip("goimports not on PATH")
 	}
 	dir := t.TempDir()
-	hookTaskfile(t, dir, "repotooling/templates/Taskfile.yml", "hook:format", nil)
+	hookTaskfile(t, dir, "repotooling/templates/Taskfile.yml", "hook:format", templateTasks(t, "repotooling/templates/Taskfile.yml", "fmt:changed"))
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module scratch\n\ngo 1.24\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -751,7 +756,7 @@ func TestHookFormatGo(t *testing.T) {
 	// untracked files; they must still be formatted.
 	t.Run("no commits yet", func(t *testing.T) {
 		dir := t.TempDir()
-		hookTaskfile(t, dir, "repotooling/templates/Taskfile.yml", "hook:format", nil)
+		hookTaskfile(t, dir, "repotooling/templates/Taskfile.yml", "hook:format", templateTasks(t, "repotooling/templates/Taskfile.yml", "fmt:changed"))
 		// #nosec G204 -- fixed arguments
 		init := exec.Command("git", "init", "-q", "-b", "main")
 		init.Dir = dir

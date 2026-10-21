@@ -98,17 +98,16 @@ func TestPrettierLeavesOwnedEditorFilesAlone(t *testing.T) {
 				}
 			}
 
-			hookFormat, hasHooks := tf.Tasks["hook:format"]
-			if hasHooks != module.WantsAgentHooks(&module.Context{Integrations: tc.integrations}) {
+			if _, hasHooks := tf.Tasks["hook:format"]; hasHooks != module.WantsAgentHooks(&module.Context{Integrations: tc.integrations}) {
 				t.Fatalf("hook:format present = %v with %v", hasHooks, tc.integrations)
 			}
-			if hasHooks {
-				cmds := scripts(hookFormat.Cmds)
-				for _, p := range tc.excluded {
-					// Once on git diff, once on git ls-files.
-					if got := strings.Count(cmds, "':(exclude)"+p+"'"); got != 2 {
-						t.Errorf("hook:format excludes %s %d times, want 2:\n%s", p, got, cmds)
-					}
+			// fmt:changed, which hook:format runs, is there with or without
+			// the agent hooks.
+			cmds := scripts(tf.Tasks["fmt:changed"].Cmds)
+			for _, p := range tc.excluded {
+				// Once on git diff, once on git ls-files.
+				if got := strings.Count(cmds, "':(exclude)"+p+"'"); got != 2 {
+					t.Errorf("fmt:changed excludes %s %d times, want 2:\n%s", p, got, cmds)
 				}
 			}
 
@@ -144,21 +143,22 @@ func TestNoEditorKeepsTemplatesByteIdentical(t *testing.T) {
 func TestExcludeFromPrettierRefusesUnknownTemplates(t *testing.T) {
 	paths := []string{".zed/tasks.json"}
 	missing := bytes.ReplaceAll(taskfile, []byte(prettierGlob), []byte(`"src/**/*.ts"`))
-	if _, err := excludeFromPrettierTaskfile(missing, paths, true); err == nil {
+	if _, err := excludeFromPrettierTaskfile(missing, paths); err == nil {
 		t.Error("a Taskfile without the fmt glob was accepted")
 	}
 	duplicated := append(append([]byte{}, taskfile...), taskfile...)
-	if _, err := excludeFromPrettierTaskfile(duplicated, paths, true); err == nil {
+	if _, err := excludeFromPrettierTaskfile(duplicated, paths); err == nil {
 		t.Error("a Taskfile with every anchor twice was accepted")
 	}
-	if got, err := excludeFromPrettierTaskfile(missing, nil, true); err != nil || !bytes.Equal(got, missing) {
+	if got, err := excludeFromPrettierTaskfile(missing, nil); err != nil || !bytes.Equal(got, missing) {
 		t.Errorf("no paths must return the input unchanged; got err %v", err)
 	}
 }
 
-// TestHookFormatSkipsOwnedFilesWithRealGit runs hook:format's file list
-// with real git: an edited owned file is not listed, while the user's own
-// .vscode/settings.json and ordinary sources still are.
+// TestHookFormatSkipsOwnedFilesWithRealGit runs the file list of
+// fmt:changed, which hook:format runs, with real git: an edited owned file
+// is not listed, while the user's own .vscode/settings.json and ordinary
+// sources still are.
 func TestHookFormatSkipsOwnedFilesWithRealGit(t *testing.T) {
 	git, err := exec.LookPath("git")
 	if err != nil {
@@ -173,11 +173,11 @@ func TestHookFormatSkipsOwnedFilesWithRealGit(t *testing.T) {
 	if err := yaml.Unmarshal(tf, &rendered); err != nil {
 		t.Fatal(err)
 	}
-	script := scripts(rendered.Tasks["hook:format"].Cmds)
+	script := scripts(rendered.Tasks["fmt:changed"].Cmds)
 	start := strings.Index(script, "list() {")
 	end := strings.Index(script, "\n}\n")
 	if start < 0 || end < 0 {
-		t.Fatalf("hook:format has no list function:\n%s", script)
+		t.Fatalf("fmt:changed has no list function:\n%s", script)
 	}
 	listFn := script[start : end+2]
 
