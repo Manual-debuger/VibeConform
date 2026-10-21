@@ -1,6 +1,7 @@
-# Lefthook: fast checks at commit time, stronger checks at push time.
+# Lefthook: the format check at commit time, fast verification at push time.
 # CI is the authoritative full verification gate;
 # these hooks are a fast local first line of defense, not a substitute.
+# Each hook calls a Taskfile entrypoint, so the checks live in one place.
 
 # Repository-specific hooks go in lefthook.local.yml (optional, yours;
 # see VibeConform's docs/usage.md). Lefthook merges it over this file.
@@ -8,23 +9,19 @@ extends:
   - lefthook.local.yml
 
 pre-commit:
-  parallel: true
   commands:
-    prettier:
+    fmt-check:
       glob: "*.{js,jsx,ts,tsx,json,css,md}"
-      exclude:
-        - ".vscode/tasks.json"
-        - ".vscode/extensions.json"
-      run: pnpm exec prettier --check {staged_files}
-      fail_text: "Run 'task fmt' to format staged files."
-    eslint:
-      glob: "*.{js,jsx,ts,tsx}"
-      run: pnpm exec eslint {staged_files}
+      run: task fmt:check
+      fail_text: "Run 'task fmt' to format the files."
 
+# verify:fast: the format check, lint, typecheck and the tests.
+#
+# A pre-push hook started from a linked worktree exports GIT_DIR, so a
+# test that runs git would act on the real repository instead of its
+# fixture. unset clears Git's repository variables first; lefthook runs
+# run: with sh on every platform.
 pre-push:
-  parallel: false
   commands:
-    typecheck:
-      run: pnpm exec tsc --noEmit
-    test:
-      run: pnpm test
+    verify-fast:
+      run: unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; task verify:fast
