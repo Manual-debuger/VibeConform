@@ -119,7 +119,9 @@ jobs:
 
   # source: go-install builds from the tagged source, here at the
   # pseudo-version .vibe/state.yaml records, as an example synced by a
-  # source build does.
+  # source build does. A sync from uncommitted changes records it with
+  # +dirty (spec 0057), which no module proxy serves, so the job installs
+  # the commit's pseudo-version without it.
   go-install:
     name: Setup action / go-install (${{ matrix.os }})
     strategy:
@@ -135,7 +137,7 @@ jobs:
         shell: bash
         run: |
           v=$(sed -n 's/^vibe_version: *//p' .vibe/state.yaml | tr -d '\r')
-          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "version=${v%%+*}" >> "$GITHUB_OUTPUT"
       - name: Setup action, source go-install
         id: setup
         uses: ./
