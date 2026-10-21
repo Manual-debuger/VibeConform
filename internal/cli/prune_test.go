@@ -30,7 +30,8 @@ func TestMain(m *testing.M) {
 	for _, v := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"} {
 		_ = os.Unsetenv(v)
 	}
-	os.Exit(m.Run())
+	lookPath = memoLookPath(exec.LookPath)
+	os.Exit(checkTestLog(m.Run()))
 }
 
 func writeVibeYAML(t *testing.T, dir, body string) {

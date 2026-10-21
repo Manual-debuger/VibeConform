@@ -61,34 +61,54 @@ Full-mode test names, compared through `go test -json`:
 - five subtests are named after random temporary directories and so match
   only by count.
 
-## Open: contract rule A-05 cannot be decided
+## Contract rule A-05: the test cache, not a process
 
 `vibe audit --config vibe.v2.yaml` ran twice: at 880ce12 under load, and
-at 88b2093 on a quiet machine. Both runs ended "cannot decide". Every
-other MUST rule passes. The five SHOULD findings (H-02, C-05, A-06, D-03,
-R-02) are the same as on the baseline, 2055da5.
+at 88b2093 on a quiet machine. Both runs ended "cannot decide" on A-05.
+Every other MUST rule passed. The five SHOULD findings (H-02, C-05, A-06,
+D-03, R-02) are the same as on the baseline, 2055da5.
 
 A-05 runs the Stop hook in a probe copy with a planted failing test
-(`cmd/vibe/vibe_probe_test.go`). The hook command times out at the hook's
-own 600s. Reproduced in a fresh worktree of 88b2093: `go test -short
-./...` took 634s, and `internal/cli` took 620s of that.
-- The cli tests themselves finished in 53s: the `ok … 53.450s` line was
-  printed at 02:28:00.
-- The package's `pass` event came 9m27s later, with no other test events
-  in between.
+(`cmd/vibe/vibe_probe_test.go`), and the hook timed out at its own 600s.
+In `internal/cli` the `ok … 53s` line came at once and the package's
+`pass` event 9m27s later. The first guess was a child process holding
+the output pipe. It was not one. Diagnosed on 2026-10-21:
+- **Nothing outlived the test binary.** With Win32_Process listed during
+  the gap, `go test` had no children and there were no orphans. cmd/go
+  gives a test binary's pipes 60s (`WaitDelay`, a tenth of `-timeout`)
+  and measures the time it prints after they close. A held pipe would
+  have shown as "Test I/O incomplete", and the printed time would include
+  the wait.
+- **The test cache.** Without `-count=1`, cmd/go reads the binary's test
+  log after the run (`saveOutput`) and before a cache lookup
+  (`tryCache`), and hashes every entry. For each `stat` or `open` outside
+  the module it calls `search.InDir`, which calls `filepath.EvalSymlinks`
+  on the path and on the module root. `test:short` runs `go test -short
+  ./...` with no `-count`, so the Stop hook pays this; the timings above
+  used `-count=1` and did not.
+- **The cli tests wrote 661,037 entries,** 604,507 of them `stat`. Every
+  sync warns about missing tools (`warnMissingTools`), and each search on
+  Windows stats all 59 PATH directories with every PATHEXT extension.
+  Hundreds of syncs repeated the same ten searches.
+- **The module root's depth sets the price.** The same `go test -short
+  ./internal/cli`, with the cache on: 73s from `ok` to `pass` in
+  `D:\VibeConform`, 10m08s in a probe copy 11 directories deep under
+  `%TEMP%`. A cache hit pays it too, because the lookup hashes the stored
+  log again.
 
-`go test` waited for something that outlived the test binary, most likely
-a child process that inherited its output pipe. It did not reproduce when
-`internal/cli` ran alone in the same worktree (60s). It does not happen in
-the main checkout (53–55s for the whole suite). Suspects, none confirmed:
-- git's detached auto-gc: a linked worktree shares the object store,
-  which held 6,216 loose objects against gc.auto's default of 6,700;
-- another detached process that a cli test starts in a fresh checkout.
+The fix is in the tests: the cli `TestMain` memoizes `lookPath`, so each
+tool is searched once per binary. The log fell to 98,895 entries in short
+mode (113,017 in full mode), and the cli run from 61s to 45s. The gap fell
+to 16s in the main checkout. The Stop hook in a probe copy took 119s,
+against 636s, and still exited 2. As a regression test, the cli
+`TestMain` fails the package when its test log holds more than 150,000
+entries (`checkTestLog`). It checks only when go test passes a log, which
+is the cached mode that the Stop hook uses.
 
-Next step: find the process. List the processes (Win32_Process) while the
-gap is open, in a fresh copy and with the whole `./...` run. Before this
-branch, `verify:fast` ran the full suite, so A-05 may not have been
-decidable on main either. That is not checked.
+Main had the same problem, and a larger one. Its `verify:fast` ran the
+full suite, and main's cli tests (a365ed6) write 818,572 entries in full
+mode. That is inferred from the log size; the A-05 probe was not run
+against main.
 
 ## Multi-agent friction this work exposed
 
