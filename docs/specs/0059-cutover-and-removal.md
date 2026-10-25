@@ -28,6 +28,15 @@ visible in every change:
 - **The examples test the templates, not the references.**
   `examples/` comes from `vibe sync`. Nothing runs the setup skill's
   reference files as a whole repository.
+- **An example shares this repository's green stamp.** The Stop gate's
+  stamp (spec 0057) is `git rev-parse --git-path green-stamp`, in the
+  old templates and in the references alike. An example has no `.git`
+  of its own, so a session opened in `examples/monorepo/` reads and
+  writes this repository's stamp. When this repository's `verify:fast`
+  passed on a tree, the example's gate skips its own `verify:fast` on
+  that tree, and the reverse. A manual check of spec 0058 found this
+  (2026-10-25). CI does not show it, because `examples.yml` audits a
+  copy in a fresh Git repository.
 - **The CLI still promises the old model.** `vibe` describes itself as
   desired-state reconciliation. `vibe check` is a stub. `vibe init`
   writes only a version 1 `vibe.yaml`. `vibe doctor` understands only
@@ -163,20 +172,27 @@ visible in every change:
     example must be conformant. The GitLab job audits the monorepo
     example with the reference `.gitlab-ci.yml` in place of the GitHub
     workflows. `examples.yml` keeps its gate job.
+16. The reference Taskfiles key the green stamp on the project as well
+    as the Git directory. A project at the root of its Git repository
+    keeps the stamp it has now, so a single-project repository and an
+    adopter's monorepo see no change. A project in a subdirectory of
+    another repository's working tree, such as an example here, gets a
+    stamp of its own. The stamp still lives in the Git directory, and
+    the gate behaves as in spec 0057 otherwise.
 
 ### Documentation (#112)
 
-16. README, `docs/usage.md`, `docs/architecture/overview.md` and
+17. README, `docs/usage.md`, `docs/architecture/overview.md` and
     `docs/adopting.md` describe only the contract model. Sync, drift,
     standards, managed files and `vibe check` are gone from them,
     except in a short note on how to leave the old system (pointing at
     the migration guide). `docs/usage.md` has a section on `vibe init`
     and `vibe doctor` as they now behave.
-17. AGENTS.md's "Rules" drop the managed-files / `task sync` /
+18. AGENTS.md's "Rules" drop the managed-files / `task sync` /
     `go:embed` rule. They say instead that `task audit` (the contract
     audit) must pass, and that guardrail files need a person's unlock.
-18. GLOSSARY drops its "Retired terms" section.
-19. Each ADR and spec whose subject is the template-sync model gets the
+19. GLOSSARY drops its "Retired terms" section.
+20. Each ADR and spec whose subject is the template-sync model gets the
     status "superseded by ADR 0025 (removed in spec 0059)". The files
     are kept.
 
@@ -235,6 +251,9 @@ visible in every change:
 21. As the maintainer, I want CI green and branch protection pointing
     at `Contract / audit`, so that the cutover is complete when this
     merges.
+22. As a contributor in a session opened in an example, I want the
+    example's Stop gate to keep its own green stamp, so that a green run
+    of this repository never makes it skip the example's checks.
 
 ## Implementation Decisions
 
@@ -281,6 +300,14 @@ visible in every change:
   generator. A test (Seam 3) keeps them conformant. A drift test
   between an example and its references is not added: the audit is the
   check.
+- **The stamp's name carries the project's path.** `hook:stamp:check`
+  and `hook:stamp:save` read `git rev-parse --show-prefix` in the
+  Taskfile's directory. An empty prefix keeps `green-stamp`. Any other
+  prefix gives `green-stamp-<prefix>`, with `/` turned into `-`. The
+  hash and the rest of spec 0057's design stay. Spec 0057's
+  constraint that the stamp never leaves the Git directory still holds.
+  This repository's own Taskfile is at the root, so it keeps its stamp
+  and needs no edit.
 - **No contract change, no new dependency.** No new ADR, because ADR
   0025 already decided this.
 
@@ -309,7 +336,10 @@ not check which packages exist.
   `TestHookCheckRunsTypecheckAndLintOnly`, `TestStopGateEverySource`,
   the Go test-mode tests and `TestSkillCIMatchesPins`, unchanged in
   behavior, in their new package. Spec 0058's hooks-from-any-directory
-  test sits beside them.
+  test sits beside them. A new case runs the stamp tasks of a project in
+  a subdirectory of a fixture repository and of a project at its root:
+  a green save in one does not make the other's check pass, and the
+  root project's stamp keeps its name.
 - **Seam 3, the examples in CI.** `examples.yml` audits each example on
   Linux and Windows, plus the GitLab variant. This is CI only, a real
   integration of the references; it is a separate line in the ledger.
@@ -362,9 +392,12 @@ not check which packages exist.
 - [ ] The three examples come from the references, with version 2
       configs. `examples.yml` audits each one conformant on Linux and
       Windows, and the GitLab variant conformant too.
+- [ ] A project in a subdirectory of another repository's working tree
+      gets its own green stamp. A project at the root keeps
+      `green-stamp`. A test shows both.
 - [ ] README, `docs/usage.md`, `docs/architecture/overview.md`,
       `docs/adopting.md`, AGENTS.md and GLOSSARY are updated as in
-      Desired Behavior 16–18. Superseded ADRs and specs are marked.
+      Desired Behavior 17–19. Superseded ADRs and specs are marked.
 - [ ] `task verify` and `task audit` pass, and CI is green with the new
       required checks.
 
