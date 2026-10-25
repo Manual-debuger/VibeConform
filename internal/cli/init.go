@@ -91,7 +91,7 @@ func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) err
 	if err != nil {
 		return fmt.Errorf("init: %w", err)
 	}
-	components := detectComponents(repo.Files())
+	components, nested := detectComponents(repo.Files())
 	if len(components) == 0 {
 		return fmt.Errorf("init: found no component in the tracked files: no go.mod, pyproject.toml, "+
 			"or package.json beside a tsconfig.json within %d directories of the root; "+
@@ -132,6 +132,12 @@ func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) err
 	}
 	for _, c := range components {
 		if _, err := fmt.Fprintf(w, "component %s (%s)\n", c.Path, c.Language); err != nil {
+			return fmt.Errorf("init: %w", err)
+		}
+	}
+	for _, n := range nested {
+		if _, err := fmt.Fprintf(w, "skipped %s: inside the component %s (%s); components do not nest\n",
+			n.dir, n.in.Path, n.in.Language); err != nil {
 			return fmt.Errorf("init: %w", err)
 		}
 	}
@@ -179,8 +185,9 @@ var skippedDirs = []string{"node_modules", "vendor"}
 // pyproject.toml, or a package.json beside a tsconfig.json, in that order
 // when a directory has more than one. Components do not nest, so a
 // directory inside another component is not one. The result is sorted by
-// path.
-func detectComponents(files []string) []contract.Component {
+// path. nested holds each directory with a manifest that lies inside
+// another component, with that component.
+func detectComponents(files []string) (components []contract.Component, nested []nestedManifest) {
 	has := map[string]bool{}
 	for _, f := range files {
 		has[f] = true
@@ -214,13 +221,22 @@ func detectComponents(files []string) []contract.Component {
 	}
 	slices.SortFunc(found, func(a, b contract.Component) int { return strings.Compare(a.Path, b.Path) })
 
-	var out []contract.Component
 	for _, c := range found {
-		if !slices.ContainsFunc(out, func(o contract.Component) bool { return insideDir(c.Path, o.Path) }) {
-			out = append(out, c)
+		i := slices.IndexFunc(components, func(o contract.Component) bool { return insideDir(c.Path, o.Path) })
+		if i < 0 {
+			components = append(components, c)
+		} else {
+			nested = append(nested, nestedManifest{dir: c.Path, in: components[i]})
 		}
 	}
-	return out
+	return components, nested
+}
+
+// nestedManifest is a directory with a manifest inside the component in,
+// which is therefore not a component of its own.
+type nestedManifest struct {
+	dir string
+	in  contract.Component
 }
 
 // componentDir reports whether dir may hold a component: within initDepth

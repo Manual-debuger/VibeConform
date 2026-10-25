@@ -175,6 +175,31 @@ func TestInitRefusesAnExistingConfig(t *testing.T) {
 	}
 }
 
+// TestInitSaysWhyANestedManifestIsNoComponent: a manifest inside another
+// component is not a component, since the contract forbids nesting, and
+// init prints one line per such directory saying so.
+func TestInitSaysWhyANestedManifestIsNoComponent(t *testing.T) {
+	t.Parallel()
+	dir := contractFixture(t, withoutFile("vibe.yaml"),
+		withFile("tools/go.mod", "module tools\n"),
+		withFile("web/package.json", "{}\n"), withFile("web/tsconfig.json", "{}\n"))
+	out, err := runInit(t, dir)
+	if err != nil {
+		t.Fatalf("vibe init: %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		"skipped tools: inside the component . (go); components do not nest\n",
+		"skipped web: inside the component . (go); components do not nest\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(readVibeYAML(t, dir), "\ncomponents:") {
+		t.Errorf("the nested manifests became components:\n%s", readVibeYAML(t, dir))
+	}
+}
+
 // TestInitRaceLostIsAnError: when the exclusive create finds a vibe.yaml
 // that is gone again by the time init reads it, init wrote nothing and
 // must say so with an error, not exit 0 (regression: refuseExisting
