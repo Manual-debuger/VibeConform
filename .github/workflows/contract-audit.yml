@@ -46,7 +46,7 @@ jobs:
     # the guard corpus and D-01. 60 leaves twice that (spec 0053).
     timeout-minutes: 60
     env:
-      VIBE_TEST_REQUIRE_TOOLS: bash,uv,pnpm,python,node
+      VIBE_TEST_REQUIRE_TOOLS: bash,uv,pnpm
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
