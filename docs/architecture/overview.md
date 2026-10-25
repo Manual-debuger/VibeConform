@@ -5,251 +5,66 @@ VibeConform's design; Notion (or any other project tracker) holds roadmap
 and status, never competing architecture.
 
 The design principles every change is held to — mechanical rules over
-prompts, Windows/Linux parity, and generated output that stands on
-third-party tools rather than `vibe` — are in
-`docs/architecture/principles.md`.
+prompts, Windows/Linux parity, and tooling that stands on third-party
+tools rather than `vibe` — are in `docs/architecture/principles.md`.
 
 ## Conceptual model
 
 ```text
-vibe.yaml
-    +
-versioned standard
-    ↓
-VibeConform resolver/reconciler
-    ↓
-repo integrations
-├── language tooling
-├── CI
-├── Git hooks
-├── Codex
-├── Claude
-├── Skills Manager
-└── repository intelligence
+contract (versioned rules: ID, level, check)
+    ↓ states
+setup skill ──writes──→ adopting repository ←──verifies── vibe audit
+(vibeconform-setup)     (vibe.yaml version 2,          (static checks,
+                         its own tooling)               execution checks,
+                                                        probes)
 ```
 
-`vibe.yaml` is human-owned desired state: which standard and version a
-repository conforms to, plus repository-specific overrides. Machine-owned
-state (`.vibe/lock.yaml`, `.vibe/state.yaml`) records what was last resolved
-and applied, enabling three-way reconciliation. `.vibe/state.yaml` exists
-today: `vibe sync` writes it and `vibe audit`/`vibe diff` read it.
-`.vibe/lock.yaml` does not exist yet (see "Internal package layout" below).
+ADR 0025 settled the model, and spec 0059 removed the template-sync system
+it replaced. Three roles:
 
-## Module/component composition
+- **The contract** (spec 0051) is a versioned list of rules a repository
+  must satisfy. Each rule has a stable ID, a level (MUST or SHOULD) and a
+  check: static (reads configuration), execution (runs a command and
+  inspects its result) or probe (feeds a known input and checks the
+  reaction). A rule names a property, never a tool or a file's content.
+- **The setup skill** gives a repository those properties in whatever way
+  fits it, and runs the audit until it passes. `vibe init --skill` writes
+  it into the repository, which owns it and everything it writes.
+- **`vibe audit`** only verifies, deterministically, and never writes a
+  file.
 
-Adapted from [projen](https://github.com/projen/projen): a standard is a
-composition of modules, and each module resolves into concrete resources.
-
-```text
-standard
-    ↓
-modules/components
-    ↓
-resolved resources/tasks/adapters
-```
-
-```go
-type Module interface {
-    Name() string
-    Resolve(ctx context.Context, mctx *Context) ([]resource.Resource, error)
-}
-```
-
-Since spec 0026 a standard is a **core** — always resolved, in fixed
-order — plus a **catalog of integrations** (editors, agents,
-code-intelligence providers) that `vibe.yaml`'s `integrations:` map
-selects from; selected integrations resolve after the core, in catalog
-order. `module.Context` carries the selection, so a core module can emit
-content an integration needs (the `hook:*` tasks and guard for `claude`)
-only when it is selected. See `docs/decisions/0013-optional-integrations.md`.
-
-Since spec 0029 the catalog is an **option catalog**. Each option belongs
-to a group, which is one of two kinds:
-
-- **An integration category**, selected as a list under `integrations:`.
-- **A single-valued key**, selected as one value under its own map:
-  `policy:` for a repository policy (`policy: {line_endings: lf}`),
-  since spec 0030 `development:` for the docs layout and an optional
-  bundled workflow (`development: {docs_layout: standard}`; leaving
-  `workflow` out is the recommended, workflow-neutral setting, spec
-  0042), and since spec 0038 `ci:` for the CI system
-  (`ci: {provider: gitlab}`).
-
-Both are opt-in, with one exception: `ci.provider` defaults to `github`,
-so an absent `ci:` generates what `prod-mono` always generated. Only
-`prod-mono` offers it (`catalog(extra...)`). Its options resolve nothing
-themselves; the CI, conformance and repo-tooling modules read
-`module.CIProvider`, so pruning's trial selection finds the old
-provider's files. `.gitlab-ci.yml` delegates project jobs to a child
-pipeline from the project-owned `.gitlab-ci.local.yml`, a seam beside a
-generated file like `Taskfile.local.yml` (ADR 0019). The generated jobs
-fix only their floor, the keys that decide what runs and whether it
-counts. A project sets runner tags and other environment keys through
-the project-owned, `default:`-only `.gitlab-ci.defaults.yml`, whose shape
-audit checks (ADR 0021). Keys are unique across maps, so the selection stays
-one flat map. Selection, resolution order, `Requires`/`Excludes`
-and pruning share one code path for both kinds. `module.Context.Policies`
-carries the selected values. See
-`docs/decisions/0014-managed-sections.md`, and
-`docs/decisions/0015-agents-md-workflow-section.md` for why a workflow
-may own one section of `AGENTS.md`.
-
-See `internal/module` for the current (intentionally minimal) interface and
-`internal/resource` for the `Resource` type it produces. Do not treat this
-signature as frozen — it will grow as the resolver is implemented.
-
-## Resource ownership
-
-Adopted to avoid relying on fragile text markers as the primary ownership
-mechanism. See `docs/decisions/0003-resource-ownership.md` and
-`internal/resource` for the `Ownership` enum:
-
-- `generated` — VibeConform owns the whole file.
-- `structured-patch` — VibeConform owns specific structured fields.
-- `managed-section` — VibeConform owns a delimited section of a
-  project-owned file.
-- `project-owned` — read-only context; never written.
-- `seeded` — the repository owns the file; VibeConform writes its seed
-  only when the file is missing, never records it in state, and checks
-  that it still names its base config (`Resource.Base`). ESLint's, Ruff's
-  and TypeScript's own configurations are seeded next to their managed
-  base configs (spec 0049, ADR 0024). An unchanged file that a previous
-  version managed whole is converted; an edited one is a conflict, and
-  the base next to it is held until it is resolved.
-
-A module may also guard a project-owned file it opens a seam for, by
-implementing `module.ProjectFileGuard`: the planner reads each guarded
-file that exists, the module's pure check returns problems, and audit,
-diff and sync report each one as a conflict without writing the file.
-GitLab's `.gitlab-ci.defaults.yml` is the first (spec 0040).
-
-Since spec 0026 `structured-patch` is implemented for owned elements of one
-JSON(C) array (`internal/jsonarray`, over `github.com/tailscale/hujson`):
-each element, identified by its `label` or string value, is reconciled
-three-way like a whole file, and every byte outside owned elements is
-preserved. `.vibe/state.yaml` schema 3 records a hash per owned element.
-Owned object keys are spec 0027's.
-
-Since spec 0029 `managed-section` is implemented as well. A section is
-identified by its path together with a section ID, so one file can hold
-several sections. The section is the lines between
-`vibeconform:begin <id>` and `vibeconform:end <id>` markers, written as
-`#` comments or as HTML comments.
-
-- **Parsing:** `internal/textregion` parses and splices sections without
-  touching any other byte.
-- **Planning:** the planner groups sections by file. Each file is read
-  once, every section in it is decided three-way, and the file is written
-  once. A conflict in one section holds back the whole file.
-- **Module checks:** a module that implements `module.SectionChecker` can
-  veto its own section because of text around it. The line-ending policy
-  does this when a later `* eol=crlf` would defeat it.
-- **State:** schema 4 turns `resources:` into a sorted list of records,
-  each with `path`, an optional `section_id`, and `ownership`.
-
-`generated` owning the whole file does not mean a repository has no
-recourse: a generated file may delegate to an unmanaged sibling by a
-documented extension point, as `Taskfile.yml` does to `Taskfile.local.yml`
-and `lefthook.yml` does to `lefthook.local.yml` (through lefthook's
-`extends:`). That is a seam beside a wholly-generated file, not a weaker
-ownership mode — the ownership of `Taskfile.yml` and `lefthook.yml` is
-unchanged. See `docs/decisions/0009-managed-file-local-extension.md` and
-`docs/decisions/0017-lefthook-local-extension.md`.
-
-## Three-way reconciliation
-
-Adopted from [Copier](https://github.com/copier-org/copier):
-
-```text
-previous resolved state
-        +
-current repository
-        +
-new desired state
-        ↓
-reconciliation
-```
-
-- `current == target` → no change.
-- `current == previous`, `target != previous` → **out of date**: the
-  repository is exactly as VibeConform last wrote it and the standard has
-  moved on. Safe replacement.
-- `current != previous`, `target == previous` → **local drift**: the
-  managed file was edited after it was written. Safe replacement too, but a
-  different thing to tell the user.
-- `current != previous` and `target != previous` → conflict, surfaced to the
-  user rather than silently overwritten.
-- `project-owned` → never overwritten.
-- `seeded` → written only when missing; otherwise checked, never
-  overwritten (spec 0049).
-
-Removal is decided two-way, since there is no target: a recorded path
-that a deselected integration would produce is removed when the file
-still matches its recorded hash, forgotten when it is already gone, and
-kept as a conflict when it was modified (spec 0026). A whole file a
-module has retired (`module.Retirer`, spec 0031), such as the `/spec`
-command the spec skill replaced, is removed by the same rules. So is a
-section whose file moved with `vibe.yaml` (`module.SectionMover`, spec
-0034): the specs section, which follows `development.specs_dir`. So is a
-section that exists only while `vibe.yaml` declares something
-(`module.ConditionalSectioner`, spec 0037): the `generated` section of
-`.prettierignore`, which goes when its `generated:` list does. Nothing
-unrecorded is ever deleted, and orphans left by a standard dropping a
-resource without retiring it are still not pruned.
-
-The two middle cases both mean "write the target", and spec 0006 therefore
-collapsed them into one decision. Spec 0019 separates them because they
-differ in whose doing it is: reporting a moved standard as drift told
-adopters who had changed nothing that files they never opened had drifted.
-No extra recorded state was needed — the two conditions are mutually
-exclusive wherever both are reachable, so the distinction was already
-implied by the three hashes.
-
-What hashes cannot express is *direction*: a target that moved because the
-binary is newer looks identical to one that moved because the binary is
-older. `.vibe/state.yaml` schema 2 records which `vibe` last wrote it, so
-`sync` can refuse to run backwards instead of reverting managed files and
-recording the result as correct. Provenance is absent from pre-0019 state
-files, and absent means unknown — never old.
-
-## Audit / diff / sync UX
-
-Adopted from [Cruft](https://github.com/cruft/cruft):
-
-- `vibe audit` — read-only compliance/drift check; non-zero exit on strict
-  non-compliance. Safe to run in CI.
-- `vibe diff` — human-readable reconciliation preview.
-- `vibe sync` — performs the reconciliation.
+`vibe.yaml` version 2 is the repository's declaration: the contract
+version it follows, its platforms, agents and components, the commands
+of its entrypoints (`verify`, `verify-fast`, `fmt`, `fmt-check`, and
+optionally `setup`), and waivers for SHOULD rules. The audit does not
+depend on a task runner: any command qualifies as an entrypoint. `vibe
+init` writes a first `vibe.yaml`; the repository edits it by hand.
 
 ## Contract audit
 
-ADR 0025 replaces the template-sync model with a versioned contract of
-rules about properties of a repository (spec 0051). Since spec 0052 the
-static half of that audit exists, in `internal/contract`, beside the
-reconcile code rather than inside it:
+The audit lives in `internal/contract` (spec 0052 for the static checks,
+spec 0053 for execution checks and probes, spec 0055 for GitLab CI):
 
 ```text
                  vibe audit (internal/cli)
-          reads the configuration's top-level key
-        contract: ↓                          ↓ standard:
-internal/contract                    the old audit: manifest, standard,
-  vibe.yaml version 2                module, resource, reconcile, state
+                          ↓
+internal/contract
+  vibe.yaml version 2 (a version 1 file is detected and refused)
   the 25 rules of contract 1.1.0
   static checks of tracked files
+  execution checks and probes in a probe copy
   report model (plain data)
 ```
 
-- **Dispatch.** `vibe audit` reads the configuration once and picks the
-  engine from its top-level key: `contract` runs the contract audit,
-  `standard` the old audit, unchanged. Both or neither is an error. `diff`,
-  `sync` and `init` still speak only the old schema; `vibe init --skill`
+- **Configuration.** `vibe audit` reads `vibe.yaml` once.
+  `contract.DetectSchema` tells version 2 (`contract:`) from version 1
+  (`standard:`); a version 1 file, and a missing one, are exit 1 with a
+  pointer (the migration guide, or `vibe init`). `vibe init --skill`
   writes the setup skill and reads no configuration.
-- **Dependency direction.** `internal/contract` imports none of the old
-  packages (`reconcile`, `state`, `resource`, `standard`, `module`,
-  `manifest`), so #112 can delete them without touching it.
-  `internal/contract/imports_test.go` enforces that. The CLI imports
-  `internal/contract`, never the reverse, and renders its report model as
-  text or JSON (`internal/cli/contract_*.go`).
+- **Dependency direction.** The CLI imports `internal/contract`, never
+  the reverse, and renders its report model as text or JSON
+  (`internal/cli/contract_*.go`). `internal/contract/imports_test.go`
+  keeps the removed template-sync package names out of its imports.
 - **Shell parsing.** "Called" means a simple command in the shell parse
   tree, so `internal/contract` depends on `mvdan.cc/sh/v3/syntax` (ADR
   0026). `internal/contract/shell.go` is the only file that imports it;
@@ -314,7 +129,7 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
 - **`internal/guard`** is `vibe-guard`'s logic: the baseline rules, the
   decision, observe mode, the unlock marker, `hook`, `explain`, `relock`,
   and the reference hook commands. It imports `internal/guardrule` and
-  nothing from `internal/contract` or the old packages. `cmd/vibe-guard`
+  nothing from `internal/contract`. `cmd/vibe-guard`
   is a thin `main` over it, a separate binary that opens no network
   connection.
 - **`internal/contract`** imports `internal/guardrule`, never
@@ -323,12 +138,10 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   `vibe`; `internal/guard`'s tests run the same corpus through
   `vibe-guard`.
 - The dependency is one way: `internal/contract` → `internal/guardrule`
-  ← `internal/guard`. Neither new package imports the old ones, and
-  tests in each package enforce it. The old `internal/module/agents/claude`
-  imports `internal/guard` for the reference commands and the version
-  rule (`InstallVersion`: the version the install hint names) when
-  `policy.agent_guard` selects `vibe-guard`, an old-to-new direction #112
-  removes with the module.
+  ← `internal/guard`, and tests in each package enforce it.
+  `internal/setupskill` imports `internal/guard` for the reference
+  commands and the version rule (`InstallVersion`: the version the
+  install hint names).
 
 ### The setup skill
 
@@ -344,16 +157,22 @@ cmd/vibe → internal/cli ──→ internal/setupskill ──→ internal/guard
 
 - **Imports.** Among this repository's packages, `internal/setupskill`
   imports only `internal/guard`, for the version rule that fills the
-  skill's one placeholder (the `vibe` version). It imports no old package,
-  so #112 can delete them without touching it; its tests enforce that.
+  skill's one placeholder (the `vibe` version); its tests enforce that.
 - **Embedded bytes.** `.gitattributes` forces LF for
   `internal/setupskill/skill/`, and a test fails on any carriage return
   in an embedded file, so a CRLF working copy cannot change what a build
   ships.
-- **Reference files.** The skill's reference implementations are copied
-  from the module templates as single files; the templates stay until
-  #112 deletes them with the template-sync system. The reference hook
-  commands in its `settings.json` equal `internal/guard`'s.
+- **Reference files.** The skill's reference implementations
+  (`skill/reference/`) are single files per stack, maintained here; they
+  began as copies of the template-sync system's templates, which spec
+  0059 deleted. The reference hook commands in its `settings.json` equal
+  `internal/guard`'s.
+- **Reference hook tests** (spec 0059). The tests that run the reference
+  hooks sit beside the skill, in `internal/setupskill/*_test.go`, and
+  import only `setupskill`, `guard` and `contract`: `hook:check`'s path
+  filter and its checks, the Stop gate and the green stamp (including a
+  project in a subdirectory), the Go test modes, the CI pins, and the
+  hooks run from any directory (spec 0058).
 - **The drift test** (#109) is test code in `internal/cli`
   (`skill_drift_checker_test.go`), not a package: it checks the
   skill's `vibe` commands and flags against the real command tree, which
@@ -370,7 +189,7 @@ cmd/vibe → internal/cli ──→ internal/setupskill ──→ internal/guard
 
 ## Affected-component graph
 
-Adopted from [Nx](https://nx.dev/):
+Adopted from [Nx](https://nx.dev/), and not built:
 
 ```text
 changed files
@@ -384,208 +203,92 @@ affected components
 applicable validation tasks
 ```
 
-Mixed-language repositories are represented as an explicit component graph,
-not a flat `languages: [...]` list:
-
-```yaml
-components:
-  - id: web
-    path: apps/web
-    profile: typescript
-    depends_on: [contracts]
-
-  - id: api
-    path: services/api
-    profile: go
-    depends_on: [contracts]
-```
-
-Since spec 0025, `vibe.yaml` carries this list as `components:`
-(`id`, `path`, `profile`; ADR 0012), and `prod-mono/v1` resolves from it:
-each component gets its profile's single-language configuration at its
-path, and the root `Taskfile.yml` and `ci.yml` fan out to every component.
-Since spec 0037 a `ts` or `py` component may also list `generated:` paths
-(ADR 0018), which its tooling renders into ruff, ESLint and Prettier
-excludes; `monotooling` passes each component its own list.
-`depends_on` and the graph engine are still not built, so every task runs
-every component (see `docs/plans/0001-bootstrap.md`).
+`vibe.yaml` version 2 names components (`path`, `language`), and the
+audit plants its defects per component, but there is no dependency graph
+between them and nothing that narrows verification to the affected ones.
+Each tool's own cache (`go test`, golangci-lint, ESLint) is what makes
+`verify:fast` incremental today (`docs/usage.md`, "`verify:fast` and the
+tool caches"). If affected-component validation is built, it must fall
+back to the full `verify` whenever it cannot establish the narrower scope
+safely: it may never report success having silently skipped checks.
 
 ## Repository intelligence and Skills Manager boundaries
 
-VibeConform will eventually orchestrate, but not absorb, two adjacent
-systems through provider abstractions:
+VibeConform may orchestrate, but not absorb, two adjacent systems:
 
-- **GitNexus** (repository intelligence): index/search/dependency/
-  caller/impact/trace. It must never replace the compiler, LSP, linter,
-  tests, or CI — it augments them.
-
-The first code-intelligence provider is not GitNexus but **Graphify**
-(spec 0035), an opt-in integration in the `intelligence` category. It
-follows the same rule. VibeConform configures it and never runs it:
-`sync` writes a `.gitignore` section, a skill, a `graph:update` task,
-and `post-commit`/`post-checkout`/`post-merge` lefthook jobs (spec 0046). The graph is rebuilt by
-those Git hooks, and is never consulted by `verify` or CI. `vibe
-doctor` reports whether the graph is current, using its
-`built_at_commit`. Core repo-tooling modules read the selection through
-`module.Selected`, which fails closed; `WantsAgentHooks` fails open,
-because a guard must not vanish on an unknown selection.
+- **Repository intelligence** (GitNexus, Graphify): index, search,
+  dependency, caller, impact and trace queries. It must never replace the
+  compiler, LSP, linter, tests, or CI; it augments them. The setup skill
+  offers Graphify as optional content (`reference/optional/graphify.md`);
+  no rule checks it, and `verify` and CI never consult a graph.
 - **Skills Manager**: canonical skill storage, deployment, and per-project
   activation. It must never become a CI dependency.
 
 ## Internal package layout
 
-Present today:
-
 ```text
+cmd/
+  vibe/                     # the CLI's main
+  vibe-guard/               # the reference agent guard's main (spec 0053)
 internal/
-  manifest/                 # vibe.yaml parsing, including components (ADR 0012)
-  standard/                 # versioned standard definitions
-  module/                   # module composition interface + optional ToolRequirer, HookRuntime
-    gotooling/              # .golangci.yml
-    ci/github/              # GitHub Actions workflow, dependabot, PR template (prod-go)
-    ci/githubts/            # the same, for prod-ts
-    ci/githubpy/            # the same, for prod-py
-    ci/githubmono/          # the same, one job per component, for prod-mono
-    ci/gitlabmono/          # GitLab CI and MR template for prod-mono (ci.provider gitlab)
-    conformance/            # conformance.yml + Taskfile.vibe.yml: the only files that run vibe
-    repotooling/            # Taskfile.yml, lefthook.yml, Go guard (prod-go)
-    tsrepotooling/          # Taskfile.yml, lefthook.yml, Node guard (prod-ts)
-    pyrepotooling/          # Taskfile.yml, lefthook.yml, Python guard (prod-py)
-    monorepotooling/        # root + per-component Taskfiles, lefthook.yml, guard (prod-mono)
-    monotooling/            # each component's language config, re-rooted (prod-mono)
-    agents/claude/          # Claude Code settings + guard policy (policy.json), CLAUDE.md import, /spec with a workflow; the claude integration
-    agents/codex/           # Codex config; hooks suspended (spec 0024); the codex integration
-    editors/vscode/         # owned entries in .vscode/tasks.json, extensions.json (spec 0026)
-    editors/zed/            # owned entries in .zed/tasks.json (spec 0026)
-    intelligence/graphify/  # opt-in Graphify: a .gitignore section and a Claude skill; the graph:update task and hook jobs come from repo-tooling (spec 0035)
-    policy/lineendings/     # opt-in LF policy: a managed section of .gitattributes (spec 0029)
-    workflow/               # opt-in development workflow (AGENTS.md section) and docs layout (spec 0030)
-    tstooling/              # eslint, prettier, tsconfig base
-    pythontooling/          # ruff, pyright
-  resource/                 # resource + ownership + file mode model
-  state/                    # .vibe/state.yaml read/write
-  reconcile/                # three-way decision engine, plus two-way removal
-  jsonarray/                # byte-preserving edits of owned JSON(C) array elements
-  textregion/               # marker-delimited sections of text files; imports nothing from internal/ (spec 0029)
-  atomicfile/               # temp-file + rename writes
-  doctor/                   # vibe doctor checks; imports nothing from internal/ (spec 0028)
-  contract/                 # contract audit: vibe.yaml v2, rule registry, static checks, the CI model with its GitHub Actions and GitLab CI readers, probe copy and probes; imports none of the old packages (spec 0052, 0053, 0055)
+  cli/                      # command tree: init, audit, doctor, unlock; hidden stubs for the removed sync, diff and check
+  contract/                 # contract audit: vibe.yaml v2, rule registry, static checks, the CI model with its GitHub Actions and GitLab CI readers, probe copy and probes (spec 0052, 0053, 0055)
   guardrule/                # guard rule IDs, policy.json v2, command parsing shared by the audit and vibe-guard; imports nothing from internal/ (spec 0053)
   guard/                    # vibe-guard: baseline rules, hook/explain/relock, unlock marker, reference commands, version rule; imports only guardrule (spec 0053, 0054)
-  setupskill/               # the embedded vibeconform-setup skill and vibe init --skill; imports only guard (spec 0054)
-  cli/                      # command tree; audit/diff/sync share one plan walk; vibe audit dispatches to contract/; vibe unlock
+  setupskill/               # the embedded vibeconform-setup skill, vibe init --skill, and the tests that run its reference hooks; imports only guard (spec 0054)
+  doctor/                   # vibe doctor's checks; imports only contract, for the configuration, hook reader and bash resolution (spec 0059)
 ```
 
-and `cmd/vibe-guard`, the reference agent guard's `main` (spec 0053).
+- **`vibe init`** (spec 0059) detects components from the tracked files
+  with a small function in `internal/cli`, and checks the file it writes
+  with `contract.Parse`, so it never writes a configuration `vibe audit`
+  cannot read.
+- **`vibe doctor`** reuses the audit's readers (`contract.Parse`, the
+  entrypoint splitter `ParseSimpleCommand`, `ReadClaudeHooks` and
+  `ResolveBash`), so it finds programs and bash exactly as the audit
+  would run them.
+- **The removed commands.** `vibe sync`, `vibe diff` and `vibe check` are
+  hidden commands that print the migration guide's path and exit 1.
+  `contract.DetectSchema` stays, so that a version 1 `vibe.yaml` gets the
+  same pointer from `audit`, `doctor` and `init`.
 
 **The release and the setup action** (spec 0054). One release holds both
 binaries: `.goreleaser.yaml` builds `vibe` and `vibe-guard` for linux,
 darwin and windows on amd64 and arm64, each in its own archive, with one
 `checksums.txt`. A tag push publishes it (`.github/workflows/release.yml`)
 and attests every archive and binary. The jobs after it install the
-release on every hosted platform and verify the attestations. The
-root `action.yml` is the setup action: it installs an exact version of
-either tool from a release (checksums checked) or builds it from source,
-and the generated conformance workflow is its only consumer outside this
-repository. Neither is Go code, so neither appears in the tree above.
-They are repository files that no module generates, like
-`contract-audit.yml`.
+release on every hosted platform and verify the attestations. The root
+`action.yml` is the setup action: it installs an exact version of either
+tool from a release (checksums checked) or builds it from source. Its
+consumer outside this repository is the audit job of the setup skill's
+reference CI (`reference/ci/*/audit.yml`).
 
-Since M2, `examples/typescript` and `examples/python` hold real repositories
-declaring the language standards, synced and committed; since spec 0025,
-`examples/monorepo` does the same for `prod-mono/v1`. They are the drift
-alarm for modules this repository cannot dogfood: a Go repository never
-resolves `tstooling` or `pythontooling`, so without them those templates
-would have no live counterpart, which is the role `.golangci.yml` plays for
-`gotooling`. `internal/cli` enforces it — deliberately not `Taskfile.yml` or
-the CI workflow, since both are resources shipped to every adopting
-repository and must not name paths that exist only here.
-
-Not built yet:
-
-```text
-internal/
-  affected/       # changed-files -> affected-components graph
-  validation/     # task execution for affected components
-  skills/         # Skills Manager provider
-  intelligence/   # GitNexus provider (Graphify is a module, module/intelligence/graphify)
-```
-
-`.vibe/lock.yaml` does not exist either: state alone closes the
-reconciliation loop, and the lock file earns its place when standards
-resolve dynamically rather than being registered in Go.
+**The examples** (spec 0059). `examples/typescript`, `examples/python`
+and `examples/monorepo` are assembled by hand from the setup skill's
+reference files, each with a `vibe.yaml` version 2. They are the live
+counterpart of references this repository cannot dogfood: a Go
+repository never runs the TypeScript or Python references.
+`.github/workflows/examples.yml` copies each into a fresh Git repository
+and runs the full audit there on Linux and Windows, plus a GitLab variant
+of the monorepo. The audit is the check; there is no drift test between
+an example and its references.
 
 Packages are created when there is real code to put in them, not in
-advance. Audit/diff/sync orchestration lives in `internal/cli` rather than a
-separate `audit/` package, because all three are thin reporters over one
-shared plan walk — a package boundary there would separate nothing.
+advance.
 
 ## Canonical verification interface
 
-Taskfile (`Taskfile.yml`) is the single cross-platform entry point for local
-and CI verification (`task fmt`, `task lint`, `task test`, `task security`,
-`task audit`, `task verify`). CI, Git hooks, and docs invoke these tasks
-rather than duplicating command lists. Since M1, `Taskfile.yml` is itself a
-managed resource, and `task audit` checks this repository against the
-standard it declares.
+Taskfile (`Taskfile.yml`) is this repository's single cross-platform entry
+point for local and CI verification (`task fmt`, `task lint`, `task test`,
+`task security`, `task verify`, `task audit`). CI, Git hooks, and docs
+invoke these tasks rather than duplicating command lists, and `vibe.yaml`
+declares them as the entrypoints. An adopting repository may use any
+runner; the contract only asks that its entrypoints exist and behave.
 
-Since spec 0017, `task verify`/`task verify-ci` depend only on native
-language tooling — `task audit` is deliberately not one of `verify`'s
-steps. A generated repository's language verification must not require a
-`vibe` binary (or, for Go, a local `cmd/vibe`) to succeed; `task audit` and
-its CI `conformance` job stay independently invocable, VibeConform-specific
-checks layered on top, not folded into what `verify` means by "the code is
-correct."
-
-Since spec 0022, those checks are also *physically* separate. They live in
-the `vibe-conformance` module's two files, `Taskfile.vibe.yml` (included
-optionally by `Taskfile.yml`) and `.github/workflows/conformance.yml`.
-Nothing in `Taskfile.yml` or `ci.yml` refers to `vibe`, so removing
-VibeConform deletes files instead of editing shared ones.
-
-Since spec 0018, all three standards resolve `vibe` the same way in
-`audit`: a `PATH` lookup (`vibe audit --repo-root .`). Since spec 0022,
-when that lookup fails, `audit` falls back to installing exactly the
-`vibe_version` `.vibe/state.yaml` records. Go previously used
-`go run ./cmd/vibe`, which resolved only in this repository and left every
-external `prod-go/v1` adopter with a `task audit` — and so a CI
-`conformance` job — that could not run. The conformance job's
-self-hosting build step is conditional as a result; see
-`docs/decisions/0008-self-hosting-probe-in-shipped-templates.md` for why a
-published release is the wrong binary for this repository to audit itself
-with. Since spec 0054 the GitHub conformance job no longer goes through
-`task audit`: it installs the recorded `vibe_version` with the setup
-action, whose `source: auto` holds the self-hosting probe, and runs
-`vibe audit` directly, with no Go or Task in the job.
-
-The managed target set is fixed and extended, never overridden. A
-repository's own tasks go in a project-owned `Taskfile.local.yml`, which
-the generated `Taskfile.yml` includes optionally; Task treats a name
-collision as a hard error, so the verification interface stays what the
-standard says it is. See
-`docs/decisions/0009-managed-file-local-extension.md`. A repository's own
-Git hooks go in a project-owned `lefthook.local.yml`, which the generated
-`lefthook.yml` extends; lefthook lets it override a managed command, which
-is acceptable because hooks are not the gate (ADR 0017).
-
-### `vibe check`'s safe-fallback contract
-
-`vibe check` (not yet implemented; see "Not built yet" under "Internal
-package layout" above) will
-eventually let validation skip components unaffected by a change set, once
-the affected-graph and validation subsystems exist. Whenever it can't
-establish that narrower scope safely, it must run the full equivalent of
-`task verify` instead of skipping anything — it may never report success
-having silently skipped checks. A full run is required whenever: `vibe`
-itself can't be resolved from the calling context; the affected-component
-scope can't be determined with confidence (no prior state to diff against,
-or a graph-resolution error); or a change touches something with unbounded
-blast radius that isn't representable as a single component (`Taskfile.yml`
-itself, lint/tooling configuration, dependency manifests, or the
-`vibe.yaml` standard declaration). This extends two precedents already in
-the codebase: `vibe check`'s existing "not implemented yet"
-placeholder already fails loudly rather than no-oping (`docs/usage.md`),
-and `vibe sync`'s `ToolRequirer` warning already surfaces a missing tool
-rather than hiding it (spec 0014) — `vibe check`'s fallback is stricter
-than that warning-only pattern, since it must still run full verification,
-not just warn.
+`task verify` and `task verify:fast` depend only on native language
+tooling, never on `vibe` (spec 0017; contract rule R-01 for adopters).
+`task audit` is deliberately not one of `verify`'s steps: it builds `vibe`
+and `vibe-guard` from the checkout into the Git directory, puts them first
+on `PATH`, and runs the full contract audit (spec 0059). CI runs the same
+audit as the required check `Contract / audit`
+(`.github/workflows/contract-audit.yml`), next to `CI / gate`.
