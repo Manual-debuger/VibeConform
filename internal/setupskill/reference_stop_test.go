@@ -327,6 +327,61 @@ func TestStopGateOutsideGit(t *testing.T) {
 	}
 }
 
+// TestStopGateProjectStamps pins spec 0059 Desired Behavior 16: a project
+// in a subdirectory of a repository's working tree keeps a stamp of its
+// own, so a green run of the repository's root project never skips the
+// subdirectory project's checks, nor the reverse, even on the same tree.
+// The root project keeps green-stamp; the other gets green-stamp-<prefix>
+// with "/" turned into "-" and no trailing "-". Both stay in the Git
+// directory.
+func TestStopGateProjectStamps(t *testing.T) {
+	t.Parallel()
+	bash := hookShell(t)
+	command := refStopCommand(t)
+	root := newStopRepo(t, readRef(t, refTaskfiles["go"]), true)
+	taskfile, err := os.ReadFile(filepath.Join(root.dir, "Taskfile.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub := stopRepo{dir: filepath.Join(root.dir, "examples", "my app"), env: root.env}
+	sub.write(t, "Taskfile.yml", string(taskfile))
+	root.git(t, "add", "-A")
+	root.git(t, "commit", "-q", "-m", "a project in a subdirectory")
+
+	expect := func(name string, r stopRepo, wantRan bool) {
+		t.Helper()
+		code, ran, stderr := r.stop(t, bash, command, false)
+		if code != 0 || ran != wantRan {
+			t.Fatalf("%s: exit %d, verify:fast ran %v; want exit 0, ran %v\nstderr: %s", name, code, ran, wantRan, stderr)
+		}
+	}
+	expect("subdirectory, first stop", sub, true)
+	expect("root, after the subdirectory's green run", root, true)
+	expect("root, same tree", root, false)
+	expect("subdirectory, same tree", sub, false)
+
+	root.write(t, "calc/calc.go", "package calc\n\nconst X = 1\n")
+	expect("root, after an edit", root, true)
+	expect("subdirectory, after the root's green run", sub, true)
+	expect("subdirectory, same tree again", sub, false)
+
+	gitDir := filepath.Join(root.dir, ".git")
+	stamps, err := filepath.Glob(filepath.Join(gitDir, "green-stamp*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, p := range stamps {
+		stamps[i] = filepath.Base(p)
+	}
+	slices.Sort(stamps)
+	if want := []string{"green-stamp", "green-stamp-examples-my app"}; !slices.Equal(stamps, want) {
+		t.Errorf("stamps in the Git directory = %q, want %q", stamps, want)
+	}
+	if st := root.git(t, "status", "--porcelain", "--untracked-files=all"); strings.Contains(st, "green-stamp") {
+		t.Errorf("a stamp shows in git status:\n%s", st)
+	}
+}
+
 // TestStopGateLinkedWorktrees: each linked worktree keeps its own stamp,
 // so a green run in one never stands for another, even on the same tree.
 func TestStopGateLinkedWorktrees(t *testing.T) {

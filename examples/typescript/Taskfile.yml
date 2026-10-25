@@ -1,77 +1,38 @@
 version: "3"
 
-# Repository-specific tasks — build, run, deploy, whatever this repository
-# happens to need — belong in a project-owned Taskfile.local.yml, which
-# VibeConform never writes, reads, or audits. The include is optional: with
-# no such file it does nothing. Tasks defined there are available
-# unprefixed, but cannot redefine a task below — Task exits 203 on a name
-# collision rather than silently overriding, so the verification interface
-# stays what the standard says it is. Requires Task v3.39.0 or newer.
-# See docs/decisions/0009-managed-file-local-extension.md.
-includes:
-  local:
-    taskfile: ./Taskfile.local.yml
-    optional: true
-    flatten: true
-  # VibeConform's own tasks (task audit), kept out of this file so that
-  # removing VibeConform is deleting Taskfile.vibe.yml, not editing this
-  # one. Optional for the same reason: with the file gone, this include
-  # does nothing. See docs/specs/0022-conformance-isolation.md.
-  vibe:
-    taskfile: ./Taskfile.vibe.yml
-    optional: true
-    flatten: true
-
-# Task's built-in shell (mvdan.cc/sh) interprets POSIX-style syntax
-# identically on Windows/Linux/macOS, so these commands need no per-OS
-# branching.
+# The verification entrypoints of a TypeScript repository managed with
+# pnpm, for Task v3.39.0 or newer. The repository's own tasks (build, run,
+# deploy) go in this file too. Task's built-in shell interprets POSIX
+# syntax the same way on Windows, Linux and macOS, so no command needs a
+# per-OS branch.
+#
+# Every cache below lives under node_modules, which a Node repository
+# already ignores, so nothing shows up in git status. A cold CI checkout
+# has no cache and checks everything.
 
 tasks:
-  # Scoped to source extensions, not ".": Prettier auto-detects a parser for
-  # any file type it recognizes, including the YAML this standard's other
-  # modules generate (Taskfile.yml, lefthook.yml, .github/*, .vibe/*.yaml).
-  # Reformatting those is not this repository's job — they are owned by
-  # their module template, not by the adopting repository's style.
-  #
-  # Every cache below lives under node_modules, which a Node repository
-  # already ignores, so nothing shows up in git status (spec 0023). A cold
-  # CI checkout has no cache and checks everything.
+  # Installs the locked dependencies. Declare it as the setup entrypoint
+  # in vibe.yaml, so that the audit's probe copy has node_modules.
+  setup:
+    desc: Install the locked dependencies.
+    cmds:
+      - pnpm install --frozen-lockfile
+
+  # Scoped to source extensions, not ".": Prettier would otherwise also
+  # reformat YAML such as Taskfile.yml and the workflows.
   fmt:
     desc: Apply Prettier formatting.
     cmds:
-      - pnpm exec prettier --write --cache "**/*.{js,jsx,ts,tsx,json,css,md}" "!.vscode/tasks.json" "!.vscode/extensions.json"
+      - pnpm exec prettier --write --cache "**/*.{js,jsx,ts,tsx,json,css,md}"
 
   fmt:check:
     desc: Fail if any file is not Prettier-formatted (CI-safe, no writes).
     cmds:
-      - pnpm exec prettier --check --cache "**/*.{js,jsx,ts,tsx,json,css,md}" "!.vscode/tasks.json" "!.vscode/extensions.json"
-
-  # What the agents' hook:format runs after each edit (spec 0023): only the
-  # files git reports as changed or new (tracked changes plus untracked
-  # files it doesn't ignore), not the whole repository, with fmt's
-  # extensions. No eslint --fix here: with pnpm exec's own startup it takes
-  # about two seconds per edit, over the budget spec 0023 sets, so ESLint's
-  # findings come from hook:check instead. NUL-separated names keep paths
-  # with spaces intact, and the list is checked first because GNU xargs
-  # runs its command even with no input. Run it from this directory, as
-  # hook:format does: Task's built-in xargs, which Windows uses, starts the
-  # formatter in the directory task was started from, not in this one, and
-  # the paths are relative to this one.
-  fmt:changed:
-    desc: Format only the changed and untracked files.
-    silent: true
-    cmds:
-      - |
-        list() {
-          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md' ':(exclude).vscode/tasks.json' ':(exclude).vscode/extensions.json' 2>/dev/null || true
-          git ls-files -z --others --exclude-standard -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md' ':(exclude).vscode/tasks.json' ':(exclude).vscode/extensions.json'
-        }
-        [ -n "$(list)" ] || exit 0
-        list | xargs -0 pnpm exec prettier --write --cache --log-level warn || exit 2
+      - pnpm exec prettier --check --cache "**/*.{js,jsx,ts,tsx,json,css,md}"
 
   # ESLint's cache does not track dependencies between files, so a
-  # type-aware rule can report a stale result locally until the file itself
-  # changes. CI starts cold and is unaffected.
+  # type-aware rule can report a stale result locally until the file
+  # itself changes. CI starts cold and is unaffected.
   lint:
     desc: Run eslint.
     cmds:
@@ -87,37 +48,15 @@ tasks:
     cmds:
       - pnpm test
 
-  # Called by Claude Code and Codex, not by people: .claude/settings.json
-  # and .codex/hooks.json run "task -x hook:guard" before every shell
-  # command and file edit. No desc, so it stays out of task --list. The -x
-  # in that command matters: without it Task reports the guard's deny
-  # (exit 2) as 201, and both agents treat 201 as allow. The name is
-  # reserved like every task here. See
-  # docs/specs/0021-agent-hooks-task-interface.md.
+  # The agent hooks. .claude/settings.json calls them as
+  # "task -x hook:<name>": without -x, Task reports a script's exit 2 as
+  # 201, and Claude Code shows the model only exit 2. No desc, so they
+  # stay out of task --list. Task runs each cmd with errexit, so every
+  # command that can fail on a healthy machine ends in "|| true" or
+  # "|| echo missing".
   #
-  # "|| exit 2" turns any failure inside the task into a deny rather than
-  # an allow: go run reports a program's exit 2 as 1, and a missing or
-  # broken runtime would otherwise let every tool call through.
-  hook:guard:
-    silent: true
-    cmds:
-      - node .claude/hooks/guard.mjs .claude/hooks/policy.json || exit 2
-
-  # The other agent hooks (spec 0023). Like hook:guard, agents call these
-  # through "task -x hook:<name>", and none has a desc. Exit 2 is the one
-  # code both agents show the model; the scripts use only Task's built-in
-  # shell and git, so they behave the same on Windows and Linux.
-  # Task runs each cmd with errexit, so every command that can fail on a
-  # healthy machine (a missing runtime, no commit yet) ends in "|| true"
-  # or "|| echo missing"; unguarded, it would end the script early.
-  #
-  # Session start: a few lines of facts for the agent's context. Never
-  # installs, builds, tests, or starts anything; those stay explicit tasks.
-  # Platform comes from Task itself, and Runtime only from marker files, so
-  # neither is a guess. The shell is not reported: the harness doesn't say
-  # which one the agent's command tool uses, and the OS doesn't settle it
-  # (docs/specs/0028-environment-doctor.md).
-  # It doesn't repeat AGENTS.md, which both agents load themselves.
+  # Session start: a few lines of facts for the agent's context. It never
+  # installs, builds, tests or starts anything, and changes no file.
   hook:context:
     silent: true
     cmds:
@@ -135,7 +74,6 @@ tasks:
           runtime=container
         fi
         echo "Runtime: $runtime"
-        echo "Shell: unknown (not reported by the harness)"
         git rev-parse --git-dir >/dev/null 2>&1 || exit 0
         gitdir="$(git rev-parse --path-format=absolute --git-dir 2>/dev/null || true)"
         common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
@@ -165,23 +103,9 @@ tasks:
         echo "Dirty files: $n"
         printf '%s' "$list"
         [ "$n" -le 20 ] || echo "… and $((n-20)) more"
-        dirstat="$(git diff --dirstat=files,0 HEAD 2>/dev/null || true)"
-        if [ -n "$dirstat" ]; then
-          echo "Affected components:"
-          echo "$dirstat"
-        fi
-
-  # After each file edit: format the changed files (fmt:changed). It runs as
-  # its own task process, started in this directory: the agent's working
-  # directory can be a subdirectory, and Task's built-in xargs would start
-  # the formatter there, where the listed paths do not resolve (#129).
-  hook:format:
-    silent: true
-    cmds:
-      - task -s fmt:changed || exit 2
 
   # After each file edit, in the background: the typecheck and the lint,
-  # no tests and no fmt:check (spec 0057). An edit in the middle of a
+  # no tests and no fmt:check. An edit in the middle of a
   # change rarely passes the tests; the Stop gate's verify:fast runs them,
   # and checks formatting, at the end of the turn. Agents run all of an
   # event's hooks in parallel, so a format check here would race
@@ -192,11 +116,11 @@ tasks:
   # failures, and a test-first red phase fails on purpose.
   # An edit outside the repository (the agent's memory, its scratchpad) or
   # of a file git ignores cannot change the checks' result, so it runs
-  # nothing (spec 0056). The path comes from the payload's file_path or
-  # notebook_path, JSON-escaped; git reads doubled backslashes as one.
-  # git check-ignore exits 0 for an ignored path, 1 for any other path in
-  # the repository and 128 outside it. Without a path (a malformed payload,
-  # a tool with no path) or a repository, the checks run.
+  # nothing. The path comes from the payload's file_path or notebook_path,
+  # JSON-escaped; git reads doubled backslashes as one. git check-ignore
+  # exits 0 for an ignored path, 1 for any other path in the repository
+  # and 128 outside it. Without a path (a malformed payload, a tool with no
+  # path) or a repository, the checks run.
   hook:check:
     silent: true
     cmds:
@@ -234,13 +158,21 @@ tasks:
   # files git does not ignore, names and contents: a copy of the index
   # marks them intent-to-add, so the diff shows them and git stores no
   # object. The stamp sits in the worktree's own Git directory, so it never
-  # shows in git status and each linked worktree has its own. Neither task
-  # reads stdin, which the Stop hook keeps for hook:done.
+  # shows in git status and each linked worktree has its own. A project at
+  # the root of its repository keeps green-stamp; one in a subdirectory
+  # (git rev-parse --show-prefix, such as "examples/app/") gets
+  # green-stamp-examples-app, so the two never stand for each other
+  # (spec 0059). Neither task reads stdin, which the Stop hook keeps for
+  # hook:done.
   hook:stamp:check:
     silent: true
     cmds:
       - |
-        stamp="$(git rev-parse --path-format=absolute --git-path green-stamp 2>/dev/null)" || exit 1
+        n=green-stamp
+        p="$(git rev-parse --show-prefix 2>/dev/null)" || exit 1
+        p="${p%/}"
+        [ -z "$p" ] || n="$n-${p//\//-}"
+        stamp="$(git rev-parse --path-format=absolute --git-path "$n" 2>/dev/null)" || exit 1
         [ -f "$stamp" ] || exit 1
         w="$stamp.$$"
         h=""
@@ -256,7 +188,11 @@ tasks:
     silent: true
     cmds:
       - |
-        stamp="$(git rev-parse --path-format=absolute --git-path green-stamp 2>/dev/null)" || exit 0
+        n=green-stamp
+        p="$(git rev-parse --show-prefix 2>/dev/null)" || exit 0
+        p="${p%/}"
+        [ -z "$p" ] || n="$n-${p//\//-}"
+        stamp="$(git rev-parse --path-format=absolute --git-path "$n" 2>/dev/null)" || exit 0
         w="$stamp.$$"
         h=""
         cp "$(git rev-parse --path-format=absolute --git-path index)" "$w.index" 2>/dev/null || true
@@ -267,13 +203,11 @@ tasks:
         rm -f "$w" "$w.index"
         [ -z "$h" ] || printf '%s\n' "$h" >"$stamp" || true
 
-  # When the agent ends its turn: the same checks, as a gate. The settings'
-  # Stop hook calls verify:fast itself, so the contract audit sees it
-  # (rule A-05), and runs this only when verify:fast fails:
-  # "task verify:fast 1>&2 </dev/null || task -x hook:done". The failure
-  # blocks the stop once. If the agent stops again with the checks still
-  # failing (stop_hook_active), the stop goes through, with the failure
-  # printed, rather than looping forever on something it can't fix.
+  # Runs only when the Stop hook's verify:fast fails:
+  # "task verify:fast 1>&2 </dev/null || task -x hook:done". It blocks the
+  # stop once. If the agent stops again with the checks still failing
+  # (stop_hook_active), the stop goes through, so the agent cannot loop
+  # forever on something it cannot fix.
   hook:done:
     silent: true
     cmds:
@@ -288,28 +222,19 @@ tasks:
         exit 2
 
   verify:
-    desc: Local verification gate — native language tooling only, never
-      VibeConform itself; "task audit" is VibeConform's check, which CI
-      runs in its own Conformance workflow.
+    desc: Full verification gate.
     cmds:
       - task: fmt:check
       - task: lint
       - task: typecheck
       - task: test
 
-  # The agents' Stop hook and background check run this after edits (spec
-  # 0023). For prod-ts it is all of verify, made incremental by the caches
-  # above; it exists so every standard offers the same name.
+  # What the agents' Stop hook and pre-push run: all of verify, made
+  # incremental by the caches above.
   verify:fast:
-    desc: Fast incremental verification (cached format, lint, typecheck,
-      then test); what the agents' Stop hook runs. Same steps as verify.
+    desc: Fast incremental verification; same steps as verify.
     cmds:
       - task: fmt:check
       - task: lint
       - task: typecheck
       - task: test
-
-  verify-ci:
-    desc: Alias used by CI so the workflow and local docs never drift.
-    cmds:
-      - task: verify

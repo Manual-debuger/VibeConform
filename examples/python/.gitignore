@@ -1,9 +1,9 @@
-# vibeconform:begin graphify
-# Managed by VibeConform: integrations.intelligence graphify in vibe.yaml.
-graphify-out/
-# vibeconform:end graphify
+# The virtual environment and bytecode.
+.venv/
+__pycache__/
+*.pyc
 
-# vibeconform:begin claude
-# Managed by VibeConform: integrations.agents claude in vibe.yaml.
+# Claude Code: personal settings, and agent worktrees, each a full
+# checkout.
 .claude/settings.local.json
-# vibeconform:end claude
+.claude/worktrees/
