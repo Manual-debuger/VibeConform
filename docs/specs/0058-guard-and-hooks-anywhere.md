@@ -1,6 +1,6 @@
 # Spec 0058: The guard and the hooks hold for shell writes and from any directory
 
-Status: draft (2026-10-25). Issues #123 and #133. Amends spec 0053
+Status: accepted (2026-10-25). Issues #123 and #133. Amends spec 0053
 ("guardrail-settings", "guard-policy-file") and the setup skill's
 reference settings (spec 0054). No contract change.
 
