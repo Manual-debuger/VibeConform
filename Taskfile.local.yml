@@ -47,28 +47,6 @@ tasks:
         go build -ldflags "-X main.version=$version" -o bin/vibe{{exeExt}} ./cmd/vibe
         echo "built bin/vibe{{exeExt}} $version"
 
-  sync:
-    desc: Rebuild vibe from this checkout, then sync this repository and its examples.
-    # go:embed resolves at build time, so the vibe that syncs a template
-    # change has to be built after it. Every root is synced, because vibe
-    # audit does not compare the sha256 that .vibe/state.yaml records: a
-    # file hand-edited to match its new template passes audit while its
-    # recorded sha256 is stale, and only sync records the new one. A root
-    # whose state.yaml then differs only in vibe_version, which the stamp
-    # changes with every commit, gets that file back from the index, so a
-    # clean tree stays clean. Stops at the first sync that fails.
-    cmds:
-      - task: build
-      - |
-        for d in . examples/monorepo examples/python examples/typescript; do
-          echo "$d: vibe sync"
-          ./bin/vibe{{exeExt}} sync --repo-root "$d" || exit $?
-          s="$d/.vibe/state.yaml"
-          if git diff --quiet -I'^vibe_version: ' -- "$s"; then
-            git checkout -q -- "$s"
-          fi
-        done
-
   run:
     desc: 'Run the CLI, e.g. task run -- --help.'
     cmds:

@@ -404,7 +404,7 @@ probe parts as "not run".
 
 ```bash
 vibe audit                                  # the full audit
-vibe audit --config vibe.v2.yaml            # this repository, until #111
+vibe audit --config other.yaml              # another configuration file
 vibe audit --static                         # the quick run
 vibe audit --explain C-02
 ```
@@ -652,8 +652,10 @@ This repository's `Contract / audit` job
 pull request and passes on exit `0`. It builds `vibe` and `vibe-guard`,
 installs the tools the entrypoints call, and sets
 `VIBE_TEST_REQUIRE_TOOLS` so that the tests `verify` runs fail rather
-than skip without uv, pnpm, Python, Node or bash. It is not a required
-check until #111.
+than skip without uv, pnpm, Python, Node or bash. It is a required
+check (spec 0059). `task audit` runs the same audit locally, with the
+`vibe` and `vibe-guard` built from the checkout; `task audit:static`
+runs `--static`.
 
 Since `--static` always exits `1`, a CI job that runs it judges the JSON
 instead. This repository's `Contract / audit (static)` job
@@ -661,7 +663,7 @@ instead. This repository's `Contract / audit (static)` job
 `fail` or `undecided`:
 
 ```bash
-vibe audit --static --json --config vibe.v2.yaml > contract.json || true
+vibe audit --static --json > contract.json || true
 jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "undecided")) | .id' contract.json
 ```
 

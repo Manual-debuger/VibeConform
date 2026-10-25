@@ -1,8 +1,20 @@
-standard: prod-go
-version: v1
-policy:
-  line_endings: lf
-  agent_guard: vibe-guard
-development:
-  workflow: plan-triggered-sdd
-  docs_layout: standard
+# This repository's contract configuration (vibe.yaml version 2, spec
+# 0052). `task audit` and the contract-audit workflow run `vibe audit`
+# on it (spec 0059).
+contract: 1.1.0
+platforms: [linux, windows]
+agents: [claude, codex]
+# No components: one Go component at the root, found from go.mod.
+entrypoints:
+  # The tasks ci.yml runs, one per job, so the audit checks each one.
+  verify:
+    - task fmt:check
+    - task typecheck
+    - task lint
+    - task test
+    - task mod:verify
+    - task security
+    - task workflows:lint
+  verify-fast: task verify:fast
+  fmt: task fmt
+  fmt-check: task fmt:check
