@@ -31,9 +31,19 @@ func parseBash(src string) ([]Command, error) {
 			case syntax.WordHdoc:
 				w := bashWord(r.Word)
 				c.stdin = &w
-			case syntax.DplIn, syntax.DplOut:
+			case syntax.DplIn:
+			case syntax.DplOut:
+				// >&word with a word that is no descriptor sends stdout and
+				// stderr to the file word, as &> does.
+				if w := bashWord(r.Word); !w.Literal || !isDescriptor(w.Text) {
+					c.Writes = append(c.Writes, w)
+				}
 			default:
-				c.Redirects = append(c.Redirects, bashWord(r.Word))
+				w := bashWord(r.Word)
+				c.Redirects = append(c.Redirects, w)
+				if r.Op != syntax.RdrIn {
+					c.Writes = append(c.Writes, w)
+				}
 			}
 		}
 		if call, ok := st.Cmd.(*syntax.CallExpr); ok && len(call.Args) > 0 {
@@ -41,13 +51,20 @@ func parseBash(src string) ([]Command, error) {
 				c.Words = append(c.Words, bashWord(a))
 			}
 			out = append(out, c)
-		} else if len(c.Redirects) > 0 {
+		} else if len(c.Redirects) > 0 || len(c.Writes) > 0 {
 			c.stdin = nil
 			out = append(out, c)
 		}
 		return true
 	})
 	return out, nil
+}
+
+// isDescriptor reports whether s, the word after >&, names a file
+// descriptor or closes one (-), rather than a file.
+func isDescriptor(s string) bool {
+	s = strings.TrimSuffix(s, "-")
+	return strings.Trim(s, "0123456789") == ""
 }
 
 // bashWord performs quote removal on a word. An unquoted expansion, or a

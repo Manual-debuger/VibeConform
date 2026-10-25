@@ -98,6 +98,13 @@ type Command struct {
 	// (">f", ">>f", "<f", "2>f"). Here-documents and descriptor
 	// duplications ("2>&1") are not targets.
 	Redirects []Word
+	// Writes are the paths the command writes, deletes, moves or renames
+	// (spec 0058, "Write targets come from the parser"): its output
+	// redirections, then the operands that the writers in writers.go
+	// write. A word with an expansion is listed as it is; whether it
+	// counts is the reader's to decide. The contract audit does not read
+	// Writes.
+	Writes []Word
 	// Shell is the language whose conventions apply to Words. A command
 	// started by a wrapper (sudo, env, xargs, find -exec, …) is an
 	// external program, so it is ShellBash even inside PowerShell.
@@ -229,8 +236,10 @@ func expand(c Command, out *[]Command) error {
 		inner.Depth = c.Depth
 		inner.Via = appendVia(c.Via, label)
 		inner.Redirects = c.Redirects
+		inner.Writes = c.Writes
 		return expand(inner, out)
 	}
+	c.Writes = append(slices.Clone(c.Writes), writtenOperands(c)...)
 	*out = append(*out, c)
 	if c.Name() == "find" {
 		for _, seg := range findExecs(c) {
