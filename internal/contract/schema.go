@@ -17,7 +17,8 @@ type Schema int
 const (
 	// SchemaUnknown is returned with an error: the file is neither.
 	SchemaUnknown Schema = iota
-	// SchemaV1 has a top-level standard key and runs the old audit.
+	// SchemaV1 has a top-level standard key: the removed template-sync
+	// system's file, which vibe refuses with the migration pointer.
 	SchemaV1
 	// SchemaV2 has a top-level contract key and runs the contract audit.
 	SchemaV2

@@ -1,7 +1,7 @@
 name: Setup action
 
 # Tests the setup action (action.yml, spec 0054) on Linux, macOS and
-# Windows. Repository-owned, not generated: adopters do not receive it.
+# Windows. This repository's own; it is not a setup-skill reference.
 #
 # The release cases need a release that contains vibe-guard. Until
 # RELEASE_VERSION is published, the probe job reports it and those jobs are
@@ -60,7 +60,7 @@ jobs:
           vibe --version
           vibe-guard version
       # The workspace source takes the version as information only, so a
-      # sync from uncommitted changes (+dirty) or an unstamped build (dev)
+      # build from uncommitted changes (+dirty) or an unstamped build (dev)
       # still passes here (spec 0057).
       - name: Setup action, workspace with version dev
         uses: ./

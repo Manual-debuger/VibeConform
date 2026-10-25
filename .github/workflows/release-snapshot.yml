@@ -2,8 +2,8 @@ name: Release snapshot
 
 # Builds every release target with GoReleaser in snapshot mode, without
 # publishing, so a missing build or a broken .goreleaser.yaml fails the
-# pull request before a tag exists (spec 0054). Repository-owned, not
-# generated: adopters do not receive it.
+# pull request before a tag exists (spec 0054). This repository's own;
+# it is not a setup-skill reference.
 
 on:
   pull_request:

@@ -531,8 +531,8 @@ var repoFilePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*/?$
 // contract does not read them and no reference implementation creates
 // them: the template-sync system's files, which the migration removes or
 // merges into one file (spec 0054, "The setup skill", Migrate), and the
-// secret files the skill must not read. #112 removes the template-sync
-// system, and its names leave this list with migrate.md.
+// secret files the skill must not read. The template-sync names leave
+// this list when migrate.md does.
 var removedOrAvoided = []string{
 	".vibe/", "Taskfile.vibe.yml", "Taskfile.local.yml", "lefthook.local.yml",
 	".gitlab-ci.vibe.yml", ".gitlab-ci.local.yml", ".gitlab-ci.defaults.yml",
