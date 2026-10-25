@@ -120,7 +120,9 @@ guard running in this session refuses your edits there.
    `vibe unlock` in their own terminal, and wait until they say it is
    done. Then write `.claude/settings.json` from
    `reference/agents/settings.json`, keeping any other hooks the team
-   added.
+   added. A kept hook that calls the task runner gets the reference's
+   `cd "${CLAUDE_PROJECT_DIR:-.}" &&` prefix (`reference/rules.md`,
+   "A: agent guardrails").
 4. Last, remove `hook:guard` from `Taskfile.yml`, the old guard script
    and `.claude/hooks/policy.local.json`. Claude Code may keep running
    the hooks this session started with, so do it in a new session, or

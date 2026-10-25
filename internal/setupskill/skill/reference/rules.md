@@ -198,6 +198,18 @@ Not applicable when `agents` does not include `claude`. Start from
 `vibe-guard` satisfies A-01 to A-04 and A-08. Install it first (`SKILL.md`,
 step 5).
 
+The hooks run from the project root. Claude Code runs a hook command in
+the agent's current directory, and Task uses the nearest `Taskfile.yml`
+above that directory. Inside a component, or under any directory with
+its own Taskfile, that is not the root Taskfile: the `hook:*` tasks are
+missing there, and `verify:fast` checks only that part of the
+repository. So every reference hook command that calls Task starts with
+`cd "${CLAUDE_PROJECT_DIR:-.}" &&`. Keep this prefix, and give it to
+each hook of your own that calls the task runner. Do not use
+`task -d <dir>` instead: A-05 finds the Stop hook's `task verify:fast`
+only as written. `vibe-guard hook` finds the root itself and needs no
+prefix.
+
 ### A-01 (MUST): shell commands and file edits pass through the guard
 
 `.claude/settings.json` has PreToolUse hooks matching `Bash`,
@@ -235,7 +247,8 @@ reference Stop command and the `hook:done` task in
 
 A PostToolUse hook matching `Write` and `Edit` calls the `fmt`
 entrypoint as written in `vibe.yaml`. The reference
-`.claude/settings.json` runs `task fmt 1>&2 || exit 2`.
+`.claude/settings.json` runs `task fmt 1>&2 || exit 2` from the project
+root.
 
 ### A-07 (SHOULD): session start injects facts and changes nothing
 
