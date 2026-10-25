@@ -45,8 +45,8 @@ var monoComponents = []manifest.Component{
 	{ID: "worker", Path: "services/worker", Profile: manifest.ProfilePy},
 }
 
-// goTaskSetups are every Go setup VibeConform generates or the setup skill
-// hands out.
+// goTaskSetups are every Go setup VibeConform generates. The setup
+// skill's references are tested in internal/setupskill (spec 0059).
 var goTaskSetups = map[string]func(t *testing.T) goTaskSetup{
 	"prod-go": func(t *testing.T) goTaskSetup {
 		t.Helper()
@@ -74,28 +74,6 @@ var goTaskSetups = map[string]func(t *testing.T) goTaskSetup{
 			}
 		}
 		return s
-	},
-	"setupskill/reference/go": func(t *testing.T) goTaskSetup {
-		t.Helper()
-		return goTaskSetup{
-			root:         readSource("../setupskill/skill/reference/taskrunner/go/Taskfile.yml")(t),
-			lefthook:     readSource("../setupskill/skill/reference/hooks/go/lefthook.yml")(t),
-			goComponents: []string{""},
-		}
-	},
-	"setupskill/reference/monorepo": func(t *testing.T) goTaskSetup {
-		t.Helper()
-		dir := "../setupskill/skill/reference/taskrunner/monorepo/"
-		return goTaskSetup{
-			root: readSource(dir + "Taskfile.yml")(t),
-			includes: map[string][]byte{
-				"api":    readSource(dir + "go.Taskfile.yml")(t),
-				"web":    readSource(dir + "typescript.Taskfile.yml")(t),
-				"worker": readSource(dir + "python.Taskfile.yml")(t),
-			},
-			lefthook:     readSource("../setupskill/skill/reference/hooks/monorepo/lefthook.yml")(t),
-			goComponents: []string{"api"},
-		}
 	},
 }
 

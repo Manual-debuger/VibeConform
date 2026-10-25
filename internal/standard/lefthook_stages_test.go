@@ -56,14 +56,8 @@ func TestLefthookHookStages(t *testing.T) {
 	if len(cases) == 0 {
 		t.Fatal("no standard resolves lefthook.yml")
 	}
-	// The setup skill's reference hooks follow the same stages.
-	for _, stack := range []string{"go", "python", "typescript", "monorepo"} {
-		data, err := os.ReadFile(filepath.Join("..", "setupskill", "skill", "reference", "hooks", stack, "lefthook.yml"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		cases["setupskill/reference/"+stack] = data
-	}
+	// The setup skill's reference hooks are tested in internal/setupskill
+	// (spec 0059).
 	for name, content := range cases {
 		if got := lefthookRuns(t, name, content, "pre-commit"); !slices.Equal(got, []string{preCommitRun}) {
 			t.Errorf("%s: pre-commit runs %q, want only %q", name, got, preCommitRun)

@@ -1,4 +1,4 @@
-package pins_test
+package setupskill_test
 
 import (
 	"io/fs"
@@ -6,14 +6,30 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Manual-debuger/VibeConform/internal/module/ci/pins"
 	"github.com/Manual-debuger/VibeConform/internal/setupskill"
 )
 
-// The skill's reference CI files are written out, not rendered from the
-// table: the setup skill must not import the template-sync packages
-// (spec 0054). So the check lives here, on the table's side, and reads the
-// skill's embedded files.
+// The reference CI files' pins, moved here from internal/module/ci/pins
+// by spec 0059 (Desired Behavior 13, Seam 2). The pin table and the
+// generated CI they were checked against go with internal/module, so the
+// table's versions are held here, and each action must be pinned at one
+// commit across the reference files.
+
+// refPins are the toolchain versions the reference CI files name: the
+// values of internal/module/ci/pins.Current when spec 0059 removed it.
+// A bump changes the reference files and this table together.
+var refPins = struct {
+	Go, Task, GolangciLint, Goimports, Govulncheck, Actionlint, Node, Python string
+}{
+	Go:           "1.27.0",
+	Task:         "v3.53.1",
+	GolangciLint: "v2.13.2",
+	Goimports:    "v0.51.0",
+	Govulncheck:  "v1.8.0",
+	Actionlint:   "v1.7.12",
+	Node:         "22",
+	Python:       "3.12",
+}
 
 const setupAction = "Manual-debuger/VibeConform"
 
@@ -28,43 +44,28 @@ var (
 	setupTaskRE = regexp.MustCompile(`uses:\s*go-task/setup-task@\S+[^\n]*\n\s+with:\n\s+version:\s*"?([^"\s]+)"?`)
 )
 
-// skillPins returns, for each version the table holds, the name the skill's
-// files give it: an env: variable or a go install path.
-func skillPins(t pins.Table) (env, install map[string]string) {
-	env = map[string]string{
-		"GO_VERSION":            t.Go,
-		"TASK_VERSION":          t.Task,
-		"GOLANGCI_LINT_VERSION": t.GolangciLint,
-		"NODE_VERSION":          t.Node,
-		"PYTHON_VERSION":        t.Python,
-	}
-	install = map[string]string{
-		"github.com/go-task/task/v3/cmd/task":                    t.Task,
-		"github.com/golangci/golangci-lint/v2/cmd/golangci-lint": t.GolangciLint,
-		"golang.org/x/tools/cmd/goimports":                       t.Goimports,
-		"golang.org/x/vuln/cmd/govulncheck":                      t.Govulncheck,
-		"github.com/rhysd/actionlint/cmd/actionlint":             t.Actionlint,
-	}
-	return env, install
-}
-
 // TestSkillCIMatchesPins: wherever the skill's reference CI files name a
-// tool the table pins, or an action a generated CI file pins, they name the
-// same version or commit, so a pin bump cannot leave the skill behind.
+// pinned tool, they name the version refPins holds, and every action is
+// pinned at the same commit in each file, so a pin bump cannot leave one
+// reference behind.
 func TestSkillCIMatchesPins(t *testing.T) {
-	// Every action the generated CI uses, with the commits it is pinned to.
-	actions := map[string]map[string]bool{}
-	for _, content := range renderAll(t) {
-		for _, m := range usesRE.FindAllStringSubmatch(string(content), -1) {
-			if actions[m[1]] == nil {
-				actions[m[1]] = map[string]bool{}
-			}
-			actions[m[1]][m[2]] = true
-		}
+	env := map[string]string{
+		"GO_VERSION":            refPins.Go,
+		"TASK_VERSION":          refPins.Task,
+		"GOLANGCI_LINT_VERSION": refPins.GolangciLint,
+		"NODE_VERSION":          refPins.Node,
+		"PYTHON_VERSION":        refPins.Python,
 	}
-	env, install := skillPins(pins.Current)
+	install := map[string]string{
+		"github.com/go-task/task/v3/cmd/task":                    refPins.Task,
+		"github.com/golangci/golangci-lint/v2/cmd/golangci-lint": refPins.GolangciLint,
+		"golang.org/x/tools/cmd/goimports":                       refPins.Goimports,
+		"golang.org/x/vuln/cmd/govulncheck":                      refPins.Govulncheck,
+		"github.com/rhysd/actionlint/cmd/actionlint":             refPins.Actionlint,
+	}
 
 	skill := setupskill.FS()
+	// The pattern matches .gitlab-ci.yml too: * matches a leading dot.
 	files, err := fs.Glob(skill, "reference/ci/*/*.yml")
 	if err != nil {
 		t.Fatal(err)
@@ -72,6 +73,8 @@ func TestSkillCIMatchesPins(t *testing.T) {
 	if len(files) < 8 {
 		t.Fatalf("found only %d reference CI files: %v", len(files), files)
 	}
+	// actions holds, per action, the commits and the files that pin it.
+	actions := map[string]map[string][]string{}
 	checked := map[string]int{}
 	for _, file := range files {
 		b, err := fs.ReadFile(skill, file)
@@ -80,24 +83,24 @@ func TestSkillCIMatchesPins(t *testing.T) {
 		}
 		content := strings.ReplaceAll(string(b), "\r\n", "\n")
 		for _, m := range usesRE.FindAllStringSubmatch(content, -1) {
-			want, ok := actions[m[1]]
 			// The skill names the setup action by a placeholder commit
 			// that the agent fills in from the release it installs.
-			if !ok || m[1] == setupAction {
+			if m[1] == setupAction {
 				continue
 			}
 			checked["actions"]++
-			if !want[m[2]] {
-				t.Errorf("%s pins %s at %s; the generated CI pins it at %v", file, m[1], m[2], keysOf(want))
+			if actions[m[1]] == nil {
+				actions[m[1]] = map[string][]string{}
 			}
+			actions[m[1]][m[2]] = append(actions[m[1]][m[2]], file)
 		}
 		for _, m := range envRE.FindAllStringSubmatch(content, -1) {
 			// The GitLab references need an exact Node release (for
 			// Chocolatey and nodejs.org) of the major the table pins.
 			if m[1] == "NODE_RELEASE" {
 				checked["env"]++
-				if !strings.HasPrefix(m[2], pins.Current.Node+".") {
-					t.Errorf("%s sets NODE_RELEASE to %q; the pin table says Node %q", file, m[2], pins.Current.Node)
+				if !strings.HasPrefix(m[2], refPins.Node+".") {
+					t.Errorf("%s sets NODE_RELEASE to %q; the pin table says Node %q", file, m[2], refPins.Node)
 				}
 				continue
 			}
@@ -123,9 +126,14 @@ func TestSkillCIMatchesPins(t *testing.T) {
 		}
 		for _, m := range setupTaskRE.FindAllStringSubmatch(content, -1) {
 			checked["setup-task"]++
-			if m[1] != pins.Current.TaskSetup() {
-				t.Errorf("%s sets up Task %s; the pin table says %s", file, m[1], pins.Current.TaskSetup())
+			if want := strings.TrimPrefix(refPins.Task, "v"); m[1] != want {
+				t.Errorf("%s sets up Task %s; the pin table says %s", file, m[1], want)
 			}
+		}
+	}
+	for action, commits := range actions {
+		if len(commits) > 1 {
+			t.Errorf("%s is pinned at %d commits: %v", action, len(commits), commits)
 		}
 	}
 	// Each kind of reference is present, so a change to the files' form
@@ -135,12 +143,4 @@ func TestSkillCIMatchesPins(t *testing.T) {
 			t.Errorf("no %s reference in the skill's CI files was checked", kind)
 		}
 	}
-}
-
-func keysOf(m map[string]bool) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
 }

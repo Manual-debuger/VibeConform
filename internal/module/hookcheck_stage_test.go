@@ -18,10 +18,6 @@ var hookCheckWant = map[string][]string{
 	"tsrepotooling/templates/Taskfile.yml":        {"lint", "typecheck"},
 	"pyrepotooling/templates/Taskfile.yml":        {"lint", "typecheck"},
 	"monorepotooling/templates/Taskfile.yml.tmpl": {"api:lint", "api:typecheck", "web:lint", "web:typecheck", "worker:lint", "worker:typecheck"},
-	"setupskill/reference/go":                     {"lint", "typecheck"},
-	"setupskill/reference/typescript":             {"lint", "typecheck"},
-	"setupskill/reference/python":                 {"lint", "typecheck"},
-	"setupskill/reference/monorepo":               {"api:lint", "api:typecheck", "web:lint", "web:typecheck", "worker:lint", "worker:typecheck"},
 }
 
 // agentPayload is a PostToolUse payload for an edit of path with a

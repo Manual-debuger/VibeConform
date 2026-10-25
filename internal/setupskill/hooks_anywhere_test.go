@@ -234,16 +234,8 @@ func (r hookRepo) run(t *testing.T, bash, dir, command string, payload map[strin
 // set: in CI a skip would hide the Windows run spec 0058 asks for.
 func hookShell(t *testing.T) string {
 	t.Helper()
-	missing := func(name string, err error) {
-		t.Helper()
-		if os.Getenv("VIBE_HOOKS_E2E") != "" || os.Getenv("CI") != "" {
-			t.Fatalf("VIBE_HOOKS_E2E or CI is set but %s is not found: %v", name, err)
-		}
-		t.Skipf("%s not found (%v); task test in CI runs this", name, err)
-	}
-	if _, err := exec.LookPath("task"); err != nil {
-		missing("task", err)
-	}
+	missing := func(name string, err error) { t.Helper(); missingTool(t, name, err) }
+	taskBinary(t)
 	if runtime.GOOS == "windows" {
 		// Git for Windows keeps <root>\bin\bash.exe, and git.exe in
 		// <root>\cmd, <root>\bin or <root>\mingw64\bin: which one is on
@@ -269,6 +261,27 @@ func hookShell(t *testing.T) string {
 		missing("bash", err)
 	}
 	return bash
+}
+
+// missingTool skips a test that needs the tool name, which is not found,
+// unless VIBE_HOOKS_E2E or CI is set: then it fails, since a skip in CI
+// would hide the run.
+func missingTool(t *testing.T, name string, err error) {
+	t.Helper()
+	if os.Getenv("VIBE_HOOKS_E2E") != "" || os.Getenv("CI") != "" {
+		t.Fatalf("VIBE_HOOKS_E2E or CI is set but %s is not found: %v", name, err)
+	}
+	t.Skipf("%s not found (%v); task test in CI runs this", name, err)
+}
+
+// taskBinary returns the task binary on PATH (see missingTool).
+func taskBinary(t *testing.T) string {
+	t.Helper()
+	task, err := exec.LookPath("task")
+	if err != nil {
+		missingTool(t, "task", err)
+	}
+	return task
 }
 
 // each returns "<id>:<task>" for every component.
