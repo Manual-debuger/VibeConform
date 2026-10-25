@@ -68,8 +68,7 @@ func resolve(t *testing.T, components []manifest.Component) map[string]resource.
 
 // TestComponentTaskfilesMatchSingleLanguage is the drift alarm between a
 // component's Taskfile and its single-language standard's (spec 0025): a
-// task both define runs the same commands, and fmt:changed runs exactly
-// what the single-language hook:format does.
+// task both define runs the same commands, fmt:changed included.
 func TestComponentTaskfilesMatchSingleLanguage(t *testing.T) {
 	for p, prof := range profiles {
 		t.Run(string(p), func(t *testing.T) {
@@ -82,9 +81,6 @@ func TestComponentTaskfilesMatchSingleLanguage(t *testing.T) {
 
 			for name, task := range component.Tasks {
 				want, ok := single.Tasks[name]
-				if name == "fmt:changed" {
-					want, ok = single.Tasks["hook:format"]
-				}
 				if !ok {
 					t.Errorf("component task %s has no single-language counterpart", name)
 					continue

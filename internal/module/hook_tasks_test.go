@@ -16,9 +16,12 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/Manual-debuger/VibeConform/internal/module/internal/hooktest"
 )
 
 func TestMain(m *testing.M) {
+	hooktest.Main()
 	// A git hook running the suite, such as pre-push in a linked worktree,
 	// exports GIT_DIR. Every git the tests start would then use this
 	// repository instead of the one in its temp directory.
@@ -120,12 +123,17 @@ var pathspec = regexp.MustCompile(`'(\*\.[a-z]+)'`)
 // (tracked changes relative to the Taskfile's directory, plus untracked
 // files git doesn't ignore), the list is NUL-separated so paths with spaces
 // survive, an empty list runs nothing (GNU xargs would otherwise run the
-// formatter with no arguments), and every tool failure is exit 2.
+// formatter with no arguments), and every tool failure is exit 2. The list
+// and the formatters are fmt:changed's, which hook:format runs as a task
+// process of its own, started in the Taskfile's directory (#129).
 func TestHookFormatScope(t *testing.T) {
 	for _, path := range repoToolingTaskfiles {
 		t.Run(path, func(t *testing.T) {
 			_, tf := readTaskfile(t, path)
-			script := hookScript(t, tf, "hook:format")
+			if got, want := hookScript(t, tf, "hook:format"), "task -s fmt:changed || exit 2"; got != want {
+				t.Errorf("hook:format runs %q, want %q", got, want)
+			}
+			script := hookScript(t, tf, "fmt:changed")
 
 			for _, want := range []string{
 				"git diff -z --relative --name-only --diff-filter=d HEAD --",
@@ -133,7 +141,7 @@ func TestHookFormatScope(t *testing.T) {
 				`[ -n "$(list)" ] || exit 0`,
 			} {
 				if !strings.Contains(script, want) {
-					t.Errorf("hook:format does not contain %q", want)
+					t.Errorf("fmt:changed does not contain %q", want)
 				}
 			}
 
@@ -154,7 +162,7 @@ func TestHookFormatScope(t *testing.T) {
 				}
 			}
 			if selectors != 2 {
-				t.Errorf("hook:format has %d git file selectors, want 2 (changed and untracked)", selectors)
+				t.Errorf("fmt:changed has %d git file selectors, want 2 (changed and untracked)", selectors)
 			}
 
 			runs := 0
@@ -172,7 +180,7 @@ func TestHookFormatScope(t *testing.T) {
 				}
 			}
 			if runs == 0 {
-				t.Error("hook:format runs no tool")
+				t.Error("fmt:changed runs no tool")
 			}
 		})
 	}
@@ -707,7 +715,7 @@ func TestHookFormatGo(t *testing.T) {
 		t.Skip("goimports not on PATH")
 	}
 	dir := t.TempDir()
-	hookTaskfile(t, dir, "repotooling/templates/Taskfile.yml", "hook:format", nil)
+	hookTaskfile(t, dir, "repotooling/templates/Taskfile.yml", "hook:format", templateTasks(t, "repotooling/templates/Taskfile.yml", "fmt:changed"))
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module scratch\n\ngo 1.24\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -748,7 +756,7 @@ func TestHookFormatGo(t *testing.T) {
 	// untracked files; they must still be formatted.
 	t.Run("no commits yet", func(t *testing.T) {
 		dir := t.TempDir()
-		hookTaskfile(t, dir, "repotooling/templates/Taskfile.yml", "hook:format", nil)
+		hookTaskfile(t, dir, "repotooling/templates/Taskfile.yml", "hook:format", templateTasks(t, "repotooling/templates/Taskfile.yml", "fmt:changed"))
 		// #nosec G204 -- fixed arguments
 		init := exec.Command("git", "init", "-q", "-b", "main")
 		init.Dir = dir
@@ -772,6 +780,60 @@ func TestHookFormatGo(t *testing.T) {
 	})
 }
 
+// TestHookFormatFromSubdirectory is #129: an agent whose working directory
+// is a subdirectory of the repository runs hook:format from there, and
+// every changed file must reach the formatter as a path it can open. Task's
+// built-in xargs, the default on Windows, starts its command in the task
+// process's directory, not in the script's; TASK_CORE_UTILS=1 makes it the
+// one used on every platform. Stubs stand in for the formatters
+// (hooktest), so all three standards run without the real tools.
+func TestHookFormatFromSubdirectory(t *testing.T) {
+	task := taskOnPath(t)
+	for _, path := range repoToolingTaskfiles {
+		t.Run(path, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.FromSlash(path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "Taskfile.yml"), data, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			sub := filepath.Join(dir, "internal", "pkg")
+			if err := os.MkdirAll(sub, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			ext := strings.TrimPrefix(formatExtensions[path][0], "*")
+			changed, added := filepath.Join(sub, "a"+ext), filepath.Join(sub, "b c"+ext)
+			if err := os.WriteFile(changed, []byte("1\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			gitRepo(t, dir)
+			for _, file := range []string{changed, added} {
+				if err := os.WriteFile(file, []byte("2\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			log := hooktest.Install(t, "goimports", "gofmt", "uv", "pnpm")
+			t.Setenv("TASK_CORE_UTILS", "1")
+			code, stdout, stderr := runTask(t, task, sub, "hook:format")
+			if code != 0 {
+				t.Fatalf("exit %d; stderr: %s", code, stderr)
+			}
+			if stdout != "" {
+				t.Errorf("stdout = %q; agents parse stdout on exit 0", stdout)
+			}
+			got := hooktest.Formatted(t, log)
+			for _, file := range []string{changed, added} {
+				if !slices.Contains(got, hooktest.Resolve(t, file)) {
+					t.Errorf("%s was not formatted; the formatters got %q", file, got)
+				}
+			}
+		})
+	}
+}
+
 // formatSamples are, per standard, an unformatted file and what the
 // formatter makes of it, for TestHookFormatEndToEnd.
 var formatSamples = map[string]struct{ name, before, after string }{
@@ -784,8 +846,11 @@ var formatSamples = map[string]struct{ name, before, after string }{
 // TestHookFormatEndToEnd runs hook:format through the real Taskfile of a
 // synced repository, when VIBE_HOOKS_E2E_DIR names one and
 // VIBE_HOOKS_E2E_LANG says which standard it is on. It writes one untracked
-// file there and removes it afterwards. .github/workflows/hook-guard.yml
-// sets both for each standard, on Linux and Windows.
+// file there and removes it afterwards, then does the same in a new
+// subdirectory, running hook:format from that subdirectory through Task's
+// built-in xargs (#129, TestHookFormatFromSubdirectory).
+// .github/workflows/hook-guard.yml sets both for each standard, on Linux
+// and Windows.
 func TestHookFormatEndToEnd(t *testing.T) {
 	dir := os.Getenv("VIBE_HOOKS_E2E_DIR")
 	if dir == "" {
@@ -799,24 +864,38 @@ func TestHookFormatEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VIBE_HOOKS_E2E_DIR is set but task is not on PATH: %v", err)
 	}
-	file := filepath.Join(dir, sample.name)
-	if err := os.WriteFile(file, []byte(sample.before), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Remove(file) })
 
-	code, stdout, stderr := runTask(t, task, dir, "hook:format")
-	if code != 0 {
-		t.Fatalf("exit %d; stderr: %s", code, stderr)
+	format := func(t *testing.T, from string) {
+		t.Helper()
+		file := filepath.Join(from, sample.name)
+		if err := os.WriteFile(file, []byte(sample.before), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Remove(file) })
+
+		code, stdout, stderr := runTask(t, task, from, "hook:format")
+		if code != 0 {
+			t.Fatalf("exit %d; stderr: %s", code, stderr)
+		}
+		if stdout != "" {
+			t.Errorf("stdout = %q; agents parse stdout on exit 0", stdout)
+		}
+		got, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != sample.after {
+			t.Errorf("formatted file = %q, want %q", got, sample.after)
+		}
 	}
-	if stdout != "" {
-		t.Errorf("stdout = %q; agents parse stdout on exit 0", stdout)
-	}
-	got, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != sample.after {
-		t.Errorf("formatted file = %q, want %q", got, sample.after)
-	}
+	t.Run("root", func(t *testing.T) { format(t, dir) })
+	t.Run("subdirectory", func(t *testing.T) {
+		sub := filepath.Join(dir, "zz_hook_format_e2e")
+		if err := os.Mkdir(sub, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Remove(sub) })
+		t.Setenv("TASK_CORE_UTILS", "1")
+		format(t, sub)
+	})
 }
