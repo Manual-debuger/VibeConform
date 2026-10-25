@@ -1,6 +1,6 @@
 # Spec 0014: M2 — hook registration, tool warnings, TypeScript/Python
 
-Status: accepted and implemented.
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented.
 
 One spec for the whole milestone rather than a spec/plan pair per
 increment, as M1 used. The three increments below are small and share one

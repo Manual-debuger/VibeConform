@@ -1,6 +1,6 @@
 # Spec 0041: A `vibeconform` skill for adopter agents
 
-Status: approved 2026-10-05. Addresses part of #50 (skills for other
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: approved 2026-10-05. Addresses part of #50 (skills for other
 harnesses), for this one skill only. AGENTS.md and CLAUDE.md are not
 changed.
 

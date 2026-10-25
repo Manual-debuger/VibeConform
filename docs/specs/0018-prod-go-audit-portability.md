@@ -1,6 +1,6 @@
 # Spec 0018: Make `prod-go/v1`'s `task audit` work outside this repository
 
-Status: accepted. Implementation plan: `docs/plans/0018-prod-go-audit-portability.md`.
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted. Implementation plan: `docs/plans/0018-prod-go-audit-portability.md`.
 
 Closes issue #20.
 

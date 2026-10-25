@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted. Implemented per `docs/specs/0036-lefthook-local-extension.md`.
 Applies ADR 0009's seam to `lefthook.yml`.
 

@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted. Implemented per `docs/specs/0039-doctor-paths-graphify-coexistence.md`
 (issue #56). Amends ADR 0016.
 

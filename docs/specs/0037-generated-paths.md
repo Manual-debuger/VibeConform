@@ -1,6 +1,6 @@
 # Spec 0037: Declared Generated-Code Paths
 
-Status: accepted and implemented (ADR 0018). Revised after the plan's
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented (ADR 0018). Revised after the plan's
 step-0 probe: the grammar admits `**` but no single `*` (§2, A1). Builds on spec 0025 (`prod-mono/v1`), ADR 0012
 (`components:`), spec 0029 / ADR 0014 (managed sections) and spec 0026
 §10 (Prettier exclusions for owned editor files).

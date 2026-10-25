@@ -1,6 +1,6 @@
 # Spec 0034: Adopting an Existing Docs Layout
 
-Status: accepted and implemented. Tracks issue #49 ("Adopting an existing
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented. Tracks issue #49 ("Adopting an existing
 docs layout"). Extends spec 0030 §4 and spec 0033.
 
 ## Problem
