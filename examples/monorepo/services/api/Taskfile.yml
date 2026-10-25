@@ -1,10 +1,9 @@
 version: "3"
 
-# A Go component of a prod-mono/v1 repository. The root Taskfile.yml
-# includes this file under the component's id, so "task <id>:test" at the
-# root runs "task test" here; "task verify" works from this directory too.
-# Every command is prod-go/v1's, run from the component instead of the
-# repository root. See docs/specs/0025-prod-mono.md.
+# A Go component of a monorepo; copy it to <component path>/Taskfile.yml.
+# The root Taskfile.yml includes this file under the component's id, so
+# "task <id>:test" at the root runs "task test" here; "task verify" works
+# from this directory too.
 
 tasks:
   fmt:
@@ -18,27 +17,6 @@ tasks:
     cmds:
       - test -z "$(gofmt -l .)"
       - test -z "$(goimports -l .)"
-
-  # What the agents' hook:format runs after each edit (spec 0023): only the
-  # files git reports as changed or new in this component. NUL-separated
-  # names keep paths with spaces intact, and the list is checked first
-  # because GNU xargs runs its command even with no input. Run it from
-  # this directory, as the root's hook:format does: Task's built-in xargs,
-  # which Windows uses, starts the formatter in the directory task was
-  # started from, not in this one, so through the root's include ("task
-  # <id>:fmt:changed") or from a subdirectory the paths do not resolve.
-  fmt:changed:
-    desc: Format only this component's changed and untracked Go files.
-    silent: true
-    cmds:
-      - |
-        list() {
-          git diff -z --relative --name-only --diff-filter=d HEAD -- '*.go' 2>/dev/null || true
-          git ls-files -z --others --exclude-standard -- '*.go'
-        }
-        [ -n "$(list)" ] || exit 0
-        list | xargs -0 goimports -w || exit 2
-        list | xargs -0 gofmt -w || exit 2
 
   lint:
     desc: Run go vet and golangci-lint.
@@ -96,8 +74,7 @@ tasks:
 
   verify:
     desc: Verification gate for this component. Race detection needs a C
-      compiler (CGO); run "task test:race" separately if you have one — CI
-      runs it in this component's job.
+      compiler (CGO); run "task test:race" separately if you have one.
     cmds:
       - task: fmt:check
       - task: typecheck

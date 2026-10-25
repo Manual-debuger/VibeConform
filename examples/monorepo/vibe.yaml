@@ -1,24 +1,22 @@
-standard: prod-mono
-version: v1
+# vibe.yaml version 2 for a monorepo. Every component is listed with its
+# path and language; the entrypoints are repository-wide.
+contract: 1.1.0
+platforms: [linux, windows]
+agents: [claude]
 components:
-  - id: api
-    path: services/api
-    profile: go
-  - id: web
-    path: apps/web
-    profile: ts
-    # Committed generator output: not formatted or linted, still
-    # type-checked (spec 0037).
-    generated:
-      - src/contracts/**
-  - id: worker
-    path: services/worker
-    profile: py
-    generated:
-      - src/example/contracts/**
-# Two editors (listing order does not matter) and one agent.
-integrations:
-  editors: [zed, vscode]
-  agents: [claude]
-# No development: VibeConform chooses no development process, the
-# recommended setting (spec 0042).
+  - path: services/api
+    language: go
+  - path: apps/web
+    language: typescript
+  - path: services/worker
+    language: python
+entrypoints:
+  # Installs each component's dependencies in the audit's probe copy.
+  setup: task setup
+  # When CI verifies each component in a job of its own, list the
+  # commands those jobs call instead:
+  #   verify: [task api:verify, task web:verify, task worker:verify]
+  verify: task verify
+  verify-fast: task verify:fast
+  fmt: task fmt
+  fmt-check: task fmt:check

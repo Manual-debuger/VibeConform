@@ -1,8 +1,8 @@
-# Claude Code agent worktrees: each is a full checkout. ESLint and
-# Prettier skip what this file ignores (spec 0045).
-.claude/worktrees/
+# Dependencies and build output.
+node_modules/
+dist/
 
-# vibeconform:begin claude
-# Managed by VibeConform: integrations.agents claude in vibe.yaml.
+# Claude Code: personal settings, and agent worktrees, each a full
+# checkout. ESLint and Prettier skip what this file ignores.
 .claude/settings.local.json
-# vibeconform:end claude
+.claude/worktrees/
