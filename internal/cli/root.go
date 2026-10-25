@@ -32,7 +32,7 @@ func newRootCmd(version string, seams contractSeams) *cobra.Command {
 	root.AddCommand(
 		newInitCmd(seams),
 		newAuditCmd(seams),
-		newDoctorCmd(),
+		newDoctorCmd(seams),
 		newUnlockCmd(),
 	)
 	for _, name := range []string{"sync", "diff", "check"} {

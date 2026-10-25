@@ -4,23 +4,18 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
-	"io/fs"
-	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 )
 
-// fake is a scripted machine: which binaries are on PATH, and what each
-// command line prints or fails with.
+// fake is a scripted machine: which binaries are on PATH, which paths
+// exist, what each command line prints or fails with, and its bash.
 type fake struct {
 	onPath   map[string]bool
 	commands map[string]reply
 	exists   map[string]bool
-	// files maps a slash path to what Open reads from it.
-	files map[string]string
-	ran   []string
+	bashErr  error
+	ran      []string
 }
 
 type reply struct {
@@ -46,15 +41,12 @@ func (f *fake) env() Env {
 			return r.stdout, r.stderr, r.err
 		},
 		Exists: func(path string) bool { return f.exists[path] },
-		Open: func(path string) (io.ReadCloser, error) {
-			content, ok := f.files[filepath.ToSlash(path)]
-			if !ok {
-				return nil, fs.ErrNotExist
+		Bash: func() (string, error) {
+			if f.bashErr != nil {
+				return "", f.bashErr
 			}
-			return io.NopCloser(strings.NewReader(content)), nil
+			return "/bin/bash", nil
 		},
-		GOOS:   "linux",
-		GOARCH: "amd64",
 	}
 }
 
@@ -102,59 +94,6 @@ func TestGit(t *testing.T) {
 			want := Result{Status: tc.status, Name: "git", Detail: tc.detail}
 			if got != want {
 				t.Errorf("Git() = %+v, want %+v", got, want)
-			}
-		})
-	}
-}
-
-func TestTools(t *testing.T) {
-	tools := []Tool{
-		{Name: "go", Module: "repo-tooling", Why: "builds", Version: []string{"env", "GOVERSION"}},
-		{Name: "goimports", Module: "repo-tooling", Why: "task fmt"},
-		{Name: "lefthook", Module: "repo-tooling", Why: "hooks", Version: []string{"version"}},
-		{Name: "actionlint", Module: "repo-tooling", Why: "task workflows:lint", Version: []string{"-version"}},
-	}
-	f := fake{
-		onPath: map[string]bool{"go": true, "goimports": true, "lefthook": true},
-		commands: map[string]reply{
-			"go env GOVERSION": {stdout: "go1.27.0\n"},
-			"lefthook version": {err: context.DeadlineExceeded},
-		},
-	}
-	got := Tools(context.Background(), f.env(), ".", tools)
-	want := []Result{
-		{Status: Pass, Name: "go", Detail: "go1.27.0 (/bin/go)"},
-		{Status: Pass, Name: "goimports", Detail: "/bin/goimports"},
-		{Status: Warn, Name: "lefthook", Detail: "/bin/lefthook: found on PATH but did not report a version"},
-		{Status: Fail, Name: "actionlint", Detail: "not found on PATH (required by repo-tooling: task workflows:lint)"},
-	}
-	if !slices.Equal(got, want) {
-		t.Errorf("Tools() =\n%+v\nwant\n%+v", got, want)
-	}
-	if slices.Contains(f.ran, "actionlint -version") {
-		t.Error("probed the version of a binary that is not on PATH")
-	}
-}
-
-// TestToolsTaskfileLoads: task's line also says whether the Taskfile
-// loads, and a Taskfile that doesn't is a FAIL even with task installed.
-func TestToolsTaskfileLoads(t *testing.T) {
-	task := []Tool{{Name: "task", Module: "repo-tooling", Why: "everything", Version: []string{"--version"}}}
-	for _, tc := range []struct {
-		name string
-		load reply
-		want Result
-	}{
-		{"loads", reply{stdout: "task: Available tasks\n"}, Result{Status: Pass, Name: "task", Detail: "3.53.1 (/bin/task); Taskfile.yml loads"}},
-		{"broken", reply{stderr: "task: Failed to parse Taskfile.yml\n", err: errExit}, Result{Status: Fail, Name: "task", Detail: "3.53.1 (/bin/task); Taskfile.yml does not load: task: Failed to parse Taskfile.yml"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := fake{onPath: map[string]bool{"task": true}, commands: map[string]reply{
-				"task --version":  {stdout: "3.53.1\n"},
-				"task --list-all": tc.load,
-			}}
-			if got := Tools(context.Background(), f.env(), ".", task); len(got) != 1 || got[0] != tc.want {
-				t.Errorf("Tools() = %+v, want [%+v]", got, tc.want)
 			}
 		})
 	}
