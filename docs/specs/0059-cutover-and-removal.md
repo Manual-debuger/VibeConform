@@ -1,6 +1,6 @@
 # Spec 0059: Cutover to the contract audit, and removal of template sync
 
-Status: draft (2026-10-25). Issues #111 and #112, milestone "Contract v1
+Status: accepted (2026-10-25). Issues #111 and #112, milestone "Contract v1
 · Phase 4: Cutover and removal". Builds on specs 0051–0058. Carries out
 the Consequences of ADR 0025, and depends on spec 0058 landing first.
 
