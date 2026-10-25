@@ -80,11 +80,12 @@ func TestAgentGuardRuntimeUnchanged(t *testing.T) {
 }
 
 // TestReferenceStopIsRelockThenStopCommand: internal/guard's reference
-// Stop command is the relock, then this module's Stop gate unchanged, so
-// the green stamp (spec 0057) works the same with either guard.
-// internal/guard cannot import this package, so it spells the command out.
+// Stop command is the relock, then, from the project root (spec 0058),
+// this module's Stop gate unchanged, so the green stamp (spec 0057) works
+// the same with either guard. internal/guard cannot import this package,
+// so it spells the command out.
 func TestReferenceStopIsRelockThenStopCommand(t *testing.T) {
-	if want := "vibe-guard relock 2>/dev/null; " + StopCommand; guard.ReferenceStop != want {
+	if want := "vibe-guard relock 2>/dev/null; " + guard.ProjectRootPrefix + "{ " + StopCommand + "; }"; guard.ReferenceStop != want {
 		t.Errorf("guard.ReferenceStop =\n%s\nwant\n%s", guard.ReferenceStop, want)
 	}
 }
@@ -129,12 +130,23 @@ func TestAgentGuardVibeGuard(t *testing.T) {
 		stop[0].Hooks[0].Timeout != rt["Stop"][0].Hooks[0].Timeout {
 		t.Errorf("Stop = %+v, want the reference command with the template's timeout", stop)
 	}
+	// Every other hook is the template's, run from the project root (spec
+	// 0058, #133).
 	for event, entries := range rt {
 		if event == "PreToolUse" || event == "Stop" {
 			continue
 		}
-		if !reflect.DeepEqual(vg[event], entries) {
-			t.Errorf("%s hooks differ from the template", event)
+		var want []entry
+		for _, e := range entries {
+			hooks := make([]hook, len(e.Hooks))
+			for i, h := range e.Hooks {
+				h.Command = `cd "${CLAUDE_PROJECT_DIR:-.}" && ` + h.Command
+				hooks[i] = h
+			}
+			want = append(want, entry{Matcher: e.Matcher, Hooks: hooks})
+		}
+		if !reflect.DeepEqual(vg[event], want) {
+			t.Errorf("%s hooks = %+v, want the template's from the project root %+v", event, vg[event], want)
 		}
 	}
 	if len(vg) != len(rt) {
