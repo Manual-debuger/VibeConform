@@ -100,7 +100,7 @@ type Command struct {
 	Redirects []Word
 	// Writes are the paths the command writes, deletes, moves or renames
 	// (spec 0058, "Write targets come from the parser"): its output
-	// redirections, then the operands that the writers in writers.go
+	// redirections, then the operands that the writers in wrappers.go
 	// write. A word with an expansion is listed as it is; whether it
 	// counts is the reader's to decide. The contract audit does not read
 	// Writes.

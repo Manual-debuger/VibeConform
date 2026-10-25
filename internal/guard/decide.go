@@ -243,8 +243,7 @@ func (g *Guard) checkPath(rules []pathRule, p, shown string, c *gr.Command, d *D
 // D:/….
 func (g *Guard) resolve(p string) string {
 	p = strings.ReplaceAll(p, `\`, "/")
-	if len(g.Repo.Root) >= 2 && g.Repo.Root[1] == ':' && len(p) >= 2 && p[0] == '/' &&
-		(len(p) == 2 || p[2] == '/') && unicode.IsLetter(rune(p[1])) {
+	if len(g.Repo.Root) >= 2 && g.Repo.Root[1] == ':' && isGitBashDrive(p) {
 		p = strings.ToUpper(p[1:2]) + ":" + p[2:]
 	}
 	if strings.HasPrefix(p, "/") || len(p) >= 2 && p[1] == ':' {
@@ -255,6 +254,13 @@ func (g *Guard) resolve(p string) string {
 		dir = g.Repo.Root
 	}
 	return filepath.Join(dir, filepath.FromSlash(p))
+}
+
+// isGitBashDrive reports whether p starts with a Git Bash drive, such as
+// /d or /d/….
+func isGitBashDrive(p string) bool {
+	return len(p) >= 2 && p[0] == '/' && unicode.IsLetter(rune(p[1])) &&
+		(len(p) == 2 || p[2] == '/')
 }
 
 // exception returns the first exception for rule that matches.

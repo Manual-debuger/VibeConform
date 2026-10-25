@@ -140,6 +140,8 @@ func TestAgentGuardVibeGuard(t *testing.T) {
 		for _, e := range entries {
 			hooks := make([]hook, len(e.Hooks))
 			for i, h := range e.Hooks {
+				// The literal, not guard.ProjectRootPrefix: the prefix
+				// spec 0058 names, checked apart from the constant.
 				h.Command = `cd "${CLAUDE_PROJECT_DIR:-.}" && ` + h.Command
 				hooks[i] = h
 			}
