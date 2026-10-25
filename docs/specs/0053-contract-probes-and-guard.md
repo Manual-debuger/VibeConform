@@ -822,6 +822,16 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     any repository (`/repo/…`, `C:\repo\…`) became relative paths; the
     corpus gained two allow cases for files outside the repository, and
     `internal/guard` a regression test.
+  - Amended by spec 0058 (#123): shell writes are matched too.
+    `guardrail-settings` and `guard-policy-file` also check every path
+    a `Bash` or `PowerShell` command writes, deletes, moves or renames
+    (output redirections, and the operands of `tee`, `sed -i`,
+    `truncate`, `cp`, `mv`, `install`, `ln`, `rm`, `unlink`, `dd of=`
+    and the writing cmdlets), resolved against the payload's `cwd`,
+    with the same unlock and exceptions as an edit. Before, `sed -i …
+    .claude/settings.json` was allowed. The guard corpus does not
+    change (no contract change); the write forms and the gaps are in
+    `docs/usage.md`.
   - A PowerShell expression redirected to a file (`'x' > f`) is a
     redirect-only command in `internal/guardrule`, as `> f` is in Bash.
     Before, the PowerShell tokenizer skipped it.

@@ -73,9 +73,13 @@ func referenceRepo(t *testing.T, stack, provider string) map[string]string {
 type staticReport struct {
 	CIProvider string `json:"ci_provider"`
 	Rules      []struct {
-		ID       string          `json:"id"`
-		Level    contract.Level  `json:"level"`
-		Result   contract.Result `json:"result"`
+		ID     string          `json:"id"`
+		Level  contract.Level  `json:"level"`
+		Result contract.Result `json:"result"`
+		Parts  []struct {
+			Check  contract.PartKind `json:"check"`
+			Result contract.Result   `json:"result"`
+		} `json:"parts"`
 		Findings []struct {
 			File    string `json:"file"`
 			Message string `json:"message"`
@@ -115,6 +119,77 @@ func (r staticReport) findings(id string) (contract.Result, string) {
 		}
 	}
 	return "", "(no such rule)"
+}
+
+// staticPart is the result of the static part of a rule of the report.
+func (r staticReport) staticPart(id string) contract.Result {
+	for _, rule := range r.Rules {
+		if rule.ID != id {
+			continue
+		}
+		for _, p := range rule.Parts {
+			if p.Check == contract.Static {
+				return p.Result
+			}
+		}
+	}
+	return ""
+}
+
+// withStopCommand returns the files with the Stop hook of
+// .claude/settings.json replaced by one that runs command.
+func withStopCommand(t *testing.T, files map[string]string, command string) map[string]string {
+	t.Helper()
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(files[".claude/settings.json"]), &settings); err != nil {
+		t.Fatalf(".claude/settings.json: %v", err)
+	}
+	hooks, ok := settings["hooks"].(map[string]any)
+	if !ok {
+		t.Fatal(".claude/settings.json has no hooks")
+	}
+	hooks["Stop"] = []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": command}}}}
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := maps.Clone(files)
+	changed[".claude/settings.json"] = string(out) + "\n"
+	return changed
+}
+
+// TestStaticAuditReadsACdPrefixedHookCommand: the hook prefix of spec 0058
+// (#133) keeps the reference conformant. The static audit splits a hook
+// command into simple commands, so `cd "…" && task verify:fast` still
+// calls verify-fast for A-05 and a `vibe` call after the cd still counts
+// for R-01, while `task -d … verify:fast` is not the literal call A-05
+// reads (spec 0057, constraint 1).
+func TestStaticAuditReadsACdPrefixedHookCommand(t *testing.T) {
+	t.Parallel()
+	base := referenceRepo(t, "monorepo", providerGitHub)
+	cases := []struct {
+		name, command, rule string
+		want                contract.Result
+	}{
+		{"cd prefix calls verify-fast", `cd "${CLAUDE_PROJECT_DIR:-.}" && task verify:fast 1>&2 </dev/null`,
+			"A-05", contract.ResultPass},
+		{"task -d is not the literal call", `task -d "${CLAUDE_PROJECT_DIR:-.}" verify:fast 1>&2 </dev/null`,
+			"A-05", contract.ResultFail},
+		{"cd prefix with no vibe", `cd "${CLAUDE_PROJECT_DIR:-.}" && task verify:fast 1>&2 </dev/null`,
+			"R-01", contract.ResultPass},
+		{"vibe after a cd prefix is a vibe call", `cd "${CLAUDE_PROJECT_DIR:-.}" && vibe audit --static; task verify:fast`,
+			"R-01", contract.ResultFail},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			report := auditReference(t, withStopCommand(t, base, c.command))
+			if got := report.staticPart(c.rule); got != c.want {
+				_, msgs := report.findings(c.rule)
+				t.Errorf("%s static part = %q, want %q: %s", c.rule, got, c.want, msgs)
+			}
+		})
+	}
 }
 
 // gitlabDecided are the rules a GitLab reference repository must pass

@@ -59,7 +59,8 @@ Don't include yourself as contributor in commits.
   `git reset --hard`, `git push --force`, PowerShell's recursive forced
   `Remove-Item`, `git restore .`, …) in every spelling it can parse,
   edits to secret-looking files, commands it cannot parse, and edits of
-  `.claude/settings.json`, `.claude/hooks/` and the guard's policy. When
+  `.claude/settings.json`, `.claude/hooks/` and the guard's policy, by an
+  edit tool or by a shell command that writes them (spec 0058). When
   it refuses a command you need, ask the user to run it with
   `! <command>`; don't look for a spelling it misses. `vibe-guard explain
   '<command>'` says which rule matched. It is not a sandbox. Its rules are
@@ -72,7 +73,11 @@ Don't include yourself as contributor in commits.
   `vibe-guard relock` and locks again.
 - Known gaps (`docs/usage.md`, "`vibe-guard`, the reference guard"):
   `cmd /c`, `Start-Process`, shell aliases and glob expansion into
-  flag-like file names are not read.
+  flag-like file names are not read. A shell write to a guardrail file is
+  not caught when its path holds an expansion (`> "$f"`), after a `cd`
+  in the same command, through an interpreter (`python -c`, `node -e`)
+  or a program not in the listed write forms, or by `git checkout` or
+  `git restore` of a path.
 - Codex hooks are suspended (spec 0024, ADR 0011): `.codex/hooks.json` is
   generated with no hooks, so a Codex session here gets no guard and no
   `Stop` gate. Apply the same rules by judgment.

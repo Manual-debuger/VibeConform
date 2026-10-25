@@ -2941,7 +2941,9 @@ doesn't know are dangerous here:
 - **An agent cannot edit it.** The `guard-policy-file` rule refuses an
   agent's Edit or Write of `policy.json` and `policy.local.json`, so an
   agent the guard stops cannot write itself an exception; you edit the
-  file yourself. A write through the shell is not caught.
+  file yourself. A write through the shell is not caught by this guard;
+  `vibe-guard` catches the common spellings (below, "Shell writes to
+  these files").
 - **`vibe audit` lists every exception and extra rule**, failing nothing,
   so a reviewer sees each place the guard was weakened:
 
@@ -3151,6 +3153,45 @@ of `.claude/settings.json` or of anything under `.claude/hooks/` is
 refused unless you unlocked it. `policy.json` stays refused even then.
 Always refused: an agent's `vibe unlock`, and any command or edit that
 names the `vibe-unlock` marker.
+
+**Shell writes to these files** (spec 0058). `guard-policy-file` and
+`guardrail-settings` also check every path a `Bash` or `PowerShell`
+command writes, deletes, moves or renames, with the decision and the
+exceptions an edit of that path gets: refused, or allowed while you
+unlocked the settings and hooks (never `policy.json`). A command writes
+a path when the path is:
+
+- the target of an output redirection: `>`, `>>`, `>|`, `&>`, `&>>`,
+  `n>`, `n>>`, `>&file`, and PowerShell's `>`, `>>`, `n>`, `*>`. An
+  input redirection (`<`) is a read.
+- a file operand of `tee`, of `sed -i`/`--in-place` (any suffix), or of
+  `truncate`;
+- the destination of `cp`, `mv`, `install` or `ln` (the last operand, or
+  the directory after `-t`/`--target-directory`), and the source of `mv`.
+  A destination may be a directory, so the source's name inside it
+  counts too: `cp backup/settings.json .claude/` writes
+  `.claude/settings.json`;
+- an operand of `rm` or `unlink`, or `dd`'s `of=`;
+- in PowerShell, the `-Path`, `-LiteralPath`, `-FilePath` or first
+  positional argument of `Set-Content`, `Add-Content`, `Out-File`,
+  `Clear-Content`, `Remove-Item`, `Rename-Item` (and the new name),
+  `New-Item` (and `-Name`) and `Tee-Object`; the `-Destination` (or
+  second positional argument) of `Copy-Item` and `Move-Item`, and
+  `Move-Item`'s source. `rm`, `cp`, `mv` and `tee` are read as the
+  cmdlet and as the program;
+- any of these found through a wrapper or a nested shell (`sudo`, `env`,
+  `xargs`, `find -exec`, `bash -c`, `pwsh -c`, …).
+
+A relative path is resolved against the payload's `cwd` (for `explain`,
+against the root), and Git Bash's `/d/…` is read as `D:/…`. A read
+(`cat`, `jq . <`, `Get-Content`) is allowed, and so is a write to any
+other file: `secret-file` stays an edit rule, so `cp .env.example .env`
+runs. `explain` shows the rule, the matched path and the simple command
+that writes it. **Not caught** (the agent guard is not a security
+boundary): a written path that holds an expansion (`> "$f"`), a `cd`
+earlier in the same command, writes made by an interpreter (`python -c`,
+`node -e`, …) or by any program not listed above, and `git checkout` or
+`git restore` of a path.
 
 ### `vibe unlock`
 
