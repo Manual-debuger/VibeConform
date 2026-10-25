@@ -118,7 +118,10 @@ how the agent spells a call or where it runs it:
    then resolves the root Taskfile and runs the root tasks, whatever
    the agent's current directory. The guard command does not need the
    prefix, because `vibe-guard` finds the root itself, but it may have
-   it.
+   it. The Stop command may run `vibe-guard relock` before the prefix,
+   so that the relock runs even when the `cd` fails, and puts the gate
+   in one group after the prefix: `vibe-guard relock 2>/dev/null; cd
+   "${CLAUDE_PROJECT_DIR:-.}" && { … }`.
 9. The Stop command keeps `task verify:fast 1>&2 </dev/null` as one
    simple command, so A-05's static part still finds it. The block-once
    behavior and the green stamp of spec 0057 do not change.
