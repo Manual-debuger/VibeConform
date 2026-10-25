@@ -114,7 +114,7 @@ func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) err
 	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) // #nosec G302 G304 -- vibe.yaml at the operator's repository root
 	if err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			return refuseExisting(file)
+			return createRefused(file)
 		}
 		return fmt.Errorf("init: %w", err)
 	}
@@ -154,6 +154,16 @@ func refuseExisting(file string) error {
 			configFileName, migrationPointer())
 	}
 	return fmt.Errorf("init: %s exists; vibe init does not overwrite it. Edit it, or remove it and run vibe init again", configFileName)
+}
+
+// createRefused is the error when the exclusive create of file found one.
+// It is never nil: a file that is gone again by the time init reads it
+// still means init wrote nothing.
+func createRefused(file string) error {
+	if err := refuseExisting(file); err != nil {
+		return err
+	}
+	return fmt.Errorf("init: %s appeared while vibe init ran and is gone again; nothing was written. Run vibe init again", configFileName)
 }
 
 // initDepth is how many directories below the root vibe init looks for a

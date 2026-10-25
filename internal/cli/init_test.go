@@ -175,6 +175,21 @@ func TestInitRefusesAnExistingConfig(t *testing.T) {
 	}
 }
 
+// TestInitRaceLostIsAnError: when the exclusive create finds a vibe.yaml
+// that is gone again by the time init reads it, init wrote nothing and
+// must say so with an error, not exit 0 (regression: refuseExisting
+// returned nil for a missing file).
+func TestInitRaceLostIsAnError(t *testing.T) {
+	t.Parallel()
+	err := createRefused(filepath.Join(t.TempDir(), "vibe.yaml"))
+	if code := ExitCode(err); code != exitError {
+		t.Fatalf("exit %d, want %d: %v", code, exitError, err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "nothing was written") {
+		t.Errorf("error = %v, want one saying nothing was written", err)
+	}
+}
+
 // TestInitNeedsAComponent: with no manifest in the tracked files, vibe
 // init says what it looked for and writes nothing, since the audit could
 // not read a vibe.yaml without components.
