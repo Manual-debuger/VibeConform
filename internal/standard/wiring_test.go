@@ -289,7 +289,8 @@ func TestAgentHooksFollowClaude(t *testing.T) {
 // hook:guard nor guard.go is resolved. The other standards do not offer
 // the key.
 func TestVibeGuardWiring(t *testing.T) {
-	taskCall := regexp.MustCompile(`task (?:-x )?(\S+)`)
+	// A task name ends at a space or at the ; that closes a { …; } group.
+	taskCall := regexp.MustCompile(`task (?:-x )?([^\s;]+)`)
 	for k, s := range registry {
 		t.Run(k.name+"/"+k.version, func(t *testing.T) {
 			v := module.AgentGuardVibeGuard
