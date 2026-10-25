@@ -97,8 +97,6 @@ Don't include yourself as contributor in commits.
 These are guardrails, not a complete enforcement boundary — apply the same
 judgment regardless of which agent runtime is in use.
 
-<!-- vibeconform:begin workflow -->
-
 ## Repository workflow
 
 Managed by VibeConform from `development:` in `vibe.yaml`. This section
@@ -131,5 +129,3 @@ Verification:
   done. Do not weaken a test, lint or type check to make a change pass.
 - Finish with a ledger, one line per check: PASS, FAIL or UNVERIFIED.
   Unit tests, CI and a real integration are separate lines.
-
-<!-- vibeconform:end workflow -->
