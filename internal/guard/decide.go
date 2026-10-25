@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	gr "github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
@@ -78,6 +79,9 @@ type Guard struct {
 	PolicyErr error
 	// Now is the time an unlock marker is compared with.
 	Now time.Time
+	// Dir is the directory a relative path that a command writes is
+	// resolved against: the payload's cwd. When it is "", the root is.
+	Dir string
 }
 
 // New loads the guard of the repository at repo.
@@ -155,6 +159,19 @@ func (g *Guard) decideCommand(t gr.Target) Decision {
 			d.Outcome, d.Finding = Deny, &f
 			return d
 		}
+		// The paths the command writes get the guardrail path rules (spec
+		// 0058). A word with an expansion is not a written path: what it
+		// names is not known, and refusing it would refuse common scripts.
+		for _, w := range c.Writes {
+			if !w.Literal {
+				continue
+			}
+			p := g.resolve(w.Text)
+			if f := g.checkPath(shellWriteRules, p, gr.RelPath(g.Repo.Root, p), c, &d); f != nil {
+				d.Outcome, d.Finding = Deny, f
+				return d
+			}
+		}
 		for _, r := range g.Policy.Rules {
 			if r.Command == "" || !r.AppliesTo(t.Tool) || !r.MatchesCommand(*c) {
 				continue
@@ -177,17 +194,8 @@ func (g *Guard) decideCommand(t gr.Target) Decision {
 
 func (g *Guard) decidePath(t gr.Target) Decision {
 	var d Decision
-	for _, r := range pathRules {
-		if !r.match(g, t.Path) {
-			continue
-		}
-		f := Finding{Rule: r.id, Why: r.why, Path: t.Path}
-		if e := g.exception(r.id, func(e gr.Exception) bool { return e.MatchesPath(t.Path, g.Repo.Root) }); e != nil && !r.fixed {
-			f.Exception = e
-			d.Lifted = append(d.Lifted, f)
-			continue
-		}
-		d.Outcome, d.Finding = Deny, &f
+	if f := g.checkPath(pathRules, t.Path, t.Path, nil, &d); f != nil {
+		d.Outcome, d.Finding = Deny, f
 		return d
 	}
 	var ask *Finding
@@ -208,6 +216,45 @@ func (g *Guard) decidePath(t gr.Target) Decision {
 		d.Outcome, d.Finding = Ask, ask
 	}
 	return d
+}
+
+// checkPath checks the path p against rules, in order, and returns the
+// first refusal. A rule an exception lifts is added to d.Lifted. shown is
+// the path a finding names; c is the command that writes p, or nil for
+// an edit.
+func (g *Guard) checkPath(rules []pathRule, p, shown string, c *gr.Command, d *Decision) *Finding {
+	for _, r := range rules {
+		if !r.match(g, p) {
+			continue
+		}
+		f := Finding{Rule: r.id, Why: r.why, Path: shown, Command: c}
+		if e := g.exception(r.id, func(e gr.Exception) bool { return e.MatchesPath(p, g.Repo.Root) }); e != nil && !r.fixed {
+			f.Exception = e
+			d.Lifted = append(d.Lifted, f)
+			continue
+		}
+		return &f
+	}
+	return nil
+}
+
+// resolve makes a path a command writes absolute: against Dir, or the
+// root (spec 0058, "Path resolution"). On Windows, Git Bash's /d/… is
+// D:/….
+func (g *Guard) resolve(p string) string {
+	p = strings.ReplaceAll(p, `\`, "/")
+	if len(g.Repo.Root) >= 2 && g.Repo.Root[1] == ':' && len(p) >= 2 && p[0] == '/' &&
+		(len(p) == 2 || p[2] == '/') && unicode.IsLetter(rune(p[1])) {
+		p = strings.ToUpper(p[1:2]) + ":" + p[2:]
+	}
+	if strings.HasPrefix(p, "/") || len(p) >= 2 && p[1] == ':' {
+		return p
+	}
+	dir := g.Dir
+	if dir == "" {
+		dir = g.Repo.Root
+	}
+	return filepath.Join(dir, filepath.FromSlash(p))
 }
 
 // exception returns the first exception for rule that matches.
