@@ -30,7 +30,7 @@ func newRootCmd(version string, seams contractSeams) *cobra.Command {
 	root.SetVersionTemplate("vibe version {{.Version}} (contract " + contract.Implemented + ")\n")
 
 	root.AddCommand(
-		newInitCmd(),
+		newInitCmd(seams),
 		newAuditCmd(seams),
 		newDoctorCmd(),
 		newUnlockCmd(),
