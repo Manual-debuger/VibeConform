@@ -3,17 +3,12 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/Manual-debuger/VibeConform/internal/manifest"
 	"github.com/Manual-debuger/VibeConform/internal/setupskill"
 )
-
-const manifestFileName = "vibe.yaml"
 
 func newInitCmd() *cobra.Command {
 	var (
@@ -22,60 +17,23 @@ func newInitCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "init <standard> <version> | init --skill",
-		Short: "Write a vibe.yaml desired-state declaration, or the setup skill, for a repository",
-		Long: "vibe init <standard> <version> writes a vibe.yaml for the template-sync system.\n\n" +
-			"vibe init --skill writes the setup skill, " + setupskill.Name + ", to " +
+		Use:   "init --skill",
+		Short: "Write the setup skill into a repository",
+		Long: "vibe init --skill writes the setup skill, " + setupskill.Name + ", to " +
 			strings.Join(setupskill.Dirs, " and ") + ",\n" +
 			"replacing its files and removing files it no longer has. It writes nothing else.",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if skill {
-				if len(args) != 0 {
-					return fmt.Errorf("init --skill takes no arguments, got %d", len(args))
-				}
-				return nil
-			}
-			return cobra.ExactArgs(2)(cmd, args)
-		},
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if skill {
-				return runInitSkill(cmd, repoRoot)
+			if !skill {
+				return errors.New("init: only vibe init --skill is available")
 			}
-			return runInit(cmd, repoRoot, args[0], args[1])
+			return runInitSkill(cmd, repoRoot)
 		},
 	}
 	cmd.Flags().StringVar(&repoRoot, "repo-root", ".", "repository root to initialize")
-	cmd.Flags().BoolVar(&skill, "skill", false, "write the setup skill ("+setupskill.Name+") instead of vibe.yaml")
+	cmd.Flags().BoolVar(&skill, "skill", false, "write the setup skill ("+setupskill.Name+")")
 
 	return cmd
-}
-
-func runInit(cmd *cobra.Command, repoRoot, standard, version string) error {
-	m, err := manifest.New(standard, version)
-	if err != nil {
-		return fmt.Errorf("init: %w", err)
-	}
-
-	path := filepath.Join(repoRoot, manifestFileName)
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("init: %s already exists", path)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("init: %w", err)
-	}
-
-	data, err := m.Marshal()
-	if err != nil {
-		return fmt.Errorf("init: %w", err)
-	}
-
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		return fmt.Errorf("init: write %s: %w", path, err)
-	}
-
-	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "wrote %s (standard=%s version=%s)\n", path, standard, version); err != nil {
-		return fmt.Errorf("init: %w", err)
-	}
-	return nil
 }
 
 // runInitSkill writes the setup skill into the repository (spec 0054,
