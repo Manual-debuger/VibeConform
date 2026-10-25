@@ -15,13 +15,13 @@ import (
 
 // runInit runs vibe init in dir with the audit's repository seam, so that
 // a fixture built without git lists its files the same way for both.
-func runInit(t *testing.T, dir string, args ...string) (string, error) {
+func runInit(t *testing.T, dir string) (string, error) {
 	t.Helper()
 	root := newRootCmd("test", contractSeams{openRepo: openFixtureRepo})
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)
-	root.SetArgs(append([]string{"init", "--repo-root", dir}, args...))
+	root.SetArgs([]string{"init", "--repo-root", dir})
 	err := root.Execute()
 	return out.String(), err
 }
