@@ -230,13 +230,14 @@ func (r hookRepo) run(t *testing.T, bash, dir, command string, payload map[strin
 
 // hookShell is the bash a hook runs in here: Git Bash on Windows, as
 // Claude Code uses it there, found next to git when the bash on PATH is
-// WSL's. It skips without bash or Task, unless VIBE_HOOKS_E2E is set.
+// WSL's. It skips without bash or Task, unless VIBE_HOOKS_E2E or CI is
+// set: in CI a skip would hide the Windows run spec 0058 asks for.
 func hookShell(t *testing.T) string {
 	t.Helper()
 	missing := func(name string, err error) {
 		t.Helper()
-		if os.Getenv("VIBE_HOOKS_E2E") != "" {
-			t.Fatalf("VIBE_HOOKS_E2E is set but %s is not found: %v", name, err)
+		if os.Getenv("VIBE_HOOKS_E2E") != "" || os.Getenv("CI") != "" {
+			t.Fatalf("VIBE_HOOKS_E2E or CI is set but %s is not found: %v", name, err)
 		}
 		t.Skipf("%s not found (%v); task test in CI runs this", name, err)
 	}
@@ -244,16 +245,24 @@ func hookShell(t *testing.T) string {
 		missing("task", err)
 	}
 	if runtime.GOOS == "windows" {
-		// Git for Windows: <root>\cmd\git.exe and <root>\bin\bash.exe.
+		// Git for Windows keeps <root>\bin\bash.exe, and git.exe in
+		// <root>\cmd, <root>\bin or <root>\mingw64\bin: which one is on
+		// PATH depends on the shell the test starts from.
 		git, err := exec.LookPath("git")
 		if err != nil {
 			missing("git", err)
 		}
-		bash := filepath.Join(filepath.Dir(filepath.Dir(git)), "bin", "bash.exe")
-		if _, err := os.Stat(bash); err != nil {
-			missing("Git Bash", err)
+		for dir := filepath.Dir(filepath.Dir(git)); ; dir = filepath.Dir(dir) {
+			bash := filepath.Join(dir, "bin", "bash.exe")
+			if _, err := os.Stat(bash); err == nil {
+				return bash
+			}
+			if filepath.Dir(dir) == dir {
+				break
+			}
 		}
-		return bash
+		missing("Git Bash", errors.New("no bin/bash.exe above "+git))
+		return ""
 	}
 	bash, err := exec.LookPath("bash")
 	if err != nil {
