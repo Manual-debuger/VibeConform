@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted. Implemented by `internal/module/ci/github/templates/ci.yml`'s
 `conformance` job, per `docs/specs/0018-prod-go-audit-portability.md`.
 Nothing enforces this rule in code — like ADR 0007's tag naming, it governs

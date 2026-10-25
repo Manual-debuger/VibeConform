@@ -6,6 +6,10 @@ Accepted. Implemented by `internal/module/agents/claude` (`claude-config`)
 and `internal/module/agents/codex` (`codex-config`), per
 `docs/specs/0024-claude-first-agent-modules.md`.
 
+Note (spec 0059): `internal/module/agents` is gone; Codex hooks stay
+suspended in this repository's own `.codex/hooks.json`, an ordinary file
+now, and the setup skill's references cover Claude Code only.
+
 ## Context
 
 Spec 0012 created one `agent-config` module for Claude Code and Codex,

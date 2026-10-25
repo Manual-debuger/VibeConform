@@ -1,6 +1,6 @@
 # Spec 0024: Claude First, One Module per Agent, Codex Hooks Suspended
 
-Status: implemented (2026-09-24), with the proposed answer to both open
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: implemented (2026-09-24), with the proposed answer to both open
 questions: keep composing `codex-config`, and nest the packages. See
 `docs/plans/0024-claude-first-agent-modules.md` for the verification
 record.
