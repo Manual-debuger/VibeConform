@@ -19,10 +19,10 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/module/monorepotooling"
 )
 
-// hookCheckSources are every Taskfile that defines hook:check: the three
-// single-language templates, the monorepo root as vibe sync renders it,
-// and the setup skill's four reference Taskfiles. Each returns the
-// Taskfile's bytes.
+// hookCheckSources are every template Taskfile that defines hook:check:
+// the three single-language templates and the monorepo root as vibe sync
+// renders it. Each returns the Taskfile's bytes. The setup skill's
+// reference Taskfiles are tested in internal/setupskill (spec 0059).
 var hookCheckSources = map[string]func(t *testing.T) []byte{
 	"repotooling/templates/Taskfile.yml":   readSource("repotooling/templates/Taskfile.yml"),
 	"tsrepotooling/templates/Taskfile.yml": readSource("tsrepotooling/templates/Taskfile.yml"),
@@ -45,10 +45,6 @@ var hookCheckSources = map[string]func(t *testing.T) []byte{
 		t.Fatal("the monorepo module writes no root Taskfile.yml")
 		return nil
 	},
-	"setupskill/reference/go":         readSource("../setupskill/skill/reference/taskrunner/go/Taskfile.yml"),
-	"setupskill/reference/typescript": readSource("../setupskill/skill/reference/taskrunner/typescript/Taskfile.yml"),
-	"setupskill/reference/python":     readSource("../setupskill/skill/reference/taskrunner/python/Taskfile.yml"),
-	"setupskill/reference/monorepo":   readSource("../setupskill/skill/reference/taskrunner/monorepo/Taskfile.yml"),
 }
 
 func readSource(path string) func(t *testing.T) []byte {
