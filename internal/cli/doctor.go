@@ -40,10 +40,7 @@ func newDoctorCmd(seams contractSeams) *cobra.Command {
 // here. A configuration the audit would not read stops the checks that
 // need it, with the audit's own message.
 func runDoctor(cmd *cobra.Command, repoRoot string, seams contractSeams) error {
-	ctx := cmd.Context()
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx := commandContext(cmd)
 	env := doctorEnv()
 	var report doctor.Report
 
@@ -77,11 +74,7 @@ func readDoctorConfig(ctx context.Context, repoRoot string, seams contractSeams)
 	if err != nil {
 		return nil, nil, err
 	}
-	openRepo := contract.OpenRepo
-	if seams.openRepo != nil {
-		openRepo = seams.openRepo
-	}
-	repo, err := openRepo(ctx, repoRoot)
+	repo, err := seams.open(ctx, repoRoot)
 	if err != nil {
 		return nil, nil, err
 	}

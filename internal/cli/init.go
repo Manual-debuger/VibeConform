@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -79,15 +78,7 @@ func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) err
 	if err := refuseExisting(file); err != nil {
 		return err
 	}
-	ctx := cmd.Context()
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	openRepo := contract.OpenRepo
-	if seams.openRepo != nil {
-		openRepo = seams.openRepo
-	}
-	repo, err := openRepo(ctx, repoRoot)
+	repo, err := seams.open(commandContext(cmd), repoRoot)
 	if err != nil {
 		return fmt.Errorf("init: %w", err)
 	}
@@ -98,16 +89,19 @@ func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) err
 			"commit the project's manifest and run vibe init again", initDepth)
 	}
 
-	data := renderConfig(components, false)
-	cfg, err := contract.Parse(configFileName, data, repo)
-	if err != nil || !slices.Equal(cfg.Components, components) {
-		// The audit detects the root's language only from a single root
-		// manifest, so a root component it would read otherwise is
-		// declared.
-		data = renderConfig(components, true)
-		if _, err := contract.Parse(configFileName, data, repo); err != nil {
-			return fmt.Errorf("init: the vibe.yaml it would write does not parse, which is a bug in vibe: %w", err)
+	data := renderConfig(components)
+	if len(components) == 1 && components[0].Path == "." {
+		// A single root component goes without a components key when the
+		// audit detects the same one. It detects the root's language only
+		// from a single root manifest, so a root it would read otherwise
+		// stays declared.
+		implicit := renderConfig(nil)
+		if cfg, err := contract.Parse(configFileName, implicit, repo); err == nil && slices.Equal(cfg.Components, components) {
+			data = implicit
 		}
+	}
+	if _, err := contract.Parse(configFileName, data, repo); err != nil {
+		return fmt.Errorf("init: the vibe.yaml it would write does not parse, which is a bug in vibe: %w", err)
 	}
 
 	// O_EXCL: a vibe.yaml that appeared since the check is not overwritten.
@@ -265,16 +259,17 @@ func insideDir(dir, parent string) bool {
 	return strings.HasPrefix(dir, parent+"/")
 }
 
-// renderConfig writes the vibe.yaml vibe init writes. A single component
-// at the root goes without a components key unless declare is set.
-func renderConfig(components []contract.Component, declare bool) []byte {
+// renderConfig writes the vibe.yaml vibe init writes, declaring
+// components. With none it writes no components key, so the audit
+// detects the root component.
+func renderConfig(components []contract.Component) []byte {
 	var b strings.Builder
 	b.WriteString("# vibe.yaml version 2, written by vibe init. vibe audit reads it and\n")
 	b.WriteString("# checks the repository against the VibeConform contract.\n")
 	fmt.Fprintf(&b, "contract: %s\n", contract.Implemented)
 	b.WriteString("platforms: [linux, windows]\n")
 	b.WriteString("agents: [claude]\n")
-	if declare || len(components) != 1 || components[0].Path != "." {
+	if len(components) > 0 {
 		b.WriteString("components:\n")
 		for _, c := range components {
 			fmt.Fprintf(&b, "  - path: %q\n    language: %s\n", c.Path, c.Language)
