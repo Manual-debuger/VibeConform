@@ -1,8 +1,6 @@
 package gotooling
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -12,16 +10,12 @@ import (
 // golangci-lint holds one lock per machine, and a second run that finds it
 // held exits 3 with "parallel golangci-lint is running" unless the config
 // sets run.allow-serial-runners. Agent hooks and parallel worktrees overlap
-// routinely, so the generated config and the setup skill's Go reference
-// both make a second run wait for the first.
+// routinely, so the generated config makes a second run wait for the
+// first. The setup skill's Go reference is tested in internal/setupskill
+// (spec 0059).
 func TestConfigsWaitForTheLock(t *testing.T) {
-	reference, err := os.ReadFile(filepath.Join("..", "..", "setupskill", "skill", "reference", "lint", "go", ".golangci.yml"))
-	if err != nil {
-		t.Fatalf("reading the setup skill's Go reference: %v", err)
-	}
 	for name, content := range map[string][]byte{
-		"embedded template":     golangciConfig,
-		"setup skill reference": reference,
+		"embedded template": golangciConfig,
 	} {
 		var cfg struct {
 			Run map[string]any `yaml:"run"`
