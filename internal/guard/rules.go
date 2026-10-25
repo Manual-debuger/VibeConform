@@ -114,6 +114,11 @@ func commandRulesFor(shell gr.Shell) []commandRule {
 // guardrail-settings, so an unlock never opens policy.json.
 var pathRules = []pathRule{secretFile, guardPolicyFile, unlockMarker, guardrailSettings}
 
+// shellWriteRules are the path rules a path that a command writes is
+// checked against (spec 0058). secret-file stays an edit rule, and the
+// unlock marker is the self-unlock command rule's.
+var shellWriteRules = []pathRule{guardPolicyFile, guardrailSettings}
+
 // posixArgs is a POSIX-style argument list read by getopt's conventions:
 // short options cluster (-rf), long options may be abbreviated and carry
 // =value, options may follow operands, and "--" ends them.

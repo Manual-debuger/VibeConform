@@ -119,6 +119,7 @@ func readPayload(r io.Reader) (payload, error) {
 func hook(env Env) int {
 	p, perr := readPayload(env.Stdin)
 	g := New(FindRepo(startDir(env, p.Cwd)), env.Now())
+	g.Dir = p.Cwd
 	var d Decision
 	var t gr.Target
 	if perr == nil {

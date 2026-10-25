@@ -24,8 +24,11 @@ func TestMain(m *testing.M) {
 	hooktest.Main()
 	// A git hook running the suite, such as pre-push in a linked worktree,
 	// exports GIT_DIR. Every git the tests start would then use this
-	// repository instead of the one in its temp directory.
-	for _, v := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"} {
+	// repository instead of the one in its temp directory. An agent hook
+	// running the suite exports CLAUDE_PROJECT_DIR, and a Stop command
+	// with the project-root prefix (spec 0058) would then cd into this
+	// repository instead of the test's scratch one.
+	for _, v := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "CLAUDE_PROJECT_DIR"} {
 		_ = os.Unsetenv(v)
 	}
 	os.Exit(m.Run())

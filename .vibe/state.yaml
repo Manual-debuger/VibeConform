@@ -1,5 +1,5 @@
 schema: 4
-vibe_version: v0.13.0-alpha.1.0.20261021061603-86e83e3b0d16+dirty
+vibe_version: v0.13.0-alpha.1.0.20261025101354-d4f33d9ff5ba
 standard: prod-go/v1
 resources:
     - path: .agents/skills/vibeconform/SKILL.md
@@ -16,7 +16,7 @@ resources:
       sha256: a2ec8b045e297426516a895dc4d58bfba7d9f9ca3665f3bc84e0ae8c1edbe121
     - path: .claude/settings.json
       ownership: generated
-      sha256: eb66e8a2128e6043470efac4f1e26a5f21fd16e110eba70e6fb9ac5cc02f3cb3
+      sha256: 039d9721997669fc405824689a98726e012f0f6429e0620013ff4f00b7eb9e6d
     - path: .claude/skills/spec/SKILL.md
       ownership: generated
       sha256: 6e73fcab0e36e89b871f8980dd119fb986b6d582d6ae38e33063e6d179256ba9

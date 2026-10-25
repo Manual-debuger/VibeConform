@@ -19,24 +19,35 @@ const VibeGuardPolicy = "{\n" +
 	"}\n"
 
 // The lines of templates/settings.json that policy.agent_guard vibe-guard
-// replaces: the PreToolUse matcher and command, and the Stop command.
+// replaces: the PreToolUse matcher and command, the Stop command, and the
+// other hooks' Task calls.
 const (
 	runtimeMatcher = `"matcher": "Bash|PowerShell|Write|Edit|MultiEdit",`
 	runtimeGuard   = `"command": "` + GuardCommand + `"`
 	runtimeStop    = `"command": "` + StopCommand + `",`
 )
 
+// rootedCommands are the template's other hook commands, which call Task.
+// With vibe-guard each runs from the project root (spec 0058, #133).
+var rootedCommands = []string{ContextCommand, FormatCommand, CheckCommand}
+
 // vibeGuardSettings returns templates/settings.json with the reference
 // hook commands of spec 0053 (internal/guard's ReferencePreToolUse,
 // ReferencePreToolUseMatcher and ReferenceStop) in place of the runtime
-// guard's. Everything else is byte-for-byte the template.
+// guard's, and with guard.ProjectRootPrefix before every other hook
+// command (spec 0058). Everything else is byte-for-byte the template.
 func vibeGuardSettings(vibeVersion string) ([]byte, error) {
 	out := settings
-	for _, r := range []struct{ old, new string }{
+	replacements := []struct{ old, new string }{
 		{runtimeMatcher, `"matcher": ` + jsonString(guard.ReferencePreToolUseMatcher) + `,`},
 		{runtimeGuard, `"command": ` + jsonString(guard.ReferencePreToolUse(guard.InstallVersion(vibeVersion)))},
 		{runtimeStop, `"command": ` + jsonString(guard.ReferenceStop) + `,`},
-	} {
+	}
+	for _, c := range rootedCommands {
+		replacements = append(replacements, struct{ old, new string }{
+			`"command": "` + c + `",`, `"command": ` + jsonString(guard.ProjectRootPrefix+c) + `,`})
+	}
+	for _, r := range replacements {
 		if n := bytes.Count(out, []byte(r.old)); n != 1 {
 			return nil, fmt.Errorf("render vibe-guard settings: %s found %d times in the template, want 1", r.old, n)
 		}

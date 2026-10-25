@@ -30,14 +30,24 @@ func ReferencePreToolUse(version string) string {
 		`, or download it from ` + page + `" >&2; exit 2; }; vibe-guard hook`
 }
 
+// ProjectRootPrefix starts every reference hook command that calls Task
+// (spec 0058, #133). Claude Code runs a hook in the agent's current
+// directory, and Task runs the nearest Taskfile above it: inside a
+// component, the component's own. From the project root every hook runs
+// the root's tasks. Without CLAUDE_PROJECT_DIR (a person runs the command
+// by hand) it stays in the current directory.
+const ProjectRootPrefix = `cd "${CLAUDE_PROJECT_DIR:-.}" && `
+
 // ReferenceStop is the reference Stop command: the relock runs first,
-// whatever verify-fast does, then the generated Stop gate (claude-config's
-// StopCommand, spec 0057), which skips verify-fast when the tree matches
-// the green stamp.
-const ReferenceStop = "vibe-guard relock 2>/dev/null; " +
+// whatever verify-fast does, then, from the project root, the generated
+// Stop gate (claude-config's StopCommand, spec 0057), which skips
+// verify-fast when the tree matches the green stamp. The gate is one group
+// after the cd, so that a failed cd runs none of it; task verify:fast
+// stays one simple command for A-05's static part.
+const ReferenceStop = "vibe-guard relock 2>/dev/null; " + ProjectRootPrefix + "{ " +
 	"task -x hook:stamp:check >/dev/null 2>&1 </dev/null || " +
 	"{ task verify:fast 1>&2 </dev/null && task -x hook:stamp:save >/dev/null 2>&1 </dev/null; } || " +
-	"task -x hook:done"
+	"task -x hook:done; }"
 
 // InstallVersion is the version the PreToolUse command's install hint
 // names for a vibe of version vibeVersion (spec 0053, "The reference hook
