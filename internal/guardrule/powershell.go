@@ -382,7 +382,9 @@ func (p *psParser) redirect(c *Command) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	// PowerShell has no input redirection, so every target is written.
 	c.Redirects = append(c.Redirects, w)
+	c.Writes = append(c.Writes, w)
 	return true, nil
 }
 
