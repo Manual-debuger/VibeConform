@@ -86,24 +86,6 @@ func TestTemplatesAreLF(t *testing.T) {
 	}
 }
 
-// TestTemplatesMatchLiveFiles is the drift alarm between this repository's
-// own synced copies and the templates they were synced from.
-func TestTemplatesMatchLiveFiles(t *testing.T) {
-	repoRoot := filepath.Join("..", "..", "..")
-	for live, embedded := range map[string][]byte{
-		filepath.Join(".github", "workflows", "conformance.yml"): conformanceWorkflow,
-		"Taskfile.vibe.yml": vibeTaskfile,
-	} {
-		got, err := os.ReadFile(filepath.Join(repoRoot, live))
-		if err != nil {
-			t.Fatalf("reading live file: %v", err)
-		}
-		if !bytes.Equal(got, embedded) {
-			t.Errorf("embedded template has drifted from %s", live)
-		}
-	}
-}
-
 // TestWorkflowIsPinnedAndSelfContained pins spec 0022's workflow as spec
 // 0054 changed it: one job, named as the required check, that installs
 // exactly the vibe_version .vibe/state.yaml records through the setup

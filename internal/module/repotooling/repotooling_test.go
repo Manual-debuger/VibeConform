@@ -10,7 +10,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/Manual-debuger/VibeConform/internal/module"
 	"github.com/Manual-debuger/VibeConform/internal/resource"
 )
 
@@ -70,13 +69,9 @@ func TestResolveDeterministic(t *testing.T) {
 func TestTemplatesMatchLiveFiles(t *testing.T) {
 	repoRoot := filepath.Join("..", "..", "..")
 
-	// This repository selects policy.agent_guard vibe-guard (spec 0053):
-	// its Taskfile.yml has no hook:guard and it has no guard.go. The
-	// guard template stays covered by the guard corpus tests.
-	liveTaskfile, err := module.StripGuardTask(taskfile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// This repository runs vibe-guard (spec 0053): it has no guard.go.
+	// Its Taskfile.yml is no longer generated (spec 0059): it has the
+	// contract audit's task audit, so it is not compared.
 	if _, err := os.Stat(filepath.Join(repoRoot, ".claude", "hooks", "guard.go")); err == nil {
 		t.Error(".claude/hooks/guard.go exists, but this repository runs vibe-guard")
 	}
@@ -85,7 +80,6 @@ func TestTemplatesMatchLiveFiles(t *testing.T) {
 		live     string
 		embedded []byte
 	}{
-		{"Taskfile.yml", liveTaskfile},
 		{"lefthook.yml", lefthookConfig},
 	} {
 		t.Run(tc.live, func(t *testing.T) {

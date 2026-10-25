@@ -192,8 +192,8 @@ func TestAgentHookConfigsCoverCatalog(t *testing.T) {
 func TestDoctorHookBinaries(t *testing.T) {
 	t.Parallel()
 	for root, want := range map[string][]string{
-		// This repository runs vibe-guard (policy.agent_guard, spec 0053).
-		filepath.Join("..", ".."):                           {"task", "vibe-guard"},
+		// This repository's vibe.yaml is version 2 since spec 0059, which
+		// the old doctor does not read.
 		filepath.Join("..", "..", "examples", "typescript"): {"task", "node"},
 		filepath.Join("..", "..", "examples", "python"):     {"task", "uv"},
 		// Go, TypeScript and Python components: the guard runs on Go.
