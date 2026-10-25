@@ -3,7 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
-	"io"
+	"errors"
 	"io/fs"
 	"maps"
 	"os"
@@ -18,19 +18,17 @@ import (
 )
 
 // stubDoctorEnv makes doctor see a machine where every binary is on PATH
-// except those named missing, and every command succeeds. Files are the
-// real ones, since the repository under test is the test's own temp
-// directory.
+// except those named missing, every command succeeds, and bash resolves
+// unless "bash" is missing. Files are the real ones, since the repository
+// under test is the test's own temp directory.
 func stubDoctorEnv(t *testing.T, missing ...string) {
 	t.Helper()
 	previous := doctorEnv
 	doctorEnv = func() doctor.Env {
 		return doctor.Env{
 			LookPath: func(name string) (string, error) {
-				for _, m := range missing {
-					if m == name {
-						return "", exec.ErrNotFound
-					}
+				if slices.Contains(missing, name) {
+					return "", exec.ErrNotFound
 				}
 				return "/stub/" + name, nil
 			},
@@ -41,11 +39,12 @@ func stubDoctorEnv(t *testing.T, missing ...string) {
 				_, err := os.Stat(path)
 				return err == nil
 			},
-			Open: func(path string) (io.ReadCloser, error) {
-				return os.Open(path) // #nosec G304 -- the test's own temp directory
+			Bash: func() (string, error) {
+				if slices.Contains(missing, "bash") {
+					return "", errors.New("no bash found")
+				}
+				return "/stub/bash", nil
 			},
-			GOOS:   "linux",
-			GOARCH: "amd64",
 		}
 	}
 	t.Cleanup(func() { doctorEnv = previous })
@@ -53,7 +52,7 @@ func stubDoctorEnv(t *testing.T, missing ...string) {
 
 func runDoctorIn(t *testing.T, dir string) (string, error) {
 	t.Helper()
-	root := NewRootCmd("test")
+	root := newRootCmd("test", contractSeams{openRepo: openFixtureRepo})
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&bytes.Buffer{})
@@ -62,40 +61,143 @@ func runDoctorIn(t *testing.T, dir string) (string, error) {
 	return out.String(), err
 }
 
-// Until vibe doctor reads the contract configuration (spec 0059, Desired
-// Behavior 11), it checks the configuration the way vibe audit does: a
-// version 1 file and a missing file fail with the audit's messages, and
-// the checks that need no configuration still run.
+// assertLines checks that every pattern matches a line of out.
+func assertLines(t *testing.T, out string, patterns ...string) {
+	t.Helper()
+	for _, p := range patterns {
+		if !regexp.MustCompile(`(?m)` + p).MatchString(out) {
+			t.Errorf("output does not match %s:\n%s", p, out)
+		}
+	}
+}
+
+// A version 1 file and a missing file get the messages vibe audit gives
+// them, and exit 1 (spec 0059, Desired Behavior 11).
 func TestDoctorConfigurationLikeAudit(t *testing.T) {
 	for _, c := range []struct {
-		name, vibeYAML string
-		want           []string
+		name  string
+		edits []fixtureEdit
 	}{
-		{"no file", "", []string{"run `vibe init`"}},
-		{"version 1", "standard: prod-go\nversion: v1\n", []string{"version 1", "vibe init --skill", migrationGuide}},
+		{"no file", []fixtureEdit{withoutFile("vibe.yaml")}},
+		{"version 1", []fixtureEdit{withFile("vibe.yaml", "standard: prod-go\nversion: v1\n")}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			dir := t.TempDir()
-			if c.vibeYAML != "" {
-				writeVibeYAML(t, dir, c.vibeYAML)
+			dir := contractFixture(t, c.edits...)
+			audit := runVibeAudit(t, "--repo-root", dir)
+			msg := strings.TrimSpace(strings.TrimPrefix(audit.stderr, "Error: "))
+			if audit.code != exitError || msg == "" {
+				t.Fatalf("vibe audit exit %d, stderr %q", audit.code, audit.stderr)
 			}
+
 			stubDoctorEnv(t)
 			out, err := runDoctorIn(t, dir)
 			if code := ExitCode(err); code != exitError {
 				t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
 			}
-			for _, want := range []string{`(?m)^PASS +git `, `(?m)^FAIL +vibe\.yaml `, `(?m)^PASS +runtime `, `(?m)^PASS +worktree `} {
-				if !regexp.MustCompile(want).MatchString(out) {
-					t.Errorf("output does not match %s:\n%s", want, out)
-				}
-			}
-			for _, want := range c.want {
-				if !strings.Contains(out, want) {
-					t.Errorf("output lacks %q:\n%s", want, out)
-				}
-			}
+			assertLines(t, out, `^PASS +git `, `^FAIL +vibe\.yaml +`+regexp.QuoteMeta(msg)+`$`)
 		})
 	}
+}
+
+// guardSettings is a .claude/settings.json whose PreToolUse hook runs
+// vibe-guard, as the setup skill's reference does.
+const guardSettings = `{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "vibe-guard hook"}]}],
+ "Stop": [{"hooks": [{"type": "command", "command": "task verify:fast 1>&2 || exit 2"}]}]}}
+`
+
+// TestDoctorChecksTheWorkflow: on a machine with everything, doctor
+// reports git, the configuration, each entrypoint program, bash for the
+// hooks and vibe-guard, one line each, and exits 0.
+func TestDoctorChecksTheWorkflow(t *testing.T) {
+	dir := contractFixture(t, withFile(".claude/settings.json", guardSettings))
+	stubDoctorEnv(t)
+	out, err := runDoctorIn(t, dir)
+	if err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
+	}
+	assertLines(t, out,
+		`^PASS +git `,
+		`^PASS +vibe\.yaml +version 2, contract 1\.1\.0`,
+		`^PASS +task +/stub/task; runs verify, verify-fast, fmt, fmt-check$`,
+		`^PASS +bash +/stub/bash`,
+		`^PASS +vibe-guard +/stub/vibe-guard`,
+	)
+}
+
+// TestDoctorReportsWhatIsMissing: a missing entrypoint program, a missing
+// bash and a missing vibe-guard each fail their own line, and doctor
+// exits 1.
+func TestDoctorReportsWhatIsMissing(t *testing.T) {
+	for _, c := range []struct {
+		missing string
+		line    string
+	}{
+		{"task", `^FAIL +task +not on PATH; verify, verify-fast, fmt, fmt-check cannot run$`},
+		{"bash", `^FAIL +bash +no bash found`},
+		{"vibe-guard", `^FAIL +vibe-guard +not on PATH`},
+	} {
+		t.Run(c.missing, func(t *testing.T) {
+			dir := contractFixture(t, withFile(".claude/settings.json", guardSettings))
+			stubDoctorEnv(t, c.missing)
+			out, err := runDoctorIn(t, dir)
+			if code := ExitCode(err); code != exitError {
+				t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
+			}
+			assertLines(t, out, c.line)
+		})
+	}
+}
+
+// TestDoctorChecksVibeGuardOnlyWhenAHookCallsIt: the baseline's guard
+// hook is a task, so vibe-guard is not checked.
+func TestDoctorChecksVibeGuardOnlyWhenAHookCallsIt(t *testing.T) {
+	dir := contractFixture(t)
+	stubDoctorEnv(t, "vibe-guard")
+	out, err := runDoctorIn(t, dir)
+	if err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "vibe-guard") {
+		t.Errorf("doctor checked vibe-guard, which no hook calls:\n%s", out)
+	}
+}
+
+// TestDoctorEntrypointPrograms: each distinct program gets one line naming
+// its entrypoints; a program given by path is looked for in the
+// repository; a command that is not one simple command is left to V-04.
+func TestDoctorEntrypointPrograms(t *testing.T) {
+	dir := contractFixture(t,
+		withFile("vibe.yaml", "contract: 1.1.0\nplatforms: [linux]\nagents: [claude]\nentrypoints:\n"+
+			"  verify: [task verify, ./scripts/check.sh]\n  verify-fast: make fast\n  fmt: task fmt && task lint\n  fmt-check: ./scripts/gone.sh\n"),
+		withFile("scripts/check.sh", "#!/bin/sh\n"))
+	stubDoctorEnv(t, "make")
+	out, _ := runDoctorIn(t, dir)
+	assertLines(t, out,
+		`^PASS +task +/stub/task; runs verify$`,
+		`^PASS +\./scripts/check\.sh +in the repository; runs verify$`,
+		`^FAIL +make +not on PATH; verify-fast cannot run$`,
+		`^UNVERIFIED +entrypoints\.fmt +"task fmt && task lint" is a list joined by &&, not one simple command`,
+		`^FAIL +\./scripts/gone\.sh +not in the repository; fmt-check cannot run$`,
+	)
+}
+
+// TestDoctorAfterInit: in a repository vibe init just configured, with no
+// hooks yet, doctor says the entrypoints are V-04's to declare and that
+// nothing needs bash, and fails nothing.
+func TestDoctorAfterInit(t *testing.T) {
+	dir := contractFixture(t, withoutFile("vibe.yaml"), withoutFile(".claude/settings.json"))
+	if out, err := runInit(t, dir); err != nil {
+		t.Fatalf("vibe init: %v\n%s", err, out)
+	}
+	stubDoctorEnv(t, "bash")
+	out, err := runDoctorIn(t, dir)
+	if err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
+	}
+	assertLines(t, out,
+		`^UNVERIFIED +entrypoints +none declared; vibe audit's V-04 says what to declare$`,
+		`^PASS +bash +not needed: \.claude/settings\.json has no command hook$`,
+	)
 }
 
 // TestDoctorWritesNothing: doctor diagnoses and never mutates.

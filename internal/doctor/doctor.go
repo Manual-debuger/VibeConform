@@ -1,13 +1,13 @@
 // Package doctor diagnoses whether this machine can run a repository's
-// workflow: the tools its standard needs, git, Task, and the environment
-// facts that make Windows and Linux differ. It answers a different
-// question from vibe audit, which asks whether the repository's files are
-// right; doctor never looks at their content. See
-// docs/specs/0028-environment-doctor.md.
+// workflow, as its vibe.yaml version 2 and .claude/settings.json declare
+// it: git, the program of each entrypoint command, the bash that runs the
+// hook commands, and vibe-guard when a hook calls it (spec 0059, Desired
+// Behavior 11). It answers a different question from vibe audit, which
+// asks whether the repository conforms to the contract.
 //
-// The package imports nothing from internal/: the CLI turns the resolved
-// plan into check inputs, so doctor depends on no module and every check is
-// a function of its inputs and an Env.
+// It reads the configuration and the hooks with the contract audit's own
+// readers, and imports no other package of this module. Every check is a
+// function of its inputs and an Env.
 package doctor
 
 import (
@@ -18,9 +18,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"time"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 )
 
 // Status is one check's verdict.
@@ -57,7 +58,7 @@ func (s Status) String() string {
 // Result is one line of the report.
 type Result struct {
 	Status Status
-	// Name is what was checked: a tool, or an aspect such as "git".
+	// Name is what was checked: a program, or an aspect such as "git".
 	Name string
 	// Detail is the one-line reason.
 	Detail string
@@ -114,13 +115,13 @@ type Env struct {
 	Run func(ctx context.Context, dir, name string, args ...string) (stdout, stderr string, err error)
 	// Exists reports whether a path exists.
 	Exists func(path string) bool
-	// Open opens a file for reading, so a large file can be streamed.
-	Open func(path string) (io.ReadCloser, error)
-	// GOOS and GOARCH describe this machine, as Go names them.
-	GOOS, GOARCH string
+	// Bash finds the bash that runs hook commands, or says why there is
+	// none.
+	Bash func() (string, error)
 }
 
-// System returns the Env of the running process.
+// System returns the Env of the running process. Its Bash is the contract
+// audit's: Git Bash on Windows, bash on PATH elsewhere.
 func System() Env {
 	return Env{
 		LookPath: exec.LookPath,
@@ -129,17 +130,12 @@ func System() Env {
 			_, err := os.Stat(path)
 			return err == nil
 		},
-		Open: func(path string) (io.ReadCloser, error) {
-			return os.Open(path) // #nosec G304 -- a path fixed by the check, under the repository root
-		},
-		GOOS:   runtime.GOOS,
-		GOARCH: runtime.GOARCH,
+		Bash: func() (string, error) { return contract.ResolveBash(os.Environ()) },
 	}
 }
 
 func run(ctx context.Context, dir, name string, args ...string) (string, string, error) {
-	// #nosec G204 -- name and args are fixed by the checks in this package
-	// or declared by a module's ToolRequirer, never read from the repository.
+	// #nosec G204 -- name and args are fixed by the checks in this package.
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
@@ -151,12 +147,9 @@ func run(ctx context.Context, dir, name string, args ...string) (string, string,
 	return stdout.String(), stderr.String(), err
 }
 
-// Timeouts. A version probe that hangs is a warning; git or Task hanging
-// means the workflow cannot rely on them.
-const (
-	probeTimeout   = 5 * time.Second
-	commandTimeout = 10 * time.Second
-)
+// commandTimeout bounds each git command: git hanging means the workflow
+// cannot rely on it.
+const commandTimeout = 10 * time.Second
 
 // firstLine returns s's first non-blank line, trimmed.
 func firstLine(s string) string {
@@ -204,73 +197,5 @@ func Git(ctx context.Context, env Env, repoRoot string) Result {
 		return res
 	}
 	res.Status, res.Detail = Pass, version+"; repository readable"
-	return res
-}
-
-// Tool is one binary the standard's modules require.
-type Tool struct {
-	Name string
-	// Module and Why say who needs it and what stops working without it.
-	Module, Why string
-	// Version is the arguments that make it print its version; nil when
-	// it has none.
-	Version []string
-	// Optional tools only degrade an optional capability: missing is a
-	// warning, with Install saying how to get one.
-	Optional bool
-	Install  string
-}
-
-// Tools checks each required binary: on PATH, and reporting a version
-// when it declares how. Task gets one more check on the same line, that the
-// repository's Taskfile loads: a Taskfile that doesn't load turns off
-// every task entry point, the agent guard included.
-func Tools(ctx context.Context, env Env, repoRoot string, tools []Tool) []Result {
-	results := make([]Result, 0, len(tools))
-	for _, t := range tools {
-		results = append(results, tool(ctx, env, repoRoot, t))
-	}
-	return results
-}
-
-func tool(ctx context.Context, env Env, repoRoot string, t Tool) Result {
-	res := Result{Name: t.Name}
-	path, err := env.LookPath(t.Name)
-	if err != nil {
-		if t.Optional {
-			res.Status = Warn
-			res.Detail = fmt.Sprintf("not found on PATH (optional, for %s: %s); install: %s", t.Module, t.Why, t.Install)
-			return res
-		}
-		res.Status = Fail
-		res.Detail = fmt.Sprintf("not found on PATH (required by %s: %s)", t.Module, t.Why)
-		return res
-	}
-
-	res.Status, res.Detail = Pass, path
-	if len(t.Version) > 0 {
-		probe, cancel := context.WithTimeout(ctx, probeTimeout)
-		out, _, err := env.Run(probe, repoRoot, t.Name, t.Version...)
-		cancel()
-		if version := firstLine(out); err == nil && version != "" {
-			// Keep the path beside the version: in WSL it is what tells a
-			// Linux binary from a Windows one (spec 0039).
-			res.Detail = version + " (" + path + ")"
-		} else {
-			res.Status, res.Detail = Warn, path+": found on PATH but did not report a version"
-		}
-	}
-
-	if t.Name == "task" {
-		load, cancel := context.WithTimeout(ctx, commandTimeout)
-		_, stderr, err := env.Run(load, repoRoot, "task", "--list-all")
-		cancel()
-		if err != nil {
-			res.Status = Fail
-			res.Detail += "; Taskfile.yml does not load: " + why(err, stderr)
-		} else {
-			res.Detail += "; Taskfile.yml loads"
-		}
-	}
 	return res
 }

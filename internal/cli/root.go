@@ -30,9 +30,9 @@ func newRootCmd(version string, seams contractSeams) *cobra.Command {
 	root.SetVersionTemplate("vibe version {{.Version}} (contract " + contract.Implemented + ")\n")
 
 	root.AddCommand(
-		newInitCmd(),
+		newInitCmd(seams),
 		newAuditCmd(seams),
-		newDoctorCmd(),
+		newDoctorCmd(seams),
 		newUnlockCmd(),
 	)
 	for _, name := range []string{"sync", "diff", "check"} {

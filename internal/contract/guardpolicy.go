@@ -170,9 +170,11 @@ func (e *Env) vibeGuardLoadError() string {
 // guard.
 func (e *Env) runsVibeGuard() bool {
 	s, _, ok := e.readClaudeSettings("")
-	if !ok {
-		return false
-	}
+	return ok && s.runsVibeGuard()
+}
+
+// runsVibeGuard reports whether a PreToolUse hook runs `vibe-guard hook`.
+func (s *claudeSettings) runsVibeGuard() bool {
 	for _, entry := range s.commandEntries(eventPreToolUse) {
 		for _, c := range entry.calls() {
 			if isVibeGuardHook(c) {
