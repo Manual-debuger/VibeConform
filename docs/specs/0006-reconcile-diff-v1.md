@@ -1,6 +1,6 @@
 # Spec 0006: Reconciliation decision engine + `vibe diff` (v1)
 
-Status: accepted and implemented.
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented.
 
 ## Problem
 

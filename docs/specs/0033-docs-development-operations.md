@@ -1,6 +1,6 @@
 # Spec 0033: Optional `docs/development/` and `docs/operations/`
 
-Status: accepted and implemented. Tracks issue #49 ("`docs/development/`
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented. Tracks issue #49 ("`docs/development/`
 and `docs/operations/`"). Extends spec 0030 §4 (the docs layout).
 
 ## Problem

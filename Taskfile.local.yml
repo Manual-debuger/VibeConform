@@ -1,14 +1,12 @@
 version: "3"
 
-# Project-owned, and deliberately not managed by VibeConform: these tasks
-# build and run this repository's own CLI, which is exactly the kind of
-# thing a standard has no business asserting for every adopter. They lived
-# in prod-go/v1's Taskfile.yml template until spec 0018 moved them here.
-# See docs/decisions/0009-managed-file-local-extension.md.
+# This repository's own tasks: build and run the CLI. Taskfile.yml holds
+# the verification entrypoints and the agent hook tasks; this file holds
+# the rest (spec 0018 split them when Taskfile.yml was generated).
 #
-# Tasks here are merged into the generated Taskfile.yml unprefixed, so
-# "task build" works as before. Defining a task the generated file already
-# defines is a hard error (Task exits 203), not an override.
+# Tasks here are merged into Taskfile.yml unprefixed, so "task build"
+# works. Defining a task Taskfile.yml already defines is a hard error
+# (Task exits 203), not an override.
 
 tasks:
   build:
@@ -16,12 +14,11 @@ tasks:
     # {{exeExt}} is ".exe" on Windows: Task's shell runs bin/vibe.exe by
     # that name, and an extensionless bin/vibe there is not executable.
     cmds:
-      # An unstamped build reports "dev", which is not valid semver, so
-      # state.CompareWriters cannot order it and spec 0019's downgrade guard
-      # stays dormant on exactly the binary a contributor uses. Stamping a
-      # Go-style pseudo-version fixes that: it sorts above the release it
-      # descends from, so running a stale ~/go/bin release against state
-      # this build wrote is recognised as a downgrade and refused.
+      # An unstamped build reports "dev", which is not valid semver and
+      # cannot be ordered against a release. Stamping a Go-style
+      # pseudo-version fixes that: it sorts above the release it descends
+      # from, so "vibe --version" tells this build from a stale ~/go/bin
+      # release.
       #
       # Raw "git describe" output would NOT work here. Semver compares
       # prerelease identifiers lexically, so v0.2.0-alpha.1-42-gAAA sorts

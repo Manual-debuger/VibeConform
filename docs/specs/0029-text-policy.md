@@ -1,6 +1,6 @@
 # Spec 0029: Line-Ending Policy and Managed Sections
 
-Status: accepted and implemented. Tracks issue #45. Per ADR 0014. Revisits the
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented. Tracks issue #45. Per ADR 0014. Revisits the
 `.gitattributes` non-goal of spec 0011. Builds on spec 0026 (the
 integration catalog, structured patch, pruning) and spec 0028 (`vibe
 doctor`).

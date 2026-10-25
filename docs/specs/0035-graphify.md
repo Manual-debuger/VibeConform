@@ -1,6 +1,6 @@
 # Spec 0035: Optional Graphify Integration
 
-Status: accepted. Tracks issue #52. Builds on spec 0026 (optional
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted. Tracks issue #52. Builds on spec 0026 (optional
 integrations), spec 0028 (`vibe doctor`), spec 0029 (managed sections)
 and spec 0023 (agent hooks).
 

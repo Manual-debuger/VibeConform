@@ -1,6 +1,6 @@
 # Spec 0045: The Generated ESLint Config Honors `.gitignore`
 
-Status: accepted and implemented (2026-10-14); CI green on PR #88. Issue #87.
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented (2026-10-14); CI green on PR #88. Issue #87.
 Implementation plan: `docs/plans/0045-eslint-honors-gitignore.md`.
 Settled with the user on 2026-10-14, after #85 was closed: keeping
 `.gitignore` up to date is the adopting repository's job, and the

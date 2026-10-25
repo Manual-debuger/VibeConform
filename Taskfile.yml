@@ -1,13 +1,11 @@
 version: "3"
 
-# Repository-specific tasks — build, run, deploy, whatever this repository
-# happens to need — belong in a project-owned Taskfile.local.yml, which
-# VibeConform never writes, reads, or audits. The include is optional: with
-# no such file it does nothing. Tasks defined there are available
-# unprefixed, but cannot redefine a task below — Task exits 203 on a name
-# collision rather than silently overriding, so the verification interface
-# stays what the standard says it is. Requires Task v3.39.0 or newer.
-# See docs/decisions/0009-managed-file-local-extension.md.
+# This repository's other tasks (build, run) are in Taskfile.local.yml.
+# The include is optional: with no such file it does nothing. Tasks
+# defined there are available unprefixed, but cannot redefine a task
+# below: Task exits 203 on a name collision rather than silently
+# overriding, so the entrypoints vibe.yaml declares stay these.
+# Requires Task v3.39.0 or newer.
 includes:
   local:
     taskfile: ./Taskfile.local.yml

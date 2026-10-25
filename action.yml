@@ -127,7 +127,7 @@ runs:
         # The source is decided before the version is checked (spec 0057).
         # The workspace source builds the tools from the checkout, so the
         # version is information only and any value is accepted, dev and
-        # +dirty included: VibeConform records whatever vibe synced it.
+        # +dirty included.
         # Every other source installs exactly that version, so it must be
         # one that can be fetched.
         label="$VERSION"

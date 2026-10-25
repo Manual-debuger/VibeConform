@@ -1,6 +1,6 @@
 # Spec 0050: Guard Exceptions and Extra Guard Rules
 
-Status: accepted and implemented (2026-10-15). Issue #80 (the umbrella), the third step after specs 0048
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented (2026-10-15). Issue #80 (the umbrella), the third step after specs 0048
 and 0049. Settled with the user on 2026-10-15 in the grilling of #80
 (Q11, Q12, Q16). Decided by ADR 0024: rule content may be extended and
 weakened through a seam, and audit reports it.

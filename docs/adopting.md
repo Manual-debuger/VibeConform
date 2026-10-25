@@ -1,39 +1,42 @@
 # Adopting VibeConform in a new repository
 
 A start-to-finish walkthrough: from an empty directory to a repository
-whose pull requests are gated by its own verification and by a
-conformance check. Each step links to the part of
-[`usage.md`](usage.md) that has the full detail.
+whose pull requests are gated by its own verification and by the
+contract audit. Each step links to the part of [`usage.md`](usage.md)
+that has the full detail.
 
-The example uses `prod-go`. The [differences for other
-standards](#other-standards) are at the end. For finished results,
-see the committed examples: `examples/python` (`prod-py`),
-`examples/typescript` (`prod-ts`), `examples/monorepo` (`prod-mono`),
-and this repository itself (`prod-go`).
+The example is a Go service. The steps are the same for Python,
+TypeScript and a monorepo; only the manifest and the tools differ. For
+finished results, see the committed examples, which are assembled from
+the setup skill's reference files: `examples/python`,
+`examples/typescript`, `examples/monorepo` (Go, TypeScript and Python
+components), and this repository itself (Go).
 
 ## 1. Prerequisites
 
 You need these on `PATH`, on Windows or Linux:
 
-| Tool | Why | Standards |
-|---|---|---|
-| `git` | everything | all |
-| `go` | installing `vibe`; also `task audit`'s fallback (spec 0022) | all |
-| [`task`](https://taskfile.dev) | every generated entry point (`task verify`, …) | all |
-| [`lefthook`](https://lefthook.dev) | the Git hooks `vibe sync` registers | all |
-| `golangci-lint`, `goimports`, `govulncheck`, `actionlint` | lint, format, security, workflow lint | `prod-go` |
-| `node`, `pnpm` (10 or below) | every TypeScript task | `prod-ts` |
-| [`uv`](https://docs.astral.sh/uv/) | every Python task | `prod-py` |
+| Tool | Why |
+|---|---|
+| `git` | everything; `vibe` reads the tracked files |
+| `vibe` and `vibe-guard` | the audit, and the agent guard the setup skill installs (step 2) |
+| an AI coding agent | runs the setup skill; Claude Code is the agent the contract's A rules cover |
+| the project's own tools | whatever the entrypoints call. With the setup skill's references: [`task`](https://taskfile.dev), [`lefthook`](https://lefthook.dev), and `golangci-lint`, `goimports`, `govulncheck`, `actionlint` for Go; `node` and `pnpm` for TypeScript; [`uv`](https://docs.astral.sh/uv/) for Python |
+| bash | Claude Code runs hook commands in it; Git for Windows' bash on Windows |
 
-`vibe sync` warns about anything missing and `vibe doctor` checks it
-(step 6), so you can install as you go.
+`vibe doctor` (step 6) checks the ones the repository's configuration
+names, so you can install as you go.
 
-## 2. Install `vibe`, pinned
+## 2. Install `vibe` and `vibe-guard`, pinned
 
 ```sh
-go install github.com/Manual-debuger/VibeConform/cmd/vibe@v0.5.0-alpha.1
-vibe --version    # vibe version v0.5.0-alpha.1
+go install github.com/Manual-debuger/VibeConform/cmd/vibe@<version>
+go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@<version>
+vibe --version    # vibe version <version> (contract 1.1.0)
 ```
+
+Without Go, download the release archives and check them against
+`checksums.txt`; see [Installing](usage.md#installing).
 
 `go install` prints nothing when it succeeds. It puts the binary in
 `$(go env GOBIN)`, or in `$(go env GOPATH)/bin` (usually `~/go/bin`)
@@ -58,29 +61,14 @@ the install worked but that directory is not on `PATH`:
   Then open a new terminal.
 
 WSL and Windows are separate machines here. Each needs its own install,
-and each has its own `PATH`.
-
-If `vibe --version` shows something else, an older `vibe` comes first
-on `PATH`. Fix that before going on: `task audit` uses whichever `vibe`
-is on `PATH`, and an older one may not know options the newer one wrote.
-
-Use a **released tag**, not a local build. `vibe sync` records the
-version that wrote the files in `.vibe/state.yaml`, and CI's conformance
-job installs exactly that version (`task audit`, see
-[usage.md](usage.md#what-prod-gov1-manages)). A `dev` or `+dirty` build
-records a version no module proxy serves, so `sync` warns:
-
-```text
-warning: vibe … is not a released or pseudo-version, so task audit
-cannot pin it; CI's conformance check will fail unless vibe is on PATH.
-```
-
-Other ways to install are in [Installing](usage.md#installing).
+and each has its own `PATH`. If `vibe --version` shows something else,
+an older `vibe` comes first on `PATH`; fix that before going on.
 
 ## 3. Start the repository
 
-`vibe` writes configuration around your code; it does not create the
-project itself. Start the way you normally would:
+`vibe` checks a repository; it does not create the project. Start the
+way you normally would, and add the files to Git: `vibe` reads only
+tracked files.
 
 ```sh
 mkdir my-service && cd my-service
@@ -88,95 +76,56 @@ git init -b main
 go mod init example.com/my-service
 printf 'package main\n\nfunc main() {}\n' > main.go
 printf 'bin/\n' > .gitignore
+git add -A
 ```
 
-Do this first, so that the `lefthook install` at the end of `vibe sync`
-has a Git repository to register hooks in.
-
-## 4. Declare the standard
+## 4. Write `vibe.yaml`
 
 ```sh
-vibe init prod-go v1
+vibe init
 ```
 
-This writes a two-line `vibe.yaml`. Before syncing, decide which opt-ins
-you want. Each one is optional, and each can be added or removed later
-with one edit and one `vibe sync`:
+This writes a `vibe.yaml` version 2: the contract version, `platforms:
+[linux, windows]`, `agents: [claude]`, the components found in the
+tracked files (none listed here, since one Go component sits at the
+root), and the four required entrypoints as comments. See
+[`vibe init`](usage.md#vibe-init).
 
-```yaml
-standard: prod-go
-version: v1
+Until the entrypoints are declared, `vibe audit` fails rule V-04, and
+every rule that needs an entrypoint fails with "fix V-04 first". The next
+step fills them in. Edit `platforms` and `agents` now if they do not fit.
 
-# Optional integrations (usage.md, "Selecting integrations").
-# Agents default to [claude, codex]; editors and intelligence to none.
-integrations:
-  agents: [claude]          # drop Codex's files
-  editors: [vscode]         # owned tasks and recommendations in .vscode/
-  intelligence: [graphify]  # needs graphify on PATH to be useful
-
-# Optional repository policy (usage.md, "Line-ending policy"):
-# pin LF everywhere. Recommended when anyone works on Windows.
-policy:
-  line_endings: lf
-
-# Optional docs layout (usage.md, "Development workflow"): a short
-# managed section in docs/README.md and docs/specs/README.md.
-development:
-  docs_layout: standard
-```
-
-There is no `workflow` key in this sample, and that is the recommended
-setting: VibeConform chooses no development process, so you can use
-your own. If you want VibeConform's bundled lightweight-SDD workflow,
-add `workflow: plan-triggered-sdd` (or `always-sdd`, or `direct`). Each
-value adds a managed section to `AGENTS.md`, so none of them is neutral.
-See usage.md, "Development workflow".
-
-`vibe.yaml` is decoded strictly: a misspelled key is an error, not
-ignored. See [What `vibe.yaml` means today](usage.md#what-vibeyaml-means-today).
-
-## 5. Preview, then sync
+## 5. Let the setup skill set the repository up
 
 ```sh
-vibe diff     # what would be created; writes nothing
-vibe sync
+vibe init --skill
 ```
 
-On a fresh repository every resource is `created` and the run ends with
-lefthook registering the hooks:
+This writes the setup skill, `vibeconform-setup`, to
+`.claude/skills/vibeconform-setup/` and `.agents/skills/vibeconform-setup/`.
+Then ask your agent to set up VibeConform. The skill:
 
-```text
-standard: prod-go/v1
-.golangci.yml: created
-.github/workflows/ci.yml: created
-.github/workflows/conformance.yml: created
-Taskfile.yml: created
-lefthook.yml: created
-.claude/settings.json: created
-…
-AGENTS.md (section workflow): created
-18 created, 0 updated, 0 unchanged, 0 conflicts
-lefthook: git hooks registered
-```
+- keeps the tools the repository already has, and uses the references
+  (Task, lefthook, GitHub Actions, golangci-lint for Go) where it has
+  none;
+- declares the entrypoints in `vibe.yaml`, such as `verify: task
+  verify`;
+- writes what each rule needs: `Taskfile.yml`, `lefthook.yml`,
+  `.github/workflows/ci.yml` (verify on Linux and Windows, a
+  vulnerability scan), `.github/workflows/audit.yml` (the audit job,
+  which installs `vibe` with the setup action), `dependabot.yml`, a pull
+  request template, `AGENTS.md`, `CLAUDE.md`, and the agent hooks in
+  `.claude/settings.json`;
+- hands you a command that writes `.claude/hooks/policy.json`, because
+  the guard refuses that file to the agent, and waits until you have run
+  it;
+- checks that `vibe-guard` is found by a non-interactive shell;
+- runs `vibe audit` and fixes each finding until the verdict is
+  `conformant`, or stops and tells you what needs a person.
 
-What you now have is described in [What `prod-go/v1`
-manages](usage.md#what-prod-gov1-manages). In short:
-
-- `Taskfile.yml`: the canonical interface (`task verify`,
-  `task verify:fast`, `task fmt`, …).
-- `lefthook.yml`: pre-commit format and vet checks, and pre-push lint
-  and test.
-- CI: `ci.yml`, whose required check is `CI / gate`, and
-  `conformance.yml`, whose check is `Conformance / audit`.
-- Agent guardrails in `.claude/` (if `claude` is selected).
-- `.vibe/state.yaml`: what `sync` wrote and with which version.
-
-Files that stay yours, never generated: `go.mod`, your code, `.gitignore`
-(apart from an integration's managed section), `AGENTS.md`/`CLAUDE.md`
-(apart from one short managed section each), `Taskfile.local.yml` for
-[your own tasks](usage.md#adding-your-own-tasks-taskfilelocalyml), and
-`lefthook.local.yml` for
-[your own Git hooks](usage.md#adding-your-own-git-hooks-lefthooklocalyml).
+See [The setup skill](usage.md#the-setup-skill). Everything it writes is
+the repository's own, to edit as you like; the audit only checks the
+properties.
 
 ## 6. Check the machine
 
@@ -184,91 +133,69 @@ Files that stay yours, never generated: `go.mod`, your code, `.gitignore`
 vibe doctor
 ```
 
-One line per check, `PASS`/`WARN`/`FAIL`/`UNVERIFIED`. A `FAIL` means a
-required local workflow cannot run here, usually a missing tool from step
-1. Doctor installs nothing and writes nothing. See
+One line per check: git, `vibe.yaml`, the program of each entrypoint,
+the bash that runs the hooks, and `vibe-guard` when a hook runs it. A
+`FAIL` means something the workflow needs is missing here. Doctor
+installs nothing and writes nothing. See
 [`vibe doctor`](usage.md#vibe-doctor).
 
 ## 7. Verify, then audit
 
 ```sh
-task verify   # your code against the standard's tooling; never needs vibe
-task audit    # are the managed files exactly what the standard says?
+lefthook install   # register the Git hooks, once per clone
+task verify        # your code against your own tooling; never needs vibe
+vibe audit         # does the repository have the contract's properties?
 ```
 
-`task verify` must pass before the first commit, since the pre-push hook
-and CI run the same checks. `task audit` prints `conformant` and exits 0.
-If it fails with an error about an option in `vibe.yaml` (for example
-`no code-intelligence providers are available yet`), it ran an older
-`vibe` from `PATH`; see step 2.
+`vibe audit` runs the static checks, then the execution checks and
+probes in a throwaway copy of the repository: it runs `verify` with a
+planted defect, the agent hooks, and the guard corpus through the
+guard. It ends with `Verdict: conformant` and exit `0`. `vibe audit
+--static` is the quick run, which never reaches a verdict. See
+[`vibe audit`](usage.md#vibe-audit).
 
 ## 8. Commit
 
-Commit everything `sync` wrote, **including `.vibe/state.yaml`**. It is
-what lets CI pin the `vibe` version and lets later syncs tell your edits
-from template upgrades.
-
 ```sh
 git add -A
-git commit -m "chore: adopt VibeConform prod-go/v1"
+git commit -m "chore: adopt the VibeConform contract"
 ```
 
 The pre-commit hook runs on this commit. Then push.
 
 ## 9. Make the checks required
 
-In the repository's branch protection (GitHub: Settings → Branches, or a
-ruleset), require both:
-
-- **`CI / gate`**: your verification, on every pull request.
-- **`Conformance / audit`**: the managed files still match the standard.
-
-Without the second one, a hand-edited managed file merges unnoticed.
+In the repository's branch protection (GitHub: Settings → Branches, or
+a ruleset), require the CI jobs that verify (with the references,
+`CI / verify (ubuntu-latest)`, `CI / verify (windows-latest)` and
+`CI / security`) and the audit job (`Audit / audit`). Without the audit,
+a change that breaks a rule merges unnoticed.
 
 ## Day to day
 
-- **Never hand-edit a managed file.** `vibe audit` lists them. A direct
-  edit is drift: `audit` exits 2, and the next `sync` puts the file back.
-  Put your own tasks in `Taskfile.local.yml`, your own Git hooks in
-  `lefthook.local.yml`, and change behavior through `vibe.yaml`.
-- **Changing what you opted into** is one edit to `vibe.yaml`, then
-  `vibe diff`, then `vibe sync`, then a commit. Deselecting removes only
-  what `sync` wrote and you left unmodified
-  ([Deselecting](usage.md#deselecting)).
-- **Upgrading VibeConform:** install the newer tag, then `vibe sync`.
-  Review the diff: template changes, plus the new `vibe_version` in
-  `.vibe/state.yaml`. CI keeps using the recorded version until you
-  commit that.
-- **A conflict** means a managed file changed in a way `sync` cannot
-  account for. `sync` leaves it untouched and exits non-zero. Reconcile
-  the file, or delete it and sync again.
+- **Every file is yours.** Change the Taskfile, the hooks, the CI or the
+  lint rules directly. The audit fails only when a property is lost, and
+  each finding names the file to change and the direction of the fix.
+- **Guardrail settings need you.** The agent may not change
+  `.claude/settings.json` or `.claude/hooks/` until you run `vibe unlock`
+  in your own terminal, and never `.claude/hooks/policy.json`. See
+  [`vibe unlock`](usage.md#vibe-unlock).
+- **Upgrading VibeConform:** install the newer `vibe` and `vibe-guard`,
+  run `vibe init --skill`, and ask the agent to upgrade. Within a contract
+  MAJOR it bumps `contract:` in `vibe.yaml`, updates the pinned versions
+  and runs the audit loop.
 
 ## Adopting an existing repository
 
-The steps are the same. The difference is that files you already have,
-such as `Taskfile.yml` or `.github/workflows/ci.yml`, are not yet
-recorded in state. When their content differs from the standard's,
-`sync` reports them as **conflicts** and does not overwrite them. Move
-anything you want to keep into `Taskfile.local.yml`, `lefthook.local.yml`
-or your own workflow file, delete the conflicting file, and sync again. An existing docs tree
-can be adopted in place with the `development.*_dir` keys (spec 0034,
-[Development workflow](usage.md#development-workflow)).
-
-## Other standards
-
-- **`prod-ts`:** `vibe init prod-ts v1`. You need a `package.json` with a
-  `packageManager: "pnpm@10.x"` field, eslint, prettier, and typescript
-  as devDependencies, a committed `pnpm-lock.yaml`, and a `tsconfig.json`
-  that extends the generated `tsconfig.base.json`. See [`prod-ts` uses
-  pnpm](usage.md#prod-ts-uses-pnpm) and `examples/typescript`.
-- **`prod-py`:** `vibe init prod-py v1`. You need a `pyproject.toml`
-  whose dev dependency group has ruff, pyright, and pytest, and a
-  committed `uv.lock`. See `examples/python`.
-- **`prod-mono`:** add a `components:` list (`id`, `path`, `profile`)
-  to `vibe.yaml`, which `init` does not write. See [What `prod-mono/v1`
-  manages](usage.md#what-prod-monov1-manages) and `examples/monorepo`.
+The steps are the same. The setup skill keeps what already satisfies a
+rule (your task runner, hook manager, CI layout and lint rules) and adds
+only what is missing. A repository set up by the old template-sync
+system (it has `.vibe/`, or a `vibe.yaml` with `standard:`) is migrated
+first; see [Leaving the template-sync
+system](usage.md#leaving-the-template-sync-system).
 
 ## Leaving
 
-Everything generated keeps working without `vibe`. Removal is deleting
-four things; see [Removing VibeConform](usage.md#removing-vibeconform).
+Nothing the repository runs calls `vibe`, so removing VibeConform is
+deleting `vibe.yaml`, the audit job and the setup skill; see
+[Removing VibeConform](usage.md#removing-vibeconform).

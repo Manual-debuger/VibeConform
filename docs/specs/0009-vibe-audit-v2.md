@@ -1,6 +1,6 @@
 # Spec 0009: `vibe audit` (v2 — strict conformance gate)
 
-Status: accepted and implemented. **Partly superseded by
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented. **Partly superseded by
 `docs/specs/0019-drift-classification.md`**, which splits the `Overwrite`
 decision below into `LocalDrift` and `OutOfDate`, gives them distinct
 messages, adds exit code `3` for out-of-date-only, and makes a `vibe` older

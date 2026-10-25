@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted. Implemented per `docs/specs/0042-workflow-neutral-defaults.md`.
 Amends ADR 0015 §3 and §5. Does not remove anything ADR 0015 added.
 

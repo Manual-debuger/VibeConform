@@ -1,6 +1,6 @@
 # Spec 0039: Tool Paths in `vibe doctor`, and Graphify's Own Skill Beside VibeConform's
 
-Status: accepted and implemented (ADR 0020). Issue #56. Implementation
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented (ADR 0020). Issue #56. Implementation
 plan: `docs/plans/0039-doctor-paths-graphify-coexistence.md`. Builds on
 spec 0028 (environment doctor), spec 0035 (Graphify) and ADR 0016
 (integration-owned `.gitignore` sections).

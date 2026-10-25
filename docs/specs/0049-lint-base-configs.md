@@ -1,6 +1,6 @@
 # Spec 0049: Base Configs for ESLint and Ruff
 
-Status: accepted and implemented (2026-10-15). Issue #80 (the umbrella), the second step after spec
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented (2026-10-15). Issue #80 (the umbrella), the second step after spec
 0048. Settled with the user on 2026-10-15 in the grilling of #80
 (Q1–Q18). Decided by ADR 0024.
 

@@ -1,6 +1,6 @@
 # Spec 0048: ESLint Lints Every File the Standard Formats
 
-Status: accepted and implemented (2026-10-15). Issue #91. The first step of #80, settled with the user
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented (2026-10-15). Issue #91. The first step of #80, settled with the user
 on 2026-10-15 in the grilling of #80. A file the standard treats as
 source is not left to an extension seam. It gets its own release tag.
 

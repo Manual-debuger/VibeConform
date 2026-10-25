@@ -90,8 +90,7 @@ func TestReferenceHooksAreTheGuards(t *testing.T) {
 }
 
 // TestImportsOnlyGuard: among this repository's packages, setupskill
-// imports only internal/guard, so that #112 can remove the old packages
-// without touching it.
+// imports only internal/guard.
 func TestImportsOnlyGuard(t *testing.T) {
 	const internal = "github.com/Manual-debuger/VibeConform/internal/"
 	paths, err := filepath.Glob("*.go")

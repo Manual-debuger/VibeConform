@@ -1,7 +1,7 @@
 name: Contract
 
-# The contract audit (spec 0052) of this repository. It is
-# repository-owned, so adopters do not receive it.
+# The contract audit (spec 0052) of this repository. Adopters get their
+# own audit job from the setup skill's reference audit.yml.
 #
 # Two jobs. "Contract / audit" runs the full audit (spec 0053) and passes
 # on exit 0; it is a required check, next to CI / gate (spec 0059).

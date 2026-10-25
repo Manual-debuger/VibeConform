@@ -1,6 +1,6 @@
 # Spec 0032: Component AGENTS.md and CLAUDE.md for `prod-mono`
 
-Status: accepted and implemented. Tracks issue #49 ("Component-level
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented. Tracks issue #49 ("Component-level
 AGENTS.md"). Builds on spec 0025 (`prod-mono`), spec 0030 (the workflow
 section) and spec 0031 (the spec skill). Component imports stay tied to
 a workflow after spec 0042, which moved only the root `CLAUDE.md`

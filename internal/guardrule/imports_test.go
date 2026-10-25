@@ -11,8 +11,7 @@ import (
 )
 
 // guardrule is shared by the contract audit and vibe-guard, and imports
-// no internal package at all, the old system's least of all (spec 0053,
-// acceptance criterion 10).
+// no internal package at all (spec 0053, acceptance criterion 10).
 func TestImportsNoInternalPackage(t *testing.T) {
 	const internal = "github.com/Manual-debuger/VibeConform/internal/"
 	files, err := filepath.Glob("*.go")

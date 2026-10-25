@@ -1,8 +1,8 @@
 # Documentation
 
-VibeConform's specs, plans, architecture and decision records. This
-repository also commits each implementation plan, under [`plans/`](plans/),
-next to the spec it implements (see `AGENTS.md`).
+VibeConform's specs, architecture and decision records. Older work also
+has an implementation plan under [`plans/`](plans/); since then a spec's
+"Implementation Decisions" section is its plan (see `AGENTS.md`).
 
 For users: [`adopting.md`](adopting.md) walks through adopting VibeConform
 in a new repository, and [`usage.md`](usage.md) is the reference manual.
