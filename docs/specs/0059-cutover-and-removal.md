@@ -124,7 +124,11 @@ visible in every change:
     - `platforms: [linux, windows]`;
     - `agents: [claude]`;
     - `components` detected from `go.mod`, `pyproject.toml` and
-      `package.json`, or none for a single component at the root;
+      `package.json`, or no `components:` key when the one component
+      found is at the root. With no manifest at all it writes nothing
+      and says what it looked for: without components the audit reads
+      the root's language from its manifest, so it could not read that
+      file;
     - the four entrypoints as comments to fill in.
     It refuses to overwrite an existing `vibe.yaml`, version 1 included,
     and says why. `vibe init --skill` is unchanged. `vibe init
@@ -324,8 +328,9 @@ not check which packages exist.
   - `audit` and `doctor` on a version 1 file and on no file;
   - `init` on fixtures: Go at the root, Python, TypeScript, a
     three-language monorepo, an existing `vibe.yaml`. The written file
-    must parse, and must get exactly the V-04 finding for the missing
-    entrypoints;
+    must parse, and the audit must fail V-04 for the missing
+    entrypoints, and each rule that needs an entrypoint with only a
+    "fix V-04 first" finding;
   - `doctor` with a missing entrypoint program and with a missing
     `vibe-guard`;
   - `sync`, `diff` and `check` print the pointer and exit 1.
@@ -382,7 +387,8 @@ not check which packages exist.
       version 1 file, and for no file.
 - [ ] `vibe init` writes a version 2 `vibe.yaml` with the detected
       components for each fixture, refuses an existing file, and the
-      audit then reports only the missing entrypoints (V-04).
+      audit then fails V-04 for the missing entrypoints, and each rule
+      that needs an entrypoint with only a "fix V-04 first" finding.
 - [ ] `vibe doctor` reports a missing entrypoint program, missing bash
       and a missing `vibe-guard`, and changes no file.
 - [ ] The old packages and CLI files of Desired Behavior 12 are gone,
