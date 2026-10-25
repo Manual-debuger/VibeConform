@@ -50,6 +50,24 @@ type contractSeams struct {
 	openRepo func(ctx context.Context, root string) (*contract.Repo, error)
 }
 
+// open lists the tracked files of the repository at root, through the
+// openRepo seam when a test set it.
+func (s contractSeams) open(ctx context.Context, root string) (*contract.Repo, error) {
+	if s.openRepo != nil {
+		return s.openRepo(ctx, root)
+	}
+	return contract.OpenRepo(ctx, root)
+}
+
+// commandContext is cmd's context, or the background one when cmd runs
+// without one.
+func commandContext(cmd *cobra.Command) context.Context {
+	if ctx := cmd.Context(); ctx != nil {
+		return ctx
+	}
+	return context.Background()
+}
+
 // configFileName is the configuration vibe audit reads at the repository
 // root unless --config names another file.
 const configFileName = "vibe.yaml"
@@ -102,19 +120,11 @@ func runContractAudit(cmd *cobra.Command, f auditFlags, label string, data []byt
 	if f.probeTimeout <= 0 {
 		return fmt.Errorf("--probe-timeout must be a positive duration, such as 30m; got %s", f.probeTimeout)
 	}
-	ctx := cmd.Context()
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	// An interrupt ends the runs in the probe copy, and the copy is still
 	// deleted.
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	ctx, stop := signal.NotifyContext(commandContext(cmd), os.Interrupt)
 	defer stop()
-	openRepo := contract.OpenRepo
-	if f.seams.openRepo != nil {
-		openRepo = f.seams.openRepo
-	}
-	repo, err := openRepo(ctx, f.repoRoot)
+	repo, err := f.seams.open(ctx, f.repoRoot)
 	if err != nil {
 		return err
 	}

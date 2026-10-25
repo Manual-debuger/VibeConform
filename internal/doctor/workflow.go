@@ -15,7 +15,8 @@ var entrypointOrder = append(slices.Clone(contract.RequiredEntrypoints), contrac
 
 // Entrypoints checks the program of each declared entrypoint command, one
 // line per program, naming the entrypoints that run it. A program named by
-// a path is looked for under repoRoot, any other on PATH. A command that
+// an absolute path (a leading slash on every OS) is looked for there, one
+// named by a relative path under repoRoot, any other on PATH. A command that
 // is not one simple command, as V-04 reads it, has no program to look
 // for: its line is UNVERIFIED, and V-04 reports it. Undeclared entrypoints
 // are V-04's too.
@@ -26,18 +27,19 @@ func Entrypoints(env Env, repoRoot string, eps contract.Entrypoints) []Result {
 	}
 	var programs []*program
 	var results []Result
+	unverified := func(entrypoint, detail string) {
+		results = append(results, Result{Status: Unverified, Name: "entrypoints." + entrypoint, Detail: detail})
+	}
 	for _, name := range entrypointOrder {
 		for _, src := range eps[name].Commands {
 			cmd, err := contract.ParseSimpleCommand(src)
 			if err != nil {
-				results = append(results, Result{Status: Unverified, Name: "entrypoints." + name,
-					Detail: fmt.Sprintf("%q %s; vibe audit's V-04 reports it", src, err)})
+				unverified(name, fmt.Sprintf("%q %s; vibe audit's V-04 reports it", src, err))
 				continue
 			}
 			first := cmd.Words[0]
 			if !first.Literal {
-				results = append(results, Result{Status: Unverified, Name: "entrypoints." + name,
-					Detail: fmt.Sprintf("%q: its program is only known when it runs", src)})
+				unverified(name, fmt.Sprintf("%q: its program is only known when it runs", src))
 				continue
 			}
 			i := slices.IndexFunc(programs, func(p *program) bool { return p.name == first.Text })
@@ -59,7 +61,9 @@ func Entrypoints(env Env, repoRoot string, eps contract.Entrypoints) []Result {
 		names := strings.Join(p.entrypoints, ", ")
 		res := Result{Name: p.name}
 		switch {
-		case filepath.IsAbs(p.name):
+		// A leading slash is absolute on every OS: the command runs in a
+		// POSIX shell, where /usr/bin/x is not under the repository.
+		case filepath.IsAbs(p.name) || strings.HasPrefix(p.name, "/"):
 			if env.Exists(p.name) {
 				res.Status, res.Detail = Pass, "found; runs "+names
 			} else {

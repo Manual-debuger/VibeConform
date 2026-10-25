@@ -30,9 +30,6 @@ type Status int
 const (
 	// Pass means checked, and healthy.
 	Pass Status = iota
-	// Warn means the workflow runs, but diverges from what CI sees or
-	// lacks an optional capability.
-	Warn
 	// Fail means a required local workflow cannot run.
 	Fail
 	// Unverified means doctor cannot probe this reliably, and says so
@@ -45,8 +42,6 @@ func (s Status) String() string {
 	switch s {
 	case Pass:
 		return "PASS"
-	case Warn:
-		return "WARN"
 	case Fail:
 		return "FAIL"
 	case Unverified:
@@ -98,8 +93,8 @@ func (r *Report) Write(w io.Writer) error {
 	for _, res := range r.Results {
 		fmt.Fprintf(&b, "%-*s %-*s  %s\n", statusWidth, res.Status, nameWidth, res.Name, res.Detail)
 	}
-	fmt.Fprintf(&b, "summary: %d pass, %d warn, %d fail, %d unverified\n",
-		r.Count(Pass), r.Count(Warn), r.Count(Fail), r.Count(Unverified))
+	fmt.Fprintf(&b, "summary: %d pass, %d fail, %d unverified\n",
+		r.Count(Pass), r.Count(Fail), r.Count(Unverified))
 	_, err := io.WriteString(w, b.String())
 	return err
 }

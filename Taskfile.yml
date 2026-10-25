@@ -310,26 +310,38 @@ tasks:
     desc: Run the full contract audit on this checkout with the vibe and
       vibe-guard built from it.
     cmds:
-      - |
-        dir="$(git rev-parse --path-format=absolute --git-path vibe-audit)" || exit 1
-        go build -o "$dir/vibe{{exeExt}}" ./cmd/vibe || exit 1
-        go build -o "$dir/vibe-guard{{exeExt}}" ./cmd/vibe-guard || exit 1
-        PATH="$dir{{if eq OS "windows"}};{{else}}:{{end}}$PATH" vibe audit --repo-root .
+      - task: audit:run
 
   # The static rules only, in seconds. A static audit never reaches a
   # verdict, because the execution checks and probes do not run, so vibe
-  # exits 1 when no rule failed; this task exits 0 then, and keeps exit 2,
-  # a MUST rule that fails. Read the report for undecided rules.
+  # exits 1 when no rule failed. This task exits 0 then, and keeps exit 2,
+  # a MUST rule that fails. Read the report for undecided rules. vibe
+  # prints no report when it cannot audit at all (no vibe.yaml, a version
+  # 1 or invalid one), and that exit 1 stays 1.
   audit:static:
     desc: Run the static contract audit (vibe audit --static) with the vibe
       built from this checkout.
     cmds:
+      - task: audit:run
+        vars: {STATIC: "true"}
+
+  audit:run:
+    internal: true
+    silent: true
+    cmds:
       - |
         dir="$(git rev-parse --path-format=absolute --git-path vibe-audit)" || exit 1
         go build -o "$dir/vibe{{exeExt}}" ./cmd/vibe || exit 1
+        go build -o "$dir/vibe-guard{{exeExt}}" ./cmd/vibe-guard || exit 1
+        export PATH="$dir{{if eq OS "windows"}};{{else}}:{{end}}$PATH"
+        if [ -z "{{.STATIC}}" ]; then
+          vibe audit --repo-root .
+          exit $?
+        fi
         rc=0
-        "$dir/vibe{{exeExt}}" audit --static --repo-root . || rc=$?
-        [ "$rc" -ne 1 ] || rc=0
+        report="$(vibe audit --static --repo-root .)" || rc=$?
+        [ -z "$report" ] || printf '%s\n' "$report"
+        if [ "$rc" -eq 1 ] && [ -n "$report" ]; then rc=0; fi
         exit $rc
 
   verify:

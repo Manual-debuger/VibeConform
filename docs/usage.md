@@ -212,8 +212,11 @@ agents: [claude]
   below the root with a `go.mod`, a `pyproject.toml`, or a `package.json`
   beside a `tsconfig.json` is a component, of language `go`, `python` or
   `typescript`. When a directory has more than one, that order decides.
-  Directories under `node_modules` or `vendor` are skipped, and a
-  component inside another one is not a component of its own. A single
+  Directories under `node_modules` or `vendor` are skipped. A manifest
+  inside another component is not a component of its own, since
+  components do not nest; `vibe init` prints one line for each, such as
+  `skipped services/api/tools: inside the component services/api (go);
+  components do not nest`. A single
   component at the root gets no `components:` key, because the audit
   finds it from the root manifest; several components, or one in a
   subdirectory, are listed:
@@ -228,7 +231,9 @@ agents: [claude]
 
 - **No component found** is an error, and nothing is written:
   `init: found no component in the tracked files: …; commit the
-  project's manifest and run vibe init again`.
+  project's manifest and run vibe init again`. Without a `components:`
+  key the audit reads the root's language from its manifest, so a
+  `vibe.yaml` written here could not be read.
 - **Entrypoints are left as comments.** `vibe init` cannot know which
   commands verify and format the repository. It checks what it writes
   with the audit's own parser, so the file always parses, but the audit
@@ -710,7 +715,7 @@ PASS        vibe.yaml      version 2, contract 1.1.0
 PASS        task           C:\Users\me\AppData\Local\Microsoft\WinGet\Links\task.exe; runs verify, verify-fast, fmt, fmt-check
 PASS        bash           C:\Program Files\Git\bin\bash.exe; runs the hook commands
 FAIL        vibe-guard     not on PATH; the PreToolUse hook that runs it fails on every tool call
-summary: 4 pass, 0 warn, 1 fail, 0 unverified
+summary: 4 pass, 1 fail, 0 unverified
 Error: doctor: 1 check failed
 ```
 
@@ -723,8 +728,10 @@ The checks, in order:
   configuration, do not run.
 - **One line per entrypoint program:** the first word of each command
   of `verify`, `verify-fast`, `fmt`, `fmt-check` and `setup`, with the
-  entrypoints that run it. A program named by a path is looked for in
-  the repository (or at that absolute path), any other on `PATH`. A
+  entrypoints that run it. A program named by an absolute path is
+  looked for at that path (a leading `/` counts as absolute on Windows
+  too), one named by a relative path in the repository, any other on
+  `PATH`. A
   command that is not one simple command, as V-04 reads it, or whose
   program is an expansion, is `UNVERIFIED`; with no entrypoint declared,
   the line says so. V-04 reports these.
@@ -1540,9 +1547,11 @@ repository is an ordinary file, edited directly.
   worktree's Git directory, puts that directory first on `PATH`, and runs
   the full `vibe audit`. The probes therefore use this checkout's
   `vibe-guard`, and a stale `vibe` installed elsewhere never gives the
-  verdict. `task audit:static` runs `vibe audit --static` with the
-  checkout's `vibe`; it exits `0` when no MUST rule fails, since a static
-  audit never reaches a verdict.
+  verdict. `task audit:static` runs `vibe audit --static` the same way.
+  Since a static audit never reaches a verdict, it exits `0` when the
+  report shows no failing MUST rule, `2` when it does, and `1` when
+  `vibe` printed no report: no `vibe.yaml`, a version 1 or an invalid
+  one.
 - `.github/workflows/contract-audit.yml` runs the same full audit as the
   required check `Contract / audit`, next to `CI / gate`. Its
   `Contract / audit (static)` job is not required.

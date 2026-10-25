@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted (2026-10-15). Implemented first by `docs/specs/0049-lint-base-configs.md`
 (lint base configs), then spec 0050 (guard exceptions). Issue #80.
 

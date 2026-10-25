@@ -105,7 +105,6 @@ func TestReportWrite(t *testing.T) {
 		Result{Status: Pass, Name: "git", Detail: "ok"},
 		Result{Status: Unverified, Name: "worktree", Detail: "not checked"},
 		Result{Status: Fail, Name: "golangci-lint", Detail: "missing"},
-		Result{Status: Warn, Name: "go", Detail: "slow"},
 	)
 	var out bytes.Buffer
 	if err := r.Write(&out); err != nil {
@@ -115,15 +114,14 @@ func TestReportWrite(t *testing.T) {
 		"PASS        git            ok\n" +
 		"UNVERIFIED  worktree       not checked\n" +
 		"FAIL        golangci-lint  missing\n" +
-		"WARN        go             slow\n" +
-		"summary: 1 pass, 1 warn, 1 fail, 1 unverified\n"
+		"summary: 1 pass, 1 fail, 1 unverified\n"
 	if out.String() != want {
 		t.Errorf("Write() =\n%s\nwant\n%s", out.String(), want)
 	}
 }
 
 func TestStatusString(t *testing.T) {
-	for s, want := range map[Status]string{Pass: "PASS", Warn: "WARN", Fail: "FAIL", Unverified: "UNVERIFIED"} {
+	for s, want := range map[Status]string{Pass: "PASS", Fail: "FAIL", Unverified: "UNVERIFIED"} {
 		if s.String() != want {
 			t.Errorf("%d.String() = %q, want %q", int(s), s.String(), want)
 		}

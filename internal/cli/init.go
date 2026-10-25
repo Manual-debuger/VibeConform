@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -79,42 +78,37 @@ func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) err
 	if err := refuseExisting(file); err != nil {
 		return err
 	}
-	ctx := cmd.Context()
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	openRepo := contract.OpenRepo
-	if seams.openRepo != nil {
-		openRepo = seams.openRepo
-	}
-	repo, err := openRepo(ctx, repoRoot)
+	repo, err := seams.open(commandContext(cmd), repoRoot)
 	if err != nil {
 		return fmt.Errorf("init: %w", err)
 	}
-	components := detectComponents(repo.Files())
+	components, nested := detectComponents(repo.Files())
 	if len(components) == 0 {
 		return fmt.Errorf("init: found no component in the tracked files: no go.mod, pyproject.toml, "+
 			"or package.json beside a tsconfig.json within %d directories of the root; "+
 			"commit the project's manifest and run vibe init again", initDepth)
 	}
 
-	data := renderConfig(components, false)
-	cfg, err := contract.Parse(configFileName, data, repo)
-	if err != nil || !slices.Equal(cfg.Components, components) {
-		// The audit detects the root's language only from a single root
-		// manifest, so a root component it would read otherwise is
-		// declared.
-		data = renderConfig(components, true)
-		if _, err := contract.Parse(configFileName, data, repo); err != nil {
-			return fmt.Errorf("init: the vibe.yaml it would write does not parse, which is a bug in vibe: %w", err)
+	data := renderConfig(components)
+	if len(components) == 1 && components[0].Path == "." {
+		// A single root component goes without a components key when the
+		// audit detects the same one. It detects the root's language only
+		// from a single root manifest, so a root it would read otherwise
+		// stays declared.
+		implicit := renderConfig(nil)
+		if cfg, err := contract.Parse(configFileName, implicit, repo); err == nil && slices.Equal(cfg.Components, components) {
+			data = implicit
 		}
+	}
+	if _, err := contract.Parse(configFileName, data, repo); err != nil {
+		return fmt.Errorf("init: the vibe.yaml it would write does not parse, which is a bug in vibe: %w", err)
 	}
 
 	// O_EXCL: a vibe.yaml that appeared since the check is not overwritten.
 	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) // #nosec G302 G304 -- vibe.yaml at the operator's repository root
 	if err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			return refuseExisting(file)
+			return createRefused(file)
 		}
 		return fmt.Errorf("init: %w", err)
 	}
@@ -132,6 +126,12 @@ func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) err
 	}
 	for _, c := range components {
 		if _, err := fmt.Fprintf(w, "component %s (%s)\n", c.Path, c.Language); err != nil {
+			return fmt.Errorf("init: %w", err)
+		}
+	}
+	for _, n := range nested {
+		if _, err := fmt.Fprintf(w, "skipped %s: inside the component %s (%s); components do not nest\n",
+			n.dir, n.in.Path, n.in.Language); err != nil {
 			return fmt.Errorf("init: %w", err)
 		}
 	}
@@ -156,6 +156,16 @@ func refuseExisting(file string) error {
 	return fmt.Errorf("init: %s exists; vibe init does not overwrite it. Edit it, or remove it and run vibe init again", configFileName)
 }
 
+// createRefused is the error when the exclusive create of file found one.
+// It is never nil: a file that is gone again by the time init reads it
+// still means init wrote nothing.
+func createRefused(file string) error {
+	if err := refuseExisting(file); err != nil {
+		return err
+	}
+	return fmt.Errorf("init: %s appeared while vibe init ran and is gone again; nothing was written. Run vibe init again", configFileName)
+}
+
 // initDepth is how many directories below the root vibe init looks for a
 // component's manifest.
 const initDepth = 3
@@ -169,8 +179,9 @@ var skippedDirs = []string{"node_modules", "vendor"}
 // pyproject.toml, or a package.json beside a tsconfig.json, in that order
 // when a directory has more than one. Components do not nest, so a
 // directory inside another component is not one. The result is sorted by
-// path.
-func detectComponents(files []string) []contract.Component {
+// path. nested holds each directory with a manifest that lies inside
+// another component, with that component.
+func detectComponents(files []string) (components []contract.Component, nested []nestedManifest) {
 	has := map[string]bool{}
 	for _, f := range files {
 		has[f] = true
@@ -204,13 +215,22 @@ func detectComponents(files []string) []contract.Component {
 	}
 	slices.SortFunc(found, func(a, b contract.Component) int { return strings.Compare(a.Path, b.Path) })
 
-	var out []contract.Component
 	for _, c := range found {
-		if !slices.ContainsFunc(out, func(o contract.Component) bool { return insideDir(c.Path, o.Path) }) {
-			out = append(out, c)
+		i := slices.IndexFunc(components, func(o contract.Component) bool { return insideDir(c.Path, o.Path) })
+		if i < 0 {
+			components = append(components, c)
+		} else {
+			nested = append(nested, nestedManifest{dir: c.Path, in: components[i]})
 		}
 	}
-	return out
+	return components, nested
+}
+
+// nestedManifest is a directory with a manifest inside the component in,
+// which is therefore not a component of its own.
+type nestedManifest struct {
+	dir string
+	in  contract.Component
 }
 
 // componentDir reports whether dir may hold a component: within initDepth
@@ -239,16 +259,17 @@ func insideDir(dir, parent string) bool {
 	return strings.HasPrefix(dir, parent+"/")
 }
 
-// renderConfig writes the vibe.yaml vibe init writes. A single component
-// at the root goes without a components key unless declare is set.
-func renderConfig(components []contract.Component, declare bool) []byte {
+// renderConfig writes the vibe.yaml vibe init writes, declaring
+// components. With none it writes no components key, so the audit
+// detects the root component.
+func renderConfig(components []contract.Component) []byte {
 	var b strings.Builder
 	b.WriteString("# vibe.yaml version 2, written by vibe init. vibe audit reads it and\n")
 	b.WriteString("# checks the repository against the VibeConform contract.\n")
 	fmt.Fprintf(&b, "contract: %s\n", contract.Implemented)
 	b.WriteString("platforms: [linux, windows]\n")
 	b.WriteString("agents: [claude]\n")
-	if declare || len(components) != 1 || components[0].Path != "." {
+	if len(components) > 0 {
 		b.WriteString("components:\n")
 		for _, c := range components {
 			fmt.Fprintf(&b, "  - path: %q\n    language: %s\n", c.Path, c.Language)
