@@ -20,10 +20,11 @@ func newDoctorCmd(seams contractSeams) *cobra.Command {
 		Use:   "doctor",
 		Short: "Diagnose whether this machine can run the repository's workflow",
 		Long: "vibe doctor reads vibe.yaml version 2 and .claude/settings.json and checks,\n" +
-			"one line each: git; the program of each entrypoint command (on PATH, or in\n" +
-			"the repository when named by a path); the bash that runs the hook commands\n" +
+			"one line each: git; the program of each entrypoint command (on PATH; at its\n" +
+			"path when absolute, a leading / included; in the repository when named by a\n" +
+			"relative path); the bash that runs the hook commands\n" +
 			"(Git Bash on Windows), found as vibe audit finds it; and vibe-guard on PATH\n" +
-			"when a PreToolUse hook runs it. It prints PASS, WARN, FAIL or UNVERIFIED\n" +
+			"when a PreToolUse hook runs it. It prints PASS, FAIL or UNVERIFIED\n" +
 			"per check and exits 1 if any check fails. Read-only: it installs nothing,\n" +
 			"writes nothing, and does not check conformance (that is vibe audit).",
 		Args: cobra.NoArgs,
