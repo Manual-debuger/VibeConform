@@ -15,8 +15,7 @@ import (
 var version = "dev"
 
 // devVersion is what an unstamped build reports. It is deliberately not
-// valid semver: state.CompareWriters refuses to order it, so spec 0019's
-// downgrade guard stays dormant rather than guessing.
+// valid semver, so that nothing mistakes it for a release.
 const devVersion = "dev"
 
 // resolveVersion reports the version this binary should call itself.
@@ -24,12 +23,9 @@ const devVersion = "dev"
 // ldflags wins when present, but it is absent for the way most people get
 // vibe: "go install github.com/.../cmd/vibe@latest" compiles from source
 // without GoReleaser, so main.version keeps its default and the binary
-// would report "dev" despite being a specific published release. That is
-// not cosmetic — task audit's fallback installs vibe exactly that way
-// (go install …@<recorded version>, spec 0022), and so do most adopters,
-// so every adopter's binary would be unorderable and spec 0019's
-// stale-binary guard would never fire for the population it exists to
-// protect.
+// would report "dev" despite being a specific published release. Most
+// adopters install vibe that way, and the setup skill and vibe init --skill
+// name the version vibe reports.
 //
 // The module version is recorded in the build info regardless, so read it
 // from there. It is "(devel)" for a plain "go build" from a work tree,
@@ -52,8 +48,7 @@ func main() {
 		os.Exit(code)
 	}
 	root := cli.NewRootCmd(resolveVersion(version))
-	// Exit code carries meaning: 2 means "audited, not conformant" and 3
-	// "audited, merely out of date", which CI needs to tell apart from 1,
-	// "the tool could not answer".
+	// Exit code carries meaning: 2 means "audited, not conformant", which
+	// CI needs to tell apart from 1, "the tool could not answer".
 	os.Exit(cli.ExitCode(root.Execute()))
 }

@@ -1,6 +1,0 @@
-# The standard's settings are in ruff.base.toml, which VibeConform
-# manages. Settings here win: [lint] extend-select adds rules, and ignore
-# or per-file-ignores switch them off. Keep the extend line: vibe audit
-# fails without it, and reports this file as extended once it differs
-# from what vibe created (ADR 0024).
-extend = "ruff.base.toml"

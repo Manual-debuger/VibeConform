@@ -2,10 +2,8 @@ package doctor
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 )
 
@@ -144,33 +142,5 @@ func TestWorktree(t *testing.T) {
 				t.Errorf("Worktree() = %+v, want %+v", got, tc.want)
 			}
 		})
-	}
-}
-
-// TestRuntimeMarkersMatchTemplates holds the Go markers and the four
-// generated hook:context scripts together: both claim to detect the same
-// runtimes, and a marker added to one alone would make them disagree. The
-// templates are read from disk rather than imported, so doctor keeps
-// depending on no module.
-func TestRuntimeMarkersMatchTemplates(t *testing.T) {
-	for _, path := range []string{
-		"../module/repotooling/templates/Taskfile.yml",
-		"../module/tsrepotooling/templates/Taskfile.yml",
-		"../module/pyrepotooling/templates/Taskfile.yml",
-		"../module/monorepotooling/templates/Taskfile.yml.tmpl",
-	} {
-		data, err := os.ReadFile(filepath.FromSlash(path))
-		if err != nil {
-			t.Fatal(err)
-		}
-		script := string(data)
-		for _, m := range RuntimeMarkers {
-			if !strings.Contains(script, "test -e "+m.Path) {
-				t.Errorf("%s does not test for %s (%s)", path, m.Path, m.Runtime)
-			}
-		}
-		if n := strings.Count(script, "test -e /"); n != len(RuntimeMarkers) {
-			t.Errorf("%s tests %d marker paths, doctor knows %d", path, n, len(RuntimeMarkers))
-		}
 	}
 }

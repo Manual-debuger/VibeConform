@@ -150,51 +150,33 @@ func TestAuditDispatchNotAMapping(t *testing.T) {
 	assertStderr(t, r, "vibe.yaml:", "map")
 }
 
-// The old audit still runs on a v1 vibe.yaml: its own tests cover its
-// output; this one only shows the dispatch reaches it.
-func TestAuditDispatchV1RunsOldAudit(t *testing.T) {
+// A version 1 vibe.yaml (a top-level standard key) is no longer read: the
+// audit exits 1 and points at the migration guide, whatever flags it got
+// (spec 0059, Desired Behavior 9).
+func TestAuditV1PointsAtTheMigrationGuide(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	writeManifest(t, dir)
-	r := runVibeAudit(t, "--repo-root", dir)
-	assertExit(t, r, 2)
-	if !strings.Contains(r.stdout, "standard: prod-go/v1") {
-		t.Errorf("old audit did not run:\n%s", r.stdout)
-	}
-}
-
-func TestAuditNewFlagsNeedV2(t *testing.T) {
-	t.Parallel()
-	for _, flag := range []string{"--static", "--json"} {
-		t.Run(flag, func(t *testing.T) {
-			dir := t.TempDir()
-			writeManifest(t, dir)
-			r := runVibeAudit(t, "--repo-root", dir, flag)
+	for _, flags := range [][]string{nil, {"--static"}, {"--json"}, {"--config", "vibe.yaml"}} {
+		t.Run(strings.Join(append([]string{"audit"}, flags...), " "), func(t *testing.T) {
+			dir := contractFixture(t, withFile("vibe.yaml", "standard: prod-go\nversion: v1\n"))
+			args := []string{"--repo-root", dir}
+			if len(flags) == 2 {
+				args = append(args, flags[0], filepath.Join(dir, flags[1]))
+			} else {
+				args = append(args, flags...)
+			}
+			r := runVibeAudit(t, args...)
 			assertExit(t, r, 1)
-			assertStderr(t, r, flag, "contract")
+			assertStderr(t, r, "vibe.yaml", "version 1", "vibe init --skill", migrationGuide)
 			if r.stdout != "" {
-				t.Errorf("old audit ran despite %s:\n%s", flag, r.stdout)
+				t.Errorf("an audit ran on a version 1 file:\n%s", r.stdout)
 			}
 		})
 	}
 }
 
-func TestAuditConfigMustNameV2File(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	writeManifest(t, dir)
-	r := runVibeAudit(t, "--repo-root", dir, "--config", filepath.Join(dir, "vibe.yaml"))
-	assertExit(t, r, 1)
-	assertStderr(t, r, "--config", "contract")
-	if r.stdout != "" {
-		t.Errorf("old audit ran despite --config:\n%s", r.stdout)
-	}
-}
-
 func TestAuditConfigSelectsV2Beside(t *testing.T) {
 	t.Parallel()
-	// A repository keeps its v1 vibe.yaml for the old audit and its v2
-	// configuration beside it (spec 0052, "This repository").
+	// --config reads only the file it names, whatever vibe.yaml holds.
 	v2, err := os.ReadFile(filepath.Join(baselineFixture, "vibe.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -218,24 +200,20 @@ func TestAuditConfigErrorsNameTheConfigFile(t *testing.T) {
 	assertStderr(t, r, cfg+": platforms[0]:")
 }
 
-// Without vibe.yaml and without a contract audit flag, the old audit
-// reports the missing file as it always has.
-func TestAuditMissingVibeYAMLRunsOldAudit(t *testing.T) {
+// Without vibe.yaml the audit exits 1 and says to run vibe init, with or
+// without a contract audit flag (spec 0059, Desired Behavior 9).
+func TestAuditMissingVibeYAMLSaysRunInit(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t, withoutFile("vibe.yaml"))
-	r := runVibeAudit(t, "--repo-root", dir)
-	assertExit(t, r, 1)
-	assertStderr(t, r, "audit: open ", "vibe.yaml")
-}
-
-func TestAuditMissingVibeYAMLWithStatic(t *testing.T) {
-	t.Parallel()
-	dir := contractFixture(t, withoutFile("vibe.yaml"))
-	r := runVibeAudit(t, "--repo-root", dir, "--static")
-	assertExit(t, r, 1)
-	assertStderr(t, r, "vibe.yaml")
-	if strings.Contains(r.stderr, "audit: open") {
-		t.Errorf("--static fell back to the old audit:\n%s", r.stderr)
+	for _, flags := range [][]string{nil, {"--static"}, {"--json"}} {
+		t.Run(strings.Join(append([]string{"audit"}, flags...), " "), func(t *testing.T) {
+			dir := contractFixture(t, withoutFile("vibe.yaml"))
+			r := runVibeAudit(t, append([]string{"--repo-root", dir}, flags...)...)
+			assertExit(t, r, 1)
+			assertStderr(t, r, "vibe.yaml", "run `vibe init`")
+			if r.stdout != "" {
+				t.Errorf("an audit ran without vibe.yaml:\n%s", r.stdout)
+			}
+		})
 	}
 }
 
