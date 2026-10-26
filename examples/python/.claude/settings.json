@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "command -v vibe-guard >/dev/null 2>&1 || { echo \"vibe-guard is not installed; install it: go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@v0.13.0-alpha.1, or download it from https://github.com/Manual-debuger/VibeConform/releases/tag/v0.13.0-alpha.1\" >&2; exit 2; }; vibe-guard hook"
+            "command": "command -v vibe-guard >/dev/null 2>&1 || { echo \"vibe-guard is not installed; install it: go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@v0.14.0-alpha.1, or download it from https://github.com/Manual-debuger/VibeConform/releases/tag/v0.14.0-alpha.1\" >&2; exit 2; }; vibe-guard hook"
           }
         ]
       }

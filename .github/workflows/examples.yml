@@ -37,7 +37,7 @@ env:
   # The release the examples' audit.yml and settings.json name in place
   # of the references' {{VIBE_VERSION}}; the GitLab job renders the
   # reference .gitlab-ci.yml with it too.
-  VIBE_RELEASE: "v0.13.0-alpha.1"
+  VIBE_RELEASE: "v0.14.0-alpha.1"
 
 jobs:
   audit:
