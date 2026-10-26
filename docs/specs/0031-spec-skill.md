@@ -1,6 +1,6 @@
 # Spec 0031: `/spec` as a Claude Code Skill
 
-Status: accepted and implemented. Tracks issue #49 ("Claude Skill
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented. Tracks issue #49 ("Claude Skill
 follow-up", and the unverified `/spec` checks of spec 0030). Revises spec
 0030 §5: the Claude Code adapter generates a skill instead of a command.
 

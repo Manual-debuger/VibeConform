@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted. Implemented by `internal/manifest`, per
 `docs/specs/0025-prod-mono.md`.
 

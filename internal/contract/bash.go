@@ -8,13 +8,14 @@ import (
 	"strings"
 )
 
-// resolveBash finds the bash Claude Code runs hook commands with (spec
+// ResolveBash finds the bash Claude Code runs hook commands with (spec
 // 0053, "Hook commands run the way Claude Code runs them"), from env and
-// before the audit changes PATH. On Windows that is
+// before the audit changes PATH. vibe doctor finds it the same way (spec
+// 0059). On Windows that is
 // CLAUDE_CODE_GIT_BASH_PATH when set, otherwise Git for Windows' bash.exe
 // found next to git.exe, never the WSL launcher in System32. Elsewhere
 // it is bash on PATH. The error says why there is none.
-func resolveBash(env []string) (string, error) {
+func ResolveBash(env []string) (string, error) {
 	if runtime.GOOS != "windows" {
 		if p := lookPath("bash", env, ""); p != "" {
 			return p, nil

@@ -118,6 +118,35 @@ func (e *Env) readClaudeSettings(missingFix string) (s *claudeSettings, result P
 	return e.claudeSettings.settings, Pass(), true
 }
 
+// ClaudeSettingsFile is the Claude Code settings file the A rules read.
+const ClaudeSettingsFile = claudeSettingsFile
+
+// ClaudeHooks is what vibe doctor needs of .claude/settings.json (spec
+// 0059, Desired Behavior 11), read as the A rules read it.
+type ClaudeHooks struct {
+	// Commands is every command hook's command, by event name, then in
+	// file order.
+	Commands []string
+	// RunsVibeGuard is true when a PreToolUse hook runs `vibe-guard hook`.
+	RunsVibeGuard bool
+}
+
+// ReadClaudeHooks parses the content of .claude/settings.json.
+func ReadClaudeHooks(data []byte) (ClaudeHooks, error) {
+	s, err := parseClaudeSettings(data)
+	if err != nil {
+		return ClaudeHooks{}, err
+	}
+	var h ClaudeHooks
+	for _, event := range slices.Sorted(maps.Keys(s.Events)) {
+		for _, c := range s.commandHooks(event) {
+			h.Commands = append(h.Commands, c.command)
+		}
+	}
+	h.RunsVibeGuard = s.runsVibeGuard()
+	return h, nil
+}
+
 // parsedClaudeSettings is .claude/settings.json parsed, once per audit.
 type parsedClaudeSettings struct {
 	settings *claudeSettings

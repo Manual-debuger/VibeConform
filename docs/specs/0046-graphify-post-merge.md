@@ -1,6 +1,6 @@
 # Spec 0046: Graphify Rebuilds the Graph After a Pull
 
-Status: accepted and implemented (2026-10-15). Issue #82. Replaces acceptance criterion 4 of spec 0035
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented (2026-10-15). Issue #82. Replaces acceptance criterion 4 of spec 0035
 ("They exist only under `post-commit` and `post-checkout`"). The rest of
 spec 0035 stays as it is.
 Settled with the user on 2026-10-14 in the grilling of #82, #84 and #85.

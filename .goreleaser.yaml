@@ -10,7 +10,8 @@ before:
 # archive of its own, so the guard can be installed without vibe and kept
 # after VibeConform is removed (ADR 0025, decision 8). The version is the
 # tag itself ({{ .Tag }}, with its leading v), which is what the binaries
-# print and what .vibe/state.yaml records; {{ .Version }} drops the v.
+# print and what the setup action's version input takes; {{ .Version }}
+# drops the v.
 builds:
   - id: vibe
     main: ./cmd/vibe

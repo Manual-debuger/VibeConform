@@ -6,6 +6,11 @@ Accepted. Implemented per `docs/specs/0041-vibeconform-skill.md`.
 Narrows the "skills for other harnesses" non-goal of specs 0030 and
 0031 (#50) for one skill.
 
+Note (spec 0059): `internal/module/agents/vibeskill` and the
+`vibeconform` skill are gone; the decision now lives in
+`internal/setupskill`, whose `Dirs` writes the setup skill byte for byte
+to both skill paths.
+
 ## Context
 
 Until spec 0041, every generated skill was Claude-only:

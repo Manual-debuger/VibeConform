@@ -1,6 +1,6 @@
 # Spec 0019: Tell local drift apart from a moved standard
 
-Status: accepted. Implementation plan:
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted. Implementation plan:
 `docs/plans/0019-drift-classification.md`.
 
 Closes issue #22.

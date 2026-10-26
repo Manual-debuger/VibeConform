@@ -1,6 +1,6 @@
 # Spec 0011: Repo-tooling module (`internal/module/repotooling`)
 
-Status: accepted and implemented.
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented.
 
 ## Problem
 

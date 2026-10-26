@@ -1,6 +1,6 @@
 # Spec 0008: `vibe sync` (v1)
 
-Status: proposed.
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: proposed.
 
 ## Problem
 

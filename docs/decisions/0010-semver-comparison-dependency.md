@@ -6,6 +6,10 @@ Accepted. Implemented by `internal/state.CompareWriters`, per
 `docs/specs/0019-drift-classification.md`. First production dependency
 added since the repository was bootstrapped with `cobra` and `yaml.v3`.
 
+Note (spec 0059): `internal/state` is gone; the dependency stays for
+`internal/guard.InstallVersion`, which reads the running version with
+`semver`.
+
 ## Context
 
 Spec 0019 needs to answer one question: is the running `vibe` binary older

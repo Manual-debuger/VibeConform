@@ -89,9 +89,24 @@ func TestReferenceHooksAreTheGuards(t *testing.T) {
 	}
 }
 
+// TestReferenceStopIsRelockThenStopGate: the reference settings' Stop
+// command relocks first, whatever the gate does, then runs spec 0057's
+// Stop gate unchanged from the project root (spec 0058), so the green
+// stamp works the same as without the guard. The gate is spelled out
+// here, independently of internal/guard. Replaces the deleted
+// internal/module/agents/claude TestReferenceStopIsRelockThenStopCommand.
+func TestReferenceStopIsRelockThenStopGate(t *testing.T) {
+	const gate = "task -x hook:stamp:check >/dev/null 2>&1 </dev/null || " +
+		"{ task verify:fast 1>&2 </dev/null && task -x hook:stamp:save >/dev/null 2>&1 </dev/null; } || " +
+		"task -x hook:done"
+	want := "vibe-guard relock 2>/dev/null; " + `cd "${CLAUDE_PROJECT_DIR:-.}" && ` + "{ " + gate + "; }"
+	if got := refStopCommand(t); got != want {
+		t.Errorf("the reference Stop command =\n%s\nwant\n%s", got, want)
+	}
+}
+
 // TestImportsOnlyGuard: among this repository's packages, setupskill
-// imports only internal/guard, so that #112 can remove the old packages
-// without touching it.
+// imports only internal/guard.
 func TestImportsOnlyGuard(t *testing.T) {
 	const internal = "github.com/Manual-debuger/VibeConform/internal/"
 	paths, err := filepath.Glob("*.go")

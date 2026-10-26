@@ -1,7 +1,7 @@
 name: Setup action
 
 # Tests the setup action (action.yml, spec 0054) on Linux, macOS and
-# Windows. Repository-owned, not generated: adopters do not receive it.
+# Windows. This repository's own; it is not a setup-skill reference.
 #
 # The release cases need a release that contains vibe-guard. Until
 # RELEASE_VERSION is published, the probe job reports it and those jobs are
@@ -22,6 +22,8 @@ concurrency:
 env:
   # The first release with vibe-guard (spec 0054).
   RELEASE_VERSION: v0.12.0-alpha.1
+  # A pseudo-version for the go-install source (a commit on main).
+  GO_INSTALL_VERSION: v0.13.0-alpha.1.0.20261025101354-d4f33d9ff5ba
 
 jobs:
   # source: auto in this checkout resolves to workspace (ADR 0008), and a
@@ -58,7 +60,7 @@ jobs:
           vibe --version
           vibe-guard version
       # The workspace source takes the version as information only, so a
-      # sync from uncommitted changes (+dirty) or an unstamped build (dev)
+      # build from uncommitted changes (+dirty) or an unstamped build (dev)
       # still passes here (spec 0057).
       - name: Setup action, workspace with version dev
         uses: ./
@@ -117,11 +119,10 @@ jobs:
             exit 1
           fi
 
-  # source: go-install builds from the tagged source, here at the
-  # pseudo-version .vibe/state.yaml records, as an example synced by a
-  # source build does. A sync from uncommitted changes records it with
-  # +dirty (spec 0057), which no module proxy serves, so the job installs
-  # the commit's pseudo-version without it.
+  # source: go-install builds from the tagged source, here at
+  # GO_INSTALL_VERSION, a pseudo-version of a commit on main. It was the
+  # version this repository's .vibe/state.yaml recorded when spec 0059
+  # deleted that file.
   go-install:
     name: Setup action / go-install (${{ matrix.os }})
     strategy:
@@ -132,22 +133,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Read vibe_version
-        id: state
-        shell: bash
-        run: |
-          v=$(sed -n 's/^vibe_version: *//p' .vibe/state.yaml | tr -d '\r')
-          echo "version=${v%%+*}" >> "$GITHUB_OUTPUT"
       - name: Setup action, source go-install
         id: setup
         uses: ./
         with:
-          version: ${{ steps.state.outputs.version }}
+          version: ${{ env.GO_INSTALL_VERSION }}
           source: go-install
       - name: Both tools print the version
         shell: bash
         env:
-          VERSION: ${{ steps.state.outputs.version }}
+          VERSION: ${{ env.GO_INSTALL_VERSION }}
         run: |
           vibe --version | grep -F "$VERSION"
           vibe-guard version | grep -F "$VERSION"

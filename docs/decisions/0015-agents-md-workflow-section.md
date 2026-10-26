@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted. Implemented per `docs/specs/0030-plan-triggered-sdd.md`.
 §3 and §5 amended by ADR 0023: the workflow is optional and not
 recommended by default, and the `CLAUDE.md` import belongs to the

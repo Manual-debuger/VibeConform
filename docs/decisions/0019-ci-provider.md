@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted. Implemented per `docs/specs/0038-ci-provider.md`. Narrows spec
 0026's non-goal "no core deselection".
 

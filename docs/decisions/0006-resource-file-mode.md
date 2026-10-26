@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted (implemented by `docs/specs/0012-agent-config-module.md`).
 
 ## Context

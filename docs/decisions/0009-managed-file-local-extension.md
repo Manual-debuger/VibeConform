@@ -2,8 +2,7 @@
 
 ## Status
 
-Superseded by ADR 0025 (2026-10-16). The code still follows this ADR
-until #112 removes the template-sync model.
+Superseded by ADR 0025 (removed in spec 0059). ADR 0025 was accepted on 2026-10-16.
 
 Accepted. Implemented by the `includes:` block in all three repo-tooling
 `Taskfile.yml` templates, per

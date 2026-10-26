@@ -1,4 +1,11 @@
-# vibeconform:begin claude
-# Managed by VibeConform: integrations.agents claude in vibe.yaml.
+# Dependencies, build output, the virtual environment and bytecode.
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+
+# Claude Code: personal settings, and agent worktrees, each a full
+# checkout.
 .claude/settings.local.json
-# vibeconform:end claude
+.claude/worktrees/

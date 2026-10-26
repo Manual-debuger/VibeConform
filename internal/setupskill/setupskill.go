@@ -3,9 +3,8 @@
 // repository to a passing contract audit, and the code that writes it
 // into a repository (vibe init --skill).
 //
-// It stands beside the template-sync system and imports none of its
-// packages, so that #112 can remove them. Among this repository's
-// packages it imports only internal/guard, for the version rule.
+// Among this repository's packages it imports only internal/guard, for
+// the version rule and the reference hook commands.
 package setupskill
 
 import (

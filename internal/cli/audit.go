@@ -1,13 +1,9 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
-	"github.com/Manual-debuger/VibeConform/internal/reconcile"
-	"github.com/Manual-debuger/VibeConform/internal/state"
 )
 
 func newAuditCmd(seams contractSeams) *cobra.Command {
@@ -15,208 +11,25 @@ func newAuditCmd(seams contractSeams) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "audit",
-		Short: "Read-only compliance and drift check against the desired standard",
-		Long: "Read-only check of the repository.\n\n" +
-			"A configuration with a top-level contract key (vibe.yaml version 2)\n" +
-			"runs the contract audit; one with a top-level standard key runs the\n" +
-			"old drift audit against the standard's templates.",
+		Short: "Read-only audit of the repository against the contract",
+		Long: "Read-only check of the repository against contract " + contract.Implemented + ".\n\n" +
+			"It reads vibe.yaml version 2 (a top-level contract key). A version 1 file\n" +
+			"(a top-level standard key) belongs to the template-sync system, which vibe\n" +
+			"no longer has: vibe audit then names the migration guide and exits 1.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			f.probeTimeoutSet = cmd.Flags().Changed("probe-timeout")
 			return dispatchAudit(cmd, f)
 		},
 	}
 	cmd.Flags().StringVar(&f.repoRoot, "repo-root", ".", "repository root to audit")
 	cmd.Flags().StringVar(&f.config, "config", "", "configuration file to read instead of vibe.yaml at the repository root; must be version 2 (contract:)")
-	cmd.Flags().BoolVar(&f.static, "static", false, "contract audit: run only the static checks; never reaches a verdict")
-	cmd.Flags().BoolVar(&f.json, "json", false, "contract audit: print the report as JSON")
-	cmd.Flags().StringVar(&f.explain, "explain", "", "contract audit: explain the rule with this ID and read nothing else")
+	cmd.Flags().BoolVar(&f.static, "static", false, "run only the static checks; never reaches a verdict")
+	cmd.Flags().BoolVar(&f.json, "json", false, "print the report as JSON")
+	cmd.Flags().StringVar(&f.explain, "explain", "", "explain the rule with this ID and read nothing else")
 	cmd.Flags().DurationVar(&f.probeTimeout, "probe-timeout", contract.DefaultProbeTimeout,
-		"contract audit: time limit of each entrypoint run in the probe copy")
+		"time limit of each entrypoint run in the probe copy")
 	cmd.Flags().BoolVar(&f.keepProbeCopy, "keep-probe-copy", false,
-		"contract audit: keep the probe copy after the audit and print its path on stderr")
+		"keep the probe copy after the audit and print its path on stderr")
 
 	return cmd
-}
-
-func runAudit(cmd *cobra.Command, repoRoot string) error {
-	p, err := buildPlan(repoRoot, runningVersion(cmd))
-	if err != nil {
-		return fmt.Errorf("audit: %w", err)
-	}
-
-	out := cmd.OutOrStdout()
-	if _, err := fmt.Fprintf(out, "standard: %s/%s\n", p.Standard.Name, p.Standard.Version); err != nil {
-		return fmt.Errorf("audit: %w", err)
-	}
-
-	printWarnings(cmd.ErrOrStderr(), p)
-
-	var checked, drifted, outOfDate, conflicts int
-	for _, rp := range p.Resources {
-		line := "not yet checked (unsupported ownership)"
-		switch {
-		case rp.Supported && rp.Ignored:
-			// Conformant here, missing in every fresh checkout: a conflict,
-			// since only an edit to .gitignore resolves it.
-			checked++
-			conflicts++
-			line = ignoredLine(rp.Resource.Path)
-		case rp.Seed != nil:
-			checked++
-			line = auditSeedLine(rp.Seed)
-			switch rp.Seed.Action {
-			case seedCreate:
-				drifted++
-			case seedConvert, seedAdopt:
-				outOfDate++
-			case seedEdited, seedNoBase:
-				conflicts++
-			case seedOK:
-			}
-		case rp.Supported:
-			checked++
-			line = auditLine(rp.Decision)
-			if rp.HeldBy != "" && rp.Decision != reconcile.NoChange {
-				line += fmt.Sprintf("; held until %s is resolved", rp.HeldBy)
-			}
-			switch rp.Decision {
-			case reconcile.Create, reconcile.LocalDrift:
-				drifted++
-			case reconcile.OutOfDate:
-				outOfDate++
-			case reconcile.Conflict:
-				conflicts++
-			case reconcile.NoChange:
-			}
-		}
-		if rp.Section != nil && !rp.Ignored {
-			if _, err := fmt.Fprintf(out, "%s: %s\n", sectionLabel(rp.Resource.Path, rp.Section.ID), auditSectionLine(rp.Section)); err != nil {
-				return fmt.Errorf("audit: %w", err)
-			}
-			continue
-		}
-		if rp.Patch != nil && rp.Supported && !rp.Ignored {
-			if err := printElementLines(out, rp.Resource.Path, elementLines(rp.Patch, auditElement), "ok"); err != nil {
-				return fmt.Errorf("audit: %w", err)
-			}
-			continue
-		}
-		if _, err := fmt.Fprintf(out, "%s: %s\n", rp.Resource.Path, line); err != nil {
-			return fmt.Errorf("audit: %w", err)
-		}
-	}
-	// A deselected integration's leftovers: out of date while sync can
-	// remove them, a conflict when it would refuse to.
-	for _, pp := range p.Prunes {
-		checked++
-		if pp.Decision == reconcile.RemoveConflict {
-			conflicts++
-		} else {
-			outOfDate++
-		}
-		if pp.Section != nil {
-			if _, err := fmt.Fprintf(out, "%s: %s\n", sectionLabel(pp.Path, pp.Section.ID), auditSectionPruneLine(pp.Section, pp.cause())); err != nil {
-				return fmt.Errorf("audit: %w", err)
-			}
-			continue
-		}
-		if pp.Patch != nil {
-			if err := printElementLines(out, pp.Path, patchPruneLines(pp, auditElement), ""); err != nil {
-				return fmt.Errorf("audit: %w", err)
-			}
-			continue
-		}
-		if _, err := fmt.Fprintf(out, "%s: %s\n", pp.Path, auditPruneLine(pp)); err != nil {
-			return fmt.Errorf("audit: %w", err)
-		}
-	}
-	// A guarded project file that breaks its seam's limits: a conflict,
-	// since sync never writes it.
-	for _, g := range p.Guards {
-		checked++
-		if len(g.Problems) > 0 {
-			conflicts++
-		}
-		if err := printGuard(out, g); err != nil {
-			return fmt.Errorf("audit: %w", err)
-		}
-	}
-
-	if _, err := fmt.Fprintf(out, "%d %s checked, %d drifted, %d out of date, %d conflicts\n",
-		checked, pluralize(checked, "resource"), drifted, outOfDate, conflicts); err != nil {
-		return fmt.Errorf("audit: %w", err)
-	}
-
-	// A binary older than the one that wrote the state cannot judge this
-	// repository: its embedded templates predate the repository's own
-	// state, so every finding above is suspect and "run vibe sync" would
-	// revert managed files rather than update them. No verdict is printed,
-	// because there isn't one to give — announcing "not conformant" and
-	// then explaining that the findings cannot be trusted would be two
-	// contradictory claims in a row (spec 0019).
-	recorded := p.Previous.VibeVersion
-	running := runningVersion(cmd)
-	if state.CompareWriters(recorded, running) == state.WriterRunningOlder {
-		if _, err := fmt.Fprintf(out,
-			"no verdict: this vibe is %s, older than the %s that last synced this\n"+
-				"repository. Its templates predate this repository's state, so the\n"+
-				"findings above cannot be trusted and vibe sync would revert managed\n"+
-				"files. Upgrade vibe and audit again.\n", running, recorded); err != nil {
-			return fmt.Errorf("audit: %w", err)
-		}
-		return fmt.Errorf("audit: %w", &staleBinaryError{recorded: recorded, running: running})
-	}
-
-	verdict := "conformant"
-	if drifted+outOfDate+conflicts > 0 {
-		verdict = "not conformant"
-	}
-	if _, err := fmt.Fprintln(out, verdict); err != nil {
-		return fmt.Errorf("audit: %w", err)
-	}
-
-	// Being out of date is not the repository's doing, so name the two
-	// binaries whenever they are known — whether or not they order. The
-	// mismatch being visible is what works in every case; ordering it is a
-	// bonus that needs both versions to be valid semver.
-	if outOfDate > 0 && recorded != "" && recorded != running {
-		if _, err := fmt.Fprintf(out,
-			"last synced by vibe %s; this vibe is %s\n", recorded, running); err != nil {
-			return fmt.Errorf("audit: %w", err)
-		}
-	}
-
-	if drifted+outOfDate+conflicts > 0 {
-		return fmt.Errorf("audit: %w", &nonConformantError{
-			drifted: drifted, outOfDate: outOfDate, conflicts: conflicts,
-		})
-	}
-	return nil
-}
-
-// auditLine describes a resource's present state, as opposed to diffLine's
-// description of the action sync would take.
-func auditLine(d reconcile.Decision) string {
-	switch d {
-	case reconcile.NoChange:
-		return "ok"
-	case reconcile.Create:
-		return "missing (run vibe sync)"
-	case reconcile.LocalDrift:
-		return "drifted (edited since last sync; run vibe sync to restore)"
-	case reconcile.OutOfDate:
-		return "out of date (standard moved; run vibe sync to update)"
-	case reconcile.Conflict:
-		return "conflict: manual changes detected"
-	default:
-		return d.String()
-	}
-}
-
-func pluralize(n int, word string) string {
-	if n == 1 {
-		return word
-	}
-	return word + "s"
 }

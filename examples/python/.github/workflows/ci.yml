@@ -1,7 +1,11 @@
 name: CI
 
-# Every job below runs a Taskfile target so CI, local dev, and docs never
-# duplicate independent command lists. See Taskfile.yml.
+# .github/workflows/ci.yml for a Python repository managed with uv. CI
+# calls the verify entrypoint (`task verify`) on Linux and Windows, on pull
+# requests and on pushes to the default branch. No Go toolchain: Task comes
+# from its own setup action. Every `uses:` is pinned to a full commit SHA,
+# and every tool to an exact version. Change main if the default branch has
+# another name.
 
 on:
   pull_request:
@@ -19,9 +23,13 @@ env:
   PYTHON_VERSION: "3.12"
 
 jobs:
-  lint:
-    name: format / lint
-    runs-on: ubuntu-latest
+  verify:
+    name: verify (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,17 +40,16 @@ jobs:
       - name: Install task
         uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
         with:
-          version: "3.53.1"
-          checksum: "a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7"
+          version: 3.53.1
       - name: Install dependencies
-        run: uv sync
-      - name: task fmt:check
-        run: task fmt:check
-      - name: task lint
-        run: task lint
+        run: uv sync --frozen
+      - name: task verify
+        run: task verify
 
-  typecheck_test:
-    name: typecheck / test
+  # The vulnerability scan: pip-audit checks the locked dependencies, not
+  # the project itself.
+  security:
+    name: security
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -51,31 +58,9 @@ jobs:
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install task
-        uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
-        with:
-          version: "3.53.1"
-          checksum: "a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7"
-      - name: Install dependencies
-        run: uv sync
-      - name: task typecheck
-        run: task typecheck
-      - name: task test
-        run: task test
-
-  gate:
-    name: CI / gate
-    if: always()
-    needs: [lint, typecheck_test]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require all upstream jobs to have succeeded
-        run: |
-          for result in \
-            "${{ needs.lint.result }}" \
-            "${{ needs.typecheck_test.result }}"; do
-            if [ "$result" != "success" ]; then
-              echo "A required job did not succeed: $result"
-              exit 1
-            fi
-          done
+      - name: Install pip-audit
+        run: uv tool install pip-audit==2.9.0
+      - name: Export the locked requirements
+        run: uv export --frozen --no-hashes --no-emit-project --format requirements-txt -o "$RUNNER_TEMP/requirements.txt"
+      - name: pip-audit
+        run: pip-audit -r "$RUNNER_TEMP/requirements.txt"

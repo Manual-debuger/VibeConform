@@ -1,6 +1,6 @@
 # Spec 0044: One Pin Table for Generated CI, and a GitLab Schema Check
 
-Status: accepted and implemented (2026-10-08); CI green on PR #76,
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented (2026-10-08); CI green on PR #76,
 real GitLab run UNVERIFIED (issue #74). Implementation plan:
 `docs/plans/0044-ci-pin-table.md`. Pinning
 `actionlint` together with `goimports` and `govulncheck` was confirmed

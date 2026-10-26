@@ -1,3 +1,6 @@
+# .github/dependabot.yml: one entry per component, with the component's
+# path and ecosystem, and one for github-actions, so the pinned action
+# SHAs are updated too.
 version: 2
 updates:
   - package-ecosystem: gomod

@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,9 +16,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 )
 
-// auditFlags are vibe audit's flags. Only --repo-root applies to the old
-// audit; the others select or shape the contract audit (spec 0052,
-// "Package and command").
+// auditFlags are vibe audit's flags (spec 0052, "Package and command").
 type auditFlags struct {
 	repoRoot string
 	config   string
@@ -25,9 +25,8 @@ type auditFlags struct {
 	explain  string
 	// probeTimeout limits each entrypoint run; keepProbeCopy keeps the
 	// probe copy (spec 0053, "Report and CLI").
-	probeTimeout    time.Duration
-	probeTimeoutSet bool
-	keepProbeCopy   bool
+	probeTimeout  time.Duration
+	keepProbeCopy bool
 
 	// seams are not flags: tests set them through newRootCmd.
 	seams contractSeams
@@ -51,64 +50,67 @@ type contractSeams struct {
 	openRepo func(ctx context.Context, root string) (*contract.Repo, error)
 }
 
-// dispatchAudit picks the audit from the configuration it reads: a
-// top-level contract key runs the contract audit, a top-level standard key
-// runs the old audit exactly as before.
+// open lists the tracked files of the repository at root, through the
+// openRepo seam when a test set it.
+func (s contractSeams) open(ctx context.Context, root string) (*contract.Repo, error) {
+	if s.openRepo != nil {
+		return s.openRepo(ctx, root)
+	}
+	return contract.OpenRepo(ctx, root)
+}
+
+// commandContext is cmd's context, or the background one when cmd runs
+// without one.
+func commandContext(cmd *cobra.Command) context.Context {
+	if ctx := cmd.Context(); ctx != nil {
+		return ctx
+	}
+	return context.Background()
+}
+
+// configFileName is the configuration vibe audit reads at the repository
+// root unless --config names another file.
+const configFileName = "vibe.yaml"
+
+// dispatchAudit reads the configuration and runs the contract audit.
 func dispatchAudit(cmd *cobra.Command, f auditFlags) error {
 	if cmd.Flags().Changed("explain") {
 		return runExplain(cmd, f)
 	}
-
-	path, label := f.config, f.config
-	if path == "" {
-		path, label = filepath.Join(f.repoRoot, manifestFileName), manifestFileName
-	}
-	data, err := os.ReadFile(path) // #nosec G304 -- operator-supplied CLI flag, same trust boundary as buildPlan's read
-	if err != nil {
-		if f.config == "" && !f.static && !f.json {
-			// The old audit reports a missing vibe.yaml as it always has.
-			return runAudit(cmd, f.repoRoot)
-		}
-		return fmt.Errorf("cannot read the configuration: %w", err)
-	}
-
-	schema, err := contract.DetectSchema(label, data)
+	label, data, err := readV2Config(f.repoRoot, f.config)
 	if err != nil {
 		return err
-	}
-	if schema == contract.SchemaV1 {
-		if err := v1FlagError(f, label); err != nil {
-			return err
-		}
-		return runAudit(cmd, f.repoRoot)
 	}
 	return runContractAudit(cmd, f, label, data)
 }
 
-// v1FlagError rejects the contract audit's flags on a version 1
-// configuration, which only the old audit reads.
-func v1FlagError(f auditFlags, label string) error {
-	var used []string
-	if f.config != "" {
-		used = append(used, "--config")
+// readV2Config reads the configuration at config, or vibe.yaml at the
+// repository root when config is empty, and returns its label and
+// content when it is version 2. A version 1 file (a top-level standard
+// key) belongs to the template-sync system, which vibe no longer has: its
+// error is the migration pointer. A missing vibe.yaml says to run vibe
+// init.
+func readV2Config(repoRoot, config string) (label string, data []byte, err error) {
+	path, label := config, config
+	if path == "" {
+		path, label = filepath.Join(repoRoot, configFileName), configFileName
 	}
-	if f.static {
-		used = append(used, "--static")
+	data, err = os.ReadFile(path) // #nosec G304 -- operator-supplied CLI flag
+	if err != nil {
+		if config == "" && errors.Is(err, fs.ErrNotExist) {
+			return "", nil, fmt.Errorf("no %s in %s: run `vibe init` to write one", configFileName, repoRoot)
+		}
+		return "", nil, fmt.Errorf("cannot read the configuration: %w", err)
 	}
-	if f.json {
-		used = append(used, "--json")
+	schema, err := contract.DetectSchema(label, data)
+	if err != nil {
+		return "", nil, err
 	}
-	if f.probeTimeoutSet {
-		used = append(used, "--probe-timeout")
+	if schema == contract.SchemaV1 {
+		return "", nil, fmt.Errorf("%s is version 1 (a top-level standard key), which this vibe no longer reads; %s",
+			label, migrationPointer())
 	}
-	if f.keepProbeCopy {
-		used = append(used, "--keep-probe-copy")
-	}
-	if len(used) == 0 {
-		return nil
-	}
-	return fmt.Errorf("%s needs a version 2 configuration (a top-level contract key); "+
-		"%s is version 1 (a top-level standard key)", strings.Join(used, ", "), label)
+	return label, data, nil
 }
 
 // runContractAudit runs the contract audit on a version 2 configuration,
@@ -118,19 +120,11 @@ func runContractAudit(cmd *cobra.Command, f auditFlags, label string, data []byt
 	if f.probeTimeout <= 0 {
 		return fmt.Errorf("--probe-timeout must be a positive duration, such as 30m; got %s", f.probeTimeout)
 	}
-	ctx := cmd.Context()
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	// An interrupt ends the runs in the probe copy, and the copy is still
 	// deleted.
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	ctx, stop := signal.NotifyContext(commandContext(cmd), os.Interrupt)
 	defer stop()
-	openRepo := contract.OpenRepo
-	if f.seams.openRepo != nil {
-		openRepo = f.seams.openRepo
-	}
-	repo, err := openRepo(ctx, f.repoRoot)
+	repo, err := f.seams.open(ctx, f.repoRoot)
 	if err != nil {
 		return err
 	}

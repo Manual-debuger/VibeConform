@@ -1,3 +1,6 @@
+# .github/dependabot.yml: one entry per component's ecosystem, and one for
+# github-actions, so the pinned action SHAs are updated too. Dependabot's
+# npm ecosystem also reads pnpm-lock.yaml.
 version: 2
 updates:
   - package-ecosystem: npm

@@ -36,7 +36,5 @@ Thumbs.db
 !.vscode/*.code-snippets
 .idea/
 
-# vibeconform:begin claude
-# Managed by VibeConform: integrations.agents claude in vibe.yaml.
+# Claude Code: personal settings stay out of the repository.
 .claude/settings.local.json
-# vibeconform:end claude

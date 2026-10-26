@@ -1,14 +1,14 @@
 name: Contract
 
-# The contract audit (spec 0052) beside the old one in conformance.yml. It
-# is repository-owned, not generated, so adopters do not receive it, and it
-# is not a required check until #111 makes it one.
+# The contract audit (spec 0052) of this repository. Adopters get their
+# own audit job from the setup skill's reference audit.yml.
 #
 # Two jobs. "Contract / audit" runs the full audit (spec 0053) and passes
-# on exit 0. "Contract / audit (static)" is the quick one: `vibe audit
-# --static` never reaches a verdict (exit 1), since execution checks and
-# probes do not run. It passes when no MUST rule failed or could not be
-# decided; MUST rules that did not run are expected.
+# on exit 0; it is a required check, next to CI / gate (spec 0059).
+# "Contract / audit (static)" is the quick one, and not required: `vibe
+# audit --static` never reaches a verdict (exit 1), since execution checks
+# and probes do not run. It passes when no MUST rule failed or could not
+# be decided; MUST rules that did not run are expected.
 
 on:
   pull_request:
@@ -34,10 +34,10 @@ jobs:
   # contract 1.0.0, in a probe copy. It runs verify and verify-fast several
   # times, the guard corpus through the PreToolUse hook, and the Stop hook,
   # so it builds vibe and vibe-guard and installs every tool the
-  # entrypoints in vibe.v2.yaml call, as ci.yml does. verify runs the
+  # entrypoints in vibe.yaml call, as ci.yml does. verify runs the
   # tests, whose Python and TypeScript probe fixtures need uv and pnpm;
   # VIBE_TEST_REQUIRE_TOOLS turns their skip into a failure. It passes on
-  # exit 0 (conformant) and is not a required check until #111.
+  # exit 0 (conformant) and is a required check (spec 0059).
   full:
     name: Contract / audit
     runs-on: ubuntu-latest
@@ -46,7 +46,7 @@ jobs:
     # the guard corpus and D-01. 60 leaves twice that (spec 0053).
     timeout-minutes: 60
     env:
-      VIBE_TEST_REQUIRE_TOOLS: bash,uv,pnpm,python,node
+      VIBE_TEST_REQUIRE_TOOLS: bash,uv,pnpm
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,7 +72,7 @@ jobs:
           go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
           go build -o "$RUNNER_TEMP/bin/vibe-guard" ./cmd/vibe-guard
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      # The tools vibe.v2.yaml's entrypoints call, pinned as in ci.yml.
+      # The tools vibe.yaml's entrypoints call, pinned as in ci.yml.
       - name: Install the entrypoints' tools
         run: |
           go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
@@ -81,7 +81,7 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - name: vibe audit
-        run: vibe audit --config vibe.v2.yaml
+        run: vibe audit
 
 
   audit:
@@ -100,10 +100,10 @@ jobs:
           go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: vibe audit --static
-        run: vibe audit --static --config vibe.v2.yaml || true
+        run: vibe audit --static || true
       - name: No MUST rule fails or is undecided
         run: |
-          vibe audit --static --json --config vibe.v2.yaml > "$RUNNER_TEMP/contract.json" || true
+          vibe audit --static --json > "$RUNNER_TEMP/contract.json" || true
           jq -e '.schema == 1' "$RUNNER_TEMP/contract.json" > /dev/null
           bad=$(jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "undecided")) | .id' "$RUNNER_TEMP/contract.json")
           if [ -n "$bad" ]; then

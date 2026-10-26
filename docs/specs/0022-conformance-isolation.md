@@ -1,6 +1,6 @@
 # Spec 0022: Isolate, Pin, and Fall Back for the Conformance Check
 
-Status: accepted and implemented.
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented.
 
 Closes the remaining items of issue #26 (1, 2, 3, 8). Items 11 and 16 were
 closed by #29 and #30.

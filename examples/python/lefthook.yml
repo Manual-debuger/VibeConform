@@ -1,12 +1,6 @@
 # Lefthook: the format check at commit time, fast verification at push time.
-# CI is the authoritative full verification gate;
-# these hooks are a fast local first line of defense, not a substitute.
-# Each hook calls a Taskfile entrypoint, so the checks live in one place.
-
-# Repository-specific hooks go in lefthook.local.yml (optional, yours;
-# see VibeConform's docs/usage.md). Lefthook merges it over this file.
-extends:
-  - lefthook.local.yml
+# CI is the full gate; these hooks are a fast local first line of defense.
+# Install once per clone with "lefthook install".
 
 pre-commit:
   commands:
@@ -15,8 +9,6 @@ pre-commit:
       run: task fmt:check
       fail_text: "Run 'task fmt' to format the Python files."
 
-# verify:fast: the format check, lint, typecheck and the tests.
-#
 # A pre-push hook started from a linked worktree exports GIT_DIR, so a
 # test that runs git would act on the real repository instead of its
 # fixture. unset clears Git's repository variables first; lefthook runs
@@ -25,18 +17,3 @@ pre-push:
   commands:
     verify-fast:
       run: unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; task verify:fast
-
-post-commit:
-  commands:
-    graphify-update:
-      run: task graph:update
-
-post-checkout:
-  commands:
-    graphify-update:
-      run: task graph:update
-
-post-merge:
-  commands:
-    graphify-update:
-      run: task graph:update

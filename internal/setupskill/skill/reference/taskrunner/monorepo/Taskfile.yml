@@ -191,13 +191,21 @@ tasks:
   # files git does not ignore, names and contents: a copy of the index
   # marks them intent-to-add, so the diff shows them and git stores no
   # object. The stamp sits in the worktree's own Git directory, so it never
-  # shows in git status and each linked worktree has its own. Neither task
-  # reads stdin, which the Stop hook keeps for hook:done.
+  # shows in git status and each linked worktree has its own. A project at
+  # the root of its repository keeps green-stamp; one in a subdirectory
+  # (git rev-parse --show-prefix, such as "examples/app/") gets
+  # green-stamp-examples-app, so the two never stand for each other
+  # (spec 0059). Neither task reads stdin, which the Stop hook keeps for
+  # hook:done.
   hook:stamp:check:
     silent: true
     cmds:
       - |
-        stamp="$(git rev-parse --path-format=absolute --git-path green-stamp 2>/dev/null)" || exit 1
+        n=green-stamp
+        p="$(git rev-parse --show-prefix 2>/dev/null)" || exit 1
+        p="${p%/}"
+        [ -z "$p" ] || n="$n-${p//\//-}"
+        stamp="$(git rev-parse --path-format=absolute --git-path "$n" 2>/dev/null)" || exit 1
         [ -f "$stamp" ] || exit 1
         w="$stamp.$$"
         h=""
@@ -213,7 +221,11 @@ tasks:
     silent: true
     cmds:
       - |
-        stamp="$(git rev-parse --path-format=absolute --git-path green-stamp 2>/dev/null)" || exit 0
+        n=green-stamp
+        p="$(git rev-parse --show-prefix 2>/dev/null)" || exit 0
+        p="${p%/}"
+        [ -z "$p" ] || n="$n-${p//\//-}"
+        stamp="$(git rev-parse --path-format=absolute --git-path "$n" 2>/dev/null)" || exit 0
         w="$stamp.$$"
         h=""
         cp "$(git rev-parse --path-format=absolute --git-path index)" "$w.index" 2>/dev/null || true

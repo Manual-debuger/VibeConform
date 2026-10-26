@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted. Implemented per `docs/specs/0035-graphify.md`. Narrows spec
 0026's non-goal "no `.gitignore` editing". Amended by ADR 0020, which also
 allows a section for a runtime's per-developer file (`claude-config` and

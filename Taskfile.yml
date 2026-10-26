@@ -1,24 +1,14 @@
 version: "3"
 
-# Repository-specific tasks — build, run, deploy, whatever this repository
-# happens to need — belong in a project-owned Taskfile.local.yml, which
-# VibeConform never writes, reads, or audits. The include is optional: with
-# no such file it does nothing. Tasks defined there are available
-# unprefixed, but cannot redefine a task below — Task exits 203 on a name
-# collision rather than silently overriding, so the verification interface
-# stays what the standard says it is. Requires Task v3.39.0 or newer.
-# See docs/decisions/0009-managed-file-local-extension.md.
+# This repository's other tasks (build, run) are in Taskfile.local.yml.
+# The include is optional: with no such file it does nothing. Tasks
+# defined there are available unprefixed, but cannot redefine a task
+# below: Task exits 203 on a name collision rather than silently
+# overriding, so the entrypoints vibe.yaml declares stay these.
+# Requires Task v3.39.0 or newer.
 includes:
   local:
     taskfile: ./Taskfile.local.yml
-    optional: true
-    flatten: true
-  # VibeConform's own tasks (task audit), kept out of this file so that
-  # removing VibeConform is deleting Taskfile.vibe.yml, not editing this
-  # one. Optional for the same reason: with the file gone, this include
-  # does nothing. See docs/specs/0022-conformance-isolation.md.
-  vibe:
-    taskfile: ./Taskfile.vibe.yml
     optional: true
     flatten: true
 
@@ -309,10 +299,55 @@ tasks:
         echo "hook:done: verify:fast fails; fix it before ending the turn." >&2
         exit 2
 
+  # The contract audit of this repository (spec 0059), with the checkout's
+  # own vibe and vibe-guard: both are built into the worktree's Git
+  # directory, which goes first on PATH, so the probes' vibe-guard (A-02
+  # runs the one on PATH) is this checkout's too, and a stale binary
+  # installed elsewhere never gives the verdict. go build, not go run,
+  # which reports every non-zero exit as 1. vibe audit exits 0 when
+  # conformant, 2 when not, and 1 when it cannot decide.
+  audit:
+    desc: Run the full contract audit on this checkout with the vibe and
+      vibe-guard built from it.
+    cmds:
+      - task: audit:run
+
+  # The static rules only, in seconds. A static audit never reaches a
+  # verdict, because the execution checks and probes do not run, so vibe
+  # exits 1 when no rule failed. This task exits 0 then, and keeps exit 2,
+  # a MUST rule that fails. Read the report for undecided rules. vibe
+  # prints no report when it cannot audit at all (no vibe.yaml, a version
+  # 1 or invalid one), and that exit 1 stays 1.
+  audit:static:
+    desc: Run the static contract audit (vibe audit --static) with the vibe
+      built from this checkout.
+    cmds:
+      - task: audit:run
+        vars: {STATIC: "true"}
+
+  audit:run:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        dir="$(git rev-parse --path-format=absolute --git-path vibe-audit)" || exit 1
+        go build -o "$dir/vibe{{exeExt}}" ./cmd/vibe || exit 1
+        go build -o "$dir/vibe-guard{{exeExt}}" ./cmd/vibe-guard || exit 1
+        export PATH="$dir{{if eq OS "windows"}};{{else}}:{{end}}$PATH"
+        if [ -z "{{.STATIC}}" ]; then
+          vibe audit --repo-root .
+          exit $?
+        fi
+        rc=0
+        report="$(vibe audit --static --repo-root .)" || rc=$?
+        [ -z "$report" ] || printf '%s\n' "$report"
+        if [ "$rc" -eq 1 ] && [ -n "$report" ]; then rc=0; fi
+        exit $rc
+
   verify:
     desc: Local verification gate — native language tooling only, never
       VibeConform itself; "task audit" is VibeConform's check, which CI
-      runs in its own Conformance workflow. Race detection needs a C compiler (CGO); run
+      runs in its own Contract workflow. Race detection needs a C compiler (CGO); run
       "task test:race" separately if you have one — CI runs it
       independently in its own job.
     cmds:

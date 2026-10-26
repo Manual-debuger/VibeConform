@@ -1,35 +1,17 @@
 name: Hook guard
 
-# Runs the shared guard corpus (internal/module/agents/claude/testdata) through the
-# exact command the generated agent configs contain, task -x hook:guard, in
-# a repository synced to each standard, on Linux and Windows. That checks
-# the Taskfile wiring, Task's -x exit-code passthrough, the "|| exit 2"
-# fail-closed suffix, and each runtime's guard in one step. See
-# docs/specs/0021-agent-hooks-task-interface.md.
-#
-# It also runs the other agent hooks (spec 0023) through Task on both OSes:
-# the Stop corpus against hook:done, hook:context's output, and hook:format
-# on a real unformatted file in each synced repository. Those scripts lean
-# on shell and xargs behaviour that differs between Task's built-in
-# Windows utilities and GNU ones on Linux, which is why both OSes run them.
-# The workflow name and check names predate those hooks and stay as they
-# are, so branch protection doesn't change.
-#
-# The in-process tests (go test ./...) already run the Go guard, and the
-# Node and Python guards where those runtimes happen to be installed. Only
-# this workflow proves each one through Task, and on Windows.
-#
-# This repository itself runs vibe-guard (policy.agent_guard, spec 0053),
-# so the prod-go leg syncs a fresh prod-go repository with the runtime
-# guard and runs the old corpus there. The vibe-guard jobs run the
-# contract corpus through vibe-guard and through the exact PreToolUse
-# command of this repository's .claude/settings.json, on Linux and
-# Windows, and on Linux once more in a network namespace with no
+# Runs the contract guard corpus through vibe-guard (spec 0053), the guard
+# this repository runs: through "vibe-guard hook" and through the exact
+# PreToolUse command of this repository's .claude/settings.json, on Linux
+# and Windows, and on Linux once more in a network namespace with no
 # interfaces: vibe-guard opens no network connection.
 #
-# Hand-authored rather than a job in ci.yml, for the same reason as
-# examples.yml: ci.yml is a resource shipped to every adopting repository,
-# and a job naming examples/ would leak this repository's layout into it.
+# The jobs that synced a prod-go repository and ran the internal/module
+# guard and hook tests through Task are gone with template sync (spec
+# 0059).
+#
+# Hand-authored rather than a job in ci.yml, so that ci.yml stays the
+# verification that an adopter's CI also runs.
 
 on:
   pull_request:
@@ -45,95 +27,8 @@ concurrency:
 
 env:
   GO_VERSION: "1.27.0"
-  TASK_VERSION: "v3.53.1"
-  NODE_VERSION: "22"
-  PYTHON_VERSION: "3.12"
 
 jobs:
-  corpus:
-    name: ${{ matrix.standard }} (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        standard: [prod-go, prod-ts, prod-py]
-        include:
-          - standard: prod-go
-            dir: .
-            guard_dir: build/hook-guard-prod-go
-            lang: go
-          - standard: prod-ts
-            dir: examples/typescript
-            guard_dir: examples/typescript
-            lang: ts
-          - standard: prod-py
-            dir: examples/python
-            guard_dir: examples/python
-            lang: py
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Go runs the test harness for every standard, and is prod-go's guard
-      # runtime.
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      # hook:format runs the repository's own formatter, installed as a
-      # project dependency, so prod-ts needs pnpm and its node_modules.
-      - name: Setup pnpm
-        if: matrix.standard == 'prod-ts'
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          package_json_file: examples/typescript/package.json
-      - name: Setup Node
-        if: matrix.standard == 'prod-ts'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - name: Install uv
-        if: matrix.standard == 'prod-py'
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
-      # This repository runs vibe-guard, so prod-go's runtime guard is
-      # checked in a repository synced to prod-go's defaults.
-      - name: Sync a prod-go repository with the runtime guard
-        if: matrix.standard == 'prod-go'
-        shell: bash
-        run: |
-          mkdir -p "${{ matrix.guard_dir }}"
-          printf 'standard: prod-go\nversion: v1\n' > "${{ matrix.guard_dir }}/vibe.yaml"
-          go run ./cmd/vibe sync --repo-root "${{ matrix.guard_dir }}"
-      - name: Run the corpus through task -x hook:guard
-        env:
-          VIBE_GUARD_E2E_DIR: ${{ github.workspace }}/${{ matrix.guard_dir }}
-        run: go test -count=1 -run TestGuardCorpusEndToEnd -v ./internal/module/agents/claude
-      # The formatters hook:format calls: goimports is a PATH tool for
-      # prod-go (as in ci.yml); Prettier and Ruff are project dependencies.
-      - name: Install goimports
-        if: matrix.standard == 'prod-go'
-        run: go install golang.org/x/tools/cmd/goimports@v0.51.0
-      - name: Install dependencies (prod-ts)
-        if: matrix.standard == 'prod-ts'
-        working-directory: examples/typescript
-        run: pnpm install --frozen-lockfile
-      - name: Install dependencies (prod-py)
-        if: matrix.standard == 'prod-py'
-        working-directory: examples/python
-        run: uv sync
-      # VIBE_HOOKS_E2E turns "task not on PATH" from a skip into a failure,
-      # so this step can't pass having run nothing.
-      - name: Run the other agent hooks through task
-        env:
-          VIBE_HOOKS_E2E: "1"
-          VIBE_HOOKS_E2E_DIR: ${{ github.workspace }}/${{ matrix.dir }}
-          VIBE_HOOKS_E2E_LANG: ${{ matrix.lang }}
-        run: go test -count=1 -run "TestHook|TestCommandWords" -v ./internal/module
-
   # The contract corpus through vibe-guard (spec 0053): internal/guard's
   # tests run every case through "vibe-guard hook", through the reference
   # command with and without vibe-guard on PATH, and, with
@@ -200,18 +95,17 @@ jobs:
   gate:
     name: Hook guard / gate
     if: always()
-    needs: [corpus, vibe-guard, vibe-guard-offline]
+    needs: [vibe-guard, vibe-guard-offline]
     runs-on: ubuntu-latest
     steps:
       - name: Require every corpus leg to have succeeded
         env:
-          CORPUS: ${{ needs.corpus.result }}
           VIBE_GUARD: ${{ needs.vibe-guard.result }}
           OFFLINE: ${{ needs.vibe-guard-offline.result }}
         run: |
-          for result in "$CORPUS" "$VIBE_GUARD" "$OFFLINE"; do
+          for result in "$VIBE_GUARD" "$OFFLINE"; do
             if [ "$result" != "success" ]; then
-              echo "A hook-guard leg did not succeed: corpus $CORPUS, vibe-guard $VIBE_GUARD, offline $OFFLINE"
+              echo "A hook-guard leg did not succeed: vibe-guard $VIBE_GUARD, offline $OFFLINE"
               exit 1
             fi
           done

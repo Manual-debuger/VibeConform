@@ -1,6 +1,6 @@
 # Spec 0043: AGENTS.md routing without a workflow
 
-Status: approved 2026-10-07. Follow-up to spec 0042 (#71).
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: approved 2026-10-07. Follow-up to spec 0042 (#71).
 
 ## Problem
 

@@ -1,6 +1,6 @@
 # Spec 0012: Agent-config module (`internal/module/agents`)
 
-Status: accepted and implemented.
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented.
 
 ## Problem
 

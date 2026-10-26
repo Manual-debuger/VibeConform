@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted. Implemented per `docs/specs/0037-generated-paths.md`. Amends
 ADR 0012: a component has an optional fourth field, `generated`.
 

@@ -1,6 +1,6 @@
 # Spec 0042: Workflow-neutral defaults
 
-Status: approved 2026-10-07. Addresses #71. Amends specs 0030–0032
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: approved 2026-10-07. Addresses #71. Amends specs 0030–0032
 (the CLAUDE.md import) and ADR 0015 (ADR 0023). Spec 0043 closes the
 routing gap of §6: without a workflow, the docs layout and Graphify each
 get their own section of `AGENTS.md`.

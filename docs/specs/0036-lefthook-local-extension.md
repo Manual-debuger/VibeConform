@@ -1,6 +1,6 @@
 # Spec 0036: A Project-Owned Extension Point for `lefthook.yml`
 
-Status: accepted and implemented (ADR 0017). Implementation plan:
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented (ADR 0017). Implementation plan:
 `docs/plans/0036-lefthook-local-extension.md`. Builds on ADR 0009
 (`Taskfile.local.yml`), spec 0019 (drift classification) and spec 0035
 (Graphify).

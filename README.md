@@ -1,112 +1,36 @@
 # VibeConform
 
-> **Status: pre-alpha, M3 in progress — VibeConform manages its own guardrails
-> and audits itself in CI.** `vibe init` writes a `vibe.yaml` desired-state file (see
-> [`docs/specs/0002-vibe-init.md`](docs/specs/0002-vibe-init.md)); `vibe
-> audit` is the conformance gate: it checks every resolved resource against
-> the repository and exits `2` when a managed file was edited, `3` when
-> nothing was edited but the standard moved on, and `1` when it cannot
-> answer at all
-> (see [`docs/specs/0009-vibe-audit-v2.md`](docs/specs/0009-vibe-audit-v2.md)
-> and [`docs/specs/0019-drift-classification.md`](docs/specs/0019-drift-classification.md)).
-> The `prod-go`/`v1` standard composes five modules: `go-tooling`
-> (a fixed `.golangci.yml`, see
-> [`docs/specs/0005-gotooling-module.md`](docs/specs/0005-gotooling-module.md))
-> `github-ci` (CI workflow, Dependabot config, PR template, see
-> [`docs/specs/0010-github-ci-module.md`](docs/specs/0010-github-ci-module.md)),
-> `vibe-conformance` (the `Conformance` workflow and `Taskfile.vibe.yml`'s
-> `task audit`, the only generated files that run `vibe`, see
-> [`docs/specs/0022-conformance-isolation.md`](docs/specs/0022-conformance-isolation.md)),
-> `repo-tooling` (`Taskfile.yml`, `lefthook.yml`, see
-> [`docs/specs/0011-repo-tooling-module.md`](docs/specs/0011-repo-tooling-module.md)),
-> `claude-config` (Claude Code settings that run `task -x hook:guard`
-> to block destructive commands, plus session context, formatting after
-> edits, background checks, and a `verify:fast` gate at stop, see
-> [`docs/specs/0012-agent-config-module.md`](docs/specs/0012-agent-config-module.md),
-> [`docs/specs/0021-agent-hooks-task-interface.md`](docs/specs/0021-agent-hooks-task-interface.md),
-> and [`docs/specs/0023-agent-lifecycle-hooks.md`](docs/specs/0023-agent-lifecycle-hooks.md)),
-> and `codex-config` (Codex settings, with hooks suspended, see
-> [`docs/specs/0024-claude-first-agent-modules.md`](docs/specs/0024-claude-first-agent-modules.md)).
-> The last two are optional integrations, on by default; `vibe.yaml`'s
-> `integrations:` map deselects them or adds the `vscode` and `zed` editor
-> integrations or the `graphify` code-intelligence integration (off by
-> default, see [`docs/specs/0035-graphify.md`](docs/specs/0035-graphify.md)),
-> and `vibe sync` safely removes what a deselected integration
-> left behind (see
-> [`docs/specs/0026-optional-integrations.md`](docs/specs/0026-optional-integrations.md)).
-> `vibe.yaml`'s opt-in `policy: {line_endings: lf}` pins LF checkouts.
-> It does this through one managed section of `.gitattributes`, and the
-> project's own rules in that file stay untouched (see
-> [`docs/specs/0029-text-policy.md`](docs/specs/0029-text-policy.md)).
-> VibeConform is workflow-neutral by default. It chooses no development
-> process unless `vibe.yaml` selects one, and leaving it out is the
-> recommended setting (see
-> [`docs/specs/0042-workflow-neutral-defaults.md`](docs/specs/0042-workflow-neutral-defaults.md)).
-> The opt-in `development:` map can select a standard docs layout. It
-> can also select an optional, bundled workflow (`direct`,
-> `plan-triggered-sdd` or `always-sdd`). That workflow owns one short
-> routing section of `AGENTS.md`, plus a Claude Code `spec` skill
-> (`/spec`) (see
-> [`docs/specs/0030-plan-triggered-sdd.md`](docs/specs/0030-plan-triggered-sdd.md)).
-> `vibe diff` previews the reconciliation VibeConform would perform for that
-> resource against `.vibe/state.yaml` — see
-> [`docs/specs/0006-reconcile-diff-v1.md`](docs/specs/0006-reconcile-diff-v1.md).
-> `vibe sync` applies it: it writes `Generated` resources, records their
-> hashes in `.vibe/state.yaml`, refuses to overwrite a conflict (see
-> [`docs/specs/0008-vibe-sync-v1.md`](docs/specs/0008-vibe-sync-v1.md)), runs
-> `lefthook install` when the standard manages `lefthook.yml`, and warns
-> (without failing) about any external binary a module requires that is
-> missing from `PATH`.
-> This repository declares `prod-go`/`v1` in its own `vibe.yaml`, commits
-> `.vibe/state.yaml`, and runs `vibe audit` against itself in CI — every file
-> those five modules manage is generated from a module template rather than
-> hand-maintained (see
-> [`docs/specs/0013-dogfood-self-management.md`](docs/specs/0013-dogfood-self-management.md)).
-> M2 added `prod-ts`/`v1` and `prod-py`/`v1` as lint/format/typecheck-only
-> standards — see
-> [`docs/specs/0014-m2-milestone.md`](docs/specs/0014-m2-milestone.md). M3
-> renamed all three standards (`production` → `prod-go`, etc., see
-> [`docs/specs/0015-standard-naming.md`](docs/specs/0015-standard-naming.md))
-> and gave `prod-ts`/`prod-py` their own `repo-tooling`/`github-ci` variants,
-> so they are now complete standards rather than lint configuration — see
-> [`docs/specs/0016-ts-py-tooling-parity.md`](docs/specs/0016-ts-py-tooling-parity.md).
-> `prod-mono`/`v1` manages a polyglot monorepo: Go, TypeScript, and Python
-> components declared in `vibe.yaml`'s `components:` list, each configured
-> as its single-language standard would configure a repository — see
-> [`docs/specs/0025-prod-mono.md`](docs/specs/0025-prod-mono.md). Its CI is
-> GitHub Actions by default, or GitLab CI, or none (`ci.provider`, spec 0038).
-> `doctor` diagnoses whether a machine can run the workflow — see
-> [`docs/specs/0028-environment-doctor.md`](docs/specs/0028-environment-doctor.md).
-> `check` still returns "not implemented yet."
-> Nothing described below as "eventually" or "will" exists yet. See
-> [`docs/plans/0007-m1-milestone.md`](docs/plans/0007-m1-milestone.md),
-> [`docs/plans/0014-m2-milestone.md`](docs/plans/0014-m2-milestone.md), and
-> [`docs/plans/0016-ts-py-tooling-parity.md`](docs/plans/0016-ts-py-tooling-parity.md)
-> for what M1, M2, and M3 (so far) delivered.
+> **Status: pre-alpha.** `vibe audit` checks a repository against
+> contract 1.1.0 (spec 0051), and this repository is gated by its own
+> audit in CI (`Contract / audit`). The template-sync system (`vibe
+> sync`, standards, `.vibe/state.yaml`) was removed in spec 0059;
+> v0.13.x is the last release that has it. To move a repository off it,
+> see [Leaving the template-sync system](docs/usage.md#leaving-the-template-sync-system).
 
 ## What VibeConform is
 
-VibeConform is a cross-platform repository control-plane CLI. The goal is a
-tool that treats a repository's tooling, CI, hooks, linters, and AI-agent
-configuration as **desired state** to reconcile against, not a one-shot
-template to generate and then drift away from.
+VibeConform checks that a repository's tooling (tasks, Git hooks, CI and
+AI-agent guardrails) has the properties a versioned **contract**
+requires. The contract is a list of rules, each with a stable ID such as
+`C-02` or `A-02`, a level (MUST or SHOULD) and a check. It names
+properties, never files or tools: a repository may use Task, make, just
+or package scripts, lefthook or pre-commit, GitHub Actions or GitLab CI.
+See [ADR 0025](docs/decisions/0025-contract-model.md) and
+[spec 0051](docs/specs/0051-contract-v1.md).
 
-Once built, `vibe` will:
+Three parts, three roles:
 
-- initialize new repositories against a versioned production standard,
-- migrate existing repositories onto that standard,
-- audit repositories for compliance/drift (`vibe audit`),
-- preview reconciliation (`vibe diff`) and apply it (`vibe sync`),
-- run affected-component validation for a change set (`vibe check`),
-- configure AI coding agents (Codex, Claude Code) and CI/hooks/linters
-  using currently supported, non-fabricated mechanisms.
-
-See [`docs/architecture/overview.md`](docs/architecture/overview.md) for the
-full design, including how it adapts ideas from
-[projen](https://github.com/projen/projen) (module composition),
-[Copier](https://github.com/copier-org/copier) (three-way reconciliation),
-[Cruft](https://github.com/cruft/cruft) (audit/diff/sync UX), and
-[Nx](https://nx.dev/) (affected-component graphs).
+- **`vibe audit`** verifies the rules, deterministically, and never
+  writes a file. Where a rule is about behavior, it runs a *probe*: it
+  plants a known defect, or feeds the agent guard a known command, in a
+  throwaway copy of the repository, and checks the reaction.
+- **The setup skill** (`vibeconform-setup`, written by `vibe init
+  --skill`) is an agent skill that gives a repository those properties
+  in whatever way fits it, then runs the audit until it passes. The
+  repository owns the skill and every file it writes.
+- **`vibe-guard`** is the reference agent guard: a separate binary that
+  Claude Code runs before each shell command and file edit. Any guard
+  that passes the guard probes will do.
 
 ## Core philosophy
 
@@ -116,39 +40,37 @@ full design, including how it adapts ideas from
    tooling (`Taskfile.yml`, CI, linters, hooks, `vibe audit`).
 2. **Easy to use, cross-platform.** Windows and Linux are both
    first-class; a repository that conforms on one conforms on the other.
-3. **Easy to install and easy to remove.** What VibeConform generates
-   stands on third-party tools (`task`, `lefthook`, `go`, `uv`, `ruff`,
-   `npm`/`pnpm`, …), not on `vibe`. Where `vibe` is unavoidable it is
-   confined, removable on its own, and has a fallback.
+3. **Easy to install and easy to remove.** Nothing a conformant
+   repository runs calls `vibe` (rule R-01). Its tooling stands on
+   third-party tools (`task`, `lefthook`, `go`, `uv`, `ruff`, `pnpm`, …),
+   so removing VibeConform leaves it working.
 
 See [`docs/architecture/principles.md`](docs/architecture/principles.md)
-for what each one means in practice. This repository's own guardrails are
-meant to be the reference example for the production standard VibeConform
-enforces on other repositories — see the bootstrap rationale in
-[`docs/plans/0001-bootstrap.md`](docs/plans/0001-bootstrap.md).
+for what each one means in practice.
 
-## Intended CLI
+## CLI
 
 ```text
-vibe init <standard> <version>  # write vibe.yaml declaring the desired standard
-vibe audit                      # read-only compliance/drift check (non-zero exit on failure)
-vibe diff                       # human-readable reconciliation preview
-vibe sync                       # perform reconciliation
-vibe check                      # affected-component validation for the current change set
-vibe doctor                     # can this machine run the workflow? (PASS/WARN/FAIL/UNVERIFIED)
+vibe init            # write a vibe.yaml version 2 with the components it finds
+vibe init --skill    # write the setup skill into the repository
+vibe audit           # check the repository against the contract (exit 0, 2, or 1)
+vibe doctor          # can this machine run the repository's workflow?
+vibe unlock          # let an agent change the guardrail settings for a while
+vibe-guard hook      # the agent guard, run by Claude Code's PreToolUse hook
 ```
-
-Later: `vibe new`, `vibe eject`.
 
 ## Using `vibe`
 
 To adopt VibeConform in a repository, follow
 [`docs/adopting.md`](docs/adopting.md), a start-to-finish walkthrough.
+[`docs/usage.md`](docs/usage.md) is the reference manual: installing,
+every command, `vibe.yaml`, the report and its exit codes, the setup
+skill, the agent hooks and the guard.
 
-See [`docs/usage.md`](docs/usage.md) for the user manual: install/build
-instructions, the `vibe init` command reference, exact error text for
-each failure case, and how to remove VibeConform from a repository that
-adopted it.
+The `examples/` directory holds three repositories assembled from the
+setup skill's reference files (TypeScript, Python, and a Go, TypeScript
+and Python monorepo). The `Examples` workflow audits each one in a fresh
+repository on Linux and Windows.
 
 ## Build and test
 
@@ -166,22 +88,22 @@ verification interface; CI runs the same tasks:
 
 ```bash
 task verify     # fmt check, build, lint, tests, go mod tidy/verify, govulncheck, actionlint
+task audit      # the full contract audit, with vibe and vibe-guard built from the checkout
 ```
 
 ## Repository layout
 
 ```text
-cmd/vibe/          CLI entrypoint
-internal/cli/      Command tree (root + init/audit/diff/sync/check/doctor)
-internal/manifest/ vibe.yaml parsing
-internal/standard/ Named, versioned standard registry
-internal/module/   Module composition interface + the modules the four standards compose
-internal/resource/ Resource + ownership + file mode model
-internal/reconcile/ Three-way decision engine
-internal/state/    .vibe/state.yaml read/write
-internal/textregion/ Marker-delimited managed sections of text files
-internal/atomicfile/ Temp-file + rename writes
-docs/              Specs, plans, architecture, and decision records (source of truth)
+cmd/vibe/            CLI entrypoint
+cmd/vibe-guard/      The reference agent guard
+internal/cli/        Command tree (init, audit, doctor, unlock)
+internal/contract/   The contract audit: vibe.yaml version 2, the rules, static checks, probes
+internal/guardrule/  Guard rule IDs, policy.json, command parsing shared by the audit and the guard
+internal/guard/      vibe-guard: rules, hook, explain, relock, the reference hook commands
+internal/setupskill/ The embedded setup skill and its reference files
+internal/doctor/     vibe doctor's checks
+examples/            Three repositories built from the setup skill's references
+docs/                Specs, architecture, and decision records (source of truth)
 ```
 
 ## License

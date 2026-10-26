@@ -1,23 +1,19 @@
 name: Examples
 
-# Runs eslint/prettier/tsc and ruff/pyright/pytest against real fixture
-# source in examples/typescript, examples/python, and examples/monorepo
-# (Go, TypeScript, and Python under prod-mono/v1), closing the blind
-# spot TestExamplesAreConformant (internal/cli/examples_test.go) leaves:
-# that test proves generated config round-trips through vibe sync, not
-# that it catches anything.
+# The examples as whole repositories (spec 0059, Desired Behavior 14 and
+# 15). examples/typescript, examples/python and examples/monorepo are
+# assembled by hand from the setup skill's reference files
+# (internal/setupskill/skill/reference/). Each job copies one example into
+# a fresh Git repository, so that it is a repository root as an adopter's
+# would be, and runs the full contract audit there with vibe and
+# vibe-guard built from this checkout. The audit runs setup, verify,
+# verify-fast, fmt-check, the hooks and the guard probes in its probe copy,
+# so each job installs every tool the example's entrypoints call. A job
+# passes on exit 0: the verdict is conformant.
 #
-# Hand-authored rather than a job in ci.yml: ci.yml is itself a resource
-# github-ci resolves, shipped to every adopting Go repository, and an
-# examples/-specific job in it would leak this repository's own layout
-# into that standard. See docs/specs/0016-ts-py-tooling-parity.md.
-#
-# "task verify" runs first, with no vibe on PATH — proving spec 0017's
-# decoupling holds: generated verify depends only on native language
-# tooling. "task audit" then runs as its own separate step, against a vibe
-# built from source rather than a published release, so it checks fixtures
-# against the templates this change under review actually contains, not
-# the last tag.
+# monorepo-gitlab audits the monorepo example with the reference
+# .gitlab-ci.yml (and Renovate, and a merge request template) in place of
+# its GitHub workflows. The real GitLab pipeline is not run here (#74).
 
 on:
   pull_request:
@@ -34,303 +30,170 @@ concurrency:
 env:
   GO_VERSION: "1.27.0"
   TASK_VERSION: "v3.53.1"
+  GOLANGCI_LINT_VERSION: "v2.13.2"
   NODE_VERSION: "22"
+  PNPM_VERSION: "10.34.5"
   PYTHON_VERSION: "3.12"
+  # The release the examples' audit.yml and settings.json name in place
+  # of the references' {{VIBE_VERSION}}; the GitLab job renders the
+  # reference .gitlab-ci.yml with it too.
+  VIBE_RELEASE: "v0.13.0-alpha.1"
 
 jobs:
-  typescript:
-    name: examples/typescript (${{ matrix.os }})
-    # Windows as well as Linux: nothing else proves prod-ts on Windows
-    # (docs/architecture/principles.md, principle 2; spec 0020).
+  audit:
+    name: examples/${{ matrix.example }} (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
+        example: [typescript, python, monorepo]
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The fixture is not at the repository root, so point the action at
-      # its package.json for the packageManager version. An adopting
-      # repository's generated ci.yml relies on the root default instead.
-      - name: Setup pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          package_json_file: examples/typescript/package.json
-      - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: examples/typescript/pnpm-lock.yaml
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
-      - name: Install dependencies
-        working-directory: examples/typescript
-        run: pnpm install --frozen-lockfile
-      # The ESLint regression tests need this job's node_modules, so ci.yml's
-      # Go job skips them and they run here (specs 0045, 0048).
-      - name: ESLint regression tests
-        run: go test ./internal/module/tstooling -run ESLint -count=1 -v
-      - name: task verify
-        working-directory: examples/typescript
-        run: task verify
-      # What the agents' Stop hook and session start run (spec 0023), on
-      # real fixture source. hook-guard.yml tests the hook scripts
-      # themselves; this proves they work in a synced example.
-      - name: task verify:fast
-        working-directory: examples/typescript
-        run: task verify:fast
-      - name: task hook:context
-        working-directory: examples/typescript
-        run: task hook:context
-      # GOEXE is ".exe" on Windows and empty elsewhere. An extensionless
-      # vibe is not found by PATH lookup on Windows.
-      - name: Build vibe from source
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          go build -o "$RUNNER_TEMP/bin/vibe$(go env GOEXE)" ./cmd/vibe
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: task audit
-        working-directory: examples/typescript
-        run: task audit
-
-  python:
-    name: examples/python
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
-      - name: Install dependencies
-        working-directory: examples/python
-        run: uv sync
-      # The Ruff seam test needs this job's .venv, so ci.yml's Go job skips
-      # it and it runs here (spec 0049).
-      - name: Ruff seam test
-        run: go test ./internal/module/pythontooling -run Ruff -count=1 -v
-      - name: task verify
-        working-directory: examples/python
-        run: task verify
-      - name: task verify:fast
-        working-directory: examples/python
-        run: task verify:fast
-      - name: task hook:context
-        working-directory: examples/python
-        run: task hook:context
-      - name: Build vibe from source
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: task audit
-        working-directory: examples/python
-        run: task audit
-
-  monorepo:
-    name: examples/monorepo (${{ matrix.os }})
-    # Windows as well as Linux: prod-mono's hook:format works around a
-    # Windows-only behavior of Task's built-in xargs (spec 0025).
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
     env:
-      GOLANGCI_LINT_VERSION: "v2.13.2"
+      EXAMPLE: ${{ matrix.example }}
     steps:
+      # Before the checkout: on Windows, Git's default autocrlf would give
+      # the examples CRLF working files, which their format checks
+      # (Prettier's endOfLine, gofmt) reject. An adopter's clone follows
+      # its own .gitattributes; this copy is made from the checkout.
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Setup pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          package_json_file: examples/monorepo/apps/web/package.json
-      - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: examples/monorepo/apps/web/pnpm-lock.yaml
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: Install task, goimports, golangci-lint, govulncheck, actionlint
+      - name: Setup pnpm
+        if: matrix.example != 'python'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - name: Setup Node
+        if: matrix.example != 'python'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install uv
+        if: matrix.example != 'typescript'
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
+      - name: Install the Go tools the monorepo's entrypoints call
+        if: matrix.example == 'monorepo'
         run: |
-          go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
           go install golang.org/x/tools/cmd/goimports@v0.51.0
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"$GOLANGCI_LINT_VERSION"
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-      - name: Install dependencies
-        run: |
-          (cd examples/monorepo/apps/web && pnpm install --frozen-lockfile)
-          (cd examples/monorepo/services/worker && uv sync)
-      - name: task verify
-        working-directory: examples/monorepo
-        run: task verify
-      - name: task verify:fast
-        working-directory: examples/monorepo
-        run: task verify:fast
-      - name: task hook:context
-        working-directory: examples/monorepo
-        run: task hook:context
-      # An untracked, unformatted file in every component: hook:format must
-      # format each one from its own directory, on both platforms. It runs
-      # from services/, a directory that is not a component's, as an agent
-      # whose session is there would (#129); the next step runs it from
-      # the root.
-      - name: task hook:format
-        working-directory: examples/monorepo
-        run: |
-          printf 'package api\n\nfunc  X() {}\n' > services/api/x.go
-          printf 'export const   y = 1\n' > apps/web/src/y.ts
-          printf 'x  =  1\n' > services/worker/src/example/x.py
-          (cd services && task -x hook:format)
-          task fmt:check
-          rm services/api/x.go apps/web/src/y.ts services/worker/src/example/x.py
-      # Spec 0037: the committed generated files fail Prettier/ESLint and
-      # ruff, and pass only because vibe.yaml declares them. hook:format
-      # must leave them alone, and the same content at a path that is not
-      # declared must still fail, so the exclusion did not switch the
-      # checks off.
-      - name: Generated paths are excluded, and only they are
-        working-directory: examples/monorepo
-        run: |
-          web=apps/web/src/contracts/greeting.ts
-          worker=services/worker/src/example/contracts/greeting.py
-          touch "$web" "$worker"
-          before="$(cat "$web" "$worker")"
-          task -x hook:format
-          [ "$(cat "$web" "$worker")" = "$before" ] || { echo "hook:format changed a generated file"; exit 1; }
-          cp "$web" apps/web/src/notgen.ts
-          cp "$worker" services/worker/src/example/notgen.py
-          for t in web:fmt:check web:lint worker:fmt:check worker:lint; do
-            if task "$t"; then echo "$t passed on a file that is not declared generated"; exit 1; fi
-          done
-          rm apps/web/src/notgen.ts services/worker/src/example/notgen.py
-      - name: Build vibe from source
+      # GOEXE is ".exe" on Windows and empty elsewhere: an extensionless
+      # binary is not found by PATH lookup on Windows. First on PATH, so
+      # the audit's probes run this checkout's vibe-guard.
+      - name: Build vibe and vibe-guard from source
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
           go build -o "$RUNNER_TEMP/bin/vibe$(go env GOEXE)" ./cmd/vibe
+          go build -o "$RUNNER_TEMP/bin/vibe-guard$(go env GOEXE)" ./cmd/vibe-guard
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: task audit
-        working-directory: examples/monorepo
-        run: task audit
-
-  # Spec 0038 acceptance criterion 10: a copy of examples/monorepo switched
-  # to ci.provider gitlab verifies and audits green with no actionlint
-  # installed and no .github/ left. The real GitLab pipeline is checked by
-  # hand (criterion 11).
-  monorepo-gitlab:
-    name: examples/monorepo (ci.provider gitlab)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-    env:
-      GOLANGCI_LINT_VERSION: "v2.13.2"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Setup pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          package_json_file: examples/monorepo/apps/web/package.json
-      - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      # No actionlint: under gitlab, task verify must not need it.
-      - name: Install task, goimports, golangci-lint, govulncheck
+      - name: Copy the example into a fresh Git repository
         run: |
-          go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}
-          go install golang.org/x/tools/cmd/goimports@v0.51.0
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
-          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
-      - name: Build vibe from source
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Copy the example and switch it to GitLab
-        run: |
-          copy="$RUNNER_TEMP/monorepo"
-          cp -R examples/monorepo "$copy"
+          copy="$RUNNER_TEMP/example"
+          cp -R "examples/$EXAMPLE" "$copy"
           cd "$copy"
-          printf 'ci:\n  provider: gitlab\n' >> vibe.yaml
           git init -q -b main
           git add -A
           git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy"
-          "$RUNNER_TEMP/bin/vibe" sync
-          [ ! -e .github ] || { echo ".github/ survived the switch"; exit 1; }
-          for f in .gitlab-ci.yml .gitlab-ci.vibe.yml .gitlab/merge_request_templates/Default.md; do
-            [ -f "$f" ] || { echo "$f was not created"; exit 1; }
-          done
+          echo "COPY=$copy" >> "$GITHUB_ENV"
+      - name: vibe audit
+        working-directory: ${{ env.COPY }}
+        run: vibe audit
+
+  monorepo-gitlab:
+    name: examples/monorepo (GitLab CI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # No actionlint: without .github/workflows, verify must not need it.
+      - name: Install task and the Go tools the entrypoints call
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
+          go install golang.org/x/tools/cmd/goimports@v0.51.0
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"$GOLANGCI_LINT_VERSION"
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+      - name: Build vibe and vibe-guard from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          go build -o "$RUNNER_TEMP/bin/vibe-guard" ./cmd/vibe-guard
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # The reference GitLab files in place of .github/: .gitlab-ci.yml
+      # with the release named, Renovate for D-02, and the merge request
+      # template for R-03.
+      - name: Copy the example into a fresh Git repository, on GitLab CI
+        run: |
+          ref="$PWD/internal/setupskill/skill/reference/ci"
+          copy="$RUNNER_TEMP/monorepo"
+          cp -R examples/monorepo "$copy"
+          cd "$copy"
+          mv .github "$RUNNER_TEMP/monorepo-github"
+          sed "s/{{VIBE_VERSION}}/$VIBE_RELEASE/g" "$ref/monorepo/.gitlab-ci.yml" > .gitlab-ci.yml
+          cp "$ref/renovate.json" renovate.json
+          mkdir -p .gitlab/merge_request_templates
+          cp "$ref/pull_request_template.md" .gitlab/merge_request_templates/Default.md
+          git init -q -b main
+          git add -A
+          git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy"
           echo "COPY=$copy" >> "$GITHUB_ENV"
       # Spec 0044: GitLab's published schema catches a misspelled keyword or
       # an invalid value. It does not resolve include, extends or rules, and
       # it is no real run (issue #74). The checker version pins the schema.
       - name: GitLab CI schema check
         working-directory: ${{ env.COPY }}
-        run: uvx check-jsonschema@0.38.2 --builtin-schema vendor.gitlab-ci --data-transform gitlab-ci .gitlab-ci.yml .gitlab-ci.vibe.yml
-      - name: Install dependencies
-        run: |
-          (cd "$COPY/apps/web" && pnpm install --frozen-lockfile)
-          (cd "$COPY/services/worker" && uv sync)
-      - name: task verify (no actionlint on PATH)
+        run: uvx check-jsonschema@0.38.2 --builtin-schema vendor.gitlab-ci --data-transform gitlab-ci .gitlab-ci.yml
+      - name: vibe audit (no actionlint on PATH)
         working-directory: ${{ env.COPY }}
         run: |
           if command -v actionlint >/dev/null 2>&1; then echo "actionlint is on PATH"; exit 1; fi
-          task verify
-      - name: task audit
-        working-directory: ${{ env.COPY }}
-        run: task audit
+          vibe audit
 
   gate:
     name: Examples / gate
     if: always()
-    needs: [typescript, python, monorepo, monorepo-gitlab]
+    needs: [audit, monorepo-gitlab]
     runs-on: ubuntu-latest
     steps:
       - name: Require all upstream jobs to have succeeded
+        env:
+          AUDIT: ${{ needs.audit.result }}
+          GITLAB: ${{ needs.monorepo-gitlab.result }}
         run: |
-          for result in \
-            "${{ needs.typescript.result }}" \
-            "${{ needs.python.result }}" \
-            "${{ needs.monorepo.result }}" \
-            "${{ needs.monorepo-gitlab.result }}"; do
+          for result in "$AUDIT" "$GITLAB"; do
             if [ "$result" != "success" ]; then
               echo "A required job did not succeed: $result"
               exit 1

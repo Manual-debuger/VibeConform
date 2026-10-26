@@ -1,3 +1,6 @@
+# .github/dependabot.yml: one entry per component's ecosystem, and one for
+# github-actions, so the pinned action SHAs are updated too. Dependabot's
+# pip ecosystem reads pyproject.toml and uv.lock.
 version: 2
 updates:
   - package-ecosystem: pip

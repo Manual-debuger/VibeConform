@@ -2,6 +2,8 @@
 
 ## Status
 
+Superseded by ADR 0025 (removed in spec 0059). Before that:
+
 Accepted. Implemented per `docs/specs/0040-ci-floor-environment-seam.md`.
 Amends ADR 0019 decision 4.
 

@@ -3,7 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
-	"io"
+	"errors"
 	"io/fs"
 	"maps"
 	"os"
@@ -15,42 +15,36 @@ import (
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/doctor"
-	"github.com/Manual-debuger/VibeConform/internal/manifest"
-	"github.com/Manual-debuger/VibeConform/internal/standard"
 )
 
 // stubDoctorEnv makes doctor see a machine where every binary is on PATH
-// except those named missing, and every command succeeds: version probes
-// print v1, and git reports eol=lf for any path. Files are the real ones,
-// since the repository under test is the test's own temp directory.
+// except those named missing, every command succeeds, and bash resolves
+// unless "bash" is missing. Files are the real ones, since the repository
+// under test is the test's own temp directory.
 func stubDoctorEnv(t *testing.T, missing ...string) {
 	t.Helper()
 	previous := doctorEnv
 	doctorEnv = func() doctor.Env {
 		return doctor.Env{
 			LookPath: func(name string) (string, error) {
-				for _, m := range missing {
-					if m == name {
-						return "", exec.ErrNotFound
-					}
+				if slices.Contains(missing, name) {
+					return "", exec.ErrNotFound
 				}
 				return "/stub/" + name, nil
 			},
 			Run: func(_ context.Context, _, _ string, args ...string) (string, string, error) {
-				if len(args) > 0 && args[0] == "check-attr" {
-					return args[len(args)-1] + ": eol: lf\n", "", nil
-				}
 				return "v1\n", "", nil
 			},
 			Exists: func(path string) bool {
 				_, err := os.Stat(path)
 				return err == nil
 			},
-			Open: func(path string) (io.ReadCloser, error) {
-				return os.Open(path) // #nosec G304 -- the test's own temp directory
+			Bash: func() (string, error) {
+				if slices.Contains(missing, "bash") {
+					return "", errors.New("no bash found")
+				}
+				return "/stub/bash", nil
 			},
-			GOOS:   "linux",
-			GOARCH: "amd64",
 		}
 	}
 	t.Cleanup(func() { doctorEnv = previous })
@@ -58,7 +52,7 @@ func stubDoctorEnv(t *testing.T, missing ...string) {
 
 func runDoctorIn(t *testing.T, dir string) (string, error) {
 	t.Helper()
-	root := NewRootCmd("test")
+	root := newRootCmd("test", contractSeams{openRepo: openFixtureRepo})
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&bytes.Buffer{})
@@ -67,156 +61,148 @@ func runDoctorIn(t *testing.T, dir string) (string, error) {
 	return out.String(), err
 }
 
-// syncedRepo returns a temp directory holding a synced prod-go
-// repository, so the files doctor checks for are there.
-func syncedRepo(t *testing.T) string {
+// assertLines checks that every pattern matches a line of out.
+func assertLines(t *testing.T, out string, patterns ...string) {
 	t.Helper()
-	dir := t.TempDir()
-	writeManifest(t, dir)
-	if out, err := runSyncIn(t, dir); err != nil {
-		t.Fatalf("sync: %v\n%s", err, out)
+	for _, p := range patterns {
+		if !regexp.MustCompile(`(?m)` + p).MatchString(out) {
+			t.Errorf("output does not match %s:\n%s", p, out)
+		}
 	}
-	return dir
 }
 
-func TestDoctorHealthyExitsZero(t *testing.T) {
-	dir := syncedRepo(t)
-	stubDoctorEnv(t)
+// A version 1 file and a missing file get the messages vibe audit gives
+// them, and exit 1 (spec 0059, Desired Behavior 11).
+func TestDoctorConfigurationLikeAudit(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		edits []fixtureEdit
+	}{
+		{"no file", []fixtureEdit{withoutFile("vibe.yaml")}},
+		{"version 1", []fixtureEdit{withFile("vibe.yaml", "standard: prod-go\nversion: v1\n")}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := contractFixture(t, c.edits...)
+			audit := runVibeAudit(t, "--repo-root", dir)
+			msg := strings.TrimSpace(strings.TrimPrefix(audit.stderr, "Error: "))
+			if audit.code != exitError || msg == "" {
+				t.Fatalf("vibe audit exit %d, stderr %q", audit.code, audit.stderr)
+			}
 
+			stubDoctorEnv(t)
+			out, err := runDoctorIn(t, dir)
+			if code := ExitCode(err); code != exitError {
+				t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
+			}
+			assertLines(t, out, `^PASS +git `, `^FAIL +vibe\.yaml +`+regexp.QuoteMeta(msg)+`$`)
+		})
+	}
+}
+
+// guardSettings is a .claude/settings.json whose PreToolUse hook runs
+// vibe-guard, as the setup skill's reference does.
+const guardSettings = `{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "vibe-guard hook"}]}],
+ "Stop": [{"hooks": [{"type": "command", "command": "task verify:fast 1>&2 || exit 2"}]}]}}
+`
+
+// TestDoctorChecksTheWorkflow: on a machine with everything, doctor
+// reports git, the configuration, each entrypoint program, bash for the
+// hooks and vibe-guard, one line each, and exits 0.
+func TestDoctorChecksTheWorkflow(t *testing.T) {
+	dir := contractFixture(t, withFile(".claude/settings.json", guardSettings))
+	stubDoctorEnv(t)
 	out, err := runDoctorIn(t, dir)
 	if err != nil {
 		t.Fatalf("doctor: %v\n%s", err, out)
 	}
-	for _, want := range []string{
-		"standard: prod-go/v1\n",
-		"PASS        git",
-		"vibe.yaml resolves prod-go/v1 (integrations: claude, codex)",
-		"; Taskfile.yml loads",
-		"PASS        claude hooks",
-		"; .golangci.yml has eol=lf; policy.line_endings is not selected",
-		"summary: 14 pass, 0 warn, 0 fail, 0 unverified",
+	assertLines(t, out,
+		`^PASS +git `,
+		`^PASS +vibe\.yaml +version 2, contract 1\.1\.0`,
+		`^PASS +task +/stub/task; runs verify, verify-fast, fmt, fmt-check$`,
+		`^PASS +bash +/stub/bash`,
+		`^PASS +vibe-guard +/stub/vibe-guard`,
+	)
+}
+
+// TestDoctorReportsWhatIsMissing: a missing entrypoint program, a missing
+// bash and a missing vibe-guard each fail their own line, and doctor
+// exits 1.
+func TestDoctorReportsWhatIsMissing(t *testing.T) {
+	for _, c := range []struct {
+		missing string
+		line    string
+	}{
+		{"task", `^FAIL +task +not on PATH; verify, verify-fast, fmt, fmt-check cannot run$`},
+		{"bash", `^FAIL +bash +no bash found`},
+		{"vibe-guard", `^FAIL +vibe-guard +not on PATH`},
 	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output lacks %q:\n%s", want, out)
-		}
-	}
-	if strings.Contains(out, "FAIL") {
-		t.Errorf("a healthy machine reports a failure:\n%s", out)
+		t.Run(c.missing, func(t *testing.T) {
+			dir := contractFixture(t, withFile(".claude/settings.json", guardSettings))
+			stubDoctorEnv(t, c.missing)
+			out, err := runDoctorIn(t, dir)
+			if code := ExitCode(err); code != exitError {
+				t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
+			}
+			assertLines(t, out, c.line)
+		})
 	}
 }
 
-// TestDoctorReportsLineEndingPolicy: with the policy selected, the line
-// endings row reports its health instead of the bare attribute.
-func TestDoctorReportsLineEndingPolicy(t *testing.T) {
-	dir := t.TempDir()
-	writeVibeYAML(t, dir, goLF)
-	mustSync(t, dir)
-	stubDoctorEnv(t)
-
+// TestDoctorChecksVibeGuardOnlyWhenAHookCallsIt: the baseline's guard
+// hook is a task, so vibe-guard is not checked.
+func TestDoctorChecksVibeGuardOnlyWhenAHookCallsIt(t *testing.T) {
+	dir := contractFixture(t)
+	stubDoctorEnv(t, "vibe-guard")
 	out, err := runDoctorIn(t, dir)
 	if err != nil {
 		t.Fatalf("doctor: %v\n%s", err, out)
 	}
-	if want := "PASS        line endings   policy line_endings: lf; core.autocrlf="; !strings.Contains(out, want) {
-		t.Errorf("output lacks %q:\n%s", want, out)
+	if strings.Contains(out, "vibe-guard") {
+		t.Errorf("doctor checked vibe-guard, which no hook calls:\n%s", out)
 	}
 }
 
-func TestDoctorMissingToolExitsOne(t *testing.T) {
-	dir := syncedRepo(t)
-	stubDoctorEnv(t, "golangci-lint")
+// TestDoctorEntrypointPrograms: each distinct program gets one line naming
+// its entrypoints; a program given by path is looked for in the
+// repository; a command that is not one simple command is left to V-04.
+func TestDoctorEntrypointPrograms(t *testing.T) {
+	dir := contractFixture(t,
+		withFile("vibe.yaml", "contract: 1.1.0\nplatforms: [linux]\nagents: [claude]\nentrypoints:\n"+
+			"  verify: [task verify, ./scripts/check.sh]\n  verify-fast: make fast\n  fmt: task fmt && task lint\n  fmt-check: ./scripts/gone.sh\n"),
+		withFile("scripts/check.sh", "#!/bin/sh\n"))
+	stubDoctorEnv(t, "make")
+	out, _ := runDoctorIn(t, dir)
+	assertLines(t, out,
+		`^PASS +task +/stub/task; runs verify$`,
+		`^PASS +\./scripts/check\.sh +in the repository; runs verify$`,
+		`^FAIL +make +not on PATH; verify-fast cannot run$`,
+		`^UNVERIFIED +entrypoints\.fmt +"task fmt && task lint" is a list joined by &&, not one simple command`,
+		`^FAIL +\./scripts/gone\.sh +not in the repository; fmt-check cannot run$`,
+	)
+}
 
+// TestDoctorAfterInit: in a repository vibe init just configured, with no
+// hooks yet, doctor says the entrypoints are V-04's to declare and that
+// nothing needs bash, and fails nothing.
+func TestDoctorAfterInit(t *testing.T) {
+	dir := contractFixture(t, withoutFile("vibe.yaml"), withoutFile(".claude/settings.json"))
+	if out, err := runInit(t, dir); err != nil {
+		t.Fatalf("vibe init: %v\n%s", err, out)
+	}
+	stubDoctorEnv(t, "bash")
 	out, err := runDoctorIn(t, dir)
-	if err == nil {
-		t.Fatalf("doctor passed with golangci-lint missing:\n%s", out)
+	if err != nil {
+		t.Fatalf("doctor: %v\n%s", err, out)
 	}
-	if code := ExitCode(err); code != exitError {
-		t.Errorf("exit %d, want %d: a required FAIL is 'no usable verdict', not a conformance code", code, exitError)
-	}
-	if !strings.Contains(err.Error(), "doctor: 1 required check failed") {
-		t.Errorf("error = %q", err)
-	}
-	if !strings.Contains(out, "FAIL        golangci-lint  not found on PATH (required by go-tooling: ") {
-		t.Errorf("output does not name the missing tool and who needs it:\n%s", out)
-	}
+	assertLines(t, out,
+		`^UNVERIFIED +entrypoints +none declared; vibe audit's V-04 says what to declare$`,
+		`^PASS +bash +not needed: \.claude/settings\.json has no command hook$`,
+	)
 }
 
-// TestDoctorWithoutManifest: no vibe.yaml fails the manifest check, but
-// the checks that don't need it still run.
-func TestDoctorWithoutManifest(t *testing.T) {
-	stubDoctorEnv(t)
-	out, err := runDoctorIn(t, t.TempDir())
-	if ExitCode(err) != exitError {
-		t.Fatalf("exit %d, want %d:\n%s", ExitCode(err), exitError, out)
-	}
-	for _, want := range []string{
-		`(?m)^PASS +git `,
-		`(?m)^FAIL +manifest `,
-		`(?m)^UNVERIFIED +tools +needs a valid vibe\.yaml$`,
-		`(?m)^UNVERIFIED +agent hooks +needs a valid vibe\.yaml$`,
-		`(?m)^PASS +runtime `,
-		`(?m)^PASS +worktree `,
-	} {
-		if !regexp.MustCompile(want).MatchString(out) {
-			t.Errorf("output does not match %s:\n%s", want, out)
-		}
-	}
-	if strings.Contains(out, "standard:") {
-		t.Errorf("no standard resolved, but the output names one:\n%s", out)
-	}
-}
-
-// TestAgentHookConfigsCoverCatalog: every agent a standard's catalog
-// offers has a doctor row, so a new agent cannot ship without doctor
-// saying whether its hooks can run.
-func TestAgentHookConfigsCoverCatalog(t *testing.T) {
-	t.Parallel()
-	for _, name := range []string{"prod-go", "prod-ts", "prod-py", "prod-mono"} {
-		s, err := standard.Lookup(name, "v1")
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, in := range s.Options {
-			if in.Group.Key != manifest.CategoryAgents {
-				continue
-			}
-			if _, ok := agentHookConfigs[in.Name]; !ok {
-				t.Errorf("%s offers agent %q, which has no agentHookConfigs row", name, in.Name)
-			}
-		}
-	}
-}
-
-// TestDoctorHookBinaries: the claude line names task and the runtime the
-// standard's guard starts, taken from each committed repository.
-func TestDoctorHookBinaries(t *testing.T) {
-	t.Parallel()
-	for root, want := range map[string][]string{
-		// This repository runs vibe-guard (policy.agent_guard, spec 0053).
-		filepath.Join("..", ".."):                           {"task", "vibe-guard"},
-		filepath.Join("..", "..", "examples", "typescript"): {"task", "node"},
-		filepath.Join("..", "..", "examples", "python"):     {"task", "uv"},
-		// Go, TypeScript and Python components: the guard runs on Go.
-		filepath.Join("..", "..", "examples", "monorepo"): {"task", "go"},
-	} {
-		p, err := buildPlan(root, "test")
-		if err != nil {
-			t.Fatal(err)
-		}
-		hooks := agentHooks(p)
-		if len(hooks) == 0 || hooks[0].Name != "claude" {
-			t.Fatalf("%s: agent hooks = %+v, want claude first", root, hooks)
-		}
-		if !slices.Equal(hooks[0].Binaries, want) {
-			t.Errorf("%s: claude hook binaries = %v, want %v", root, hooks[0].Binaries, want)
-		}
-	}
-}
-
-// TestDoctorWritesNothing: doctor diagnoses and never mutates. A synced
-// repository is byte-for-byte the same after it runs, state included.
+// TestDoctorWritesNothing: doctor diagnoses and never mutates.
 func TestDoctorWritesNothing(t *testing.T) {
-	dir := syncedRepo(t)
+	dir := contractFixture(t)
 	before := snapshot(t, dir)
 
 	stubDoctorEnv(t)

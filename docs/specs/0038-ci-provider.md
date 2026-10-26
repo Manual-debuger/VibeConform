@@ -1,6 +1,6 @@
 # Spec 0038: CI Provider Selection, and GitLab CI for `prod-mono`
 
-Status: accepted and implemented (ADR 0019). Implementation plan:
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented (ADR 0019). Implementation plan:
 `docs/plans/0038-ci-provider.md`. Open questions resolved 2026-10-02 with
 the recommended answers: a child pipeline, `prod-mono` only, `none`
 included, Linux only, a merge request template, image tags, a `ci:` map.

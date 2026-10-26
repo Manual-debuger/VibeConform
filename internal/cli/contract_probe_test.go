@@ -302,13 +302,13 @@ func TestContractAuditProbeTimeoutMustBePositive(t *testing.T) {
 	assertStderr(t, r, "--probe-timeout must be a positive duration")
 }
 
-func TestContractAuditProbeFlagsNeedV2(t *testing.T) {
+func TestContractAuditProbeFlagsOnV1PointAtTheGuide(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	writeVibeYAML(t, dir, goDefaults)
+	writeVibeYAML(t, dir, "standard: prod-go\nversion: v1\n")
 	for _, flag := range [][]string{{"--probe-timeout", "1m"}, {"--keep-probe-copy"}} {
 		r := runVibeAudit(t, append([]string{"--repo-root", dir}, flag...)...)
 		assertExit(t, r, 1)
-		assertStderr(t, r, flag[0], "needs a version 2 configuration")
+		assertStderr(t, r, "version 1", migrationGuide)
 	}
 }

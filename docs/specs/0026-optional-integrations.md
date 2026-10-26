@@ -1,6 +1,6 @@
 # Spec 0026: Optional Integrations
 
-Status: accepted and implemented. Tracks issue #38. Per ADR 0013.
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented. Tracks issue #38. Per ADR 0013.
 
 ## Problem
 

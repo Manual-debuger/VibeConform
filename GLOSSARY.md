@@ -138,24 +138,3 @@ version of `vibe` and `vibe-guard` in the conformance job: from a release
 with its checksums checked, or built from source. It never runs the audit
 itself, and `verify` must not use it.
 _Avoid_: installer, setup-vibe, bootstrap step
-
-## Retired terms
-
-Terms of the template-sync model. They stay in use until that model is
-removed, then leave this glossary.
-
-**Standard**:
-A named, versioned bundle of modules that defines a repository's tooling,
-such as `prod-go/v1` or `prod-mono/v1`. Replaced by the contract.
-_Avoid_: profile, preset, template set
-
-**Seam**:
-A documented place where an adopting repository changes generated
-behaviour without editing a managed file, such as a local extension file
-or a CI/CD variable.
-_Avoid_: hook, override, escape hatch
-
-**Base config**:
-The managed half of a lint or compiler configuration, which the
-repository's own configuration under the tool's usual name extends.
-_Avoid_: managed config (alone), vendor config, default config

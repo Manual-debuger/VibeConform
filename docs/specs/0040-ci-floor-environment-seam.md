@@ -1,6 +1,6 @@
 # Spec 0040: The CI Floor, and an Environment Seam for GitLab Jobs
 
-Status: accepted and implemented (2026-10-05); real GitLab pipeline
+Status: superseded by ADR 0025 (removed in spec 0059). Before that: accepted and implemented (2026-10-05); real GitLab pipeline
 UNVERIFIED. Implementation plan:
 `docs/plans/0040-ci-floor-environment-seam.md`. Open questions resolved
 with the user: audit checks the seam file's shape, the file is named

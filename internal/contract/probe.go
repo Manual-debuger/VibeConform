@@ -89,7 +89,7 @@ func startProbeSession(env *Env, opts ProbeOptions) *probeSession {
 		base = os.Environ()
 	}
 	s := &probeSession{ctx: env.ctx, opts: opts, baselines: map[string]*entrypointRun{}}
-	s.bash, s.bashErr = resolveBash(base)
+	s.bash, s.bashErr = ResolveBash(base)
 
 	tmp, err := os.MkdirTemp("", "vibe-audit-")
 	if err != nil {
