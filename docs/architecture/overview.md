@@ -216,11 +216,11 @@ safely: it may never report success having silently skipped checks.
 
 VibeConform may orchestrate, but not absorb, two adjacent systems:
 
-- **Repository intelligence** (GitNexus, Graphify): index, search,
+- **Repository intelligence** (such as GitNexus): index, search,
   dependency, caller, impact and trace queries. It must never replace the
   compiler, LSP, linter, tests, or CI; it augments them. The setup skill
-  offers Graphify as optional content (`reference/optional/graphify.md`);
-  no rule checks it, and `verify` and CI never consult a graph.
+  offers no repository-intelligence content (spec 0060); no rule checks
+  it, and `verify` and CI never consult a graph.
 - **Skills Manager**: canonical skill storage, deployment, and per-project
   activation. It must never become a CI dependency.
 
