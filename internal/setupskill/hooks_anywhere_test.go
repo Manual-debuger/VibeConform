@@ -195,18 +195,24 @@ type hookRun struct {
 // with payload on stdin.
 func (r hookRepo) run(t *testing.T, bash, dir, command string, payload map[string]any) (hookRun, string) {
 	t.Helper()
-	log := filepath.Join(r.scratch, "ran.log")
-	if err := os.Remove(log); err != nil && !errors.Is(err, os.ErrNotExist) {
-		t.Fatal(err)
-	}
 	in, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// #nosec G204 -- bash is the shell on PATH, the command is the reference settings'
+	return r.runInput(t, bash, dir, command, string(in), r.env)
+}
+
+// runInput runs command with bash -c from dir, with stdin and env.
+func (r hookRepo) runInput(t *testing.T, bash, dir, command, stdin string, env []string) (hookRun, string) {
+	t.Helper()
+	log := filepath.Join(r.scratch, "ran.log")
+	if err := os.Remove(log); err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	// #nosec G204 -- bash is the shell on PATH, the command is the reference settings' or the test's
 	cmd := exec.Command(bash, "-c", command)
-	cmd.Dir, cmd.Env = filepath.Join(r.root, filepath.FromSlash(dir)), r.env
-	cmd.Stdin = bytes.NewReader(in)
+	cmd.Dir, cmd.Env = filepath.Join(r.root, filepath.FromSlash(dir)), env
+	cmd.Stdin = strings.NewReader(stdin)
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	var res hookRun
@@ -309,6 +315,7 @@ func TestReferenceHooksFromAnyDirectory(t *testing.T) {
 		payload           func(r hookRepo) map[string]any
 		code              int
 		want              []string
+		only              bool // want lists every component task the step runs
 	}
 	stop := func(active bool) func(hookRepo) map[string]any {
 		return func(hookRepo) map[string]any {
@@ -321,11 +328,11 @@ func TestReferenceHooksFromAnyDirectory(t *testing.T) {
 		{name: "format", event: "PostToolUse", part: "task fmt", payload: func(r hookRepo) map[string]any {
 			return map[string]any{"hook_event_name": "PostToolUse", "tool_name": "Edit",
 				"tool_input": map[string]any{"file_path": filepath.Join(r.root, "services", "api", "main.go")}}
-		}, want: each("fmt")},
+		}, want: []string{"api:fmt"}, only: true},
 		{name: "check", event: "PostToolUse", part: "hook:check", payload: func(r hookRepo) map[string]any {
 			return map[string]any{"hook_event_name": "PostToolUse", "tool_name": "Edit",
 				"tool_input": map[string]any{"file_path": filepath.Join(r.root, "services", "api", "main.go")}}
-		}, want: append(each("typecheck"), each("lint")...)},
+		}, want: []string{"api:lint", "api:typecheck"}, only: true},
 		{name: "green stop", event: "Stop", part: "verify:fast", payload: stop(false), want: each("verify:fast")},
 		{name: "unchanged tree", event: "Stop", part: "verify:fast", payload: stop(false)},
 		{name: "another component fails", event: "Stop", part: "verify:fast", payload: stop(false), code: 2,
@@ -355,6 +362,9 @@ func TestReferenceHooksFromAnyDirectory(t *testing.T) {
 				if !slices.Contains(got.ran, w) {
 					t.Errorf("from %s, %s: ran %v, want %s among them\nstderr: %s", dir, s.name, got.ran, w, stderr)
 				}
+			}
+			if s.only && !slices.Equal(got.ran, s.want) {
+				t.Errorf("from %s, %s: ran %v, want exactly %v\nstderr: %s", dir, s.name, got.ran, s.want, stderr)
 			}
 			if s.want == nil && len(got.ran) > 0 {
 				t.Errorf("from %s, %s: ran %v, want nothing\nstderr: %s", dir, s.name, got.ran, stderr)

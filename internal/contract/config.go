@@ -122,7 +122,7 @@ type Waiver struct {
 var v1Fields = map[string]string{
 	"standard":     "contract replaces it: declare the contract version, such as contract: 1.0.0",
 	"version":      "the contract version goes in contract, such as contract: 1.0.0",
-	"integrations": "agents go in agents; editors and repository intelligence moved into the setup skill",
+	"integrations": "agents go in agents; editors moved into the setup skill; repository intelligence has no counterpart",
 	"development":  "the docs layout and development workflow moved into the setup skill",
 	"policy":       "repository policies such as line endings moved into the setup skill",
 	"ci":           "contract " + Implemented + " reads GitHub Actions or GitLab CI and needs no CI provider",

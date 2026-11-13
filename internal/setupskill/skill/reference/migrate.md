@@ -19,8 +19,11 @@ From the old `vibe.yaml`, note:
   `typescript`). `id` and `generated` have no counterpart: keep
   generated-code excludes in the lint and format configuration.
 - `integrations`: `editors`, `agents` and `intelligence`. `agents`
-  carries over; editors and intelligence are optional content
-  (`reference/optional/`).
+  carries over; editors are optional content (`reference/optional/`).
+  `intelligence` has no counterpart: a `graph:update` task, the Git
+  hook jobs that call it and the ignore line for the graph's output
+  are the repository's own. Keep them, or remove them together; do not change
+  them unless the person asks.
 - `development`: the workflow section of `AGENTS.md` and the docs
   layout. Keep the section's text as the repository's own
   (`reference/optional/workflow.md`).
