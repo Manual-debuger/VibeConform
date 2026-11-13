@@ -1,13 +1,14 @@
-# Spec 0060: Monorepo edit hooks run only the edited component, and graphify has one freshness rule
+# Spec 0060: Monorepo edit hooks run only the edited component, and the setup skill drops Graphify
 
-Status: draft (2026-10-26). Issues #81 and #86. Changes the setup skill's
-references only: the monorepo reference Taskfile and the optional
-Graphify content (spec 0054). No contract change.
+Status: draft (2026-10-26, revised 2026-11-13). Issues #81 and #86.
+Changes the setup skill's references only: the monorepo reference
+Taskfile, and the removal of the optional Graphify content (spec 0054).
+No contract change.
 
 ## Problem
 
-Two kinds of guidance from the setup skill cost an adopting repository's
-agent time or mislead it.
+Two parts of the setup skill's references cost an adopting repository's
+agent time, or blur what VibeConform is for.
 
 - **In a monorepo, every edit runs every component (#81).** The
   reference monorepo has three components: `api` (Go), `web`
@@ -27,26 +28,19 @@ agent time or mislead it.
     golangci-lint as well. When one of them fails, `asyncRewake` can
     wake the agent with a failure in a component that it did not touch.
 
-- **Graphify gets two freshness rules, and the louder one is wrong
-  (#86).** The skill's Graphify content (`reference/optional/`) tells
-  the agent to use the graph only when `built_at_commit` matches HEAD.
-  `graphify claude install` (checked with graphify 0.8.18, 2026-10-26)
-  writes two more instructions, and neither checks freshness:
-
-  - A `## graphify` section in `CLAUDE.md`: "For codebase questions,
-    first run `graphify query` … when graphify-out/graph.json exists",
-    and "After modifying code, run `graphify update .`".
-  - A PreToolUse hook on `Bash` in `.claude/settings.json`. When a
-    command contains `grep`, `rg`, `find` and similar, and
-    `graphify-out/graph.json` exists, the hook tells the agent to run
-    `graphify query` instead.
-
-  #86 reports that older versions wrote the hook to
-  `.claude/settings.local.json` and said "MANDATORY". Version 0.8.18
-  writes the hook to `.claude/settings.json`, which is a guardrail file.
-  `graphify codex install` writes a similar section to `AGENTS.md`. The
-  audit cannot see the conflict: the text is free prose, and no rule
-  reads it.
+- **Graphify is outside VibeConform's purpose (#86).** VibeConform
+  checks that a repository's tooling has the properties the contract
+  requires. Graphify is a knowledge-graph tool. No rule checks it, and
+  `verify` and CI never use it (spec 0054). The skill still ships
+  `reference/optional/graphify.md`, with a `graph:update` task, three
+  Git hook jobs and an `AGENTS.md` paragraph. The skill then has to
+  keep up with Graphify's installer: #86 reports that
+  `graphify claude install` writes a second freshness rule, which
+  conflicts with the first, and a PreToolUse hook into
+  `.claude/settings.json`, a guardrail file. Fixing that guidance would
+  tie the skill more closely to a tool the contract does not cover.
+  The maintainer decided (2026-11-13) to remove Graphify from the skill
+  instead.
 
 ## Constraints
 
@@ -65,15 +59,15 @@ agent time or mislead it.
 - **Hooks hold from any directory** (spec 0058). A scoped hook gives the
   same result from the root, a component, a component's subdirectory and
   a plain subdirectory.
-- **`.claude/settings.json` is a guardrail file.** An agent changes it
-  only after a person runs `vibe unlock` (A-08, AGENTS.md
-  "Guardrails"). `graphify claude install` and `uninstall` write it. The
-  guard does not catch a program that writes the file (a known gap), so
-  the skill must say this.
-- **The skill's length budget.** `TestSkillLength` limits `SKILL.md`.
-  The new Graphify guidance goes in `reference/optional/graphify.md`.
-- **Graphify stays optional** (spec 0035). Nothing in `verify`, in the
-  hooks that the contract reads, or in CI depends on it.
+- **Windows and Linux alike** (principle 2). The scoped hooks are POSIX
+  shell run through Task and Git Bash, with no per-OS branch.
+- **History stays.** Specs, plans and ADRs that describe Graphify are
+  records. Spec 0059 already marked them superseded. They are not
+  edited or deleted.
+- **The removal must not break a migrated repository.** A repository
+  that used Graphify through the template-sync system keeps its own
+  `graph:update` task and hook jobs. The skill does not remove them on
+  its own.
 
 ## Assumptions
 
@@ -89,12 +83,12 @@ agent time or mislead it.
   test confirms that `task fmt </dev/null` formats every component.
   During implementation, check that a lefthook job that runs `task fmt`
   does not wait on stdin.
-- `graphify claude uninstall` removes only graphify's own hook entry and
-  `CLAUDE.md` section, and keeps the reference hooks. This was checked by
-  hand with graphify 0.8.18: after install and uninstall, the parsed
-  reference settings were unchanged, and `CLAUDE.md` still held
-  `@AGENTS.md`. The command deletes `CLAUDE.md` when the file is empty
-  after the removal. It can rewrite the file's line endings.
+- Nothing outside `reference/optional/graphify.md` in the embedded skill
+  names it or depends on it. A search on 2026-11-13 found Graphify named
+  only in that file, in `docs/usage.md`'s reference table, in
+  `docs/architecture/overview.md` and in history. The
+  `integrations.intelligence` line in `reference/migrate.md` points to
+  `reference/optional/` in general.
 
 ## Desired Behavior
 
@@ -126,39 +120,32 @@ agent time or mislead it.
 7. `examples/monorepo` is rebuilt from the changed references, as spec
    0059 rebuilt it.
 
-### One freshness rule for Graphify (#86)
+### The setup skill drops Graphify (#86)
 
-8. `reference/optional/graphify.md` tells the agent not to run
-   `graphify claude install` or `graphify codex install`. The guidance
-   that they write is replaced by the `AGENTS.md` paragraph that the
-   file already defines.
-9. The file says how to find the installer's guidance and remove it, if
-   the repository already has it:
-   - a `## graphify` section in `CLAUDE.md` or `AGENTS.md`;
-   - graphify's PreToolUse hook in `.claude/settings.json` or
-     `.claude/settings.local.json`.
-
-   `graphify claude uninstall` removes the `CLAUDE.md` section and the
-   hook. `graphify codex uninstall` removes the `AGENTS.md` section.
-   After the removal, the agent checks that `CLAUDE.md` still exists and
-   still imports `AGENTS.md`, and that the reference hooks are still
-   there.
-10. When the guard is already installed, `.claude/settings.json` is a
-    guardrail file. The agent then asks the person to run `vibe unlock`,
-    or to run the uninstall with `! graphify claude uninstall`. The agent
-    does not run it before that.
-11. In the Graphify content, the freshness rule ("use it only when
-    `built_at_commit` matches HEAD") appears once. That is in the
-    `AGENTS.md` paragraph. No other part of the skill gives a second
-    instruction about when to use or rebuild the graph. The rebuild
-    stays with the Git hooks (`task graph:update`).
+8. `internal/setupskill/skill/reference/optional/graphify.md` is
+   deleted. The embedded skill names Graphify nowhere.
+9. `reference/migrate.md`: `integrations.intelligence` has no
+   counterpart. The line says that a migrated repository's
+   `graph:update` task, the Git hook jobs that call it and its
+   `graphify-out/` ignore line are the repository's own. The person can
+   keep them, or remove them together. The skill does not write or
+   delete them unless the person asks.
+10. `docs/usage.md`'s table of the skill's references no longer lists
+    Graphify under `reference/optional/`.
+11. `docs/architecture/overview.md`, "Repository intelligence and Skills
+    Manager boundaries": the boundary stays (VibeConform does not absorb
+    repository-intelligence tools, and they never replace the compiler,
+    linter, tests or CI). The sentence saying that the skill offers
+    Graphify is removed, and so is Graphify from the list of examples.
+12. Spec 0054's status line notes that spec 0060 removed its Graphify
+    content. #86 is closed as not planned, with a link to this spec.
 
 ### Documentation
 
-12. `docs/usage.md`, "Agent hooks": the PostToolUse table and the
+13. `docs/usage.md`, "Agent hooks": the PostToolUse table and the
     `hook:check` section say that a monorepo hook runs only the edited
     component, and which edits still run every component.
-13. #81's status note is corrected: F-15 was open again after spec 0059,
+14. #81's status note is corrected: F-15 was open again after spec 0059,
     and this spec closes it.
 
 ## User Stories
@@ -202,28 +189,15 @@ agent time or mislead it.
     skips me.
 14. As a maintainer, I want `examples/monorepo` to match the references,
     so that the examples workflow runs what the skill writes.
-15. As an agent in a repository with Graphify, I want one rule about when
-    the graph can be trusted, so that I do not follow a hook that pushes
-    me to a stale graph.
-16. As an agent setting up Graphify, I want the skill to tell me not to
-    run `graphify claude install`, so that I do not add the conflicting
-    guidance myself.
-17. As an agent in a repository that already has the installer's
-    guidance, I want the exact commands that remove it, so that I do not
-    edit graphify's hook by hand.
-18. As an agent, I want to check after the uninstall that `CLAUDE.md`
-    still imports `AGENTS.md`, so that the uninstall does not delete the
-    file that loads the agent instructions.
-19. As a person, I want the agent to ask me before graphify's uninstall
-    rewrites `.claude/settings.json`, so that a guardrail file changes
-    only after my unlock.
-20. As an agent using Codex, I want the `AGENTS.md` section from
-    `graphify codex install` handled too, so that both agents get the
-    same rule.
-21. As a maintainer, I want a test that fails when the Graphify content
-    states the freshness rule twice or omits the uninstall, so that the
-    guidance stays single-sourced.
-22. As a reader of `docs/usage.md`, I want the hook tables to say which
+15. As a reader of the setup skill, I want it to cover only what the
+    contract checks and the tooling around it, so that its purpose is
+    clear.
+16. As a maintainer, I want the skill to stop following Graphify's
+    installer, so that a change upstream does not become work here.
+17. As an adopter who migrated from the template-sync system with
+    Graphify, I want to know that my graph tasks are now mine, so that I
+    can keep or remove them knowingly.
+18. As a reader of `docs/usage.md`, I want the hook tables to say which
     edits run one component and which run all, so that I can predict the
     hooks' cost.
 
@@ -259,12 +233,13 @@ agent time or mislead it.
 - **No new manifest field.** #81's optional `components[].affects`
   (gitignore patterns for shared paths) is not part of this spec. A
   shared path outside every component already runs every component.
-- **Graphify: guidance only.** `reference/optional/graphify.md` gets a
-  section about the installer's guidance (Desired Behavior 8–11).
-  `vibe doctor` gets no warning (#86's proposal 2). `vibe` does not run
-  graphify, and does not parse graphify's files.
-- **No upstream dependency.** A freshness check in graphify's hook
-  (#86's proposal 3) is not a dependency of this spec.
+- **Graphify: delete, don't replace.** No other knowledge-graph or
+  code-search integration takes its place in `reference/optional/`.
+  `vibe doctor` gets no Graphify check, and `vibe` never mentions
+  Graphify.
+- **One branch and one PR** for both parts, as the spec covers both
+  issues. The Graphify removal is its own commit, so it can be reverted
+  alone.
 
 ## Testing Decisions
 
@@ -297,19 +272,11 @@ agent time or mislead it.
   `reference_pins_test.go`.
 - **A-06 still passes.** The existing static audit of the references
   covers this. No new test.
-- **Seam 2, #86: assertions on the embedded skill.** These assertions
-  read `reference/optional/graphify.md` from `setupskill.FS()`:
-  - it names `graphify claude uninstall` and `graphify codex uninstall`;
-  - it says not to run `graphify claude install`;
-  - it names `vibe unlock` for `.claude/settings.json`;
-  - it states the `built_at_commit` freshness rule exactly once.
-
-  Prior art: `TestReferenceHooksAreTheGuards` and `TestSkillLength` in
-  `setupskill_test.go`.
-- **Manual check, not in CI:** with graphify installed, run install and
-  then uninstall on a repository set up from the references. Then
-  confirm that the reference hooks survive and that `CLAUDE.md` still
-  imports `AGENTS.md` (Assumption 4). The ledger records it.
+- **Seam 2, #86: the existing skill tests.** Deleting a file is covered
+  by the tests that walk the embedded skill (`TestSkillLength`, the
+  skill drift checker in `internal/cli`, the reference pin tests). They
+  must keep passing with the file gone. No test asserts that a word is
+  absent.
 
 ## Out of Scope
 
@@ -322,10 +289,13 @@ agent time or mislead it.
   `fmt:changed`). This spec narrows by component, not by file.
 - Skipping `fmt` for edits outside the project. They keep formatting
   every component, as now.
-- A `vibe doctor` warning about stale Graphify guidance, and asking
-  upstream Graphify for a freshness check.
-- `graphify install` (the `/graphify` skill copy) and graphify's Git
-  hook installer.
+- Editing or deleting the Graphify specs, plans and ADRs (0016, 0020,
+  0035, 0039, 0046 and the plans with those numbers).
+- The other optional content (VS Code, Zed, language servers, the
+  `AGENTS.md` workflow sections, the docs layout).
+- The "repository intelligence (GitNexus, if configured)" line in this
+  repository's `AGENTS.md`, and the boundary itself in
+  `docs/architecture/overview.md`.
 
 ## Acceptance Criteria
 
@@ -343,14 +313,15 @@ agent time or mislead it.
       `vibe.yaml` components differ.
 - [ ] `examples/monorepo` matches the references, and the examples
       workflow passes.
-- [ ] `reference/optional/graphify.md` says not to run the installers,
-      how to remove their guidance, when to ask for `vibe unlock`, and
-      what to check after the removal. It states the freshness rule once,
-      and a test asserts this.
+- [ ] `reference/optional/graphify.md` is gone, and a case-insensitive
+      search for "graphify" in `internal/`, `cmd/`, `examples/`,
+      `README.md`, `docs/usage.md` and `docs/architecture/` finds
+      nothing.
+- [ ] `reference/migrate.md` says what happens to a migrated
+      repository's Graphify tasks (Desired Behavior 9).
+- [ ] Spec 0054's status line and #86 are updated (Desired Behavior 12).
 - [ ] `docs/usage.md` and #81's status are updated as in Desired
-      Behavior 12–13.
-- [ ] The manual graphify install and uninstall check is recorded in the
-      ledger.
+      Behavior 13–14.
 - [ ] `task verify`, `task audit` and CI pass.
 
 ## Further Notes
@@ -368,3 +339,6 @@ agent time or mislead it.
   change to a shared type in `api` that `web` consumes. The Stop gate
   runs every component, so the break blocks the end of the turn. It does
   not appear after each edit.
+- The first draft of this spec (2026-10-26) kept Graphify and gave it
+  one freshness rule. The maintainer replaced that part with the
+  removal on 2026-11-13.
