@@ -24,7 +24,7 @@ default:
 variables:
   GO_VERSION: "1.27.0"
   TASK_VERSION: "v3.53.1"
-  GOLANGCI_LINT_VERSION: "v2.13.2"
+  GOLANGCI_LINT_VERSION: "v2.15.0"
 
 # The Go toolchain and the tools verify calls, on Linux. No tags and an
 # image: GitLab's shared Linux runners take the job.
