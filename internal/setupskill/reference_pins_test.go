@@ -23,7 +23,7 @@ var refPins = struct {
 }{
 	Go:           "1.27.0",
 	Task:         "v3.53.1",
-	GolangciLint: "v2.13.2",
+	GolangciLint: "v2.15.0",
 	Goimports:    "v0.51.0",
 	Govulncheck:  "v1.8.0",
 	Actionlint:   "v1.7.12",
