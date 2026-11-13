@@ -101,7 +101,7 @@ func TestContractConfigV1Fields(t *testing.T) {
 		{name: "version", config: configWith(section{"version", "version: v1\n"}),
 			want: []string{"vibe.yaml: version: ", "no version field", "contract"}},
 		{name: "integrations", config: configWith(section{"integrations", "integrations:\n  agents: [claude]\n"}),
-			want: []string{"vibe.yaml: integrations: ", "no integrations field", "agents", "setup skill"}},
+			want: []string{"vibe.yaml: integrations: ", "no integrations field", "agents", "setup skill", "repository intelligence has no counterpart"}},
 		{name: "development", config: configWith(section{"development", "development:\n  workflow: plan-triggered-sdd\n"}),
 			want: []string{"vibe.yaml: development: ", "no development field", "setup skill"}},
 		{name: "policy", config: configWith(section{"policy", "policy:\n  line_endings: lf\n"}),

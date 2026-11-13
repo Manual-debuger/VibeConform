@@ -6,7 +6,8 @@ version: "3"
 # included below under a short id: "task api:test" runs one component's
 # task, and "task test" here runs it for every component. The
 # repository's own tasks (build, run, deploy) go in this file too. Needs
-# Task v3.39.0 or newer.
+# Task v3.39.0 or newer. When a component is added, moved or removed,
+# update the includes, the task lists and hook:owner's component table.
 
 includes:
   api:
@@ -29,12 +30,27 @@ tasks:
       - task: web:setup
       - task: worker:setup
 
+  # After an agent's edit, the PostToolUse hook runs "task fmt" with the
+  # edit's payload on stdin, and only the component that owns the edited
+  # file is formatted (hook:owner). stdin is read only in a Claude Code
+  # hook (CLAUDE_PROJECT_DIR set) and when it is not a terminal: Git
+  # Bash's mintty gives a program a pipe, not a console, and "task fmt"
+  # typed there must not wait for input. Everywhere else, and for an edit
+  # outside every component, every component is formatted.
   fmt:
     desc: Apply every component's formatter.
+    silent: true
     cmds:
-      - task: api:fmt
-      - task: web:fmt
-      - task: worker:fmt
+      - |
+        id=""
+        if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ ! -t 0 ]; then
+          id="$(task -s hook:owner 2>/dev/null)" || id=""
+        fi
+        if [ -n "$id" ]; then
+          task "$id:fmt"
+        else
+          task api:fmt web:fmt worker:fmt
+        fi
 
   fmt:check:
     desc: Fail if any component's files are not formatted (CI-safe, no writes).
@@ -153,7 +169,9 @@ tasks:
   # JSON-escaped; git reads doubled backslashes as one. git check-ignore
   # exits 0 for an ignored path, 1 for any other path in the repository
   # and 128 outside it. Without a path (a malformed payload, a tool with no
-  # path) or a repository, the checks run.
+  # path) or a repository, the checks run. Last, an edit inside a
+  # component checks only that component (hook:owner), and any other edit
+  # checks every component.
   hook:check:
     silent: true
     cmds:
@@ -179,7 +197,62 @@ tasks:
           git check-ignore -q -- "$p" 2>/dev/null || rc=$?
           [ "$rc" -eq 1 ] || exit 0
         fi
+        id="$(printf '%s' "$in" | task -s hook:owner 2>/dev/null)" || id=""
+        if [ -n "$id" ]; then
+          task -s "$id:typecheck" "$id:lint" 1>&2 || exit 2
+          exit 0
+        fi
         task -s api:typecheck api:lint web:typecheck web:lint worker:typecheck worker:lint 1>&2 || exit 2
+
+  # Prints the id of the component that owns the file named by the hook
+  # payload on stdin (file_path or notebook_path), or nothing when every
+  # component must run: no payload or path, a path in no component (a
+  # root file, docs/, .github/), or a path whose directory does not exist.
+  # COMPONENTS is the component table, "id=path" with the paths of
+  # vibe.yaml's components (no spaces): update it with them. When
+  # components nest, the longest path owns the file, and a path matches
+  # whole segments only (apps/web2 is not in apps/web). The shell resolves
+  # both paths (cd, pwd -P), so the Windows and Linux forms, the case of a
+  # Windows path and a project below the repository root compare alike.
+  hook:owner:
+    silent: true
+    vars:
+      COMPONENTS: api=services/api web=apps/web worker=services/worker
+    cmds:
+      - |
+        in="$(cat)"
+        p=""
+        case "$in" in
+          *'"file_path":"'*) p="${in#*\"file_path\":\"}" ;;
+          *'"file_path": "'*) p="${in#*\"file_path\": \"}" ;;
+          *'"notebook_path":"'*) p="${in#*\"notebook_path\":\"}" ;;
+          *'"notebook_path": "'*) p="${in#*\"notebook_path\": \"}" ;;
+        esac
+        case "$p" in
+          *'"'*) p="${p%%\"*}" ;;
+          *) exit 0 ;;
+        esac
+        bs='\'
+        p="${p//"$bs"//}"
+        d="$(cd "${p%/*}" 2>/dev/null && pwd -P)" || exit 0
+        r="$(pwd -P)"
+        d="${d//"$bs"//}/"
+        r="${r//"$bs"//}/"
+        case "$d" in
+          "$r"*) d="${d#"$r"}" ;;
+          *) exit 0 ;;
+        esac
+        id=""
+        n=0
+        for c in {{.COMPONENTS}}; do
+          case "$d" in
+            "${c#*=}/"*)
+              q="${c#*=}"
+              [ "${#q}" -le "$n" ] || { id="${c%%=*}"; n="${#q}"; }
+              ;;
+          esac
+        done
+        [ -z "$id" ] || echo "$id"
 
   # The green stamp (spec 0057): the Stop hook skips verify:fast when the
   # tree is the one its last green run saw. hook:stamp:check exits 0 when
