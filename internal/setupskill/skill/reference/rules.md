@@ -248,7 +248,8 @@ reference Stop command and the `hook:done` task in
 A PostToolUse hook matching `Write` and `Edit` calls the `fmt`
 entrypoint as written in `vibe.yaml`. The reference
 `.claude/settings.json` runs `task fmt 1>&2 || exit 2` from the project
-root.
+root. In the monorepo reference, `fmt` then formats only the component
+that owns the edited file (`hook:owner`), and every component otherwise.
 
 ### A-07 (SHOULD): session start injects facts and changes nothing
 

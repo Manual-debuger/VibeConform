@@ -214,7 +214,11 @@ agent time, or blur what VibeConform is for.
   `hook:check` start it as a child `task` process. #129 used the same
   pattern, and Task then starts it in the root directory.
 - **`fmt` becomes one script.** It reads stdin only when stdin is not a
-  terminal. It passes the input to the owner lookup. Then it runs that
+  terminal and `CLAUDE_PROJECT_DIR` is set, as Claude Code sets it for
+  hooks. Added during implementation: Git Bash's mintty gives a native
+  program a pipe, not a console, so the terminal test alone would make
+  `task fmt` typed there wait for input. The agent's own Bash tool has
+  a closed stdin and no `CLAUDE_PROJECT_DIR`. It passes the input to the owner lookup. Then it runs that
   component's `fmt`, or every component's `fmt`. Each formatter's exit
   status still fails the task. `fmt:check`, `verify` and `verify:fast`
   stay task lists over every component.

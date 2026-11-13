@@ -953,8 +953,8 @@ see "Codex: hooks suspended" below.
 |---|---|---|---|
 | Session start | `task -x hook:context` | prints a few lines of facts into the agent's context | no |
 | Before a shell command or file edit | `vibe-guard hook` | refuses destructive commands and secret-file edits; see "The agent guard" | yes |
-| After a file edit | `task fmt` | formats the repository (rule A-06) | no (tool already ran) |
-| After a file edit, in the background | `task -x hook:check` | runs the typecheck and the lint, no tests; nothing in a sub-agent | no |
+| After a file edit | `task fmt` | formats the repository (rule A-06); in the monorepo reference, only the edited component | no (tool already ran) |
+| After a file edit, in the background | `task -x hook:check` | runs the typecheck and the lint, no tests; nothing in a sub-agent; in the monorepo reference, only the edited component | no |
 | When the agent ends its turn | `task verify:fast`, then `task -x hook:done` | gates the stop on `verify:fast`, unless the tree is unchanged since its last green run | yes, once per stop |
 
 Every hook but the guard starts with `cd "${CLAUDE_PROJECT_DIR:-.}"`, so
@@ -1095,6 +1095,23 @@ when it succeeds. A formatter that fails, on a syntax error for
 instance, exits 2 and the agent sees the error. After it runs, the
 agent's copy of the file is out of date until it reads the file again.
 
+**In the monorepo reference, only the edited component is formatted**
+(spec 0060). Its `fmt` reads the hook payload on stdin and asks
+`hook:owner`, a task without a `desc`, which component owns the edited
+path. `hook:owner` holds the component table (`COMPONENTS`, `id=path`
+with the paths of `vibe.yaml`'s components); update it when components
+change. The component with the longest matching path owns a file, and a
+path matches whole segments only: `apps/web2/x.ts` is not in `apps/web`.
+Every component is formatted when the edit is in no component (a root
+file such as `Taskfile.yml`, `docs/`, `.github/`), when the path's
+directory does not exist, and when there is no payload or no path in it.
+`fmt` reads stdin only inside a Claude Code hook (`CLAUDE_PROJECT_DIR`
+is set) and when stdin is not a terminal, so `task fmt` typed by a
+person, in Git Bash's mintty too, run by CI or by a Git hook formats
+every component and never waits for input. The hook command stays
+`task fmt 1>&2 || exit 2`, so A-06 still passes. The single-component
+references have one component at the root, and format it whole.
+
 This repository runs `task -x hook:format` instead. It formats only the
 files git reports as changed (the `fmt:changed` task: `goimports -w`,
 then `gofmt -w`, on the changed `.go` files), so the hook stays fast. The
@@ -1135,6 +1152,13 @@ So does an edit whose payload has no path it can read (a malformed
 payload, a tool with no path), and any edit outside a git repository.
 Every reference Taskfile does this. It uses only Task's shell and git,
 no `jq`.
+
+In the monorepo reference, the last step asks `hook:owner` (see
+"Formatting after each edit") for the edited component, and runs only
+its `typecheck` and `lint`. An edit in no component, or one whose
+directory does not exist, checks every component. A change in one
+component that breaks another, such as a shared type, then shows only
+at the Stop hook, whose `verify:fast` checks every component.
 
 Claude Code runs it with `asyncRewake`: on failure (exit 2) it wakes the
 session straight away and shows the output as a system reminder. A plain
