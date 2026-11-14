@@ -7,7 +7,8 @@ ADR 0009. Generalizes ADR 0024. The rules themselves are in
 `docs/specs/0051-contract-v1.md` (issue #96). The work is tracked as
 issues #95–#112, milestones "Contract v1 · Phase 0" to "Phase 4".
 Settled with the user on 2026-10-16 in a grilling session; "Qn" below
-refers to its questions, which the issues also cite.
+refers to its questions, which the issues also cite. Decision 12 is
+superseded by ADR 0027 (contract 1.2 quality probes).
 
 ## Context
 
