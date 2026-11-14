@@ -94,6 +94,11 @@ type Command struct {
 	// only for a redirection with no command (">f", "{ …; } >f"), which
 	// is kept so that its target is seen.
 	Words []Word
+	// Assigns are the environment assignments the command runs with, as
+	// NAME=value words: those before its name, then those of the env or
+	// sudo wrappers it was found through. The contract audit does not
+	// read Assigns.
+	Assigns []Word
 	// Redirects are the targets of the command's file redirections
 	// (">f", ">>f", "<f", "2>f"). Here-documents and descriptor
 	// duplications ("2>&1") are not targets.
@@ -235,6 +240,7 @@ func expand(c Command, out *[]Command) error {
 		inner.Shell = ShellBash
 		inner.Depth = c.Depth
 		inner.Via = appendVia(c.Via, label)
+		inner.Assigns = append(slices.Clone(c.Assigns), inner.Assigns...)
 		inner.Redirects = c.Redirects
 		inner.Writes = c.Writes
 		return expand(inner, out)

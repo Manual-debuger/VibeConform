@@ -121,6 +121,7 @@ var executionOrder = []string{
 	"A-02/probe",
 	"A-03/probe",
 	"A-08/probe",
+	"A-09/probe",
 	"D-01/execution",
 	"R-01/execution",
 }

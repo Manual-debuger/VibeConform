@@ -19,19 +19,19 @@ func unwrap(c Command) (inner Command, label string, ok bool) {
 		return Command{}, "", false
 	}
 	args := c.Words[1:]
-	var rest []Word
+	var rest, assigns []Word
 	switch name {
 	case "sudo", "doas":
 		rest = skipOptions(args, options{withArg: "ugCDhpRrtTU", long: []string{
 			"--user", "--group", "--host", "--close-from", "--chdir", "--prompt", "--chroot",
 			"--role", "--type", "--command-timeout", "--other-user"}})
-		rest = skipAssignments(rest)
+		assigns, rest = splitAssignments(rest)
 	case "env":
 		if hasSplitString(args) {
 			return Command{}, "", false
 		}
 		rest = skipOptions(args, options{withArg: "uCP", long: []string{"--unset", "--chdir"}})
-		rest = skipAssignments(rest)
+		assigns, rest = splitAssignments(rest)
 	case "command":
 		for _, w := range args {
 			if !w.Literal || !strings.HasPrefix(w.Text, "-") || w.Text == "--" {
@@ -65,7 +65,7 @@ func unwrap(c Command) (inner Command, label string, ok bool) {
 	if len(rest) == 0 {
 		return Command{}, "", false
 	}
-	return Command{Words: rest}, name, true
+	return Command{Words: rest, Assigns: assigns}, name, true
 }
 
 type options struct {
@@ -116,12 +116,14 @@ func skipOptions(args []Word, o options) []Word {
 	return nil
 }
 
-// skipAssignments drops leading NAME=value words.
-func skipAssignments(args []Word) []Word {
-	for len(args) > 0 && args[0].Literal && isAssignment(args[0].Text) {
-		args = args[1:]
+// splitAssignments splits leading NAME=value words from the words after
+// them.
+func splitAssignments(args []Word) (assigns, rest []Word) {
+	n := 0
+	for n < len(args) && args[n].Literal && isAssignment(args[n].Text) {
+		n++
 	}
-	return args
+	return args[:n], args[n:]
 }
 
 func isAssignment(s string) bool {

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -207,10 +208,18 @@ func TestContractAuditVerdicts(t *testing.T) {
 		rules := standIn(nil, contract.ResultPass, ruleIDs("", "V-04", "R-02", "R-03")...)
 		rep, r := auditJSONRules(t, rules, contractFixture(t), "--static")
 		assertExit(t, r, 1)
-		if !rep.StaticOnly || rep.Verdict != "undecided" || !strings.Contains(rep.Reason, "10 rules did not run (--static)") {
-			t.Errorf("static_only %v, verdict %s (%q); want undecided, 10 rules did not run", rep.StaticOnly, rep.Verdict, rep.Reason)
+		// Every rule with an execution or probe part does not run.
+		notRun := 0
+		for _, rule := range contract.Rules() {
+			if slices.ContainsFunc(rule.Parts, func(p contract.Part) bool { return p.Kind != contract.Static }) {
+				notRun++
+			}
 		}
-		for _, id := range []string{"V-01", "V-02", "V-03", "A-02", "A-03", "A-05", "A-07", "A-08", "D-01", "R-01"} {
+		want := fmt.Sprintf("%d rules did not run (--static)", notRun)
+		if notRun < 11 || !rep.StaticOnly || rep.Verdict != "undecided" || !strings.Contains(rep.Reason, want) {
+			t.Errorf("static_only %v, verdict %s (%q); want undecided, %s", rep.StaticOnly, rep.Verdict, rep.Reason, want)
+		}
+		for _, id := range []string{"V-01", "V-02", "V-03", "A-02", "A-03", "A-05", "A-07", "A-08", "A-09", "D-01", "R-01"} {
 			assertRule(t, rep, id, "not_run")
 		}
 		a05 := rep.rule(t, "A-05")
@@ -324,7 +333,7 @@ func TestContractAuditReportsEveryRule(t *testing.T) {
 	}
 	want := []string{
 		"V-01", "V-02", "V-03", "V-04", "H-01", "H-02", "C-01", "C-02", "C-03", "C-04", "C-05",
-		"A-01", "A-02", "A-03", "A-04", "A-05", "A-06", "A-07", "A-08", "D-01", "D-02", "D-03",
+		"A-01", "A-02", "A-03", "A-04", "A-05", "A-06", "A-07", "A-08", "A-09", "D-01", "D-02", "D-03",
 		"R-01", "R-02", "R-03",
 	}
 	var got []string
@@ -332,7 +341,7 @@ func TestContractAuditReportsEveryRule(t *testing.T) {
 		got = append(got, rule.ID)
 	}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
-		t.Errorf("rules = %v, want all 25 in ID order", got)
+		t.Errorf("rules = %v, want every rule in ID order", got)
 	}
 	c02 := rep.rule(t, "C-02")
 	if c02.Level != "MUST" || c02.Category != "C" || c02.Title != "Toolchains and actions are pinned" {

@@ -15,8 +15,8 @@ import (
 
 // The embedded guard corpus is valid (spec 0053, "The contract's guard
 // corpus"): names are unique, every case uses an A-01 tool and has a
-// target, every deny case names one of the ten guard rule IDs of its
-// tool's kind, and allow cases name none.
+// target, every deny case names one of the guard rule IDs of its tool's
+// kind, and allow cases name none.
 func TestGuardCorpusIsValid(t *testing.T) {
 	cases := GuardCorpus()
 	if len(cases) == 0 {
@@ -60,7 +60,7 @@ func TestGuardCorpusCountsAreInSpec0053(t *testing.T) {
 
 	deny, allow := 0, 0
 	byRule := map[string]int{}
-	for _, c := range GuardCorpus() {
+	for _, c := range GuardCorpusFor("") {
 		if c.Want == WantDeny {
 			deny++
 			byRule[c.Rule]++
@@ -109,6 +109,11 @@ func TestParseGuardCorpusRejects(t *testing.T) {
 		{"path rule on a command", `{"cases": [{"name": "a", "want": "deny", "rule": "secret-file", "payload": ` + bash("cat .env") + `}]}`, "secret-file"},
 		{"command rule on a file edit", `{"cases": [{"name": "a", "want": "deny", "rule": "rm-rf", "payload": ` + write + `}]}`, "rm-rf"},
 		{"unknown unlock", `{"cases": [{"name": "a", "want": "allow", "unlock": "open", "payload": ` + bash("ls") + `}]}`, "unlock"},
+		{"unknown probe", `{"cases": [{"name": "a", "want": "allow", "probe": "A-10", "payload": ` + bash("ls") + `}]}`, "A-10"},
+		{"an A-09 deny case with another rule", `{"cases": [{"name": "a", "want": "deny", "probe": "A-09", "rule": "rm-rf", "payload": ` +
+			bash("rm -rf x") + `}]}`, "git-skip-hooks"},
+		{"git-skip-hooks outside A-09", `{"cases": [{"name": "a", "want": "deny", "rule": "git-skip-hooks", "payload": ` +
+			bash("git commit -n") + `}]}`, "A-09"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

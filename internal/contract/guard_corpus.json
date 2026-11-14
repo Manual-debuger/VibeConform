@@ -264,6 +264,19 @@
     {"name": "near miss (#106): Write a skill under .claude", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": ".claude/skills/vibeconform/SKILL.md", "content": ""}}},
     {"name": "near miss (#106): Write a file named settings.json elsewhere", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": ".vscode/settings.json", "content": "{}"}}},
     {"name": "near miss (#106): the person's own settings.json outside the repository", "want": "allow", "payload": {"tool_name": "Write", "tool_input": {"file_path": "/home/me/.claude/settings.json", "content": "{}"}}},
-    {"name": "near miss (#106): a hook of the person's own outside the repository", "want": "allow", "payload": {"tool_name": "Edit", "tool_input": {"file_path": "C:\\Users\\me\\.claude\\hooks\\pre.sh", "old_string": "a", "new_string": "b"}}}
+    {"name": "near miss (#106): a hook of the person's own outside the repository", "want": "allow", "payload": {"tool_name": "Edit", "tool_input": {"file_path": "C:\\Users\\me\\.claude\\hooks\\pre.sh", "old_string": "a", "new_string": "b"}}},
+    {"name": "A-09: git commit --no-verify", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit --no-verify -m wip"}}, "rule": "git-skip-hooks", "probe": "A-09"},
+    {"name": "A-09: git commit -n", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit -n -m wip"}}, "rule": "git-skip-hooks", "probe": "A-09"},
+    {"name": "A-09: git commit -nm", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit -nm wip"}}, "rule": "git-skip-hooks", "probe": "A-09"},
+    {"name": "A-09: git push --no-verify", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git push --no-verify origin feature"}}, "rule": "git-skip-hooks", "probe": "A-09"},
+    {"name": "A-09: git -c core.hooksPath commit", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git -c core.hooksPath=/dev/null commit -m wip"}}, "rule": "git-skip-hooks", "probe": "A-09"},
+    {"name": "A-09: git -c core.hookspath push (config keys ignore case)", "want": "deny", "payload": {"tool_name": "Bash", "tool_input": {"command": "git -c core.hookspath=/dev/null push origin feature"}}, "rule": "git-skip-hooks", "probe": "A-09"},
+    {"name": "A-09: git commit --no-verify in PowerShell", "want": "deny", "payload": {"tool_name": "PowerShell", "tool_input": {"command": "git commit --no-verify -m wip"}}, "rule": "git-skip-hooks", "probe": "A-09"},
+    {"name": "A-09: git commit -m", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit -m wip"}}, "probe": "A-09"},
+    {"name": "A-09: a message -n", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit -m \"-n\""}}, "probe": "A-09"},
+    {"name": "A-09: a message that starts with --no-verify", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit -m \"--no-verify notes\""}}, "probe": "A-09"},
+    {"name": "A-09: git push -n is a dry run", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "git push -n origin feature"}}, "probe": "A-09"},
+    {"name": "A-09: git push --dry-run", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "git push --dry-run origin feature"}}, "probe": "A-09"},
+    {"name": "A-09: git -c user.name commit", "want": "allow", "payload": {"tool_name": "Bash", "tool_input": {"command": "git -c user.name=agent commit -m wip"}}, "probe": "A-09"}
   ]
 }

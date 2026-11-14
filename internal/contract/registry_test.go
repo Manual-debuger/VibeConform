@@ -33,6 +33,9 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 
 	must := 0
 	for _, r := range Rules() {
+		if r.Since != "" {
+			continue // TestLaterRulesAreShould
+		}
 		row, ok := rows[r.ID]
 		if !ok {
 			t.Errorf("%s is not in spec 0051", r.ID)
@@ -71,7 +74,33 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 			must++
 		}
 	}
-	if must != 16 || len(Rules()) != 25 {
-		t.Errorf("%d rules, %d MUST; want 25 and 16", len(Rules()), must)
+	later := 0
+	for _, r := range Rules() {
+		if r.Since != "" {
+			later++
+		}
+	}
+	if must != 16 || len(Rules())-later != 25 {
+		t.Errorf("%d rules of spec 0051, %d MUST; want 25 and 16", len(Rules())-later, must)
+	}
+}
+
+// TestLaterRulesAreShould: the rules added after spec 0051's table are
+// SHOULD rules of contract 1.2.0 (spec 0061: a MINOR adds SHOULD rules
+// only), with a source naming spec 0061, their category letter, and
+// parts that are pieces of their check.
+func TestLaterRulesAreShould(t *testing.T) {
+	for _, r := range Rules() {
+		if r.Since == "" {
+			continue
+		}
+		if r.Since != "1.2.0" || r.Level != Should || !strings.Contains(r.Source, "spec 0061") || string(r.Category) != r.ID[:1] {
+			t.Errorf("%s: since %s, level %s, source %q, category %s", r.ID, r.Since, r.Level, r.Source, r.Category)
+		}
+		for _, p := range r.Parts {
+			if !strings.Contains(r.Check, p.Check) || p.Run == nil {
+				t.Errorf("%s %s part %q is not part of its check, or has no check", r.ID, p.Kind, p.Check)
+			}
+		}
 	}
 }
