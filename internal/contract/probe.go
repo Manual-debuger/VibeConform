@@ -76,6 +76,11 @@ type probeSession struct {
 	// progressMu orders the progress lines of runs that happen
 	// concurrently (A-02 and A-03 feed corpus cases in parallel).
 	progressMu sync.Mutex
+	// gitOnce finds gitExe, the audit's own git, once per session: a PATH
+	// search stats every PATH entry with every PATHEXT extension, and go
+	// test records each stat in its test log (spec 0056, A-05).
+	gitOnce sync.Once
+	gitExe  string
 }
 
 // startProbeSession builds the probe copy and runs setup. A failure is
@@ -218,7 +223,13 @@ func (s *probeSession) build(env *Env) *Finding { //nolint:gocognit // baseline:
 // git runs the audit's own git in the copy, with no variable that could
 // point it at another repository.
 func (s *probeSession) git(args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(s.ctx, "git", args...) // #nosec G204 -- literal git arguments
+	s.gitOnce.Do(func() {
+		s.gitExe = "git"
+		if p, err := exec.LookPath("git"); err == nil {
+			s.gitExe = p
+		}
+	})
+	cmd := exec.CommandContext(s.ctx, s.gitExe, args...) // #nosec G204 -- literal git arguments
 	cmd.Dir = s.root
 	cmd.Env = append(envUnset(os.Environ(), gitRepoVariables...), "LC_ALL=C")
 	var stderr bytes.Buffer
