@@ -25,14 +25,25 @@ const (
 )
 
 // defectSample is one planted file. In Content, {{package}} stands for
-// the package clause's name of the Go test file beside it.
+// the package clause's name of the Go test file beside it; in a Go
+// sample that is not a _test.go file, without a _test suffix (spec 0061,
+// "The Go V-06 sample is a non-test file").
 type defectSample struct {
 	Name    string
 	Content string
 }
 
-// defectKinds lists the defect kinds in the order the probes plant them.
-var defectKinds = []defectKind{defectFormat, defectStaticAnalysis, defectTest}
+// v01Kinds lists V-01's and V-02's defect kinds in the order the probes
+// plant them.
+var v01Kinds = []defectKind{defectFormat, defectStaticAnalysis, defectTest}
+
+// defectCatchers names, by defect kind, what an entrypoint must run to
+// catch it. A probe's Fix lists the catchers of the kinds it missed.
+var defectCatchers = map[defectKind]string{
+	defectFormat:         "a format check",
+	defectStaticAnalysis: "static analysis (a type check or linter)",
+	defectTest:           "the tests",
+}
 
 // defectSamples holds the samples by language and kind. Spec 0053
 // ("Planted defects") quotes each one; change both together.
@@ -116,14 +127,21 @@ type errNoTests struct{ component string }
 
 func (e errNoTests) Error() string { return "component " + e.component + " has no tests" }
 
-// defectFor places a defect kind's sample in a component. It returns
-// errNoTests when no directory qualifies, and an error when the sample
-// cannot be built.
+// defectFor places a defect kind's sample for the component's language
+// in the component. It returns errNoTests when no directory qualifies,
+// and an error when the sample cannot be built.
 func defectFor(env *Env, comp Component, kind defectKind) (plantedDefect, error) {
 	sample, ok := defectSamples[comp.Language][kind]
 	if !ok {
 		return plantedDefect{}, fmt.Errorf("this vibe has no %s sample for %s", kind, comp.Language)
 	}
+	return plantSample(env, comp, sample)
+}
+
+// plantSample places a sample in the first directory of a component that
+// holds tests, with {{package}} filled in. It returns errNoTests when no
+// directory qualifies.
+func plantSample(env *Env, comp Component, sample defectSample) (plantedDefect, error) {
 	dir, testFile, ok := plantDir(env, comp)
 	if !ok {
 		return plantedDefect{}, errNoTests{comp.Path}
@@ -138,7 +156,12 @@ func defectFor(env *Env, comp Component, kind defectKind) (plantedDefect, error)
 		if err != nil {
 			return plantedDefect{}, fmt.Errorf("%s: cannot read its package clause: %w", testFile, err)
 		}
-		content = strings.ReplaceAll(content, "{{package}}", f.Name.Name)
+		pkg := f.Name.Name
+		if !strings.HasSuffix(sample.Name, "_test.go") {
+			// Only a _test.go file may declare the external test package.
+			pkg = strings.TrimSuffix(pkg, "_test")
+		}
+		content = strings.ReplaceAll(content, "{{package}}", pkg)
 	}
 	p := sample.Name
 	if dir != "." {
