@@ -87,7 +87,7 @@ go test ./...
 verification interface; CI runs the same tasks:
 
 ```bash
-task verify     # fmt check, build, lint, tests, go mod tidy/verify, govulncheck, actionlint
+task verify     # fmt check, build, lint, tests, go mod tidy/verify, govulncheck, actionlint, gitleaks
 task audit      # the full contract audit, with vibe and vibe-guard built from the checkout
 ```
 

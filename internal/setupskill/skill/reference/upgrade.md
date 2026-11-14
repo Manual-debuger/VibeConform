@@ -50,3 +50,20 @@ case, and it may need new guardrail settings.
 5. Run the audit loop.
 
 Your next Stop locks the guardrails again (`vibe-guard relock`).
+
+## 4. From contract 1.1 to 1.2
+
+1.2.0 adds SHOULD rules only, so the verdict does not change. To pass
+them, as `reference/rules.md` describes:
+
+- **V-07, secrets.** Add the `secrets` and `secrets:staged` tasks from
+  `reference/taskrunner/<stack>/`, `secrets` to `verify` and
+  `verify:fast` (and to `vibe.yaml`'s `verify` when it lists commands),
+  the pre-commit command from `reference/hooks/<stack>/`,
+  `reference/secrets/.gitleaks.toml` at the root, and the gitleaks
+  install step from `reference/ci/<stack>/` to every CI job that runs
+  `verify` or `vibe audit`. Then run `task secrets`. A finding that is a
+  real secret is rotated first, then removed; tell the person, since
+  the old value stays in the Git history. A finding that is not a secret
+  (a test fixture) goes into the configuration's allowlist with a
+  reason.

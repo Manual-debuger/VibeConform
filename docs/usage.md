@@ -305,7 +305,7 @@ The setup skill's upgrade flow reads the contract version from it.
 
 `vibe audit` reads `vibe.yaml` version 2 (a top-level `contract:` key,
 see "`vibe.yaml` version 2" below) and checks the repository against the
-rules of the contract version it declares: 25 rules in contract 1.2.0,
+rules of the contract version it declares: 26 rules in contract 1.2.0,
 in six categories (spec 0051, spec 0052, spec 0055). Each rule ends as
 `pass`, `fail`, `not applicable`, `waived`, `cannot decide` or `not
 run`. A full run decides every part of every
@@ -338,6 +338,15 @@ repository's working tree, index and `.git` never change.
   Code's default) for hooks,
   `--probe-timeout` for entrypoints. A run over its limit is killed with
   its child processes.
+- **V-07's secret.** V-07 plants a PEM private-key block in
+  `vibe_probe_secret.txt`, once per repository, in the first component
+  in `vibe.yaml` order that has tests, and runs `verify` once with it.
+  `vibe` assembles the block at run time, so its source holds no key.
+  The file is not committed, so a scanner that reads only Git history
+  misses it. What V-07 cannot catch: a secret pushed before CI runs
+  (the references' pre-commit scan is the local guard, and the contract
+  does not check it), a secret in a file the scanner's configuration
+  excludes, and a secret in a shape the scanner has no rule for.
 - **Tools.** The audit needs the tools the entrypoints call (`task`, the
   linters, the test runners) and bash for the hooks. A missing tool, no
   bash, a timeout or a word with an expansion makes the part `cannot
@@ -558,7 +567,7 @@ separately from the contract; it is `1`.
   `fail`, `not_applicable`, `waived`, `undecided`, `not_run`. `summary`
   has every token for both levels.
 - Verdict tokens: `conformant`, `not_conformant`, `undecided`.
-- `rules` lists all 25 rules in ID order. `parts[].check` is `static`,
+- `rules` lists all 26 rules in ID order. `parts[].check` is `static`,
   `execution` or `probe`.
 - `waiver` is `null`, or `{"reason", "until", "expired"}`. A rule with a
   waiver and result `not_applicable` has an unused waiver.
@@ -1548,6 +1557,7 @@ alone:
 | Hook | Runs | When |
 |---|---|---|
 | pre-commit | `task fmt:check` | a staged file has an extension `task fmt` covers |
+| pre-commit | `task secrets:staged` (gitleaks over the staged changes, spec 0061) | every commit |
 | pre-push | `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; task verify:fast` | every push |
 
 pre-push runs the fast verification, not the full suite: in Go the

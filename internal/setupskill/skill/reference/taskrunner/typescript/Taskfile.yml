@@ -57,6 +57,13 @@ tasks:
     cmds:
       - gitleaks dir . --redact --no-banner
 
+  # What the pre-commit hook runs: the staged changes only, read from the
+  # index Git hands the hook.
+  secrets:staged:
+    desc: Scan the staged changes for secrets with gitleaks.
+    cmds:
+      - gitleaks git --pre-commit --staged --redact --no-banner
+
   # The agent hooks. .claude/settings.json calls them as
   # "task -x hook:<name>": without -x, Task reports a script's exit 2 as
   # 201, and Claude Code shows the model only exit 2. No desc, so they

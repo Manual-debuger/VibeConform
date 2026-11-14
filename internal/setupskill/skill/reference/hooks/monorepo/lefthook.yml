@@ -12,9 +12,9 @@ pre-commit:
       run: task fmt:check
       fail_text: "Run 'task fmt' to format every component."
     # The staged changes, scanned for secrets before they are committed.
-    # Git's own variables stay set: gitleaks reads this index.
+    # Git's own variables stay set: gitleaks reads this commit's index.
     secrets:
-      run: gitleaks git --pre-commit --staged --redact --no-banner
+      run: task secrets:staged
       fail_text: "gitleaks found a secret in the staged changes: remove it, and rotate it if it is real."
 
 # verify:fast runs every component's own verify:fast, Go tests in short

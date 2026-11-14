@@ -33,7 +33,7 @@ func TestGolangciWaitsForTheLock(t *testing.T) {
 // verification. Nothing else runs in either hook.
 const (
 	preCommitRun = "task fmt:check"
-	secretsRun   = "gitleaks git --pre-commit --staged --redact --no-banner"
+	secretsRun   = "task secrets:staged"
 	prePushRun   = "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; task verify:fast"
 )
 
@@ -73,7 +73,7 @@ func TestLefthookHookStages(t *testing.T) {
 		content := readRef(t, name)
 		got := lefthookRuns(t, name, content, "pre-commit")
 		slices.Sort(got)
-		if want := []string{secretsRun, preCommitRun}; !slices.Equal(got, want) {
+		if want := []string{preCommitRun, secretsRun}; !slices.Equal(got, want) {
 			t.Errorf("%s: pre-commit runs %q, want only %q", name, got, want)
 		}
 		if got := lefthookRuns(t, name, content, "pre-push"); !slices.Equal(got, []string{prePushRun}) {

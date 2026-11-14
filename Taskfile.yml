@@ -120,6 +120,13 @@ tasks:
     cmds:
       - gitleaks dir . --redact --no-banner
 
+  # What the pre-commit hook runs: the staged changes only, read from the
+  # index Git hands the hook.
+  secrets:staged:
+    desc: Scan the staged changes for secrets with gitleaks.
+    cmds:
+      - gitleaks git --pre-commit --staged --redact --no-banner
+
   # Called by Claude Code, not by people. The PreToolUse guard is vibe-guard
   # (policy.agent_guard in vibe.yaml), which .claude/settings.json runs
   # directly, so there is no hook:guard task. See

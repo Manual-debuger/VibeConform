@@ -78,10 +78,12 @@ scanner that reports the block satisfies the rule. Start from
 directories and this skill's own directory. The CI references install a
 pinned gitleaks release and check its SHA-256 on Linux and Windows; the
 hook references scan the staged changes in pre-commit
-(`gitleaks git --pre-commit --staged`), which the contract does not
-check. A finding that is a real secret is rotated first, then removed.
-A finding that is not a secret (a test fixture) goes into the
-configuration's allowlist, with a reason.
+(`task secrets:staged`, `gitleaks git --pre-commit --staged`), which the
+contract does not check. A finding that is a real secret is rotated
+first, then removed. A finding that is not a secret (a test fixture)
+goes into the configuration's allowlist, with a reason. The allowlist
+skips `build/` and `dist/` wherever they are, so a component under one
+of them is not scanned: narrow those paths if that is your layout.
 
 ## H: local Git hooks
 
