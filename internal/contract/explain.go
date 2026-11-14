@@ -18,11 +18,12 @@ var ruleDetails = map[string]func() string{
 			"  standard mode or mypy.\n"
 	},
 	"V-06": func() string {
-		return fmt.Sprintf("Threshold:\n  The sample's cyclomatic complexity is %d and its cognitive complexity %d,\n"+
-			"  so a limit of %d or less, of either metric, catches it. A specific\n"+
-			"  suppression (one rule at one function, with a reason) is the\n"+
-			"  repository's choice; the sample carries none.\n\n",
-			complexityBranches+1, complexityBranches, complexityBranches) +
+		return fmt.Sprintf("Threshold:\n  The sample's cyclomatic complexity is %d and its cognitive complexity %d.\n"+
+			"  A linter reports a value above its limit, so a limit of %d or less, of\n"+
+			"  either metric, catches it. A specific suppression (one rule at one\n"+
+			"  function, with a reason) is the repository's choice; the sample carries\n"+
+			"  none.\n\n",
+			complexityBranches+1, complexityBranches, complexityLimit) +
 			defectSamplesText([]defectKind{defectComplexity})
 	},
 	"V-07": secretSampleText,

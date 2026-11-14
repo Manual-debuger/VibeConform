@@ -5,10 +5,33 @@ import (
 	"strings"
 )
 
-// complexityBranches is the number of if statements in V-06's sample. A
-// complexity limit of complexityBranches or less, of either metric,
-// catches it.
-const complexityBranches = 40
+// complexityBranches is the number of if statements in V-06's sample:
+// its cyclomatic complexity is complexityBranches+1 and its cognitive
+// complexity complexityBranches.
+const complexityBranches = 41
+
+// complexityLimit is the largest complexity limit, of either metric, that
+// catches V-06's sample. Complexity linters (gocyclo, gocognit, Ruff's
+// C901, ESLint's complexity, sonarjs's cognitive-complexity) report a
+// function whose complexity is above their limit, and the sample's lower
+// metric, its cognitive complexity, is complexityBranches.
+const complexityLimit = complexityBranches - 1
+
+// complexityFunction names V-06's sample by its complexities, as the
+// rule text states it.
+var complexityFunction = fmt.Sprintf("a function of cyclomatic complexity %d and cognitive complexity %d",
+	complexityBranches+1, complexityBranches)
+
+// complexityCatches is the rule text's sentence on what catches V-06's
+// sample.
+var complexityCatches = fmt.Sprintf("A complexity limit of %d or less, of either metric, catches it.", complexityLimit)
+
+// complexityHead is the first comment of V-06's sample, with the
+// language's line comment marker.
+func complexityHead(marker string) string {
+	return fmt.Sprintf("%[1]s Planted by vibe audit: a function of cyclomatic complexity %[2]d and\n"+
+		"%[1]s cognitive complexity %[3]d (the complexity defect).\n", marker, complexityBranches+1, complexityBranches)
+}
 
 // complexityLayout is how one language writes V-06's sample.
 type complexityLayout struct {
@@ -22,8 +45,7 @@ var complexityLayouts = map[string]complexityLayout{
 		// A non-test file, since repositories commonly relax lint for
 		// test files (spec 0061, "The Go V-06 sample is a non-test file").
 		name: "vibe_probe_complexity.go",
-		head: "// Planted by vibe audit: a function of cyclomatic complexity 41 and\n" +
-			"// cognitive complexity 40 (the complexity defect).\n\n" +
+		head: complexityHead("//") + "\n" +
 			"package {{package}}\n\n" +
 			"// VibeProbeComplexity adds a constant to a running total for each\n" +
 			"// threshold that n exceeds.\n" +
@@ -33,16 +55,14 @@ var complexityLayouts = map[string]complexityLayout{
 	},
 	LanguagePython: {
 		name: "vibe_probe_complexity.py",
-		head: "# Planted by vibe audit: a function of cyclomatic complexity 41 and\n" +
-			"# cognitive complexity 40 (the complexity defect).\n" +
+		head: complexityHead("#") +
 			"def vibe_probe_complexity(n: int) -> int:\n    total = 0\n",
 		branch: "    if n > %d:\n        total += %d\n",
 		tail:   "    return total\n",
 	},
 	LanguageTypeScript: {
 		name: "vibe_probe_complexity.ts",
-		head: "// Planted by vibe audit: a function of cyclomatic complexity 41 and\n" +
-			"// cognitive complexity 40 (the complexity defect).\n" +
+		head: complexityHead("//") +
 			"export function vibeProbeComplexity(n: number): number {\n  let total = 0\n",
 		branch: "  if (n > %d) {\n    total += %d\n  }\n",
 		tail:   "  return total\n}\n",
@@ -50,11 +70,11 @@ var complexityLayouts = map[string]complexityLayout{
 }
 
 // complexitySample is V-06's sample in a language (spec 0061, "V-06,
-// complexity"): one function of one integer parameter that holds 40
-// consecutive, unnested if statements, each adding a constant to a
-// running total, and returns the total. Cyclomatic complexity 41,
-// cognitive complexity 40, one return statement, no nesting and no
-// duplicated branches.
+// complexity"): one function of one integer parameter that holds
+// complexityBranches consecutive, unnested if statements, each adding a
+// constant to a running total, and returns the total. One return
+// statement, no nesting and no duplicated branches. The spec says 40 if
+// statements; its implementation notes say why the sample has 41.
 func complexitySample(lang string) defectSample {
 	l := complexityLayouts[lang]
 	var b strings.Builder

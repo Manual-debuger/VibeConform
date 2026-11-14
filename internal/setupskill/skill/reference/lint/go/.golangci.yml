@@ -39,8 +39,8 @@ linters:
       require-specific: true
       require-explanation: true
     # A complexity limit catches the contract's planted complexity defect
-    # (V-06, a function of cyclomatic complexity 41 and cognitive
-    # complexity 40). Existing code over the limits gets a specific
+    # (V-06, a function of cyclomatic complexity 42 and cognitive
+    # complexity 41). Existing code over the limits gets a specific
     # suppression with the reason "baseline: pre-existing complexity",
     # not a higher limit.
     gocyclo:

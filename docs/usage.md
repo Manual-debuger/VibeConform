@@ -370,10 +370,11 @@ repository's working tree, index and `.git` never change.
   `--explain A-02` and `A-03` print the guard corpus counts by rule ID.
 
 **V-06, complexity** (SHOULD, spec 0061). The planted function has
-cyclomatic complexity 41 and cognitive complexity 40, so any complexity
-limit of 40 or less, of either metric, catches it; the Go sample is a
-non-test file. The contract checks that a limit exists, not how strict
-it is. What it cannot catch: a threshold lowered to just under 41, a
+cyclomatic complexity 42 and cognitive complexity 41. Complexity linters
+report a function above their limit, so any complexity limit of 40 or
+less, of either metric, catches it; the Go sample is a non-test file.
+The contract checks that a limit exists, not how strict it is. What it
+cannot catch: a limit set just low enough to catch the sample (40), a
 specific suppression on new code, and a complex function split into
 meaningless pieces (ADR 0027). Review catches those.
 

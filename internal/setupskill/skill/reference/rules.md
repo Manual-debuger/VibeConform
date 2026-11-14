@@ -76,8 +76,8 @@ V-01 already shows.
 
 ### V-06 (SHOULD): `verify` catches an over-complex function
 
-`verify` exits non-zero with a function of cyclomatic complexity 41 and
-cognitive complexity 40 planted in each component (Go: a non-test file).
+`verify` exits non-zero with a function of cyclomatic complexity 42 and
+cognitive complexity 41 planted in each component (Go: a non-test file).
 Any complexity limit of 40 or less, of either metric, catches it. Start
 from the lint references: `reference/lint/go/.golangci.yml` enables
 `gocyclo` (15) and `gocognit` (20), `reference/lint/python/ruff.toml`

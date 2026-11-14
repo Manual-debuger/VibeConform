@@ -61,7 +61,7 @@ var defectCatchers = map[defectKind]string{
 	defectTypeError:      "a type checker",
 	defectBlanketSuppression: "static analysis that a suppression comment naming no rule cannot switch off " +
 		"(golangci-lint's nolintlint, Ruff's PGH004, eslint-comments' no-unlimited-disable)",
-	defectComplexity: "a complexity limit of 40 or less (cyclomatic or cognitive)",
+	defectComplexity: fmt.Sprintf("a complexity limit of %d or less (cyclomatic or cognitive)", complexityLimit),
 	defectSecret:     "a secret scanner over the working tree's files",
 }
 

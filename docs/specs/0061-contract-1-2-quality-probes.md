@@ -448,3 +448,15 @@ above stay as approved; these notes record what was built instead.
     (`testLogLimit`), and
     `task audit` failed V-01 and R-01. A probe session now finds `git`
     on `PATH` once (bc2e574, merged with #152).
+11. **V-06 sample: 41 `if` statements, not 40.** gocyclo, gocognit,
+    Ruff's `C901`, ESLint's `complexity` and sonarjs's
+    `cognitive-complexity` all report a function whose complexity is
+    above their limit, not at it. With 40 `if` statements the sample's
+    cognitive complexity is 40, so a cognitive limit of 40 (gocognit
+    `min-complexity: 40`) reported nothing, and "a limit of 40 or less,
+    of either metric, catches it" was false. The sample has 41 `if`
+    statements: cyclomatic complexity 42, cognitive complexity 41. Each
+    of the five linters at a limit of 40 reports it (golangci-lint
+    2.15.0, Ruff 0.17.5, ESLint 10.15.0 with eslint-plugin-sonarjs
+    4.2.2), so the claim holds as written. `vibe` derives every number
+    it prints from the sample's `if` count.
