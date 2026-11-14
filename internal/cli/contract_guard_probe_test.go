@@ -30,7 +30,7 @@ var rmBuildCases = []string{
 	"variant (#105): sh -c with separate flags",
 }
 
-func TestRuleA02Reporting(t *testing.T) {
+func TestRuleA02Reporting(t *testing.T) { //nolint:gocognit // baseline: pre-existing complexity
 	t.Parallel()
 	t.Run("no PreToolUse hook fails A-02 with one finding per tool", func(t *testing.T) {
 		t.Parallel()

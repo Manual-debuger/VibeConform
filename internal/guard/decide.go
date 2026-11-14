@@ -128,7 +128,7 @@ func (g *Guard) DecideError(rule, why string) Decision {
 	return d
 }
 
-func (g *Guard) decideCommand(t gr.Target) Decision {
+func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	shell := gr.ShellFor(t.Tool)
 	cmds, err := gr.Commands(shell, t.Command)
 	if err != nil {

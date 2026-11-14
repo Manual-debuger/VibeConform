@@ -153,7 +153,7 @@ func removeAllRetry(dir string) {
 }
 
 // build copies the tracked files into the copy and commits them.
-func (s *probeSession) build(env *Env) *Finding {
+func (s *probeSession) build(env *Env) *Finding { //nolint:gocognit // baseline: pre-existing complexity
 	if err := os.MkdirAll(s.root, 0o750); err != nil {
 		return &Finding{Message: "cannot create the probe copy: " + err.Error()}
 	}

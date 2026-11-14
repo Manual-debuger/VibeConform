@@ -183,7 +183,7 @@ var guardIDPattern = regexp.MustCompile(`^[a-z]+(-[a-z]+)+$`)
 // checkMarkdown checks the commands in a Markdown file's code spans and
 // shell code blocks, the guard rule IDs of every paragraph about guard
 // rule IDs, and the repository files its code spans name.
-func (c *skillChecker) checkMarkdown(f skillFile) {
+func (c *skillChecker) checkMarkdown(f skillFile) { //nolint:gocognit // baseline: pre-existing complexity
 	var paragraph []string
 	flush := func() {
 		text := strings.Join(paragraph, " ")
@@ -414,7 +414,7 @@ func vibeCommandTree() *cobra.Command {
 // checkVibeArgs checks vibe's arguments against the command tree: each
 // word before the first positional argument names a subcommand, and
 // every flag is one of the command's. It returns "" when they are valid.
-func checkVibeArgs(args []string) string {
+func checkVibeArgs(args []string) string { //nolint:gocognit // baseline: pre-existing complexity
 	cmd := vibeCommandTree()
 	vibeRootMu.Lock()
 	defer vibeRootMu.Unlock()
@@ -668,7 +668,7 @@ var gitlabReferences = map[string]string{
 // A GitHub repository takes the workflows and dependabot.yml; a GitLab
 // repository takes .gitlab-ci.yml, renovate.json and the pull request
 // template as a merge request template.
-func referenceTarget(stack, provider, ref string) (string, bool) {
+func referenceTarget(stack, provider, ref string) (string, bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	parts := strings.Split(strings.TrimPrefix(ref, "reference/"), "/")
 	if parts[0] == "ci" {
 		name := parts[len(parts)-1]

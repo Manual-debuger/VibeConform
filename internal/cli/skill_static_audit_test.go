@@ -198,7 +198,7 @@ func TestStaticAuditReadsACdPrefixedHookCommand(t *testing.T) {
 // its scanners and its merge request template.
 var gitlabDecided = []string{"C-01", "C-02", "C-04", "C-05", "D-02", "D-03", "R-03"}
 
-func TestReferenceImplementationsPassTheStaticAudit(t *testing.T) {
+func TestReferenceImplementationsPassTheStaticAudit(t *testing.T) { //nolint:gocognit // baseline: pre-existing complexity
 	t.Parallel()
 	for _, provider := range referenceProviders {
 		for _, stack := range referenceStacks {
@@ -239,7 +239,7 @@ var githubOnlyTools = []string{"actionlint"}
 // GitLab reference CI's task verify does not fail on a missing
 // actionlint (the gitlab.com run of spec 0055), while the GitHub one
 // still runs it where the Taskfile names it.
-func TestReferenceVerifyCallsOnlyTheProvidersTools(t *testing.T) {
+func TestReferenceVerifyCallsOnlyTheProvidersTools(t *testing.T) { //nolint:gocognit // baseline: pre-existing complexity
 	t.Parallel()
 	for _, provider := range referenceProviders {
 		for _, stack := range referenceStacks {
@@ -285,7 +285,7 @@ var skipStatus = regexp.MustCompile(`^(?:test|\[) ! -[de] (\S+?)(?: \])?$`)
 // of the repository files runs. A task is skipped when its status holds:
 // only status commands of the form "test ! -d <path>" are evaluated,
 // against files; any other status is taken not to hold.
-func verifyCommands(t *testing.T, files map[string]string) map[string]bool {
+func verifyCommands(t *testing.T, files map[string]string) map[string]bool { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	t.Helper()
 	ran := map[string]bool{}
 	load := func(path string) taskfile {

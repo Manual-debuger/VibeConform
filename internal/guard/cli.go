@@ -225,7 +225,7 @@ func relock(env Env) int {
 	return 0
 }
 
-func explain(args []string, env Env) int {
+func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	tool := ""
 	var rest []string
 	for i := 0; i < len(args); i++ {

@@ -11,6 +11,7 @@
     "@types/node": "26.6.2",
     "eslint": "10.11.0",
     "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-sonarjs": "4.2.2",
     "globals": "17.12.0",
     "prettier": "3.9.8",
     "typescript": "5.9.3",

@@ -89,7 +89,7 @@ const renovateFix = "add renovate.json with Renovate covering each component's m
 // either may cover a component, and automerge in either fails it. When
 // the C rules read GitLab CI, only Renovate counts, and it must cover
 // gitlabci instead of github-actions (spec 0055, D-02).
-func checkD02(env *Env) PartResult {
+func checkD02(env *Env) PartResult { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	_, gitlab := env.gitLabCI()
 	var bots []*updateBot
 	dependabotBot := dependabot(env)
@@ -418,7 +418,7 @@ func readRenovateFile(env *Env, rf renovateFile) (map[string]any, *PartResult) {
 // true, or an extends preset whose name contains "automerge", except
 // Renovate's built-in presets that do not enable it (renovateNotAutomerge).
 // Other presets are not resolved.
-func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) {
+func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) { //nolint:gocognit // baseline: pre-existing complexity
 	if raw, ok := cfg["enabledManagers"].([]any); ok {
 		var enabled []string
 		for _, m := range raw {
@@ -491,7 +491,7 @@ var renovateNotAutomerge = map[string]bool{
 
 // walkRenovate calls found for every place in a Renovate configuration
 // that enables automerge, in a stable order.
-func walkRenovate(v any, at string, found func(at, why string)) {
+func walkRenovate(v any, at string, found func(at, why string)) { //nolint:gocognit // baseline: pre-existing complexity
 	switch x := v.(type) {
 	case map[string]any:
 		for _, k := range slices.Sorted(maps.Keys(x)) {

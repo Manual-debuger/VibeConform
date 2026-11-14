@@ -148,7 +148,7 @@ var pinnedRef = regexp.MustCompile(`@[0-9a-fA-F]{40}$`)
 // checkC02: every job-level and step-level uses: that is not a local ./
 // path ends in @ and 40 hexadecimal characters, and no word of a run:
 // step ends in @latest, in every workflow.
-func checkC02(env *Env) PartResult {
+func checkC02(env *Env) PartResult { //nolint:gocognit // baseline: pre-existing complexity
 	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
@@ -265,7 +265,7 @@ func runsAudit(j *Job) bool {
 // runner and by one that runs on a Windows runner, after matrix
 // expansion, in any workflow. The rule is not applicable without windows
 // in platforms; the registry decides that before it runs.
-func checkC05(env *Env) PartResult {
+func checkC05(env *Env) PartResult { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	verify, missing := env.Entrypoint(EntrypointVerify)
 	if missing != nil {
 		return Fail(*missing)

@@ -299,7 +299,7 @@ func each(task string) []string {
 	return out
 }
 
-func TestReferenceHooksFromAnyDirectory(t *testing.T) {
+func TestReferenceHooksFromAnyDirectory(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("short mode skips this test, which runs every reference hook from four directories; task test runs it")

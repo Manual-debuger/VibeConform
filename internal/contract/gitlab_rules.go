@@ -124,7 +124,7 @@ func (r *glReader) admitted(p *glPipeline, j *glJob, ctx *glContext) (bool, *glW
 // had it matched, the job would run anyway, so a later rule that admits
 // it decides. When no later rule admits it, the reason quotes the first
 // unread rule.
-func (r *glReader) evalRules(rules *yaml.Node, ctx *glContext, label string) (bool, *glWhy) {
+func (r *glReader) evalRules(rules *yaml.Node, ctx *glContext, label string) (bool, *glWhy) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	if rules.Kind != yaml.SequenceNode {
 		return false, r.why(rules, true, "%s: rules that are not a list", label)
 	}
@@ -327,7 +327,7 @@ type exprToken struct {
 	text string
 }
 
-func lexExpression(s string) ([]exprToken, bool) {
+func lexExpression(s string) ([]exprToken, bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	var out []exprToken
 	for i := 0; i < len(s); {
 		c := s[i]
@@ -443,7 +443,7 @@ func (p *exprParser) and() (tri, bool) {
 	return v, ok
 }
 
-func (p *exprParser) atom() (tri, bool) {
+func (p *exprParser) atom() (tri, bool) { //nolint:gocyclo // baseline: pre-existing complexity
 	t, ok := p.peek()
 	if !ok {
 		return triUnknown, false
@@ -491,7 +491,7 @@ func (p *exprParser) presence(t exprToken) tri {
 }
 
 // compare decides a comparison the closed list names, in either order.
-func (p *exprParser) compare(a exprToken, op string, b exprToken) tri {
+func (p *exprParser) compare(a exprToken, op string, b exprToken) tri { //nolint:gocyclo // baseline: pre-existing complexity
 	if op != "==" && op != "!=" {
 		return triUnknown
 	}

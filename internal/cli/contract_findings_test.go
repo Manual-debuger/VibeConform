@@ -40,7 +40,7 @@ func watchReports(t *testing.T) func(*contract.Report) {
 
 // failureProblems lists the failed parts in a report that have no
 // finding, and the findings of failed parts that name no file or no fix.
-func failureProblems(rep *contract.Report) []string {
+func failureProblems(rep *contract.Report) []string { //nolint:gocognit // baseline: pre-existing complexity
 	var out []string
 	for _, rr := range rep.Rules {
 		for _, p := range rr.Parts {

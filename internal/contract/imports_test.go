@@ -13,7 +13,7 @@ import (
 // The contract audit imports none of the template-sync system's packages
 // (spec 0052, "Package and command"), which spec 0059 removed: a package of
 // one of these names must not come back through it.
-func TestImportsNoOldPackage(t *testing.T) {
+func TestImportsNoOldPackage(t *testing.T) { //nolint:gocognit // baseline: pre-existing complexity
 	old := []string{"reconcile", "state", "resource", "standard", "module", "manifest"}
 	const internal = "github.com/Manual-debuger/VibeConform/internal/"
 

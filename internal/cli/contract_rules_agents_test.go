@@ -232,7 +232,7 @@ type partCase struct {
 // runPartCases runs --static cases for one part of a rule. A failing part
 // fails the rule; a passing static part leaves it not run (its other
 // parts did not run).
-func runPartCases(t *testing.T, id, part string, cases []partCase) {
+func runPartCases(t *testing.T, id, part string, cases []partCase) { //nolint:gocognit // baseline: pre-existing complexity
 	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

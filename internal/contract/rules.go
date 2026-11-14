@@ -216,9 +216,9 @@ func needsAgents(cfg *Config) (bool, string) {
 
 const notApplicableWithoutClaude = "when `agents` does not include `claude`"
 
-// rules is contract 1.0.0's rule table, in report order: 16 MUST and 9
-// SHOULD rules. Rule sentences, checks and sources are spec 0051's,
-// verbatim.
+// rules is the rule table, in report order: contract 1.0.0's 16 MUST and
+// 9 SHOULD rules, whose sentences, checks and sources are spec 0051's
+// verbatim, and the SHOULD rules contract 1.2.0 adds (spec 0061).
 var rules = []Rule{
 	{
 		ID: "V-01", Level: Must, Category: CategoryVerification,

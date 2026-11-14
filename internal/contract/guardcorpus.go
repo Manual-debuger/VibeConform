@@ -98,7 +98,7 @@ func parseGuardCorpus(data []byte) ([]GuardCase, error) {
 	return doc.Cases, nil
 }
 
-func checkGuardCase(c GuardCase, seen map[string]bool) error {
+func checkGuardCase(c GuardCase, seen map[string]bool) error { //nolint:gocyclo // baseline: pre-existing complexity
 	tool := c.Payload.ToolName
 	switch {
 	case c.Name == "":

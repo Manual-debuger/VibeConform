@@ -166,7 +166,7 @@ func (wf *Workflow) parse(data []byte) error {
 	return nil
 }
 
-func parseJob(id string, n *yaml.Node) (*Job, error) {
+func parseJob(id string, n *yaml.Node) (*Job, error) { //nolint:gocognit // baseline: pre-existing complexity
 	if n.Kind != yaml.MappingNode {
 		return nil, lineError(n, "job "+id+" must be a map")
 	}

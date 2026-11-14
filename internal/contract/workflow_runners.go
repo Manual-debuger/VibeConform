@@ -104,7 +104,7 @@ func labelPlatform(label string) string {
 // not contradict, or added as a combination of its own. known is false
 // when the matrix is not a map of lists (an expression, such as
 // fromJSON); its one combination then has no values.
-func matrixCombos(strategy *yaml.Node) (combos []matrixCombo, known bool) {
+func matrixCombos(strategy *yaml.Node) (combos []matrixCombo, known bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	m := mapValue(strategy, "matrix")
 	if m == nil {
 		return []matrixCombo{{}}, true

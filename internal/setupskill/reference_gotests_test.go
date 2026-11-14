@@ -163,7 +163,7 @@ func (g taskGraph) walk(t *testing.T, component, name string, seen map[string]bo
 // ("out=$(go test -short ./... 2>&1) || rc=$?"). A closing parenthesis, a
 // ";" or a control operator ends the invocation, redirections are left
 // out, and a comment is not read.
-func goTestCommands(script string) []string {
+func goTestCommands(script string) []string { //nolint:gocognit // baseline: pre-existing complexity
 	var cmds []string
 	for line := range strings.Lines(script) {
 		fields := strings.Fields(line)
@@ -313,7 +313,7 @@ func assertFullTests(t *testing.T, what string, tests []goTest, want []string) {
 // tests in short mode, through verify:fast, and no full run: the full
 // suite is CI's (spec 0057 Desired Behavior 9 and 10, which replace spec
 // 0056 Desired Behavior 3's full pre-push run).
-func TestGoPrePushRunsShortTests(t *testing.T) {
+func TestGoPrePushRunsShortTests(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	for name, setup := range goTaskSetups {
 		t.Run(name, func(t *testing.T) {
 			s := setup(t)

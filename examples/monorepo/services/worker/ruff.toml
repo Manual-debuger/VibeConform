@@ -19,9 +19,17 @@ extend-exclude = [
 ]
 
 [lint]
-select = ["E4", "E7", "E9", "F", "I", "B", "UP", "RUF100", "DTZ", "S", "BLE"]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "RUF100", "DTZ", "S", "BLE", "C901"]
 # StrEnum changes user-visible str(enum) behavior; migrating API enums needs a product-level review.
 ignore = ["UP042"]
+
+# C901 is the complexity limit that catches the contract's planted
+# complexity defect (V-06, a function of cyclomatic complexity 41). A
+# function already over the limit gets a specific suppression with a
+# reason, `# noqa: C901  # baseline: pre-existing complexity`, not a
+# higher limit. Ruff cannot require the reason, so review asks for it.
+[lint.mccabe]
+max-complexity = 15
 
 [lint.per-file-ignores]
 # Assertions are the test contract, not runtime input validation.

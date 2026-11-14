@@ -143,7 +143,7 @@ func waiverConfig(rule, until string) fixtureEdit {
 		"waivers:\n  - rule: " + rule + "\n    reason: known gap\n    until: " + until + "\n"}))
 }
 
-func TestContractAuditVerdicts(t *testing.T) {
+func TestContractAuditVerdicts(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	t.Parallel()
 	t.Run("conformant exits 0", func(t *testing.T) {
 		rules := standIn(nil, contract.ResultPass, mustRules("V-04")...)
@@ -221,7 +221,7 @@ func TestContractAuditVerdicts(t *testing.T) {
 	})
 }
 
-func TestContractAuditApplicabilityAndWaivers(t *testing.T) {
+func TestContractAuditApplicabilityAndWaivers(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	t.Parallel()
 	t.Run("C-05 not applicable without windows", func(t *testing.T) {
 		rep, _ := auditJSON(t, contractFixture(t,

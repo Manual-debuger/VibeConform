@@ -132,7 +132,7 @@ func install(path, dir string, files map[string][]byte, names []string, res *Res
 // directory left empty, and returns the removed files' slash paths
 // relative to root. A missing root has nothing to prune. The walk only
 // collects; the removals follow it.
-func prune(root string, keep map[string][]byte) ([]string, error) {
+func prune(root string, keep map[string][]byte) ([]string, error) { //nolint:gocognit // baseline: pre-existing complexity
 	if _, err := os.Lstat(root); os.IsNotExist(err) {
 		return nil, nil
 	}

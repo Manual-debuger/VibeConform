@@ -48,7 +48,7 @@ func loadCases(t *testing.T) []guardCase {
 	return doc.Cases
 }
 
-func TestGuardCases(t *testing.T) {
+func TestGuardCases(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	for _, c := range loadCases(t) {
 		t.Run(c.Name, func(t *testing.T) {
 			t.Parallel()

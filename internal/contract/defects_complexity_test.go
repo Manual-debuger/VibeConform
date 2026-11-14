@@ -29,17 +29,39 @@ func TestGoComplexitySampleBuildsAndPassesVet(t *testing.T) {
 	if strings.HasSuffix(d.Path, "_test.go") || !strings.HasPrefix(d.Path, "foo/") {
 		t.Fatalf("planted at %s, want a non-test file in foo/", d.Path)
 	}
-	p := filepath.Join(env.Repo.Root(), filepath.FromSlash(d.Path))
-	if err := os.WriteFile(p, d.Content, 0o600); err != nil {
+	goVet(t, env.Repo.Root(), d)
+	fn := onlyFunc(t, d)
+	if !fn.Name.IsExported() || fn.Doc == nil || !strings.HasPrefix(fn.Doc.Text(), fn.Name.Name+" ") {
+		t.Errorf("func %s: want an exported function with a doc comment that starts with its name", fn.Name.Name)
+	}
+	if params := fn.Type.Params.List; len(params) != 1 || len(params[0].Names) != 1 || identName(params[0].Type) != "int" {
+		t.Errorf("func %s: want one int parameter", fn.Name.Name)
+	}
+	ifs, returns, other := countStatements(t, fn.Body)
+	if ifs != 40 || returns != 1 || other != 1 {
+		t.Errorf("%d if statements, %d returns and %d other statements; want 40, 1 and 1 (the running total)", ifs, returns, other)
+	}
+}
+
+// goVet writes the planted file into the module at root and runs go vet,
+// which builds the package too.
+func goVet(t *testing.T, root string, d plantedDefect) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(d.Path)), d.Content, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("go", "vet", "./...")
-	cmd.Dir = env.Repo.Root()
+	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go vet: %v\n%s", err, out)
 	}
+}
 
+// onlyFunc parses the planted Go file, which must be in package foo and
+// declare one function, and returns that function.
+func onlyFunc(t *testing.T, d plantedDefect) *ast.FuncDecl {
+	t.Helper()
 	f, err := parser.ParseFile(token.NewFileSet(), d.Path, d.Content, parser.ParseComments)
 	if err != nil {
 		t.Fatal(err)
@@ -56,22 +78,20 @@ func TestGoComplexitySampleBuildsAndPassesVet(t *testing.T) {
 	if len(funcs) != 1 {
 		t.Fatalf("%d functions, want 1", len(funcs))
 	}
-	fn := funcs[0]
-	if !fn.Name.IsExported() || fn.Doc == nil || !strings.HasPrefix(fn.Doc.Text(), fn.Name.Name+" ") {
-		t.Errorf("func %s: want an exported function with a doc comment that starts with its name", fn.Name.Name)
-	}
-	if params := fn.Type.Params.List; len(params) != 1 || len(params[0].Names) != 1 || types(params[0].Type) != "int" {
-		t.Errorf("func %s: want one int parameter", fn.Name.Name)
-	}
-	ifs, returns, other := 0, 0, 0
-	for _, stmt := range fn.Body.List {
+	return funcs[0]
+}
+
+// countStatements counts a body's top-level if and return statements and
+// the rest. Each if must hold one assignment, with no else and no init.
+func countStatements(t *testing.T, body *ast.BlockStmt) (ifs, returns, other int) {
+	t.Helper()
+	for _, stmt := range body.List {
 		switch s := stmt.(type) {
 		case *ast.IfStmt:
 			ifs++
 			if s.Else != nil || s.Init != nil || len(s.Body.List) != 1 {
 				t.Errorf("if at offset %d: want no else, no init and one statement", s.Pos())
-			}
-			if _, nested := s.Body.List[0].(*ast.AssignStmt); !nested {
+			} else if _, ok := s.Body.List[0].(*ast.AssignStmt); !ok {
 				t.Errorf("if at offset %d: want an assignment in its body, nothing nested", s.Pos())
 			}
 		case *ast.ReturnStmt:
@@ -80,15 +100,10 @@ func TestGoComplexitySampleBuildsAndPassesVet(t *testing.T) {
 			other++
 		}
 	}
-	if ifs != 40 || returns != 1 {
-		t.Errorf("%d if statements and %d returns, want 40 and 1", ifs, returns)
-	}
-	if other != 1 {
-		t.Errorf("%d other statements, want 1 (the running total)", other)
-	}
+	return ifs, returns, other
 }
 
-func types(e ast.Expr) string {
+func identName(e ast.Expr) string {
 	if id, ok := e.(*ast.Ident); ok {
 		return id.Name
 	}

@@ -269,7 +269,7 @@ func checkA02(env *Env) PartResult {
 	return res
 }
 
-func a02(env *Env, s *probeSession) PartResult {
+func a02(env *Env, s *probeSession) PartResult { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	hooks, res, ok := preToolUseHooks(env)
 	if !ok {
 		return res

@@ -52,7 +52,7 @@ func entrypointVibeCalls(env *Env) []vibeCall {
 // recognized hook manager, and each command hook of .claude/settings.json.
 // A configuration or hook script that does not parse fails R-01, which
 // cannot hold for it; settings that cannot be read leave it undecided.
-func hookVibeCalls(env *Env) ([]vibeCall, PartResult) {
+func hookVibeCalls(env *Env) ([]vibeCall, PartResult) { //nolint:gocognit // baseline: pre-existing complexity
 	var calls []vibeCall
 	var broken []Finding
 	seen := map[string]bool{}

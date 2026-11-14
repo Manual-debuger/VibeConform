@@ -21,7 +21,7 @@ var updateGoldens = flag.Bool("update", false, "rewrite the contract report gold
 // LF: .gitattributes gives testdata eol=lf, and the comparison is byte
 // for byte, so a golden checked out with CRLF fails instead of being
 // normalized silently.
-func TestContractReportGolden(t *testing.T) {
+func TestContractReportGolden(t *testing.T) { //nolint:gocognit // baseline: pre-existing complexity
 	t.Parallel()
 	cases := []struct {
 		name  string
