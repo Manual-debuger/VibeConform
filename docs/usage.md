@@ -326,8 +326,8 @@ directory that holds the working-tree content of every tracked file,
 committed once. Every execution and probe part runs there, one after
 another, from a reset copy: `setup`, A-07, V-03, the baseline runs of
 `verify` and `verify-fast`, the *planted defects* of V-01, V-02, V-05,
-V-06, V-08 and A-05, the guard corpus of A-02, A-03 and A-08, D-01 and
-R-01. The copy is
+V-06, V-07, V-08 and A-05, the guard corpus of A-02, A-03 and A-08, D-01
+and R-01. The copy is
 deleted at the end, also after a failure or an interrupt, and the
 repository's working tree, index and `.git` never change.
 
@@ -339,6 +339,15 @@ repository's working tree, index and `.git` never change.
   Code's default) for hooks,
   `--probe-timeout` for entrypoints. A run over its limit is killed with
   its child processes.
+- **V-07's secret.** V-07 plants a PEM private-key block in
+  `vibe_probe_secret.txt`, once per repository, in the first component
+  in `vibe.yaml` order that has tests, and runs `verify` once with it.
+  `vibe` assembles the block at run time, so its source holds no key.
+  The file is not committed, so a scanner that reads only Git history
+  misses it. What V-07 cannot catch: a secret pushed before CI runs
+  (the references' pre-commit scan is the local guard, and the contract
+  does not check it), a secret in a file the scanner's configuration
+  excludes, and a secret in a shape the scanner has no rule for.
 - **Tools.** The audit needs the tools the entrypoints call (`task`, the
   linters, the test runners) and bash for the hooks. A missing tool, no
   bash, a timeout or a word with an expansion makes the part `cannot
@@ -347,16 +356,17 @@ repository's working tree, index and `.git` never change.
   using `vibe-guard` needs it installed.
 - **Time.** A full audit runs `verify` and `verify-fast` once each plus
   three times per component, `verify` once more per component for each
-  of V-06 (complexity) and V-08 (blanket suppressions) and once more per
-  Python component (V-05's type error), the Stop hook three times, and
+  of V-06 (complexity) and V-08 (blanket suppressions), once more per
+  Python component (V-05's type error) and once more in all (V-07's
+  secret), the Stop hook three times, and
   the whole guard corpus through the PreToolUse hook twice. On this repository
   that is several minutes to an hour, mostly `task test`. `--static`
   stays the quick local run.
 - **Progress.** In text mode each run prints a line on stderr ("vibe
   audit: verify with the static-analysis defect in ."). `--json` keeps
   stdout to the JSON document.
-- `vibe audit --explain V-01`, `V-02`, `V-05`, `V-06` and `V-08` print
-  the defect samples;
+- `vibe audit --explain V-01`, `V-02`, `V-05`, `V-06`, `V-07` and `V-08`
+  print the defect samples;
   `--explain A-02` and `A-03` print the guard corpus counts by rule ID.
 
 **V-06, complexity** (SHOULD, spec 0061). The planted function has
@@ -1594,6 +1604,7 @@ alone:
 | Hook | Runs | When |
 |---|---|---|
 | pre-commit | `task fmt:check` | a staged file has an extension `task fmt` covers |
+| pre-commit | `task secrets:staged` (gitleaks over the staged changes, spec 0061) | every commit |
 | pre-push | `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; task verify:fast` | every push |
 
 pre-push runs the fast verification, not the full suite: in Go the
@@ -1642,8 +1653,9 @@ repository is an ordinary file, edited directly.
   pipeline is not run, #74).
 - `.github/workflows/negative-control.yml` switches off one gate in an
   example (Pyright for V-05, the complexity linters for V-06, the
-  suppression rules for V-08) and requires the rule to fail, so that each planted sample is shown to fail only because of its
-  own defect kind. It runs when a pull request changes the samples, the
+  `secrets` task for V-07, the suppression rules for V-08) and requires
+  the rule to fail, so that each planted sample is shown to fail only
+  because of its own defect kind. It runs when a pull request changes the samples, the
   setup skill's references or the examples, weekly, and on demand.
 - `.golangci.yml` enables `gocyclo` (15) and `gocognit` (20). The
   functions that were over those limits when they were enabled carry

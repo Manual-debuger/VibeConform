@@ -290,6 +290,17 @@ var rules = []Rule{
 		},
 	},
 	{
+		ID: "V-07", Level: Should, Category: CategoryVerification, Since: "1.2.0",
+		Title: "`verify` catches a secret in the working tree",
+		Check: "Probe: with the secret defect (a PEM private-key block in a plain text file) planted once, in the " +
+			"first component in configuration order that has tests, `verify` exits non-zero.",
+		Source: "spec 0061, ADR 0027",
+		Parts: []Part{
+			probeRun("with the secret defect (a PEM private-key block in a plain text file) planted once, in the "+
+				"first component in configuration order that has tests, `verify` exits non-zero.", checkV07Probe),
+		},
+	},
+	{
 		ID: "V-08", Level: Should, Category: CategoryVerification, Since: "1.2.0",
 		Title: "Blanket suppressions do not hide a defect",
 		Check: "Probe: with V-01's static-analysis defect under the language's blanket suppressions planted in each " +

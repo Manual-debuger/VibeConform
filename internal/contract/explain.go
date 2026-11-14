@@ -25,6 +25,7 @@ var ruleDetails = map[string]func() string{
 			complexityBranches+1, complexityBranches, complexityBranches) +
 			defectSamplesText([]defectKind{defectComplexity})
 	},
+	"V-07": secretSampleText,
 	"V-08": v08Details,
 	"A-09": a09CasesText,
 }
@@ -58,6 +59,36 @@ func v08Details() string {
 		"  eslint-comments/no-unlimited-disable, or a checker that ignores the\n" +
 		"  comments (go vet ignores //nolint).\n\n" +
 		defectSamplesText([]defectKind{defectBlanketSuppression})
+}
+
+// secretSampleText is V-07's planted defect: one sample for every
+// language, planted once per repository.
+func secretSampleText() string {
+	var b strings.Builder
+	b.WriteString("Planted defect:\n")
+	b.WriteString("  Once per repository, in the first component in configuration order that\n" +
+		"  has tests: into its first directory, in sorted path order, that holds a\n" +
+		"  test file of its language. The file is written to the probe copy's\n" +
+		"  working tree and is not committed, so the scanner must read the working\n" +
+		"  tree's files, not the Git history. Any secret scanner that reports it\n" +
+		"  satisfies the rule.\n")
+	fmt.Fprintf(&b, "\n  Every language, %s: %s\n", defectSecret, secretSample.Name)
+	writeIndented(&b, secretSample.Content)
+	return b.String()
+}
+
+// writeIndented writes content with each line indented by four spaces,
+// and blank lines kept blank.
+func writeIndented(b *strings.Builder, content string) {
+	for _, line := range strings.SplitAfter(content, "\n") {
+		switch line {
+		case "":
+		case "\n":
+			b.WriteString("\n")
+		default:
+			b.WriteString("    " + line)
+		}
+	}
 }
 
 // RuleDetails is what --explain prints after the check of the rule with
@@ -94,15 +125,7 @@ func defectSamplesText(kinds []defectKind) string {
 				continue
 			}
 			fmt.Fprintf(&b, "\n  %s, %s: %s\n", lang.name, kind, s.Name)
-			for _, line := range strings.SplitAfter(s.Content, "\n") {
-				switch line {
-				case "":
-				case "\n":
-					b.WriteString("\n")
-				default:
-					b.WriteString("    " + line)
-				}
-			}
+			writeIndented(&b, s.Content)
 		}
 	}
 	return b.String()

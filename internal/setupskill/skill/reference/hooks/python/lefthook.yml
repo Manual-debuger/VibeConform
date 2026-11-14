@@ -8,6 +8,11 @@ pre-commit:
       glob: "*.py"
       run: task fmt:check
       fail_text: "Run 'task fmt' to format the Python files."
+    # The staged changes, scanned for secrets before they are committed.
+    # Git's own variables stay set: gitleaks reads this commit's index.
+    secrets:
+      run: task secrets:staged
+      fail_text: "gitleaks found a secret in the staged changes: remove it, and rotate it if it is real."
 
 # A pre-push hook started from a linked worktree exports GIT_DIR, so a
 # test that runs git would act on the real repository instead of its

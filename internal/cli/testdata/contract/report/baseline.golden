@@ -1,6 +1,6 @@
 vibe audit: contract 1.2.0 (vibe test)
 
-  V  Verification entrypoints              1 pass, 1 not applicable, 5 cannot decide
+  V  Verification entrypoints              1 pass, 1 not applicable, 6 cannot decide
   H  Local Git hooks                       2 pass
   C  CI                                    5 pass
   A  Agent guardrails                      3 pass, 6 cannot decide
@@ -25,6 +25,8 @@ Cannot decide
   V-03  MUST    `fmt-check` writes no file
         vibe.yaml: cannot decide: fmt-check with the format defect in . (task fmt:check): `task` is not installed on this machine
   V-06  SHOULD  `verify` catches an over-complex function
+        vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
+  V-07  SHOULD  `verify` catches a secret in the working tree
         vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
   V-08  SHOULD  Blanket suppressions do not hide a defect
         vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
@@ -53,4 +55,4 @@ Local guardrail adjustments
 CI provider read: GitHub Actions
 Note: the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is main
 
-Verdict: cannot decide. 12 rules cannot be decided.
+Verdict: cannot decide. 13 rules cannot be decided.

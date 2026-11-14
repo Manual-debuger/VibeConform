@@ -87,6 +87,27 @@ lint task runs in `verify` and `verify-fast`. Existing code over the limits gets
 specific suppression with the reason `baseline: pre-existing complexity`
 (`reference/migrate.md`), not a raised threshold.
 
+### V-07 (SHOULD): `verify` catches a secret in the working tree
+
+`verify` exits non-zero with a PEM private-key block planted in a plain
+text file, `vibe_probe_secret.txt`. The audit plants it once per
+repository, beside the first test file of the first component in
+`vibe.yaml` order that has tests, and does not commit it: the scanner
+must read the working tree's files, not the Git history. Any secret
+scanner that reports the block satisfies the rule. Start from
+`reference/taskrunner/<stack>/` (`secrets`, which runs
+`gitleaks dir . --redact`, in `verify` and `verify:fast`) and
+`reference/secrets/.gitleaks.toml`, which skips dependency and build
+directories and this skill's own directory. The CI references install a
+pinned gitleaks release and check its SHA-256 on Linux and Windows; the
+hook references scan the staged changes in pre-commit
+(`task secrets:staged`, `gitleaks git --pre-commit --staged`), which the
+contract does not check. A finding that is a real secret is rotated
+first, then removed. A finding that is not a secret (a test fixture)
+goes into the configuration's allowlist, with a reason. The allowlist
+skips every directory named build or dist, so a component under one of
+them is not scanned: narrow those paths if that is your layout.
+
 ### V-08 (SHOULD): blanket suppressions do not hide a defect
 
 `verify` exits non-zero with V-01's static-analysis defect planted under

@@ -117,7 +117,7 @@ var executionOrder = []string{
 	"A-07/execution",
 	"V-03/execution",
 	"V-01/execution", "V-02/probe",
-	"V-01/probe", "V-05/probe", "V-06/probe", "V-08/probe", "A-05/probe",
+	"V-01/probe", "V-05/probe", "V-06/probe", "V-07/probe", "V-08/probe", "A-05/probe",
 	"A-02/probe",
 	"A-03/probe",
 	"A-08/probe",

@@ -22,6 +22,8 @@ Files under `reference/` are loaded on demand:
   `reference/ci/`, `reference/agents/`, `reference/lint/`: reference
   implementations per stack (`go`, `python`, `typescript`, `monorepo`).
   They are examples to adapt, not files to copy blindly.
+- `reference/secrets/.gitleaks.toml`: the secret scanner's
+  configuration, for every stack.
 - Optional references, used only when the person asks for what they
   cover: editors (`reference/optional/vscode.md`,
   `reference/optional/zed.md`), language servers

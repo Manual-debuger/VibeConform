@@ -46,6 +46,8 @@ func main() {
 		os.Exit(pyTypeCheck())
 	case "complexity":
 		os.Exit(complexity())
+	case "secrets":
+		os.Exit(scanSecrets())
 	case "ok":
 		fmt.Println("ok")
 	case "fail":
@@ -142,6 +144,42 @@ func pyTypeCheck() int {
 				fmt.Printf("%s:%d: a string returned from a function annotated -> int\n", filepath.ToSlash(path), i+2)
 				code = 1
 			}
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return code
+}
+
+// privateKey is the start of a PEM private-key block. The pattern
+// counts the dashes, so that this file holds no literal header.
+var privateKey = regexp.MustCompile(`-{5}BEGIN[ A-Z0-9_-]*PRIVATE KEY-{5}`)
+
+// scanSecrets is the fixture's secret scanner: it lists the files outside
+// dot directories that hold a private-key block. Listing a file fails the
+// step.
+func scanSecrets() int {
+	code := 0
+	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if path != "." && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if privateKey.Match(src) {
+			fmt.Println("secret:", filepath.ToSlash(path))
+			code = 1
 		}
 		return nil
 	})

@@ -81,6 +81,30 @@ func checkV06Probe(env *Env) PartResult {
 	return defectProbe{rule: "V-06", entrypoint: EntrypointVerify, kinds: []defectKind{defectComplexity}}.run(env)
 }
 
+// checkV07Probe: with the secret defect planted once per repository,
+// verify exits non-zero (spec 0061). A secret does not depend on the
+// language, so one component is enough.
+func checkV07Probe(env *Env) PartResult {
+	return defectProbe{rule: "V-07", entrypoint: EntrypointVerify, kinds: []defectKind{defectSecret},
+		components: firstWithTests}.run(env)
+}
+
+// firstWithTests picks the first component in configuration order that
+// has tests, or, when none has, the first component, which the probe then
+// reports as having no tests.
+func firstWithTests(env *Env) []Component {
+	comps := env.Config.Components
+	for _, comp := range comps {
+		if _, _, ok := plantDir(env, comp); ok {
+			return []Component{comp}
+		}
+	}
+	if len(comps) == 0 {
+		return nil
+	}
+	return comps[:1]
+}
+
 // checkV08Probe: with V-01's static-analysis defect under the language's
 // blanket suppressions planted in each component, verify exits non-zero.
 // A component without tests leaves it undecided (spec 0061).

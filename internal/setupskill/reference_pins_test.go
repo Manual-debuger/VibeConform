@@ -144,3 +144,48 @@ func TestSkillCIMatchesPins(t *testing.T) { //nolint:gocognit,gocyclo // baselin
 		}
 	}
 }
+
+// The gitleaks release the reference CI files install for the secrets
+// task (spec 0061, V-07), and the SHA-256 of each archive they check.
+const (
+	gitleaksVersion = "8.30.1"
+	gitleaksLinux   = "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+	gitleaksWindows = "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
+)
+
+// TestSkillCIInstallsGitleaks: every reference CI file runs verify, or
+// vibe audit, which runs verify in its probe copy, so each installs the
+// pinned gitleaks release and checks it against its SHA-256, the Windows
+// archive too where a job runs on Windows.
+func TestSkillCIInstallsGitleaks(t *testing.T) {
+	skill := setupskill.FS()
+	files, err := fs.Glob(skill, "reference/ci/*/*.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, file := range files {
+		if strings.HasSuffix(file, "dependabot.yml") {
+			continue
+		}
+		b, err := fs.ReadFile(skill, file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content := string(b)
+		checked++
+		if !strings.Contains(content, `GITLEAKS_VERSION: "`+gitleaksVersion+`"`) {
+			t.Errorf("%s does not pin gitleaks %s", file, gitleaksVersion)
+		}
+		if !strings.Contains(content, gitleaksLinux) {
+			t.Errorf("%s does not check the Linux gitleaks archive's SHA-256", file)
+		}
+		windows := strings.Contains(content, "windows-latest") || strings.Contains(content, "saas-windows")
+		if windows && !strings.Contains(content, gitleaksWindows) {
+			t.Errorf("%s runs on Windows but does not check the Windows gitleaks archive's SHA-256", file)
+		}
+	}
+	if checked < 12 {
+		t.Errorf("checked %d reference CI files, want the 12 ci.yml, audit.yml and .gitlab-ci.yml files", checked)
+	}
+}

@@ -79,6 +79,38 @@ func TestAuditExplainContent(t *testing.T) {
 	}
 }
 
+// --explain V-07 prints the secret sample once, since every language
+// has the same one, says where it is planted and what satisfies the rule
+// (spec 0061, "`vibe explain` and the report").
+func TestAuditExplainV07(t *testing.T) {
+	t.Parallel()
+	r := runVibeAudit(t, "--explain", "V-07")
+	assertExit(t, r, 0)
+	flat := strings.Join(strings.Fields(r.stdout), " ")
+	for _, want := range []string{
+		"Level: SHOULD", "Checks: probe", "Source: spec 0061, ADR 0027",
+		"Every language, secret: vibe_probe_secret.txt",
+		"    Planted by vibe audit: a PEM private-key block (the secret defect). It is not a key.\n",
+		"BEGIN PRIVATE KEY", "END PRIVATE KEY",
+	} {
+		if !strings.Contains(r.stdout, want) && !strings.Contains(flat, want) {
+			t.Errorf("--explain V-07 does not show %q:\n%s", want, r.stdout)
+		}
+	}
+	for _, want := range []string{
+		"Once per repository, in the first component in configuration order that has tests",
+		"not committed, so the scanner must read the working tree's files, not the Git history",
+		"Any secret scanner that reports it satisfies the rule",
+	} {
+		if !strings.Contains(flat, want) {
+			t.Errorf("--explain V-07 does not say %q:\n%s", want, r.stdout)
+		}
+	}
+	if n := strings.Count(r.stdout, "vibe_probe_secret.txt"); n != 1 {
+		t.Errorf("--explain V-07 names the sample %d times, want once:\n%s", n, r.stdout)
+	}
+}
+
 // --explain V-01 and V-02 print the planted defect samples exactly
 // (spec 0053, "Planted defects"), so that a probe can be reproduced by
 // hand.

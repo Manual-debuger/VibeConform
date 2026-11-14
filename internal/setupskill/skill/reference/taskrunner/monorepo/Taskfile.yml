@@ -89,6 +89,22 @@ tasks:
     cmds:
       - actionlint
 
+  # The secret scan (contract rule V-07): gitleaks reads the working
+  # tree's files, not the Git history, with its default rules and the
+  # repository's .gitleaks.toml, and prints its findings redacted. The
+  # pre-commit hook scans the staged changes instead.
+  secrets:
+    desc: Scan the working tree's files for secrets with gitleaks.
+    cmds:
+      - gitleaks dir . --redact --no-banner
+
+  # What the pre-commit hook runs: the staged changes only, read from the
+  # index Git hands the hook.
+  secrets:staged:
+    desc: Scan the staged changes for secrets with gitleaks.
+    cmds:
+      - gitleaks git --pre-commit --staged --redact --no-banner
+
   # The agent hooks. .claude/settings.json calls them as
   # "task -x hook:<name>": without -x, Task reports a script's exit 2 as
   # 201, and Claude Code shows the model only exit 2. No desc, so they
@@ -333,6 +349,7 @@ tasks:
       - task: api:verify
       - task: web:verify
       - task: worker:verify
+      - task: secrets
       - task: workflows:lint
 
   # What the agents' Stop hook and pre-push run: every component's own
@@ -343,3 +360,4 @@ tasks:
       - task: api:verify:fast
       - task: web:verify:fast
       - task: worker:verify:fast
+      - task: secrets
