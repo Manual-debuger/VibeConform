@@ -313,14 +313,40 @@ repository enforces its own direction with lint instead of prose.
 1. Ruff reports `PGH004` on a blanket `# noqa` even though that `noqa`
    covers its own line. If it does not, the Python reference needs
    another way to fail V-08.
+   **Confirmed** (issue #148) with Ruff 0.17.5 on Windows 11 x64 and
+   Linux x64, using the reference `ruff.toml` plus `C901`, `PGH003` and
+   `PGH004`. On the V-08 Python sample, `ruff check` reports `PGH004`
+   and exits 1. It does not report `PGH003`: the blanket `# noqa`
+   suppresses it, so `PGH004` alone catches the sample. With `PGH004`
+   ignored, Ruff and Pyright both pass the sample, so the suppressions
+   do hide V-01's defect.
 2. The `eslint-comments` rule `no-unlimited-disable` reports a
    file-level `eslint-disable` that would otherwise disable it. If it
    does not, the TypeScript reference needs another way.
+   **Confirmed** (issue #148) with ESLint 10.15.0,
+   `@eslint-community/eslint-plugin-eslint-comments` 4.8.1 and
+   typescript-eslint 8.72.2 on Windows 11 x64 and Linux x64, using the
+   reference `eslint.config.js` plus the plugin's recommended config and
+   the rules this spec names. On the V-08 TypeScript sample, ESLint
+   reports `no-unlimited-disable` (and `disable-enable-pair` and
+   `require-description`) and exits 1. With those three rules off,
+   ESLint and `tsc` both pass the sample.
 3. `gitleaks dir` honours an exclusion configuration well enough to
    skip `node_modules`, `.venv` and build output in reasonable time,
    and it reports the V-07 sample with the default rules.
+   **Confirmed** (issue #148) with gitleaks 8.30.1 on Windows 11 x64
+   and Linux x64. A `.gitleaks.toml` with `useDefault = true` and an
+   `[[allowlists]]` entry of path patterns written with `/` excludes
+   the directories on both platforms. gitleaks skips an excluded
+   directory without reading it, and the scan of a tree with 120 MB of
+   `node_modules` and `.venv` took under one second. The default rules
+   report the V-07 sample as `private-key` (twice, once more for its
+   base64-decoded text) and gitleaks exits 1. The default rules already
+   skip `node_modules`, but not `.venv`, `dist` or `build`.
 4. Pyright in `standard` mode reports a string returned from a function
    annotated `-> int`.
+   **Confirmed** (issue #148) with Pyright 1.1.414 on Windows 11 x64
+   and Linux x64: `reportReturnType`, exit 1.
 5. This repository has few enough functions over the new Go
    thresholds that baseline suppressions are practical.
 
