@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -231,21 +230,18 @@ func TestContractAuditVerdicts(t *testing.T) { //nolint:gocognit,gocyclo // base
 		// Every rule with an execution or probe part does not run, unless
 		// it is not applicable: V-05 has no Python component here.
 		assertRule(t, rep, "V-05", "not_applicable")
-		notRun := 0
-		for _, rule := range contract.Rules() {
-			if rep.rule(t, rule.ID).Result == "not_applicable" {
-				continue
-			}
-			if slices.ContainsFunc(rule.Parts, func(p contract.Part) bool { return p.Kind != contract.Static }) {
-				notRun++
+		if !rep.StaticOnly || rep.Verdict != "undecided" || !strings.Contains(rep.Reason, "14 rules did not run (--static)") {
+			t.Errorf("static_only %v, verdict %s (%q); want undecided, 14 rules did not run", rep.StaticOnly, rep.Verdict, rep.Reason)
+		}
+		wantNotRun := []string{"V-01", "V-02", "V-03", "V-06", "V-07", "V-08", "A-02", "A-03", "A-05", "A-07", "A-08", "A-09", "D-01", "R-01"}
+		var notRun []string
+		for _, rule := range rep.Rules {
+			if rule.Result == "not_run" {
+				notRun = append(notRun, rule.ID)
 			}
 		}
-		want := fmt.Sprintf("%d rules did not run (--static)", notRun)
-		if notRun < 14 || !rep.StaticOnly || rep.Verdict != "undecided" || !strings.Contains(rep.Reason, want) {
-			t.Errorf("static_only %v, verdict %s (%q); want undecided, %s", rep.StaticOnly, rep.Verdict, rep.Reason, want)
-		}
-		for _, id := range []string{"V-01", "V-02", "V-03", "V-06", "V-07", "V-08", "A-02", "A-03", "A-05", "A-07", "A-08", "A-09", "D-01", "R-01"} {
-			assertRule(t, rep, id, "not_run")
+		if !slices.Equal(notRun, wantNotRun) {
+			t.Errorf("rules not run under --static: %v, want %v", notRun, wantNotRun)
 		}
 		a05 := rep.rule(t, "A-05")
 		if len(a05.Parts) != 2 || a05.Parts[0].Check != "static" || a05.Parts[0].Result != "pass" ||
