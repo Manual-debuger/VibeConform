@@ -7,7 +7,7 @@ import (
 )
 
 // Implemented is the contract version this vibe implements.
-const Implemented = "1.1.0"
+const Implemented = "1.2.0"
 
 // Versions is the contract version a configuration declares and the one
 // the audit checks it against. They differ for an older MINOR of the same
