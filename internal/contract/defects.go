@@ -23,9 +23,6 @@ const (
 	defectFormat         defectKind = "format"
 	defectStaticAnalysis defectKind = "static analysis"
 	defectTest           defectKind = "test"
-	// defectBlanketSuppression is V-01's static-analysis defect under the
-	// language's blanket suppressions (spec 0061, V-08).
-	defectBlanketSuppression defectKind = "blanket suppression"
 )
 
 // The defect kinds of spec 0061.
@@ -37,6 +34,9 @@ const (
 	defectComplexity defectKind = "complexity"
 	// defectSecret is V-07's kind.
 	defectSecret defectKind = "secret"
+	// defectBlanketSuppression is V-08's kind: V-01's static-analysis
+	// defect under the language's blanket suppressions.
+	defectBlanketSuppression defectKind = "blanket suppression"
 )
 
 // defectSample is one planted file. In Content, {{package}} stands for
@@ -51,6 +51,18 @@ type defectSample struct {
 // v01Kinds lists V-01's and V-02's defect kinds in the order the probes
 // plant them.
 var v01Kinds = []defectKind{defectFormat, defectStaticAnalysis, defectTest}
+
+// ruleDefectKinds lists, by rule ID, the defect kinds the rule's
+// planted-defect probe plants, in the order it plants them. The probes
+// and --explain both read it.
+var ruleDefectKinds = map[string][]defectKind{
+	"V-01": v01Kinds,
+	"V-02": v01Kinds,
+	"V-05": {defectTypeError},
+	"V-06": {defectComplexity},
+	"V-07": {defectSecret},
+	"V-08": {defectBlanketSuppression},
+}
 
 // defectCatchers names, by defect kind, what an entrypoint must run to
 // catch it. A probe's Fix lists the catchers of the kinds it missed.
