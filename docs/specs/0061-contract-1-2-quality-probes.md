@@ -1,6 +1,6 @@
 # Spec 0061: Contract 1.2.0 probes that quality gates catch defects
 
-Status: draft (2026-11-14). ADR 0027. Spec issue to follow. Adds five
+Status: draft (2026-11-14). ADR 0027, spec issue #146. Adds five
 SHOULD rules (contract 1.2.0, MINOR), one guard rule ID, and changes to
 the setup skill's references, this repository and the examples.
 
