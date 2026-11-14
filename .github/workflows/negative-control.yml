@@ -10,15 +10,12 @@ name: Negative control
 #
 # It checks VibeConform's samples, not the examples' code, so it runs
 # when a pull request changes the samples, the setup skill's references
-# or the examples, weekly, and on demand.
+# or the examples, weekly, and on demand. The changes job decides that,
+# not a paths filter: R-01 lets only a job that runs on every pull
+# request (C-04) call vibe.
 
 on:
   pull_request:
-    paths:
-      - internal/contract/defects*.go
-      - internal/setupskill/skill/reference/**
-      - examples/**
-      - .github/workflows/negative-control.yml
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
@@ -39,8 +36,34 @@ env:
   PYTHON_VERSION: "3.12"
 
 jobs:
+  changes:
+    name: Samples, references or examples changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Compare with the base branch
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          run=true
+          if [ "$EVENT" = pull_request ] && ! git diff --name-only "$BASE"...HEAD |
+            grep -qE '^(internal/contract/defects[^/]*\.go|internal/setupskill/skill/reference/|examples/|\.github/workflows/negative-control\.yml)'; then
+            run=false
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
   control:
     name: ${{ matrix.rule }} without its gate, examples/${{ matrix.example }}
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     strategy:
       fail-fast: false
       matrix:
