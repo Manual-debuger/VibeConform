@@ -5,17 +5,17 @@ name: Negative control
 # only the gate that targets one sample in an example, runs the full
 # contract audit with vibe and vibe-guard built from this checkout, and
 # passes when the rule that sample belongs to now fails. It checks
-# VibeConform's samples, not an adopter's code, so it runs when a pull
+# VibeConform's samples, not an adopter's code, so it audits when a pull
 # request changes the samples, the setup skill's references or the
 # examples, weekly, and on demand.
+#
+# The pull request trigger has no paths filter: a job that runs vibe on a
+# filtered trigger is not the audit job R-01 allows (spec 0055), so this
+# repository would fail R-01. A first step reads the changed paths
+# instead, and the audit steps run only when one of them matters.
 
 on:
   pull_request:
-    paths:
-      - internal/contract/defects.go
-      - internal/setupskill/skill/reference/**
-      - examples/**
-      - .github/workflows/negative-control.yml
   schedule:
     - cron: "23 4 * * 1"
   workflow_dispatch:
@@ -45,23 +45,45 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # A pull request audits only when it changes the samples, the
+      # references, the examples or this workflow; a schedule or a manual
+      # run always audits.
+      - name: Changed paths
+        id: changes
+        run: |
+          run=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            run=false
+            if git diff --name-only "origin/$GITHUB_BASE_REF...HEAD" |
+              grep -qE '^(internal/contract/defects\.go|internal/setupskill/skill/reference/|examples/|\.github/workflows/negative-control\.yml)'; then
+              run=true
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Setup Go
+        if: steps.changes.outputs.run == 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Install uv
+        if: steps.changes.outputs.run == 'true'
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install task
+        if: steps.changes.outputs.run == 'true'
         run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
       - name: Build vibe and vibe-guard from source
+        if: steps.changes.outputs.run == 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
           go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
           go build -o "$RUNNER_TEMP/bin/vibe-guard" ./cmd/vibe-guard
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Copy the example, without the secrets task, into a fresh Git repository
+        if: steps.changes.outputs.run == 'true'
         run: |
           copy="$RUNNER_TEMP/example"
           cp -R examples/python "$copy"
@@ -73,6 +95,7 @@ jobs:
           git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy without the secret scan"
           echo "COPY=$copy" >> "$GITHUB_ENV"
       - name: V-07 fails
+        if: steps.changes.outputs.run == 'true'
         working-directory: ${{ env.COPY }}
         run: |
           if command -v gitleaks >/dev/null 2>&1; then echo "gitleaks is on PATH"; exit 1; fi

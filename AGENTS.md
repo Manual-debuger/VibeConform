@@ -132,7 +132,8 @@ Verification:
 - `task verify:fast` while working; `task verify` before declaring
   done. `task verify` runs the tasks CI runs: `task fmt:check`,
   `task typecheck`, `task lint`, `task test`, `task mod:verify`,
-  `task security` and `task workflows:lint`. `task fmt` formats. Do not
+  `task security`, `task workflows:lint` and `task secrets` (gitleaks,
+  spec 0061). `task fmt` formats. Do not
   weaken a test, lint or type check to make a change pass.
 - Finish with a ledger, one line per check: PASS, FAIL or UNVERIFIED.
   Unit tests, CI and a real integration are separate lines.
