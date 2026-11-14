@@ -325,7 +325,7 @@ a *probe copy*: a fresh Git repository in the system's temporary
 directory that holds the working-tree content of every tracked file,
 committed once. Every execution and probe part runs there, one after
 another, from a reset copy: `setup`, A-07, V-03, the baseline runs of
-`verify` and `verify-fast`, the *planted defects* of V-01, V-02 and A-05,
+`verify` and `verify-fast`, the *planted defects* of V-01, V-02, V-05 and A-05,
 the guard corpus of A-02, A-03 and A-08, D-01 and R-01. The copy is
 deleted at the end, also after a failure or an interrupt, and the
 repository's working tree, index and `.git` never change.
@@ -345,14 +345,15 @@ repository's working tree, index and `.git` never change.
   A-03 probes run whatever the PreToolUse hook runs, so a repository
   using `vibe-guard` needs it installed.
 - **Time.** A full audit runs `verify` and `verify-fast` once each plus
-  three times per component, the Stop hook three times, and the whole
+  three times per component, `verify` once more per Python component
+  (V-05's type error), the Stop hook three times, and the whole
   guard corpus through the PreToolUse hook twice. On this repository
   that is several minutes to an hour, mostly `task test`. `--static`
   stays the quick local run.
 - **Progress.** In text mode each run prints a line on stderr ("vibe
   audit: verify with the static-analysis defect in ."). `--json` keeps
   stdout to the JSON document.
-- `vibe audit --explain V-01` and `V-02` print the defect samples;
+- `vibe audit --explain V-01`, `V-02` and `V-05` print the defect samples;
   `--explain A-02` and `A-03` print the guard corpus counts by rule ID.
 
 **Flags:**
@@ -558,7 +559,7 @@ separately from the contract; it is `1`.
   `fail`, `not_applicable`, `waived`, `undecided`, `not_run`. `summary`
   has every token for both levels.
 - Verdict tokens: `conformant`, `not_conformant`, `undecided`.
-- `rules` lists all 26 rules in ID order. `parts[].check` is `static`,
+- `rules` lists all 27 rules in ID order. `parts[].check` is `static`,
   `execution` or `probe`.
 - `waiver` is `null`, or `{"reason", "until", "expired"}`. A rule with a
   waiver and result `not_applicable` has an unused waiver.

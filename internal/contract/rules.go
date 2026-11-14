@@ -266,6 +266,19 @@ var rules = []Rule{
 		},
 	},
 	{
+		ID: "V-05", Level: Should, Category: CategoryVerification, Since: "1.2.0",
+		Title: "`verify` catches a type error",
+		Check: "Probe: with the type-error defect planted in each Python component, `verify` exits non-zero. " +
+			"Components in other languages are skipped: there a type error is a compile error, which V-01 shows.",
+		Source:            "spec 0061, ADR 0027",
+		NotApplicableWhen: "when no component is Python",
+		Parts: []Part{
+			probeRun("with the type-error defect planted in each Python component, `verify` exits non-zero. "+
+				"Components in other languages are skipped: there a type error is a compile error, which V-01 shows.", checkV05Probe),
+		},
+		applies: onConfig(hasPythonComponent),
+	},
+	{
 		ID: "H-01", Level: Should, Category: CategoryHooks,
 		Title:  "Hook configuration is committed and installs with one command",
 		Check:  "Static: a recognized hook manager's configuration is committed",

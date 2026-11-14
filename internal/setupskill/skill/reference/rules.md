@@ -64,6 +64,16 @@ network or whole-repository checks. Start from
 non-empty. Use the team's runner: `make verify`, `just verify` or
 `npm run verify` are as good as `task verify`.
 
+### V-05 (SHOULD): `verify` catches a type error
+
+Python components only. `verify` exits non-zero with a function annotated
+`-> int` that returns a string, planted beside each Python component's
+first test file. Any type checker satisfies it: the reference runs
+Pyright in `standard` mode (`reference/lint/python/pyrightconfig.json`)
+in the `typecheck` task. A repository with no Python component gets "not
+applicable": in Go and TypeScript a type error is a compile error, which
+V-01 already shows.
+
 ## H: local Git hooks
 
 Recognized hook managers: lefthook (`lefthook.yml`, `.lefthook.yml`),

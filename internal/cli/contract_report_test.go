@@ -10,7 +10,8 @@ import (
 
 // reportOf builds a report the way the audit would: every rule of the
 // registry that contract 1.0.0 has, passing, unless results says
-// otherwise. The samples are spec 0052's, of contract 1.0.0.
+// otherwise. The samples are spec 0052's, of contract 1.0.0, so the
+// rules marked Since (added in 1.2.0, spec 0061) are left out.
 func reportOf(t *testing.T, static bool, results map[string]contract.RuleResult) *contract.Report {
 	t.Helper()
 	rep := &contract.Report{Contract: contract.Versions{Declared: "1.0.0", Audited: "1.0.0"}, Static: static}

@@ -24,6 +24,13 @@ const (
 	defectTest           defectKind = "test"
 )
 
+// The defect kinds of spec 0061.
+const (
+	// defectTypeError is V-05's kind. Only Python has a sample: in Go and
+	// TypeScript a type error is a compile error, which V-01 shows.
+	defectTypeError defectKind = "type error"
+)
+
 // defectSample is one planted file. In Content, {{package}} stands for
 // the package clause's name of the Go test file beside it; in a Go
 // sample that is not a _test.go file, without a _test suffix (spec 0061,
@@ -43,6 +50,7 @@ var defectCatchers = map[defectKind]string{
 	defectFormat:         "a format check",
 	defectStaticAnalysis: "static analysis (a type check or linter)",
 	defectTest:           "the tests",
+	defectTypeError:      "a type checker",
 }
 
 // defectSamples holds the samples by language and kind. Spec 0053
@@ -69,6 +77,8 @@ var defectSamples = map[string]map[defectKind]defectSample{
 			"def vibe_probe() -> int:\n    return vibe_probe_undefined_name\n"},
 		defectTest: {Name: "vibe_probe_test.py", Content: "# Planted by vibe audit: a test that fails (the test defect).\n" +
 			"def test_vibe_probe() -> None:\n    assert False, \"planted by vibe audit: this test fails\"\n"},
+		defectTypeError: {Name: "vibe_probe_type_error.py", Content: "# Planted by vibe audit: a function annotated -> int that returns a string (the type-error defect).\n" +
+			"def vibe_probe_type_error() -> int:\n    return \"vibe audit\"\n"},
 	},
 	LanguageTypeScript: {
 		defectFormat: {Name: "vibe_probe_format.ts", Content: "// Planted by vibe audit: an unformatted file (the format defect).\n" +

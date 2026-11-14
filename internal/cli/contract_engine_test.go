@@ -208,9 +208,14 @@ func TestContractAuditVerdicts(t *testing.T) {
 		rules := standIn(nil, contract.ResultPass, ruleIDs("", "V-04", "R-02", "R-03")...)
 		rep, r := auditJSONRules(t, rules, contractFixture(t), "--static")
 		assertExit(t, r, 1)
-		// Every rule with an execution or probe part does not run.
+		// Every rule with an execution or probe part does not run, unless
+		// it is not applicable: V-05 has no Python component here.
+		assertRule(t, rep, "V-05", "not_applicable")
 		notRun := 0
 		for _, rule := range contract.Rules() {
+			if rep.rule(t, rule.ID).Result == "not_applicable" {
+				continue
+			}
 			if slices.ContainsFunc(rule.Parts, func(p contract.Part) bool { return p.Kind != contract.Static }) {
 				notRun++
 			}
@@ -332,7 +337,7 @@ func TestContractAuditReportsEveryRule(t *testing.T) {
 		t.Errorf("contract = %+v, want 1.2.0 declared and audited", rep.Contract)
 	}
 	want := []string{
-		"V-01", "V-02", "V-03", "V-04", "H-01", "H-02", "C-01", "C-02", "C-03", "C-04", "C-05",
+		"V-01", "V-02", "V-03", "V-04", "V-05", "H-01", "H-02", "C-01", "C-02", "C-03", "C-04", "C-05",
 		"A-01", "A-02", "A-03", "A-04", "A-05", "A-06", "A-07", "A-08", "A-09", "D-01", "D-02", "D-03",
 		"R-01", "R-02", "R-03",
 	}

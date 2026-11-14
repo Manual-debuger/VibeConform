@@ -111,7 +111,19 @@ jobs:
           echo "COPY=$copy" >> "$GITHUB_ENV"
       - name: vibe audit
         working-directory: ${{ env.COPY }}
-        run: vibe audit
+        run: vibe audit | tee "$RUNNER_TEMP/audit.txt"
+      # Spec 0061: V-05 passes in the examples with a Python component and
+      # is not applicable in the TypeScript example. The text report lists
+      # every rule that does not pass, so a passing V-05 is not in it.
+      - name: V-05 passes, or is not applicable without Python
+        run: |
+          report="$RUNNER_TEMP/audit.txt"
+          if [ "$EXAMPLE" = typescript ]; then
+            grep -qx '  V-05  SHOULD  no component is Python' "$report"
+          elif grep -E '^  V-05  ' "$report"; then
+            echo "V-05 does not pass"
+            exit 1
+          fi
 
   monorepo-gitlab:
     name: examples/monorepo (GitLab CI)

@@ -1,6 +1,6 @@
 vibe audit: contract 1.2.0 (vibe test)
 
-  V  Verification entrypoints              1 FAIL, 3 cannot decide
+  V  Verification entrypoints              1 FAIL, 1 not applicable, 3 cannot decide
   H  Local Git hooks                       2 pass
   C  CI                                    4 pass, 1 not applicable
   A  Agent guardrails                      2 pass, 1 fail, 6 cannot decide
@@ -24,6 +24,7 @@ Waived
   R-03  SHOULD  until 2999-12-31: templates move to the org repository
 
 Not applicable
+  V-05  SHOULD  no component is Python
   C-05  SHOULD  platforms does not include windows
 
 Cannot decide
