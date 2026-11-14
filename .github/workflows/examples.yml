@@ -131,14 +131,15 @@ jobs:
           echo "COPY=$copy" >> "$GITHUB_ENV"
       # The verdict counts only MUST rules. The examples follow the
       # references, so the SHOULD rules of contract 1.2.0 pass too (spec
-      # 0061): every rule REQUIRED_SHOULD lists, and V-05 in the examples
-      # with a Python component. Without one V-05 is not applicable. The
+      # 0061): every rule REQUIRED_SHOULD lists (A-09 applies, since every
+      # example declares agents: [claude]), and V-05 in the examples with
+      # a Python component. Without one V-05 is not applicable. The
       # text report lists every rule that does not pass, indented by two
       # spaces, so a rule that passes is in no section of it.
       - name: vibe audit
         working-directory: ${{ env.COPY }}
         env:
-          REQUIRED_SHOULD: V-06 V-07 V-08
+          REQUIRED_SHOULD: V-06 V-07 V-08 A-09
         run: |
           report="$RUNNER_TEMP/audit.txt"
           status=0
