@@ -74,6 +74,13 @@ func hasPythonComponent(cfg *Config) (bool, string) {
 	return false, "no component is Python"
 }
 
+// checkV06Probe: with the complexity defect in each component, verify
+// exits non-zero (spec 0061). A component without tests leaves it
+// undecided.
+func checkV06Probe(env *Env) PartResult {
+	return defectProbe{rule: "V-06", entrypoint: EntrypointVerify, kinds: []defectKind{defectComplexity}}.run(env)
+}
+
 // checkV08Probe: with V-01's static-analysis defect under the language's
 // blanket suppressions planted in each component, verify exits non-zero.
 // A component without tests leaves it undecided (spec 0061).

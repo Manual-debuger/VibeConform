@@ -10,7 +10,7 @@ import (
 // The registry quotes spec 0051 (spec 0052, "Rule registry and results"):
 // each rule's sentence, check, level and source must match the spec's
 // rule table, and each part's check must be a piece of the whole check.
-func TestRegistryQuotesSpec0051(t *testing.T) {
+func TestRegistryQuotesSpec0051(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "specs", "0051-contract-v1.md"))
 	if err != nil {
 		t.Fatal(err)

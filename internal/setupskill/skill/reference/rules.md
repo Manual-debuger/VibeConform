@@ -74,6 +74,19 @@ in the `typecheck` task. A repository with no Python component gets "not
 applicable": in Go and TypeScript a type error is a compile error, which
 V-01 already shows.
 
+### V-06 (SHOULD): `verify` catches an over-complex function
+
+`verify` exits non-zero with a function of cyclomatic complexity 41 and
+cognitive complexity 40 planted in each component (Go: a non-test file).
+Any complexity limit of 40 or less, of either metric, catches it. Start
+from the lint references: `reference/lint/go/.golangci.yml` enables
+`gocyclo` (15) and `gocognit` (20), `reference/lint/python/ruff.toml`
+selects `C901` (15), and `reference/lint/typescript/eslint.config.js`
+enables `complexity` (15) and `sonarjs/cognitive-complexity` (20). The
+lint task runs in `verify` and `verify-fast`. Existing code over the limits gets a
+specific suppression with the reason `baseline: pre-existing complexity`
+(`reference/migrate.md`), not a raised threshold.
+
 ### V-08 (SHOULD): blanket suppressions do not hide a defect
 
 `verify` exits non-zero with V-01's static-analysis defect planted under

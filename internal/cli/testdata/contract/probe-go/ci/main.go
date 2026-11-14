@@ -44,6 +44,8 @@ func main() {
 		os.Exit(run("go", "test", "-vet=off", "./..."))
 	case "pytypecheck":
 		os.Exit(pyTypeCheck())
+	case "complexity":
+		os.Exit(complexity())
 	case "ok":
 		fmt.Println("ok")
 	case "fail":

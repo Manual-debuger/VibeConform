@@ -70,7 +70,7 @@ func TestRepositorySettingsRunTheReferenceHook(t *testing.T) {
 // CI's hook-guard workflow sets VIBE_GUARD_SETTINGS_E2E=1 on Linux and
 // Windows; the reference command's own corpus runs already cover the
 // same decisions in task verify, so this is skipped otherwise.
-func TestRepositorySettingsHookCorpus(t *testing.T) {
+func TestRepositorySettingsHookCorpus(t *testing.T) { //nolint:gocognit // baseline: pre-existing complexity
 	if os.Getenv("VIBE_GUARD_SETTINGS_E2E") == "" {
 		t.Skip("VIBE_GUARD_SETTINGS_E2E not set")
 	}

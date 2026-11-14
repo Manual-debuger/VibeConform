@@ -109,28 +109,36 @@ jobs:
           git add -A
           git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy"
           echo "COPY=$copy" >> "$GITHUB_ENV"
+      # The verdict counts only MUST rules. The examples follow the
+      # references, so the SHOULD rules of contract 1.2.0 pass too (spec
+      # 0061): every rule REQUIRED_SHOULD lists, and V-05 in the examples
+      # with a Python component. Without one V-05 is not applicable. The
+      # text report lists every rule that does not pass, indented by two
+      # spaces, so a rule that passes is in no section of it.
       - name: vibe audit
         working-directory: ${{ env.COPY }}
-        run: vibe audit | tee "$RUNNER_TEMP/audit.txt"
-      # Spec 0061: a conformant verdict allows failing SHOULD rules, but the
-      # examples pass the rules of 1.2.0 too. V-05 passes in the examples
-      # with a Python component and is not applicable in the TypeScript
-      # example; V-08 passes in all of them. The text report lists every
-      # rule that does not pass, indented by two spaces, so a passing rule
-      # is not in it.
-      - name: The rules of spec 0061 pass, V-05 not applicable without Python
+        env:
+          REQUIRED_SHOULD: V-06 V-08
         run: |
           report="$RUNNER_TEMP/audit.txt"
+          status=0
+          vibe audit > "$report" || status=$?
+          cat "$report"
           if [ "$EXAMPLE" = typescript ]; then
-            grep -qx '  V-05  SHOULD  no component is Python' "$report"
-          elif grep -E '^  V-05  ' "$report"; then
-            echo "V-05 does not pass"
-            exit 1
+            if ! grep -qx '  V-05  SHOULD  no component is Python' "$report"; then
+              echo "::error::V-05 is not 'not applicable'"
+              status=1
+            fi
+          else
+            REQUIRED_SHOULD="V-05 $REQUIRED_SHOULD"
           fi
-          if grep -E '^  V-08  ' "$report"; then
-            echo "V-08 does not pass"
-            exit 1
-          fi
+          for id in $REQUIRED_SHOULD; do
+            if grep -q "^  $id  " "$report"; then
+              echo "::error::$id does not pass"
+              status=1
+            fi
+          done
+          exit "$status"
 
   monorepo-gitlab:
     name: examples/monorepo (GitLab CI)

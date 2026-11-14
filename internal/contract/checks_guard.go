@@ -293,7 +293,7 @@ func checkA09(env *Env) PartResult {
 // tools, for the probe of rule, and returns the verdict on every case and
 // the verdict on the deny cases alone. ok is false when it decided
 // before running a case, and deny is then not set.
-func feedCorpus(env *Env, s *probeSession, rule string, cases []GuardCase) (result, denyResult PartResult, ok bool) {
+func feedCorpus(env *Env, s *probeSession, rule string, cases []GuardCase) (result, denyResult PartResult, ok bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	hooks, res, ok := preToolUseHooks(env)
 	if !ok {
 		return res, PartResult{}, false

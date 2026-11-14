@@ -48,7 +48,7 @@ var (
 // pinned tool, they name the version refPins holds, and every action is
 // pinned at the same commit in each file, so a pin bump cannot leave one
 // reference behind.
-func TestSkillCIMatchesPins(t *testing.T) {
+func TestSkillCIMatchesPins(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	env := map[string]string{
 		"GO_VERSION":            refPins.Go,
 		"TASK_VERSION":          refPins.Task,

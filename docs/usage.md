@@ -305,8 +305,8 @@ The setup skill's upgrade flow reads the contract version from it.
 
 `vibe audit` reads `vibe.yaml` version 2 (a top-level `contract:` key,
 see "`vibe.yaml` version 2" below) and checks the repository against the
-rules of the contract version it declares: 28 rules in contract 1.2.0,
-in six categories (spec 0051, spec 0052, spec 0055). Each rule ends as
+rules of the contract version it declares, in six categories (spec
+0051, spec 0052, spec 0055, spec 0061). Each rule ends as
 `pass`, `fail`, `not applicable`, `waived`, `cannot decide` or `not
 run`. A full run decides every part of every
 rule: the static checks, then the execution checks and probes in a
@@ -326,7 +326,8 @@ directory that holds the working-tree content of every tracked file,
 committed once. Every execution and probe part runs there, one after
 another, from a reset copy: `setup`, A-07, V-03, the baseline runs of
 `verify` and `verify-fast`, the *planted defects* of V-01, V-02, V-05,
-V-08 and A-05, the guard corpus of A-02, A-03 and A-08, D-01 and R-01. The copy is
+V-06, V-08 and A-05, the guard corpus of A-02, A-03 and A-08, D-01 and
+R-01. The copy is
 deleted at the end, also after a failure or an interrupt, and the
 repository's working tree, index and `.git` never change.
 
@@ -345,17 +346,26 @@ repository's working tree, index and `.git` never change.
   A-03 probes run whatever the PreToolUse hook runs, so a repository
   using `vibe-guard` needs it installed.
 - **Time.** A full audit runs `verify` and `verify-fast` once each plus
-  three times per component, `verify` once more per component (V-08's
-  blanket suppressions) and once more per Python component (V-05's type
-  error), the Stop hook three times, and the whole guard corpus through the PreToolUse hook twice. On this repository
+  three times per component, `verify` once more per component for each
+  of V-06 (complexity) and V-08 (blanket suppressions) and once more per
+  Python component (V-05's type error), the Stop hook three times, and
+  the whole guard corpus through the PreToolUse hook twice. On this repository
   that is several minutes to an hour, mostly `task test`. `--static`
   stays the quick local run.
 - **Progress.** In text mode each run prints a line on stderr ("vibe
   audit: verify with the static-analysis defect in ."). `--json` keeps
   stdout to the JSON document.
-- `vibe audit --explain V-01`, `V-02`, `V-05` and `V-08` print the defect
-  samples;
+- `vibe audit --explain V-01`, `V-02`, `V-05`, `V-06` and `V-08` print
+  the defect samples;
   `--explain A-02` and `A-03` print the guard corpus counts by rule ID.
+
+**V-06, complexity** (SHOULD, spec 0061). The planted function has
+cyclomatic complexity 41 and cognitive complexity 40, so any complexity
+limit of 40 or less, of either metric, catches it; the Go sample is a
+non-test file. The contract checks that a limit exists, not how strict
+it is. What it cannot catch: a threshold lowered to just under 41, a
+specific suppression on new code, and a complex function split into
+meaningless pieces (ADR 0027). Review catches those.
 
 **Flags:**
 
@@ -569,7 +579,7 @@ separately from the contract; it is `1`.
   `fail`, `not_applicable`, `waived`, `undecided`, `not_run`. `summary`
   has every token for both levels.
 - Verdict tokens: `conformant`, `not_conformant`, `undecided`.
-- `rules` lists all 28 rules in ID order. `parts[].check` is `static`,
+- `rules` lists every rule in ID order. `parts[].check` is `static`,
   `execution` or `probe`.
 - `waiver` is `null`, or `{"reason", "until", "expired"}`. A rule with a
   waiver and result `not_applicable` has an unused waiver.
@@ -1625,9 +1635,20 @@ repository is an ordinary file, edited directly.
 - `.github/workflows/examples.yml` copies each of `examples/typescript`,
   `examples/python` and `examples/monorepo` into a fresh Git repository
   and runs the full audit there, on Linux and Windows; each must be
-  conformant. Its GitLab job audits the monorepo example with the
-  reference `.gitlab-ci.yml` in place of the GitHub workflows (the real
-  GitLab pipeline is not run, #74).
+  conformant, and the SHOULD rules of contract 1.2.0 must pass (V-05
+  only with a Python component; without one it is not applicable). Its
+  GitLab job audits the monorepo example with the reference
+  `.gitlab-ci.yml` in place of the GitHub workflows (the real GitLab
+  pipeline is not run, #74).
+- `.github/workflows/negative-control.yml` switches off one gate in an
+  example (Pyright for V-05, the complexity linters for V-06, the
+  suppression rules for V-08) and requires the rule to fail, so that each planted sample is shown to fail only because of its
+  own defect kind. It runs when a pull request changes the samples, the
+  setup skill's references or the examples, weekly, and on demand.
+- `.golangci.yml` enables `gocyclo` (15) and `gocognit` (20). The
+  functions that were over those limits when they were enabled carry
+  `//nolint:gocognit,gocyclo // baseline: pre-existing complexity` (only
+  the linters that report them); new code meets the limits.
 - `Taskfile.local.yml` holds this repository's own tasks (`task build`
   and others), included optionally by `Taskfile.yml`.
 

@@ -93,7 +93,7 @@ func (p *psParser) skipComment() (bool, error) {
 
 // statements reads statements until close (0 for the end of input),
 // which it consumes. In a hashtable each statement is key = value.
-func (p *psParser) statements(close rune, hashtable bool) error {
+func (p *psParser) statements(close rune, hashtable bool) error { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	for {
 		for !p.eof() {
 			if r := p.peek(0); isBlank(r) || r == '\n' || r == ';' {
@@ -177,7 +177,7 @@ var psKeywords = []string{
 }
 
 // element reads one pipeline element: a command or an expression.
-func (p *psParser) element(expressionOnly bool) error {
+func (p *psParser) element(expressionOnly bool) error { //nolint:gocyclo // baseline: pre-existing complexity
 	p.skipSpaces()
 	if expressionOnly {
 		return p.expression()
@@ -223,7 +223,7 @@ func (p *psParser) bareword() string {
 // expression skips an expression up to the end of its statement, reading
 // the commands inside its parentheses and blocks, and the pipeline
 // after an assignment.
-func (p *psParser) expression() error {
+func (p *psParser) expression() error { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	for !p.eof() {
 		r := p.peek(0)
 		switch {
@@ -294,7 +294,7 @@ func (p *psParser) expression() error {
 
 // command reads a command: its name, then its arguments and
 // redirections. After & or . (invoked), the name may be any word.
-func (p *psParser) command(invoked bool) error {
+func (p *psParser) command(invoked bool) error { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	at := len(p.out)
 	c := Command{Shell: ShellPowerShell}
 	for {
@@ -358,7 +358,7 @@ func (p *psParser) command(invoked bool) error {
 
 // redirect reads a redirection at the cursor: >, >>, n>, n>>, *>, *>>,
 // or a stream merge such as 2>&1, which has no target.
-func (p *psParser) redirect(c *Command) (bool, error) {
+func (p *psParser) redirect(c *Command) (bool, error) { //nolint:gocyclo // baseline: pre-existing complexity
 	j := p.i
 	if j < len(p.src) && (p.src[j] == '*' || (p.src[j] >= '1' && p.src[j] <= '6')) {
 		j++
@@ -389,7 +389,7 @@ func (p *psParser) redirect(c *Command) (bool, error) {
 }
 
 // word reads one argument-mode word.
-func (p *psParser) word() (Word, error) {
+func (p *psParser) word() (Word, error) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	w := Word{Literal: true}
 	var b strings.Builder
 	start := true
@@ -538,7 +538,7 @@ func (p *psParser) double(w *Word, b *strings.Builder) error {
 }
 
 // escape reads a backtick escape inside a double-quoted string.
-func (p *psParser) escape(b *strings.Builder) {
+func (p *psParser) escape(b *strings.Builder) { //nolint:gocyclo // baseline: pre-existing complexity
 	if p.i+1 >= len(p.src) {
 		p.i++
 		return
@@ -582,7 +582,7 @@ func (p *psParser) escape(b *strings.Builder) {
 
 // variable reads $name, ${name}, $(…) or a lone $. $true, $false and
 // $null are constants and stay literal.
-func (p *psParser) variable(w *Word, b *strings.Builder, quoted bool) error {
+func (p *psParser) variable(w *Word, b *strings.Builder, quoted bool) error { //nolint:gocyclo // baseline: pre-existing complexity
 	expansion := func() {
 		w.Literal = false
 		if !quoted {

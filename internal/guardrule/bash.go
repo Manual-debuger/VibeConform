@@ -9,7 +9,7 @@ import (
 
 // parseBash parses src as Bash (the Bash tool runs bash) and returns its
 // simple commands in source order, outer before inner.
-func parseBash(src string) ([]Command, error) {
+func parseBash(src string) ([]Command, error) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	f, err := syntax.NewParser(syntax.Variant(syntax.LangBash)).Parse(strings.NewReader(src), "")
 	if err != nil {
 		return nil, &ParseError{Shell: ShellBash, Msg: err.Error()}
@@ -177,7 +177,7 @@ func Unescape(s string, inDouble bool) string {
 }
 
 // ansiC decodes the body of a $'…' string, as bash does.
-func ansiC(s string) string {
+func ansiC(s string) string { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' || i+1 == len(s) {

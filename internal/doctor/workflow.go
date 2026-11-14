@@ -20,7 +20,7 @@ var entrypointOrder = append(slices.Clone(contract.RequiredEntrypoints), contrac
 // is not one simple command, as V-04 reads it, has no program to look
 // for: its line is UNVERIFIED, and V-04 reports it. Undeclared entrypoints
 // are V-04's too.
-func Entrypoints(env Env, repoRoot string, eps contract.Entrypoints) []Result {
+func Entrypoints(env Env, repoRoot string, eps contract.Entrypoints) []Result { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	type program struct {
 		name        string
 		entrypoints []string

@@ -170,7 +170,7 @@ func TestAuditExplainTypeErrorSample(t *testing.T) {
 // --explain A-02 and A-03 print the guard corpus's counts by guard rule
 // ID (spec 0053, "Report and CLI"). The expected counts are taken from
 // the corpus data.
-func TestAuditExplainGuardCorpusCounts(t *testing.T) {
+func TestAuditExplainGuardCorpusCounts(t *testing.T) { //nolint:gocognit // baseline: pre-existing complexity
 	t.Parallel()
 	deny, allow := 0, 0
 	byRule := map[string]int{}

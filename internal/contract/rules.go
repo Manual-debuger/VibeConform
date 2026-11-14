@@ -219,9 +219,9 @@ func needsAgents(cfg *Config) (bool, string) {
 
 const notApplicableWithoutClaude = "when `agents` does not include `claude`"
 
-// rules is contract 1.0.0's rule table, in report order: 16 MUST and 9
-// SHOULD rules. Rule sentences, checks and sources are spec 0051's,
-// verbatim.
+// rules is the rule table, in report order: contract 1.0.0's 16 MUST and
+// 9 SHOULD rules, whose sentences, checks and sources are spec 0051's
+// verbatim, and the SHOULD rules contract 1.2.0 adds (spec 0061).
 var rules = []Rule{
 	{
 		ID: "V-01", Level: Must, Category: CategoryVerification,
@@ -277,6 +277,17 @@ var rules = []Rule{
 				"Components in other languages are skipped: there a type error is a compile error, which V-01 shows.", checkV05Probe),
 		},
 		applies: onConfig(hasPythonComponent),
+	},
+	{
+		ID: "V-06", Level: Should, Category: CategoryVerification, Since: "1.2.0",
+		Title: "`verify` catches an over-complex function",
+		Check: "Probe: with the complexity defect (a function of cyclomatic complexity 41 and cognitive complexity 40) " +
+			"in each component, `verify` exits non-zero. A complexity limit of 40 or less, of either metric, catches it.",
+		Source: "spec 0061, ADR 0027",
+		Parts: []Part{
+			probeRun("with the complexity defect (a function of cyclomatic complexity 41 and cognitive complexity 40) "+
+				"in each component, `verify` exits non-zero. A complexity limit of 40 or less, of either metric, catches it.", checkV06Probe),
+		},
 	},
 	{
 		ID: "V-08", Level: Should, Category: CategoryVerification, Since: "1.2.0",

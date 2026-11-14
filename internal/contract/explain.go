@@ -17,6 +17,14 @@ var ruleDetails = map[string]func() string{
 			"  checker that verify runs satisfies the rule, such as Pyright in its\n" +
 			"  standard mode or mypy.\n"
 	},
+	"V-06": func() string {
+		return fmt.Sprintf("Threshold:\n  The sample's cyclomatic complexity is %d and its cognitive complexity %d,\n"+
+			"  so a limit of %d or less, of either metric, catches it. A specific\n"+
+			"  suppression (one rule at one function, with a reason) is the\n"+
+			"  repository's choice; the sample carries none.\n\n",
+			complexityBranches+1, complexityBranches, complexityBranches) +
+			defectSamplesText([]defectKind{defectComplexity})
+	},
 	"V-08": v08Details,
 	"A-09": a09CasesText,
 }

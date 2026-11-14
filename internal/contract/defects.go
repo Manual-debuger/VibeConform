@@ -32,6 +32,8 @@ const (
 	// defectTypeError is V-05's kind. Only Python has a sample: in Go and
 	// TypeScript a type error is a compile error, which V-01 shows.
 	defectTypeError defectKind = "type error"
+	// defectComplexity is V-06's kind.
+	defectComplexity defectKind = "complexity"
 )
 
 // defectSample is one planted file. In Content, {{package}} stands for
@@ -56,6 +58,7 @@ var defectCatchers = map[defectKind]string{
 	defectTypeError:      "a type checker",
 	defectBlanketSuppression: "static analysis that a suppression comment naming no rule cannot switch off " +
 		"(golangci-lint's nolintlint, Ruff's PGH004, eslint-comments' no-unlimited-disable)",
+	defectComplexity: "a complexity limit of 40 or less (cyclomatic or cognitive)",
 }
 
 // defectSamples holds the samples by language and kind. Spec 0053
@@ -81,6 +84,7 @@ var defectSamples = map[string]map[defectKind]defectSample{
 		defectTest: {Name: "vibe_probe_test.go", Content: "// Planted by vibe audit: a test that fails (the test defect).\n\n" +
 			"package {{package}}\n\nimport \"testing\"\n\n" +
 			"func TestVibeProbe(t *testing.T) { t.Fatal(\"planted by vibe audit: this test fails\") }\n"},
+		defectComplexity: complexitySample(LanguageGo),
 	},
 	LanguagePython: {
 		defectFormat: {Name: "vibe_probe_format.py", Content: "# Planted by vibe audit: an unformatted file (the format defect).\n" +
@@ -95,6 +99,7 @@ var defectSamples = map[string]map[defectKind]defectSample{
 			"def test_vibe_probe() -> None:\n    assert False, \"planted by vibe audit: this test fails\"\n"},
 		defectTypeError: {Name: "vibe_probe_type_error.py", Content: "# Planted by vibe audit: a function annotated -> int that returns a string (the type-error defect).\n" +
 			"def vibe_probe_type_error() -> int:\n    return \"vibe audit\"\n"},
+		defectComplexity: complexitySample(LanguagePython),
 	},
 	LanguageTypeScript: {
 		defectFormat: {Name: "vibe_probe_format.ts", Content: "// Planted by vibe audit: an unformatted file (the format defect).\n" +
@@ -111,6 +116,7 @@ var defectSamples = map[string]map[defectKind]defectSample{
 			"export const vibeProbe: number = vibeProbeUndefinedName\n"},
 		defectTest: {Name: "vibe_probe.test.ts", Content: "// Planted by vibe audit: a test file that throws when it is loaded (the test defect).\n" +
 			"export {};\n\nthrow new Error(\"planted by vibe audit: this test fails\");\n"},
+		defectComplexity: complexitySample(LanguageTypeScript),
 	},
 }
 

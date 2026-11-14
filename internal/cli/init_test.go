@@ -61,7 +61,7 @@ func under(dir string, edits []fixtureEdit) []fixtureEdit {
 // parser reads. The audit then fails V-04 for the four undeclared
 // entrypoints, and every other failure only sends the reader to V-04
 // (spec 0059, Desired Behavior 10).
-func TestInitWritesAConfigTheAuditReads(t *testing.T) {
+func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	t.Parallel()
 	monorepo := slices.Concat(withoutGo,
 		[]fixtureEdit{withFile("services/api/go.mod", "module example.com/api\n\ngo 1.24\n")},

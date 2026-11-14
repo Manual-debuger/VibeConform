@@ -228,7 +228,7 @@ var gitRepoVariables = []string{
 // lookPath finds a program the way a shell would on the run's PATH, with
 // PATHEXT on Windows. A name with a path separator is taken relative to
 // dir. It returns "" when nothing is found.
-func lookPath(name string, env []string, dir string) string {
+func lookPath(name string, env []string, dir string) string { //nolint:gocognit // baseline: pre-existing complexity
 	exts := []string{""}
 	if runtime.GOOS == "windows" {
 		pathext, _ := envGet(env, "PATHEXT")

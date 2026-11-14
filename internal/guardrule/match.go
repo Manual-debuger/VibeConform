@@ -109,7 +109,7 @@ func (e Exception) MatchesCommand(c Command) bool {
 // unknown, an Unknown word of c matches the rest of the prefix, and an
 // operand matches one word: the reading a deny rule uses (spec 0053,
 // "Unknown words"). Without it, every compared word must be literal.
-func prefixMatch(m, c Command, unknown bool) bool {
+func prefixMatch(m, c Command, unknown bool) bool { //nolint:gocognit // baseline: pre-existing complexity
 	if len(m.Words) == 0 || len(c.Words) == 0 {
 		return false
 	}

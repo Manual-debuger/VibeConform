@@ -13,7 +13,7 @@ import (
 
 // unwrap returns the command a wrapper runs, and the wrapper's label.
 // ok is false when c is no wrapper, or a wrapper that runs nothing.
-func unwrap(c Command) (inner Command, label string, ok bool) {
+func unwrap(c Command) (inner Command, label string, ok bool) { //nolint:gocyclo // baseline: pre-existing complexity
 	name := c.Name()
 	if len(c.Words) < 2 {
 		return Command{}, "", false
@@ -82,7 +82,7 @@ type options struct {
 // skipOptions returns the words after a wrapper's options: the command
 // it runs. A non-literal word ends the options, so a dynamic option list
 // makes the command name dynamic.
-func skipOptions(args []Word, o options) []Word {
+func skipOptions(args []Word, o options) []Word { //nolint:gocognit // baseline: pre-existing complexity
 	for i := 0; i < len(args); i++ {
 		w := args[i]
 		if !w.Literal {
@@ -200,7 +200,7 @@ func bashQuoteWord(w Word) string {
 // from its input, which can be anything, so an Unknown word is added at
 // the end. With a replacement string (-I), each word holding it is
 // Unknown instead.
-func unwrapXargs(c Command) (Command, string, bool) {
+func unwrapXargs(c Command) (Command, string, bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	args := c.Words[1:]
 	replace := ""
 	i := 0
@@ -384,7 +384,7 @@ func (a parsedArgs) value(names ...string) (string, bool) {
 // scanArgs reads args with o's options taking an argument; sed's -i
 // takes an optional one, attached. Options may follow operands, and "--"
 // ends them. A word with an expansion is an operand.
-func scanArgs(args []Word, o options) parsedArgs {
+func scanArgs(args []Word, o options) parsedArgs { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	var a parsedArgs
 	add := func(opt, value string) { a.opts, a.values = append(a.opts, opt), append(a.values, value) }
 	for i := 0; i < len(args); i++ {
@@ -543,7 +543,7 @@ var psWriterAliases = map[string]string{
 
 // written reads a cmdlet's arguments (without its name) and returns the
 // items it writes.
-func (p psWriter) written(args []Word) []Word {
+func (p psWriter) written(args []Word) []Word { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	values := map[string][]Word{}
 	var positional []Word
 	for i := 0; i < len(args); i++ {

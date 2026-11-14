@@ -60,6 +60,11 @@ repository's own additions:
     rules if they let it run as a child pipeline
     (`$CI_PIPELINE_SOURCE == "parent_pipeline"`). The monorepo reference
     `.gitlab-ci.yml` shows the trigger job.
+- The merged lint configuration gets the complexity limits of
+  `reference/lint/` (`reference/rules.md`, V-06). Each function that
+  already exceeds them gets a specific suppression with the reason
+  `baseline: pre-existing complexity` (`reference/upgrade.md`, "From
+  contract 1.1 to 1.2"), not a raised threshold.
 - `.claude/hooks/policy.local.json` → the `rules` and `exceptions` of
   `.claude/hooks/policy.json` version 2, which step 5 writes. Each
   exception needs a guard rule ID, a `match` and a `reason`.

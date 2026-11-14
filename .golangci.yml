@@ -15,7 +15,9 @@ linters:
     - bodyclose
     - depguard
     - errorlint
+    - gocognit
     - gocritic
+    - gocyclo
     - gosec
     - misspell
     - nakedret
@@ -30,6 +32,15 @@ linters:
     nolintlint:
       require-specific: true
       require-explanation: true
+    # A complexity limit catches the contract's planted complexity defect
+    # (V-06, a function of cyclomatic complexity 41 and cognitive
+    # complexity 40). Existing code over the limits gets a specific
+    # suppression with the reason "baseline: pre-existing complexity",
+    # not a higher limit.
+    gocyclo:
+      min-complexity: 15
+    gocognit:
+      min-complexity: 20
     # The dependency direction in docs/architecture/overview.md:
     # internal/contract and internal/guard both depend on
     # internal/guardrule, never on each other. (internal/guardrule

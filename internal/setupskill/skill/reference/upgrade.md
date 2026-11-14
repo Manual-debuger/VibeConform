@@ -34,6 +34,21 @@ Compare the MAJOR parts (the X).
 4. Run the audit loop (`SKILL.md`, step 6). A new MINOR may add SHOULD
    rules; see `reference/rules.md`.
 
+### From contract 1.1 to 1.2
+
+Contract 1.2.0 adds SHOULD rules. Bring the repository's configuration
+in line with the references for each of them:
+
+- V-06: add the complexity limits of the lint reference for each
+  language (`reference/rules.md`, V-06). Give each function that already
+  exceeds them a specific suppression with the reason
+  `baseline: pre-existing complexity`, for example
+  `//nolint:gocognit // baseline: pre-existing complexity`,
+  `# noqa: C901  # baseline: pre-existing complexity` or
+  `// eslint-disable-next-line complexity -- baseline: pre-existing complexity`.
+  Do not raise a threshold to make old code pass. New code meets the
+  limits.
+
 ## 3b. New MAJOR
 
 A new MAJOR may tighten a rule, add a MUST rule or add a guard corpus

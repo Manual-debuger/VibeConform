@@ -335,7 +335,7 @@ func nested(c Command) (nestedScript, bool) {
 // after the options, when some option cluster holds c. With no -c and no
 // operand, the shell reads its script from a here-document or
 // here-string, if one is given.
-func posixShellScript(name string, args []Word, stdin *Word) (nestedScript, bool) {
+func posixShellScript(name string, args []Word, stdin *Word) (nestedScript, bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	sawC := false
 	for i := 0; i < len(args); i++ {
 		w := args[i]
@@ -380,7 +380,7 @@ func posixShellScript(name string, args []Word, stdin *Word) (nestedScript, bool
 // runs: every word after -Command, joined. powershell also runs its
 // first operand as a command; pwsh runs it as a file. An encoded command
 // is unknown, so its nested command is dynamic.
-func powerShellScript(name string, args []Word) (nestedScript, bool) {
+func powerShellScript(name string, args []Word) (nestedScript, bool) { //nolint:gocyclo // baseline: pre-existing complexity
 	label := name + " -c"
 	for i := 0; i < len(args); i++ {
 		w := args[i]
