@@ -23,9 +23,6 @@ const (
 	defectFormat         defectKind = "format"
 	defectStaticAnalysis defectKind = "static analysis"
 	defectTest           defectKind = "test"
-	// defectBlanketSuppression is V-01's static-analysis defect under the
-	// language's blanket suppressions (spec 0061, V-08).
-	defectBlanketSuppression defectKind = "blanket suppression"
 )
 
 // The defect kinds of spec 0061.
@@ -37,6 +34,9 @@ const (
 	defectComplexity defectKind = "complexity"
 	// defectSecret is V-07's kind.
 	defectSecret defectKind = "secret"
+	// defectBlanketSuppression is V-08's kind: V-01's static-analysis
+	// defect under the language's blanket suppressions.
+	defectBlanketSuppression defectKind = "blanket suppression"
 )
 
 // defectSample is one planted file. In Content, {{package}} stands for
@@ -52,6 +52,18 @@ type defectSample struct {
 // plant them.
 var v01Kinds = []defectKind{defectFormat, defectStaticAnalysis, defectTest}
 
+// ruleDefectKinds lists, by rule ID, the defect kinds the rule's
+// planted-defect probe plants, in the order it plants them. The probes
+// and --explain both read it.
+var ruleDefectKinds = map[string][]defectKind{
+	"V-01": v01Kinds,
+	"V-02": v01Kinds,
+	"V-05": {defectTypeError},
+	"V-06": {defectComplexity},
+	"V-07": {defectSecret},
+	"V-08": {defectBlanketSuppression},
+}
+
 // defectCatchers names, by defect kind, what an entrypoint must run to
 // catch it. A probe's Fix lists the catchers of the kinds it missed.
 var defectCatchers = map[defectKind]string{
@@ -61,7 +73,7 @@ var defectCatchers = map[defectKind]string{
 	defectTypeError:      "a type checker",
 	defectBlanketSuppression: "static analysis that a suppression comment naming no rule cannot switch off " +
 		"(golangci-lint's nolintlint, Ruff's PGH004, eslint-comments' no-unlimited-disable)",
-	defectComplexity: "a complexity limit of 40 or less (cyclomatic or cognitive)",
+	defectComplexity: fmt.Sprintf("a complexity limit of %d or less (cyclomatic or cognitive)", complexityLimit),
 	defectSecret:     "a secret scanner over the working tree's files",
 }
 

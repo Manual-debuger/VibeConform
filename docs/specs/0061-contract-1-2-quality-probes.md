@@ -440,7 +440,17 @@ above stay as approved; these notes record what was built instead.
 9. **A-09 in `vibe-guard`.** Beyond the corpus, the guard also refuses
    `--config-env` that sets `core.hooksPath`, and a `git commit` or
    `git push` with an unquoted expansion before `--`, since it cannot
-   tell whether the expansion skips the hooks.
+   tell whether the expansion skips the hooks. For the same reason it
+   refuses a `-c` or `--config-env` setting whose key holds an
+   expansion, quoted or not (`git -c "$key=x" commit`), and a
+   `LEFTHOOK` or `HUSKY` assignment whose value is not a literal
+   (`LEFTHOOK="$v" git commit`), not only the value `0`. A literal
+   value other than `0` (`LEFTHOOK=1`) is allowed.
+   `GuardCorpusCounts`, which `vibe audit --explain A-02` and `A-03`
+   print, leaves out a guard rule ID with no deny case in the corpus it
+   counts. A-02's and A-03's corpus has no `git-skip-hooks` case, so
+   their explain output does not list that ID, and it no longer lists
+   any other ID with a count of 0 either.
 10. **Probe test-log cap.** On Windows, every `git` call in the probe
     copy searched `PATH` again, and `go test` records each file stat in
     its test log. With the new probes' extra resets, the `internal/cli`
@@ -448,3 +458,15 @@ above stay as approved; these notes record what was built instead.
     (`testLogLimit`), and
     `task audit` failed V-01 and R-01. A probe session now finds `git`
     on `PATH` once (bc2e574, merged with #152).
+11. **V-06 sample: 41 `if` statements, not 40.** gocyclo, gocognit,
+    Ruff's `C901`, ESLint's `complexity` and sonarjs's
+    `cognitive-complexity` all report a function whose complexity is
+    above their limit, not at it. With 40 `if` statements the sample's
+    cognitive complexity is 40, so a cognitive limit of 40 (gocognit
+    `min-complexity: 40`) reported nothing, and "a limit of 40 or less,
+    of either metric, catches it" was false. The sample has 41 `if`
+    statements: cyclomatic complexity 42, cognitive complexity 41. Each
+    of the five linters at a limit of 40 reports it (golangci-lint
+    2.15.0, Ruff 0.17.5, ESLint 10.15.0 with eslint-plugin-sonarjs
+    4.2.2), so the claim holds as written. `vibe` derives every number
+    it prints from the sample's `if` count.

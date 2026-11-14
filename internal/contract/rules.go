@@ -281,12 +281,12 @@ var rules = []Rule{
 	{
 		ID: "V-06", Level: Should, Category: CategoryVerification, Since: "1.2.0",
 		Title: "`verify` catches an over-complex function",
-		Check: "Probe: with the complexity defect (a function of cyclomatic complexity 41 and cognitive complexity 40) " +
-			"in each component, `verify` exits non-zero. A complexity limit of 40 or less, of either metric, catches it.",
+		Check: "Probe: with the complexity defect (" + complexityFunction + ") " +
+			"in each component, `verify` exits non-zero. " + complexityCatches,
 		Source: "spec 0061, ADR 0027",
 		Parts: []Part{
-			probeRun("with the complexity defect (a function of cyclomatic complexity 41 and cognitive complexity 40) "+
-				"in each component, `verify` exits non-zero. A complexity limit of 40 or less, of either metric, catches it.", checkV06Probe),
+			probeRun("with the complexity defect ("+complexityFunction+") "+
+				"in each component, `verify` exits non-zero. "+complexityCatches, checkV06Probe),
 		},
 	},
 	{

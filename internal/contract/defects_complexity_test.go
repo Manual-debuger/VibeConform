@@ -14,7 +14,7 @@ import (
 // The Go complexity sample of V-06 (spec 0061, "V-06, complexity") is a
 // non-test file that builds and passes go vet beside the component's
 // code, so that only a complexity limit can catch it. It is one exported
-// function with a doc comment, of one integer parameter, holding 40
+// function with a doc comment, of one integer parameter, holding 41
 // consecutive unnested if statements and one return statement.
 func TestGoComplexitySampleBuildsAndPassesVet(t *testing.T) {
 	t.Parallel()
@@ -38,8 +38,8 @@ func TestGoComplexitySampleBuildsAndPassesVet(t *testing.T) {
 		t.Errorf("func %s: want one int parameter", fn.Name.Name)
 	}
 	ifs, returns, other := countStatements(t, fn.Body)
-	if ifs != 40 || returns != 1 || other != 1 {
-		t.Errorf("%d if statements, %d returns and %d other statements; want 40, 1 and 1 (the running total)", ifs, returns, other)
+	if ifs != 41 || returns != 1 || other != 1 {
+		t.Errorf("%d if statements, %d returns and %d other statements; want 41, 1 and 1 (the running total)", ifs, returns, other)
 	}
 }
 
@@ -111,13 +111,47 @@ func identName(e ast.Expr) string {
 }
 
 // vibe audit --explain V-06 prints the complexity sample of every
-// language and the threshold it implies.
+// language and the threshold it implies. Complexity linters report a
+// value above their limit, so the sample's cognitive complexity of 41 is
+// what makes a limit of 40 catch it.
 func TestV06ExplainListsEveryLanguage(t *testing.T) {
 	t.Parallel()
 	text := RuleDetails("V-06")
-	for _, want := range []string{"Go, complexity", "Python, complexity", "TypeScript, complexity", "40"} {
+	for _, want := range []string{
+		"Go, complexity", "Python, complexity", "TypeScript, complexity",
+		"cyclomatic complexity is 42 and its cognitive complexity 41", "a limit of 40 or less",
+	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("--explain V-06 lacks %q:\n%s", want, text)
 		}
+	}
+}
+
+// V-06's rule text states the sample's complexities and the largest
+// limit that catches it, in the check and in its probe part.
+func TestV06RuleTextStatesTheThreshold(t *testing.T) {
+	t.Parallel()
+	r, ok := LookupRule("V-06")
+	if !ok {
+		t.Fatal("no rule V-06")
+	}
+	texts := []string{r.Check}
+	for _, p := range r.Parts {
+		texts = append(texts, p.Check)
+	}
+	for _, text := range texts {
+		for _, want := range []string{"cyclomatic complexity 42 and cognitive complexity 41", "A complexity limit of 40 or less"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("V-06 text lacks %q: %s", want, text)
+			}
+		}
+	}
+}
+
+// The catcher a V-06 finding names states the same limit.
+func TestV06CatcherStatesTheThreshold(t *testing.T) {
+	t.Parallel()
+	if got := defectCatchers[defectComplexity]; !strings.Contains(got, "a complexity limit of 40 or less") {
+		t.Errorf("complexity catcher %q lacks the limit 40", got)
 	}
 }

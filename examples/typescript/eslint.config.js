@@ -86,8 +86,8 @@ export default tseslint.config(
   },
   {
     // Complexity limits catch the contract's planted complexity defect
-    // (V-06, a function of cyclomatic complexity 41 and cognitive
-    // complexity 40). A function already over a limit gets a specific
+    // (V-06, a function of cyclomatic complexity 42 and cognitive
+    // complexity 41). A function already over a limit gets a specific
     // suppression with a reason,
     // `// eslint-disable-next-line complexity -- baseline: pre-existing complexity`,
     // not a higher limit.

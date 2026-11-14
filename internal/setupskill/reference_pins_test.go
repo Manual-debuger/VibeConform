@@ -2,6 +2,8 @@ package setupskill_test
 
 import (
 	"io/fs"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -18,8 +20,16 @@ import (
 // refPins are the toolchain versions the reference CI files name: the
 // values of internal/module/ci/pins.Current when spec 0059 removed it.
 // A bump changes the reference files and this table together.
+//
+// Gitleaks is the release every gitleaks install step downloads for the
+// secrets task (spec 0061, V-07), and the two SHA-256 fields are the
+// checksums of its archives that the steps check. They hold for the
+// reference CI files, this repository's workflows and the examples'
+// workflows alike (TestGitleaksInstallsMatchPins).
 var refPins = struct {
 	Go, Task, GolangciLint, Goimports, Govulncheck, Actionlint, Node, Python string
+
+	Gitleaks, GitleaksLinuxSHA256, GitleaksWindowsSHA256 string
 }{
 	Go:           "1.27.0",
 	Task:         "v3.53.1",
@@ -29,6 +39,10 @@ var refPins = struct {
 	Actionlint:   "v1.7.12",
 	Node:         "22",
 	Python:       "3.12",
+
+	Gitleaks:              "8.30.1",
+	GitleaksLinuxSHA256:   "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+	GitleaksWindowsSHA256: "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e",
 }
 
 const setupAction = "Manual-debuger/VibeConform"
@@ -145,14 +159,6 @@ func TestSkillCIMatchesPins(t *testing.T) { //nolint:gocognit,gocyclo // baselin
 	}
 }
 
-// The gitleaks release the reference CI files install for the secrets
-// task (spec 0061, V-07), and the SHA-256 of each archive they check.
-const (
-	gitleaksVersion = "8.30.1"
-	gitleaksLinux   = "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
-	gitleaksWindows = "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
-)
-
 // TestSkillCIInstallsGitleaks: every reference CI file runs verify, or
 // vibe audit, which runs verify in its probe copy, so each installs the
 // pinned gitleaks release and checks it against its SHA-256, the Windows
@@ -174,18 +180,111 @@ func TestSkillCIInstallsGitleaks(t *testing.T) {
 		}
 		content := string(b)
 		checked++
-		if !strings.Contains(content, `GITLEAKS_VERSION: "`+gitleaksVersion+`"`) {
-			t.Errorf("%s does not pin gitleaks %s", file, gitleaksVersion)
-		}
-		if !strings.Contains(content, gitleaksLinux) {
-			t.Errorf("%s does not check the Linux gitleaks archive's SHA-256", file)
+		if !installsGitleaks(content) {
+			t.Errorf("%s does not install gitleaks", file)
 		}
 		windows := strings.Contains(content, "windows-latest") || strings.Contains(content, "saas-windows")
-		if windows && !strings.Contains(content, gitleaksWindows) {
+		if windows && !strings.Contains(content, refPins.GitleaksWindowsSHA256) {
 			t.Errorf("%s runs on Windows but does not check the Windows gitleaks archive's SHA-256", file)
 		}
 	}
 	if checked < 12 {
 		t.Errorf("checked %d reference CI files, want the 12 ci.yml, audit.yml and .gitlab-ci.yml files", checked)
+	}
+}
+
+var (
+	// gitleaksVersionRE matches the gitleaks version a CI file names:
+	// its GITLEAKS_VERSION, or a literal version in an archive's name or
+	// release URL.
+	gitleaksVersionRE = regexp.MustCompile(`GITLEAKS_VERSION:\s*"?([^"\s]+)"?|gitleaks_(\d[^_$]*)_|gitleaks/releases/download/v(\d[^/$]*)/`)
+	// checksumRE matches a SHA-256 that is not an image digest
+	// (image@sha256:...).
+	checksumRE = regexp.MustCompile(`(?:^|[^:0-9a-f])([0-9a-f]{64})(?:[^0-9a-f]|$)`)
+)
+
+// installsGitleaks says whether a CI file downloads a gitleaks release.
+func installsGitleaks(content string) bool {
+	return strings.Contains(content, "gitleaks/releases/download/")
+}
+
+// TestGitleaksInstallsMatchPins: every copy of the gitleaks install step
+// (the skill's reference CI files, this repository's workflows and the
+// examples' workflows) names the gitleaks version refPins holds, checks
+// the Linux archive against its SHA-256, and the Windows archive where it
+// downloads one. The only checksums these files carry are gitleaks's, so
+// any other SHA-256 in a file that installs gitleaks is a stale or
+// mistyped pin.
+func TestGitleaksInstallsMatchPins(t *testing.T) {
+	files := map[string]string{}
+	skill := setupskill.FS()
+	refs, err := fs.Glob(skill, "reference/ci/*/*.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range refs {
+		b, err := fs.ReadFile(skill, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files["internal/setupskill/skill/"+f] = string(b)
+	}
+	repo := os.DirFS(filepath.Join("..", ".."))
+	for _, pattern := range []string{".github/workflows/*.yml", "examples/*/.github/workflows/*.yml"} {
+		matches, err := fs.Glob(repo, pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range matches {
+			b, err := fs.ReadFile(repo, f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files[f] = string(b)
+		}
+	}
+	installs := map[string]int{}
+	for name, content := range files {
+		if !installsGitleaks(content) {
+			continue
+		}
+		installs[strings.SplitN(name, "/", 2)[0]]++
+		checkGitleaksPins(t, name, content)
+	}
+	// Each place holds copies, so a moved or renamed file cannot make the
+	// check pass by matching nothing.
+	for _, place := range []string{"internal", ".github", "examples"} {
+		if installs[place] == 0 {
+			t.Errorf("no file under %s installs gitleaks; the check matched nothing there", place)
+		}
+	}
+}
+
+// checkGitleaksPins checks one CI file that installs gitleaks against
+// refPins.
+func checkGitleaksPins(t *testing.T, name, content string) {
+	t.Helper()
+	versions := 0
+	for _, m := range gitleaksVersionRE.FindAllStringSubmatch(content, -1) {
+		v := m[1] + m[2] + m[3]
+		versions++
+		if v != refPins.Gitleaks {
+			t.Errorf("%s names gitleaks %s; the pin table says %s", name, v, refPins.Gitleaks)
+		}
+	}
+	if versions == 0 {
+		t.Errorf("%s installs gitleaks without naming a version", name)
+	}
+	pinned := map[string]bool{refPins.GitleaksLinuxSHA256: true, refPins.GitleaksWindowsSHA256: true}
+	for _, m := range checksumRE.FindAllStringSubmatch(content, -1) {
+		if !pinned[m[1]] {
+			t.Errorf("%s checks SHA-256 %s, which is neither gitleaks archive's in the pin table", name, m[1])
+		}
+	}
+	if !strings.Contains(content, refPins.GitleaksLinuxSHA256) {
+		t.Errorf("%s does not check the Linux gitleaks archive's SHA-256", name)
+	}
+	if strings.Contains(content, "windows_x64.zip") && !strings.Contains(content, refPins.GitleaksWindowsSHA256) {
+		t.Errorf("%s downloads the Windows gitleaks archive but does not check its SHA-256", name)
 	}
 }

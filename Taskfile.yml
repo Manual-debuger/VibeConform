@@ -351,8 +351,27 @@ tasks:
         go build -o "$dir/vibe-guard{{exeExt}}" ./cmd/vibe-guard || exit 1
         export PATH="$dir{{if eq OS "windows"}};{{else}}:{{end}}$PATH"
         if [ -z "{{.STATIC}}" ]; then
-          vibe audit --repo-root .
-          exit $?
+          rc=0
+          report="$(vibe audit --repo-root .)" || rc=$?
+          [ -z "$report" ] || printf '%s\n' "$report"
+          [ "$rc" -eq 0 ] || exit "$rc"
+          # The verdict counts only MUST rules. This repository meets the
+          # SHOULD rules of spec 0061 (acceptance criterion 7): V-06, V-07,
+          # V-08 and A-09 pass, so none is listed in a section of the text
+          # report, and V-05 is not applicable. CI's Contract / audit job
+          # checks the same in the JSON report.
+          nl='
+        '
+          for id in V-06 V-07 V-08 A-09; do
+            case "$nl$report" in
+              *"$nl  $id  "*) echo "task audit: $id does not pass" >&2; rc=1 ;;
+            esac
+          done
+          case "$nl$report$nl" in
+            *"$nl  V-05  SHOULD  no component is Python$nl"*) ;;
+            *) echo "task audit: V-05 is not 'not applicable'" >&2; rc=1 ;;
+          esac
+          exit "$rc"
         fi
         rc=0
         report="$(vibe audit --static --repo-root .)" || rc=$?

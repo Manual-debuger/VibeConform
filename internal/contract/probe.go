@@ -81,6 +81,9 @@ type probeSession struct {
 	// test records each stat in its test log (spec 0056, A-05).
 	gitOnce sync.Once
 	gitExe  string
+	// lookPath finds a program on this process's PATH; nil means
+	// exec.LookPath. Tests count the lookups through it.
+	lookPath func(name string) (string, error)
 }
 
 // startProbeSession builds the probe copy and runs setup. A failure is
@@ -224,8 +227,12 @@ func (s *probeSession) build(env *Env) *Finding { //nolint:gocognit // baseline:
 // point it at another repository.
 func (s *probeSession) git(args ...string) ([]byte, error) {
 	s.gitOnce.Do(func() {
+		look := s.lookPath
+		if look == nil {
+			look = exec.LookPath
+		}
 		s.gitExe = "git"
-		if p, err := exec.LookPath("git"); err == nil {
+		if p, err := look("git"); err == nil {
 			s.gitExe = p
 		}
 	})

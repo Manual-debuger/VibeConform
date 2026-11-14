@@ -7,7 +7,7 @@ import (
 )
 
 // V-06 (spec 0061): verify catches a function of cyclomatic complexity
-// 41 and cognitive complexity 40, planted as a non-test file in every
+// 42 and cognitive complexity 41, planted as a non-test file in every
 // component. The fixture's ci program has a complexity step; verify
 // without it misses the sample.
 func TestRuleV06(t *testing.T) {

@@ -9,21 +9,22 @@ import (
 // ID: material the rule's check reads that the registry's text does not
 // hold, such as V-01's planted defects.
 var ruleDetails = map[string]func() string{
-	"V-01": func() string { return defectSamplesText(v01Kinds) },
-	"V-02": func() string { return defectSamplesText(v01Kinds) },
+	"V-01": func() string { return defectSamplesText("V-01") },
+	"V-02": func() string { return defectSamplesText("V-02") },
 	"V-05": func() string {
-		return defectSamplesText([]defectKind{defectTypeError}) +
+		return defectSamplesText("V-05") +
 			"\n  Planted in Python components only, and run with verify only. Any type\n" +
 			"  checker that verify runs satisfies the rule, such as Pyright in its\n" +
 			"  standard mode or mypy.\n"
 	},
 	"V-06": func() string {
-		return fmt.Sprintf("Threshold:\n  The sample's cyclomatic complexity is %d and its cognitive complexity %d,\n"+
-			"  so a limit of %d or less, of either metric, catches it. A specific\n"+
-			"  suppression (one rule at one function, with a reason) is the\n"+
-			"  repository's choice; the sample carries none.\n\n",
-			complexityBranches+1, complexityBranches, complexityBranches) +
-			defectSamplesText([]defectKind{defectComplexity})
+		return fmt.Sprintf("Threshold:\n  The sample's cyclomatic complexity is %d and its cognitive complexity %d.\n"+
+			"  A linter reports a value above its limit, so a limit of %d or less, of\n"+
+			"  either metric, catches it. A specific suppression (one rule at one\n"+
+			"  function, with a reason) is the repository's choice; the sample carries\n"+
+			"  none.\n\n",
+			complexityBranches+1, complexityBranches, complexityLimit) +
+			defectSamplesText("V-06")
 	},
 	"V-07": secretSampleText,
 	"V-08": v08Details,
@@ -58,7 +59,7 @@ func v08Details() string {
 		"  golangci-lint's nolintlint (require-specific), Ruff's PGH004, ESLint's\n" +
 		"  eslint-comments/no-unlimited-disable, or a checker that ignores the\n" +
 		"  comments (go vet ignores //nolint).\n\n" +
-		defectSamplesText([]defectKind{defectBlanketSuppression})
+		defectSamplesText("V-08")
 }
 
 // secretSampleText is V-07's planted defect: one sample for every
@@ -107,10 +108,11 @@ var defectLanguages = []struct{ id, name string }{
 	{LanguageTypeScript, "TypeScript"},
 }
 
-// defectSamplesText prints the planted defect samples of these kinds
-// exactly, in every language that has one, each line indented by four
-// spaces.
-func defectSamplesText(kinds []defectKind) string {
+// defectSamplesText prints the planted defect samples of a rule's kinds
+// (ruleDefectKinds) exactly, in every language that has one, each line
+// indented by four spaces.
+func defectSamplesText(rule string) string {
+	kinds := ruleDefectKinds[rule]
 	var b strings.Builder
 	b.WriteString("Planted defects:\n")
 	b.WriteString("  One at a time, each into the first directory, in sorted path order,\n" +
