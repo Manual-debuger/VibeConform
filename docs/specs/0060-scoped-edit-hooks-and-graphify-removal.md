@@ -1,6 +1,7 @@
 # Spec 0060: Monorepo edit hooks run only the edited component, and the setup skill drops Graphify
 
-Status: draft (2026-10-26, revised 2026-11-13). Issues #81 and #86.
+Status: accepted and implemented (2026-11-13, PR #143). Drafted
+2026-10-26, revised 2026-11-13. Issues #81 and #86, spec issue #138.
 Changes the setup skill's references only: the monorepo reference
 Taskfile, and the removal of the optional Graphify content (spec 0054).
 No contract change.
