@@ -124,13 +124,14 @@ jobs:
       # report, not the exit code.
       - name: vibe audit
         working-directory: ${{ env.COPY }}
-        run: vibe audit > "$RUNNER_TEMP/audit.txt" || true
+        run: vibe audit --json > "$RUNNER_TEMP/audit.json" || true
       - name: V-05 fails on the type error
         run: |
-          report="$RUNNER_TEMP/audit.txt"
-          cat "$report"
-          grep -q '^  V-05  SHOULD  `verify` catches a type error$' "$report"
-          grep -q 'did not make it fail: type error$' "$report"
+          v05="$(jq -c '.rules[] | select(.id == "V-05")' "$RUNNER_TEMP/audit.json")"
+          echo "$v05" | jq .
+          [ "$(echo "$v05" | jq -r .result)" = fail ] || { echo "::error::V-05 does not fail"; exit 1; }
+          echo "$v05" | jq -e '[.findings[].message | endswith("did not make it fail: type error")] | any' >/dev/null ||
+            { echo "::error::V-05 does not fail on the type error"; exit 1; }
 
   # V-06: with the complexity linters off, V-06 fails in every component.
   v06:
@@ -404,13 +405,16 @@ jobs:
             sed -i "$2" "$1"
             if [ "$before" = "$(cat "$1")" ]; then echo "$1: nothing switched off"; exit 1; fi
           }
-          for f in $(find . -name ruff.toml -not -path '*/node_modules/*' -not -path '*/.venv/*'); do
+          mapfile -t ruff < <(find . -name ruff.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
+          mapfile -t golangci < <(find . -name .golangci.yml -not -path '*/node_modules/*')
+          mapfile -t eslint < <(find . -name eslint.config.js -not -path '*/node_modules/*')
+          for f in "${ruff[@]}"; do
             off "$f" 's/, "PGH003", "PGH004"\]/]/'
           done
-          for f in $(find . -name .golangci.yml -not -path '*/node_modules/*'); do
+          for f in "${golangci[@]}"; do
             off "$f" '/^    - nolintlint$/d'
           done
-          for f in $(find . -name eslint.config.js -not -path '*/node_modules/*'); do
+          for f in "${eslint[@]}"; do
             off "$f" "s|^  // The team's own entries go here.\$|  {\n    rules: {\n      '@eslint-community/eslint-comments/no-unlimited-disable': 'off',\n      '@eslint-community/eslint-comments/require-description': 'off',\n      '@eslint-community/eslint-comments/disable-enable-pair': 'off',\n    },\n  },|"
             # Keep the edited config Prettier-clean, so that verify's
             # baseline passes.

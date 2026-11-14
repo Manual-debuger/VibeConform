@@ -1,6 +1,7 @@
 # Spec 0061: Contract 1.2.0 probes that quality gates catch defects
 
-Status: accepted (2026-11-14). ADR 0027, spec issue #146. Adds five
+Status: accepted and implemented (2026-11-14, PR #156). ADR 0027, spec
+issue #146, issues #147 to #155. Adds five
 SHOULD rules (contract 1.2.0, MINOR), one guard rule ID, and changes to
 the setup skill's references, this repository and the examples.
 
@@ -399,3 +400,51 @@ the spec is revised before the reference is changed.
 - Goodhart's law still applies: an adopter's linter can be tuned to
   catch exactly the planted samples, and an agent can split a function
   into meaningless pieces. ADR 0027 records both as accepted limits.
+
+## Implementation notes
+
+Where the implementation departs from the text above. The decisions
+above stay as approved; these notes record what was built instead.
+
+1. **Negative-control path filter.** It is a `changes` job that diffs
+   the pull request against its base, not `on.pull_request.paths`: R-01
+   lets only a C-04 audit job, which runs on every pull request, call
+   `vibe`. The workflow triggers on every pull request, weekly and on
+   manual dispatch, and its jobs skip when the `changes` job finds none
+   of the paths.
+2. **ESLint `no-unused-disable`.** Under ESLint 10's flat config the
+   plugin's `no-unused-disable` reports nothing, so the TypeScript
+   reference uses `linterOptions.reportUnusedDisableDirectives: 'error'`
+   instead (#152).
+3. **Go V-08 negative control.** It cannot fail: `go vet`, which the Go
+   reference runs in `lint`, ignores `//nolint` and still catches the
+   sample with `nolintlint` off. The monorepo V-08 job checks only the
+   Python and TypeScript components.
+4. **TypeScript V-08 sample.** V-01's TypeScript static-analysis sample
+   ends with a semicolon, which the reference Prettier configuration
+   (`semi: false`) reports. V-08's sample drops it, so that it is clean
+   apart from its own defect, and is therefore not V-01's sample
+   character for character. V-01's sample is unchanged.
+5. **Pre-commit secret scan.** The hook references run
+   `task secrets:staged` (`gitleaks git --pre-commit --staged`), the
+   task pattern of spec 0057, not gitleaks directly.
+6. **This repository's gitleaks allowlist.** `.gitleaks.toml` allowlists
+   only dependency and build directories. No guard test fixture matched
+   a gitleaks rule, so it has no known-non-secret entries.
+7. **Rule titles.** The Solution bullets for V-08 and A-09 do not match
+   the registry titles: "Blanket suppressions do not hide a defect" and
+   "The guard refuses commands that skip Git hooks".
+8. **Complexity baseline.** 25 of the 79 functions with the baseline
+   suppression are in test files (Assumption 5). `.golangci.yml` does
+   not relax the complexity linters for tests.
+9. **A-09 in `vibe-guard`.** Beyond the corpus, the guard also refuses
+   `--config-env` that sets `core.hooksPath`, and a `git commit` or
+   `git push` with an unquoted expansion before `--`, since it cannot
+   tell whether the expansion skips the hooks.
+10. **Probe test-log cap.** On Windows, every `git` call in the probe
+    copy searched `PATH` again, and `go test` records each file stat in
+    its test log. With the new probes' extra resets, the `internal/cli`
+    test log in the probe copy passed the package's 150,000-entry cap
+    (`testLogLimit`), and
+    `task audit` failed V-01 and R-01. A probe session now finds `git`
+    on `PATH` once (bc2e574, merged with #152).

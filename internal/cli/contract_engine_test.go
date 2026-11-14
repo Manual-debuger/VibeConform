@@ -144,6 +144,26 @@ func waiverConfig(rule, until string) fixtureEdit {
 		"waivers:\n  - rule: " + rule + "\n    reason: known gap\n    until: " + until + "\n"}))
 }
 
+// A repository on contract 1.1.0 keeps its verdict under a vibe that
+// implements 1.2.0, even when every rule 1.2.0 added fails (spec 0061,
+// acceptance criterion 3; user story 9).
+func TestContractAuditOlderMinorKeepsVerdictWhenNewRulesFail(t *testing.T) {
+	t.Parallel()
+	added := []string{"V-05", "V-06", "V-07", "V-08", "A-09"}
+	rules := standIn(nil, contract.ResultPass, mustRules("V-04")...)
+	rules = standIn(rules, contract.ResultFail, added...)
+	dir := contractFixture(t, withFile("vibe.yaml", configWith(section{"contract", "contract: 1.1.0\n"})))
+	rep, r := auditJSONRules(t, rules, dir)
+	assertExit(t, r, 0)
+	if rep.Verdict != "conformant" || rep.Contract.Declared != "1.1.0" || rep.Contract.Audited != "1.2.0" {
+		t.Errorf("verdict = %s, contract = %+v, want conformant, 1.1.0 declared, 1.2.0 audited", rep.Verdict, rep.Contract)
+	}
+	// V-05 is not applicable: the fixture has no Python component.
+	for _, id := range added[1:] {
+		assertRule(t, rep, id, "fail")
+	}
+}
+
 func TestContractAuditVerdicts(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	t.Parallel()
 	t.Run("conformant exits 0", func(t *testing.T) {

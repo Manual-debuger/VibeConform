@@ -377,6 +377,15 @@ it is. What it cannot catch: a threshold lowered to just under 41, a
 specific suppression on new code, and a complex function split into
 meaningless pieces (ADR 0027). Review catches those.
 
+**What the 1.2.0 probes do not check.** V-05 to V-08 probe `verify`
+only (ADR 0027), the gate CI runs. A `verify-fast` without the type,
+complexity, secret and suppression checks still passes them, so the
+agent's Stop hook may not report those defects until CI does. The
+setup skill's references put every new check in `verify-fast` too.
+V-05 plants a plain wrong return type: a type checker in a lenient mode
+that still reports it passes, and a specific suppression
+(`# pyright: ignore[reportReturnType]`) stays allowed.
+
 **Flags:**
 
 | Flag | Default | Meaning |
@@ -1311,7 +1320,10 @@ rule ID `git-skip-hooks`). The guard also refuses `git commit
 --no-verify`, `git commit -n` (`-nm wip` too: a short-option cluster is
 read up to the first letter that takes a value, so `-mn` is the message
 "n"), `git push --no-verify`, and `git -c core.hooksPath=…` (the key in
-any case) with `commit` or `push`. `git push -n` is a dry run and runs.
+any case, also through `--config-env`) with `commit` or `push`. It
+refuses a `git commit` or `git push` with an unquoted expansion before
+`--` (`git commit $FLAGS`) too, since it cannot tell what the expansion
+holds. `git push -n` is a dry run and runs.
 A-09 has its own corpus cases, which A-02, A-03 and R-01 do not read:
 `vibe audit --explain A-09` lists them. An exception for
 `git-skip-hooks` in `policy.json` lets its command through, as for every

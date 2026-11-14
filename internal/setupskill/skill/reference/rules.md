@@ -126,8 +126,11 @@ allowed. The references refuse blanket suppressions in `verify` and
   so write one after the codes (`# noqa: S603  reason`).
 - TypeScript (`reference/lint/typescript/eslint.config.js`):
   `@eslint-community/eslint-plugin-eslint-comments` with
-  `no-unlimited-disable`, `require-description` and `no-unused-disable`
-  (`// eslint-disable-next-line no-console -- reason`).
+  `no-unlimited-disable` and `require-description`
+  (`// eslint-disable-next-line no-console -- reason`). The plugin's
+  `no-unused-disable` does not report under a flat config, so ESLint's
+  own `linterOptions.reportUnusedDisableDirectives: 'error'` reports an
+  unused disable comment.
 
 `vibe audit --explain V-08` prints the planted files.
 

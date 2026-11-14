@@ -1,8 +1,8 @@
 # VibeConform
 
 > **Status: pre-alpha.** `vibe audit` checks a repository against
-> contract 1.1.0 (spec 0051), and this repository is gated by its own
-> audit in CI (`Contract / audit`). The template-sync system (`vibe
+> contract 1.2.0 (spec 0051, spec 0061), and this repository is gated by
+> its own audit in CI (`Contract / audit`). The template-sync system (`vibe
 > sync`, standards, `.vibe/state.yaml`) was removed in spec 0059;
 > v0.13.x is the last release that has it. To move a repository off it,
 > see [Leaving the template-sync system](docs/usage.md#leaving-the-template-sync-system).
