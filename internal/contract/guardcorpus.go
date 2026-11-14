@@ -16,7 +16,10 @@ import (
 // "The contract's guard corpus"). It belongs to the contract, not to a
 // guard: A-02 and A-03 feed it to whatever PreToolUse hooks a repository
 // declares. Adding a deny case is MAJOR; adding an allow case or removing
-// a deny case is MINOR.
+// a deny case is MINOR. The cases marked with a probe belong to that
+// rule alone (A-09 since contract 1.2.0, spec 0061): A-02, A-03, A-08
+// and R-01 read only the unmarked cases, so a later MINOR adds deny
+// cases of its own without changing them.
 
 //go:embed guard_corpus.json
 var guardCorpusJSON []byte
@@ -45,7 +48,17 @@ type GuardCase struct {
 	Rule string `json:"rule,omitempty"`
 	// Unlock is UnlockNone, UnlockValid or UnlockExpired.
 	Unlock string `json:"unlock,omitempty"`
+	// Probe is the contract rule whose probe alone reads the case, one of
+	// corpusProbes, or "" for the cases of A-02, A-03, A-08 and R-01.
+	Probe string `json:"probe,omitempty"`
 }
+
+// ProbeA09 marks the cases of A-09: commands that skip Git hooks.
+const ProbeA09 = "A-09"
+
+// corpusProbes are the rules that own corpus cases of their own, and the
+// guard rule ID their deny cases name.
+var corpusProbes = map[string]string{ProbeA09: guardrule.GitSkipHooks}
 
 // GuardPayload is the Claude Code tool call of a case. The audit adds
 // the other fields of a PreToolUse payload.
@@ -68,8 +81,23 @@ var guardCorpus = sync.OnceValue(func() []GuardCase {
 	return cases
 })
 
-// GuardCorpus returns the guard corpus of contract 1.0.0, in file order.
+// GuardCorpus returns every case of the guard corpus, in file order: the
+// cases of A-02 and those marked with a probe.
 func GuardCorpus() []GuardCase { return slices.Clone(guardCorpus()) }
+
+// GuardCorpusFor returns the cases probe reads, in file order; "" gives
+// the cases of A-02, A-03, A-08 and R-01.
+func GuardCorpusFor(probe string) []GuardCase { return slices.Clone(corpusFor(probe)) }
+
+func corpusFor(probe string) []GuardCase {
+	var out []GuardCase
+	for _, c := range guardCorpus() {
+		if c.Probe == probe {
+			out = append(out, c)
+		}
+	}
+	return out
+}
 
 // parseGuardCorpus reads and checks a corpus document.
 func parseGuardCorpus(data []byte) ([]GuardCase, error) {
@@ -111,6 +139,8 @@ func checkGuardCase(c GuardCase, seen map[string]bool) error { //nolint:gocyclo 
 		return fmt.Errorf("tool %q is not one of the A-01 tools", tool)
 	case c.Unlock != UnlockNone && c.Unlock != UnlockValid && c.Unlock != UnlockExpired:
 		return fmt.Errorf("unlock is %q; it must be none, valid or expired", c.Unlock)
+	case c.Probe != "" && corpusProbes[c.Probe] == "":
+		return fmt.Errorf("probe is %q; it must be %s or absent", c.Probe, ProbeA09)
 	}
 	if _, err := guardrule.ParseTarget(tool, c.Payload.ToolInput); err != nil {
 		return err
@@ -126,6 +156,11 @@ func checkGuardCase(c GuardCase, seen map[string]bool) error { //nolint:gocyclo 
 		return errors.New("a deny case has no rule")
 	case !guardrule.IsContractID(c.Rule):
 		return fmt.Errorf("rule %q is not a guard rule ID", c.Rule)
+	case c.Probe != "" && c.Rule != corpusProbes[c.Probe]:
+		return fmt.Errorf("a deny case of %s has rule %q; it must be %s", c.Probe, c.Rule, corpusProbes[c.Probe])
+	case c.Probe == "" && c.Rule == guardrule.GitSkipHooks:
+		return fmt.Errorf("rule %s belongs to the cases of %s; mark the case with \"probe\": %q",
+			c.Rule, ProbeA09, ProbeA09)
 	case c.Rule == guardrule.GuardrailSettings:
 		// A file edit of the settings, or a command that unlocks (A-08).
 	case guardrule.IsPathRule(c.Rule) != guardrule.IsEditTool(tool):

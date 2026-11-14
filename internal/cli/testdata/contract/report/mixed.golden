@@ -3,7 +3,7 @@ vibe audit: contract 1.2.0 (vibe test)
   V  Verification entrypoints              1 FAIL, 4 cannot decide
   H  Local Git hooks                       2 pass
   C  CI                                    4 pass, 1 not applicable
-  A  Agent guardrails                      2 pass, 1 fail, 5 cannot decide
+  A  Agent guardrails                      2 pass, 1 fail, 6 cannot decide
   D  Dependencies and supply chain         3 pass
   R  Removability and repository hygiene   1 fail, 1 waived, 1 cannot decide
 
@@ -46,6 +46,8 @@ Cannot decide
         .claude/settings.json: cannot decide: the SessionStart hook (task -x hook:context): no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-08  MUST    An agent changes guardrail settings only after a person unlocks them
         .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
+  A-09  SHOULD  The guard refuses commands that skip Git hooks
+        .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   R-01  MUST    Everything but the audit works without vibe
         vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
         .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
@@ -59,4 +61,4 @@ Local guardrail adjustments
 CI provider read: GitHub Actions
 Note: the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is main
 
-Verdict: cannot decide. 10 rules cannot be decided; 1 MUST rule already fails.
+Verdict: cannot decide. 11 rules cannot be decided; 1 MUST rule already fails.

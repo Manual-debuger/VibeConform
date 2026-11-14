@@ -11,6 +11,7 @@ func TestContractIDs(t *testing.T) {
 	want := []string{
 		"rm-rf", "remove-item-recurse-force", "git-reset-hard", "git-clean-fd", "git-push-force",
 		"git-branch-force-delete", "git-discard-worktree", "secret-file", "guard-policy-file", "guardrail-settings",
+		"git-skip-hooks",
 	}
 	if strings.Join(guardrule.IDs, ",") != strings.Join(want, ",") {
 		t.Fatalf("IDs = %v, want %v", guardrule.IDs, want)

@@ -19,6 +19,21 @@ var ruleDetails = map[string]func() string{
 			complexityBranches+1, complexityBranches, complexityBranches) +
 			defectSamplesText([]defectKind{defectComplexity})
 	},
+	"A-09": a09CasesText,
+}
+
+// a09CasesText lists A-09's corpus cases: decision, tool and command.
+func a09CasesText() string {
+	var b strings.Builder
+	b.WriteString("A-09 corpus cases:\n" +
+		"  Its own cases, which A-02, A-03 and R-01 do not read. A deny case names\n" +
+		"  the guard rule ID git-skip-hooks, which an exception may name.\n")
+	for _, c := range corpusFor(ProbeA09) {
+		fmt.Fprintf(&b, "  %-5s  %-10s  %s\n", c.Want, c.Payload.ToolName, c.Target().Command)
+	}
+	b.WriteString("  vibe-guard also refuses LEFTHOOK=0 and HUSKY=0 before git commit or git\n" +
+		"  push; they are specific to one hook manager, so A-09 does not require it.\n")
+	return b.String()
 }
 
 // RuleDetails is what --explain prints after the check of the rule with

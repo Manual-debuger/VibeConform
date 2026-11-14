@@ -120,7 +120,7 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
 ```
 
 - **`internal/guardrule`** holds what the audit and the guard must agree
-  on: the ten contract guard rule IDs and the guard-internal ones,
+  on: the contract guard rule IDs and the guard-internal ones,
   `policy.json` version 2 parsing, exception matching, the policy file
   paths, the unlock marker's name and format (`vibe unlock` writes it,
   `vibe-guard` reads it, the audit plants it), and the decomposition of a

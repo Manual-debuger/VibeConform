@@ -1,6 +1,6 @@
 // Package guardrule holds what the contract audit and vibe-guard must
-// agree on (spec 0053, "Guard rule IDs and exceptions, shared"): the ten
-// guard rule IDs of contract 1.0.0, the guard-internal IDs, policy.json
+// agree on (spec 0053, "Guard rule IDs and exceptions, shared"): the
+// guard rule IDs of the contract, the guard-internal IDs, policy.json
 // version 2, exception matching, and the decomposition of a Bash or
 // PowerShell command into simple commands that both use to match
 // exceptions. It imports no package of the old template system.
@@ -22,11 +22,19 @@ const (
 	GuardrailSettings      = "guardrail-settings"
 )
 
-// IDs lists the ten guard rule IDs in the order spec 0051 tables them. A
-// corpus deny case and a guard exception name one of them.
+// The guard rule IDs of contract 1.2.0 (spec 0061, "A-09"). A-09's
+// corpus cases name GitSkipHooks; A-02's never do.
+const (
+	GitSkipHooks = "git-skip-hooks"
+)
+
+// IDs lists the guard rule IDs: the ten of contract 1.0.0 in the order
+// spec 0051 tables them, then git-skip-hooks (contract 1.2.0). A corpus
+// deny case and a guard exception name one of them.
 var IDs = []string{
 	RmRf, RemoveItemRecurseForce, GitResetHard, GitCleanFD, GitPushForce,
 	GitBranchForceDelete, GitDiscardWorktree, SecretFile, GuardPolicyFile, GuardrailSettings,
+	GitSkipHooks,
 }
 
 // The guard-internal IDs (spec 0053, "Parsing"). A refusal for one of
@@ -41,7 +49,7 @@ const (
 // InternalIDs lists the guard-internal IDs.
 var InternalIDs = []string{IDParseError, IDPayloadError, IDPolicyError, IDDynamicCommand}
 
-// IsContractID reports whether id is one of the ten guard rule IDs.
+// IsContractID reports whether id is one of the guard rule IDs.
 func IsContractID(id string) bool { return slices.Contains(IDs, id) }
 
 // IsInternalID reports whether id is a guard-internal ID.
