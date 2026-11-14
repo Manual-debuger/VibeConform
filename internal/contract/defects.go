@@ -22,6 +22,9 @@ const (
 	defectFormat         defectKind = "format"
 	defectStaticAnalysis defectKind = "static analysis"
 	defectTest           defectKind = "test"
+	// defectBlanketSuppression is V-01's static-analysis defect under the
+	// language's blanket suppressions (spec 0061, V-08).
+	defectBlanketSuppression defectKind = "blanket suppression"
 )
 
 // The defect kinds of spec 0061.
@@ -51,6 +54,8 @@ var defectCatchers = map[defectKind]string{
 	defectStaticAnalysis: "static analysis (a type check or linter)",
 	defectTest:           "the tests",
 	defectTypeError:      "a type checker",
+	defectBlanketSuppression: "static analysis that a suppression comment naming no rule cannot switch off " +
+		"(golangci-lint's nolintlint, Ruff's PGH004, eslint-comments' no-unlimited-disable)",
 }
 
 // defectSamples holds the samples by language and kind. Spec 0053
@@ -66,6 +71,13 @@ var defectSamples = map[string]map[defectKind]defectSample{
 			"// (the static-analysis defect).\n\n" +
 			"package {{package}}\n\nimport \"fmt\"\n\n" +
 			"func vibeProbeStaticAnalysis() { fmt.Printf(\"%d\\n\", \"vibe audit\") }\n"},
+		// V-08: V-01's test file, its Printf call under a nolint
+		// directive that names no linter. go vet ignores the directive;
+		// golangci-lint honors it.
+		defectBlanketSuppression: {Name: "vibe_probe_blanket_suppression_test.go", Content: "// Planted by vibe audit: a Printf call whose arguments do not match its format\n" +
+			"// (the static-analysis defect), under a blanket suppression.\n\n" +
+			"package {{package}}\n\nimport \"fmt\"\n\n" +
+			"func vibeProbeStaticAnalysis() { fmt.Printf(\"%d\\n\", \"vibe audit\") } //nolint\n"},
 		defectTest: {Name: "vibe_probe_test.go", Content: "// Planted by vibe audit: a test that fails (the test defect).\n\n" +
 			"package {{package}}\n\nimport \"testing\"\n\n" +
 			"func TestVibeProbe(t *testing.T) { t.Fatal(\"planted by vibe audit: this test fails\") }\n"},
@@ -75,6 +87,10 @@ var defectSamples = map[string]map[defectKind]defectSample{
 			"vibe_probe = [1,2 ,3]\n"},
 		defectStaticAnalysis: {Name: "vibe_probe_static_analysis.py", Content: "# Planted by vibe audit: a reference to an undefined name (the static-analysis defect).\n" +
 			"def vibe_probe() -> int:\n    return vibe_probe_undefined_name\n"},
+		// V-08: Pyright honors # type: ignore, Ruff honors # noqa.
+		defectBlanketSuppression: {Name: "vibe_probe_blanket_suppression.py", Content: "# Planted by vibe audit: a reference to an undefined name (the static-analysis defect),\n" +
+			"# under blanket suppressions.\n" +
+			"def vibe_probe() -> int:\n    return vibe_probe_undefined_name  # type: ignore  # noqa\n"},
 		defectTest: {Name: "vibe_probe_test.py", Content: "# Planted by vibe audit: a test that fails (the test defect).\n" +
 			"def test_vibe_probe() -> None:\n    assert False, \"planted by vibe audit: this test fails\"\n"},
 		defectTypeError: {Name: "vibe_probe_type_error.py", Content: "# Planted by vibe audit: a function annotated -> int that returns a string (the type-error defect).\n" +
@@ -85,6 +101,14 @@ var defectSamples = map[string]map[defectKind]defectSample{
 			"export const vibeProbe = [1,2 ,3]\n"},
 		defectStaticAnalysis: {Name: "vibe_probe_static_analysis.ts", Content: "// Planted by vibe audit: a reference to an undefined name (the static-analysis defect).\n" +
 			"export const vibeProbe: number = vibeProbeUndefinedName;\n"},
+		// V-08: ESLint honors eslint-disable, tsc honors @ts-ignore. No
+		// semicolon, so that Prettier with semi: false (the setup skill's
+		// configuration) finds nothing to change.
+		defectBlanketSuppression: {Name: "vibe_probe_blanket_suppression.ts", Content: "// Planted by vibe audit: a reference to an undefined name (the static-analysis defect),\n" +
+			"// under blanket suppressions.\n" +
+			"/* eslint-disable */\n" +
+			"// @ts-ignore\n" +
+			"export const vibeProbe: number = vibeProbeUndefinedName\n"},
 		defectTest: {Name: "vibe_probe.test.ts", Content: "// Planted by vibe audit: a test file that throws when it is loaded (the test defect).\n" +
 			"export {};\n\nthrow new Error(\"planted by vibe audit: this test fails\");\n"},
 	},

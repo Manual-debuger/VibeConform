@@ -19,10 +19,17 @@ linters:
     - gosec
     - misspell
     - nakedret
+    - nolintlint
     - revive
     - unconvert
     - unparam
   settings:
+    # A nolint directive names its linters and says why (V-08): a bare
+    # //nolint would hide every finding on its line. Unused directives
+    # are reported too.
+    nolintlint:
+      require-specific: true
+      require-explanation: true
     # The dependency direction in docs/architecture/overview.md:
     # internal/contract and internal/guard both depend on
     # internal/guardrule, never on each other. (internal/guardrule

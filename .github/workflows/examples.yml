@@ -112,16 +112,23 @@ jobs:
       - name: vibe audit
         working-directory: ${{ env.COPY }}
         run: vibe audit | tee "$RUNNER_TEMP/audit.txt"
-      # Spec 0061: V-05 passes in the examples with a Python component and
-      # is not applicable in the TypeScript example. The text report lists
-      # every rule that does not pass, so a passing V-05 is not in it.
-      - name: V-05 passes, or is not applicable without Python
+      # Spec 0061: a conformant verdict allows failing SHOULD rules, but the
+      # examples pass the rules of 1.2.0 too. V-05 passes in the examples
+      # with a Python component and is not applicable in the TypeScript
+      # example; V-08 passes in all of them. The text report lists every
+      # rule that does not pass, indented by two spaces, so a passing rule
+      # is not in it.
+      - name: The rules of spec 0061 pass, V-05 not applicable without Python
         run: |
           report="$RUNNER_TEMP/audit.txt"
           if [ "$EXAMPLE" = typescript ]; then
             grep -qx '  V-05  SHOULD  no component is Python' "$report"
           elif grep -E '^  V-05  ' "$report"; then
             echo "V-05 does not pass"
+            exit 1
+          fi
+          if grep -E '^  V-08  ' "$report"; then
+            echo "V-08 does not pass"
             exit 1
           fi
 

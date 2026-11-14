@@ -17,6 +17,7 @@ var ruleDetails = map[string]func() string{
 			"  checker that verify runs satisfies the rule, such as Pyright in its\n" +
 			"  standard mode or mypy.\n"
 	},
+	"V-08": v08Details,
 	"A-09": a09CasesText,
 }
 
@@ -32,6 +33,23 @@ func a09CasesText() string {
 	b.WriteString("  vibe-guard also refuses LEFTHOOK=0 and HUSKY=0 before git commit or git\n" +
 		"  push; they are specific to one hook manager, so A-09 does not require it.\n")
 	return b.String()
+}
+
+// v08Details lists V-08's suppressions per language before its samples.
+func v08Details() string {
+	return "Blanket suppressions:\n" +
+		"  V-01's static-analysis defect, with the language's common blanket\n" +
+		"  suppressions on the defect's line or for its file. Specific\n" +
+		"  suppressions, which name a rule, are not part of any sample.\n" +
+		"    Go: //nolint, naming no linter.\n" +
+		"    Python: # type: ignore  # noqa, with no codes.\n" +
+		"    TypeScript: a file-level eslint-disable comment naming no rule, and\n" +
+		"    // @ts-ignore on the line before the defect.\n" +
+		"  Any gate in verify that still reports the defect satisfies the rule:\n" +
+		"  golangci-lint's nolintlint (require-specific), Ruff's PGH004, ESLint's\n" +
+		"  eslint-comments/no-unlimited-disable, or a checker that ignores the\n" +
+		"  comments (go vet ignores //nolint).\n\n" +
+		defectSamplesText([]defectKind{defectBlanketSuppression})
 }
 
 // RuleDetails is what --explain prints after the check of the rule with

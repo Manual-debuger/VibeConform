@@ -221,10 +221,10 @@ func TestContractAuditVerdicts(t *testing.T) {
 			}
 		}
 		want := fmt.Sprintf("%d rules did not run (--static)", notRun)
-		if notRun < 11 || !rep.StaticOnly || rep.Verdict != "undecided" || !strings.Contains(rep.Reason, want) {
+		if notRun < 12 || !rep.StaticOnly || rep.Verdict != "undecided" || !strings.Contains(rep.Reason, want) {
 			t.Errorf("static_only %v, verdict %s (%q); want undecided, %s", rep.StaticOnly, rep.Verdict, rep.Reason, want)
 		}
-		for _, id := range []string{"V-01", "V-02", "V-03", "A-02", "A-03", "A-05", "A-07", "A-08", "A-09", "D-01", "R-01"} {
+		for _, id := range []string{"V-01", "V-02", "V-03", "V-08", "A-02", "A-03", "A-05", "A-07", "A-08", "A-09", "D-01", "R-01"} {
 			assertRule(t, rep, id, "not_run")
 		}
 		a05 := rep.rule(t, "A-05")
@@ -337,7 +337,7 @@ func TestContractAuditReportsEveryRule(t *testing.T) {
 		t.Errorf("contract = %+v, want 1.2.0 declared and audited", rep.Contract)
 	}
 	want := []string{
-		"V-01", "V-02", "V-03", "V-04", "V-05", "H-01", "H-02", "C-01", "C-02", "C-03", "C-04", "C-05",
+		"V-01", "V-02", "V-03", "V-04", "V-05", "V-08", "H-01", "H-02", "C-01", "C-02", "C-03", "C-04", "C-05",
 		"A-01", "A-02", "A-03", "A-04", "A-05", "A-06", "A-07", "A-08", "A-09", "D-01", "D-02", "D-03",
 		"R-01", "R-02", "R-03",
 	}

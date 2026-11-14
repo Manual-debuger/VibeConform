@@ -74,6 +74,29 @@ in the `typecheck` task. A repository with no Python component gets "not
 applicable": in Go and TypeScript a type error is a compile error, which
 V-01 already shows.
 
+### V-08 (SHOULD): blanket suppressions do not hide a defect
+
+`verify` exits non-zero with V-01's static-analysis defect planted under
+the language's blanket suppressions, in each component: Go `//nolint`
+naming no linter; Python `# type: ignore  # noqa` with no codes;
+TypeScript a file-level `/* eslint-disable */` and `// @ts-ignore` on
+the line before. Only `verify` is probed. A component without tests
+leaves it undecided. Specific suppressions, which name a rule, stay
+allowed. The references refuse blanket suppressions in `verify` and
+`verify-fast`:
+
+- Go (`reference/lint/go/.golangci.yml`): golangci-lint's `nolintlint` with `require-specific` and
+  `require-explanation` (`//nolint:govet // reason`). `go vet`, which
+  ignores `//nolint`, also catches the Go sample.
+- Python (`reference/lint/python/ruff.toml`): Ruff's `PGH003` and `PGH004`. Ruff cannot require a reason,
+  so write one after the codes (`# noqa: S603  reason`).
+- TypeScript (`reference/lint/typescript/eslint.config.js`):
+  `@eslint-community/eslint-plugin-eslint-comments` with
+  `no-unlimited-disable`, `require-description` and `no-unused-disable`
+  (`// eslint-disable-next-line no-console -- reason`).
+
+`vibe audit --explain V-08` prints the planted files.
+
 ## H: local Git hooks
 
 Recognized hook managers: lefthook (`lefthook.yml`, `.lefthook.yml`),

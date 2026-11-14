@@ -29,6 +29,9 @@ concurrency:
 env:
   GO_VERSION: "1.27.0"
   TASK_VERSION: "v3.53.1"
+  GOLANGCI_LINT_VERSION: "v2.15.0"
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.34.5"
   PYTHON_VERSION: "3.12"
 
 jobs:
@@ -101,3 +104,122 @@ jobs:
           cat "$report"
           grep -q '^  V-05  SHOULD  `verify` catches a type error$' "$report"
           grep -q 'did not make it fail: type error$' "$report"
+
+  # V-08: with the suppression rules off (Ruff's PGH003 and PGH004,
+  # eslint-comments' rules, golangci-lint's nolintlint), V-08 fails in
+  # every Python and TypeScript component. The Go component still passes:
+  # its verify runs go vet, which ignores //nolint.
+  v08:
+    name: V-08 without suppression rules (examples/${{ matrix.example }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - example: typescript
+            components: "."
+          - example: python
+            components: "."
+          - example: monorepo
+            components: "apps/web services/worker"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      EXAMPLE: ${{ matrix.example }}
+      COMPONENTS: ${{ matrix.components }}
+    steps:
+      # Depth 2: on a pull request HEAD is the merge commit and HEAD^1 the
+      # base branch, so their diff is the pull request's change.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      - name: Path filter
+        id: filter
+        run: |
+          run=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] &&
+            ! git diff --name-only HEAD^1 HEAD | grep -E '^(internal/contract/(defects|checks_defects)\.go|internal/setupskill/skill/reference/|examples/|\.github/workflows/negative-control\.yml)'; then
+            run=false
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+      - name: Setup Go
+        if: steps.filter.outputs.run == 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Setup pnpm
+        if: steps.filter.outputs.run == 'true' && matrix.example != 'python'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - name: Setup Node
+        if: steps.filter.outputs.run == 'true' && matrix.example != 'python'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install uv
+        if: steps.filter.outputs.run == 'true' && matrix.example != 'typescript'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install task
+        if: steps.filter.outputs.run == 'true'
+        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
+      - name: Install the Go tools the monorepo's entrypoints call
+        if: steps.filter.outputs.run == 'true' && matrix.example == 'monorepo'
+        run: |
+          go install golang.org/x/tools/cmd/goimports@v0.51.0
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"$GOLANGCI_LINT_VERSION"
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Build vibe and vibe-guard from source
+        if: steps.filter.outputs.run == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          go build -o "$RUNNER_TEMP/bin/vibe-guard" ./cmd/vibe-guard
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # Each edit must change its file, so that a changed reference cannot
+      # make the job pass without switching anything off.
+      - name: Copy the example and switch off its suppression rules
+        if: steps.filter.outputs.run == 'true'
+        run: |
+          copy="$RUNNER_TEMP/example"
+          cp -R "examples/$EXAMPLE" "$copy"
+          cd "$copy"
+          off() { # file sed-script
+            before="$(cat "$1")"
+            sed -i "$2" "$1"
+            if [ "$before" = "$(cat "$1")" ]; then echo "$1: nothing switched off"; exit 1; fi
+          }
+          for f in $(find . -name ruff.toml -not -path '*/node_modules/*' -not -path '*/.venv/*'); do
+            off "$f" 's/, "PGH003", "PGH004"\]/]/'
+          done
+          for f in $(find . -name .golangci.yml -not -path '*/node_modules/*'); do
+            off "$f" '/^    - nolintlint$/d'
+          done
+          for f in $(find . -name eslint.config.js -not -path '*/node_modules/*'); do
+            off "$f" "s|^  // The team's own entries go here.\$|  {\n    rules: {\n      '@eslint-community/eslint-comments/no-unlimited-disable': 'off',\n      '@eslint-community/eslint-comments/require-description': 'off',\n      '@eslint-community/eslint-comments/disable-enable-pair': 'off',\n    },\n  },|"
+            # Keep the edited config Prettier-clean, so that verify's
+            # baseline passes.
+            (cd "$(dirname "$f")" && pnpm install --frozen-lockfile && pnpm exec prettier --write eslint.config.js)
+          done
+          git init -q -b main
+          git add -A
+          git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy without suppression rules"
+          echo "COPY=$copy" >> "$GITHUB_ENV"
+      - name: vibe audit shows V-08 failing in each component
+        if: steps.filter.outputs.run == 'true'
+        working-directory: ${{ env.COPY }}
+        run: |
+          vibe audit --json > "$RUNNER_TEMP/audit.json" || true
+          v08="$(jq -c '.rules[] | select(.id == "V-08")' "$RUNNER_TEMP/audit.json")"
+          echo "$v08" | jq .
+          [ "$(echo "$v08" | jq -r .result)" = fail ] || { echo "V-08 does not fail"; exit 1; }
+          for c in $COMPONENTS; do
+            echo "$v08" | jq -e --arg c "in component $c with" '[.findings[].message | contains($c)] | any' >/dev/null ||
+              { echo "V-08 does not fail in component $c"; exit 1; }
+          done

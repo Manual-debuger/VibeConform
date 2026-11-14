@@ -74,6 +74,13 @@ func hasPythonComponent(cfg *Config) (bool, string) {
 	return false, "no component is Python"
 }
 
+// checkV08Probe: with V-01's static-analysis defect under the language's
+// blanket suppressions planted in each component, verify exits non-zero.
+// A component without tests leaves it undecided (spec 0061).
+func checkV08Probe(env *Env) PartResult {
+	return defectProbe{rule: "V-08", entrypoint: EntrypointVerify, kinds: []defectKind{defectBlanketSuppression}}.run(env)
+}
+
 // defectProbe is one rule's planted-defect probe: which defect kinds it
 // plants, in which components, and which entrypoint must exit non-zero
 // with each. A rule with its own defect kinds builds one with them; each

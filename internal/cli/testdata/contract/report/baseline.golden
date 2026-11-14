@@ -1,6 +1,6 @@
 vibe audit: contract 1.2.0 (vibe test)
 
-  V  Verification entrypoints              1 pass, 1 not applicable, 3 cannot decide
+  V  Verification entrypoints              1 pass, 1 not applicable, 4 cannot decide
   H  Local Git hooks                       2 pass
   C  CI                                    5 pass
   A  Agent guardrails                      3 pass, 6 cannot decide
@@ -24,6 +24,8 @@ Cannot decide
         vibe.yaml: cannot decide: verify-fast (task verify:fast): `task` is not installed on this machine
   V-03  MUST    `fmt-check` writes no file
         vibe.yaml: cannot decide: fmt-check with the format defect in . (task fmt:check): `task` is not installed on this machine
+  V-08  SHOULD  Blanket suppressions do not hide a defect
+        vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
   A-02  MUST    The guard refuses the baseline unless an exception says otherwise
         .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-03  MUST    The guard fails closed
@@ -49,4 +51,4 @@ Local guardrail adjustments
 CI provider read: GitHub Actions
 Note: the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is main
 
-Verdict: cannot decide. 10 rules cannot be decided.
+Verdict: cannot decide. 11 rules cannot be decided.

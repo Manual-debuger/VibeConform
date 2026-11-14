@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -28,6 +29,14 @@ func main() {
 		os.Exit(formatFiles(false))
 	case "typecheck":
 		os.Exit(run("go", "vet", "./..."))
+	case "vet-nolint":
+		// A linter that honors //nolint, as golangci-lint does: go vet's
+		// findings on a line holding //nolint do not count (V-08).
+		os.Exit(vetNolint())
+	case "nolintlint":
+		// Refuses a //nolint that names no linter, as golangci-lint's
+		// nolintlint does with require-specific (V-08).
+		os.Exit(nolintlint())
 	case "test":
 		// go test runs part of go vet by itself, printf included; the
 		// fixture turns that off so that typecheck alone catches the
@@ -174,4 +183,89 @@ func stop(honorActive bool) int {
 		return 2
 	}
 	return 0
+}
+
+// vetFinding is a go vet finding: file:line:col: message.
+var vetFinding = regexp.MustCompile(`^(.*\.go):(\d+):\d+: `)
+
+// vetNolint runs go vet and fails on its findings, except those on a line
+// that holds //nolint. Output go vet prints that is not a finding fails
+// the step when go vet failed.
+func vetNolint() int {
+	out, err := exec.Command("go", "vet", "./...").CombinedOutput()
+	if err == nil {
+		return 0
+	}
+	findings, counted := 0, 0
+	for _, line := range strings.Split(string(out), "\n") {
+		m := vetFinding.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		findings++
+		if !onNolintLine(m[1], m[2]) {
+			fmt.Println(line)
+			counted++
+		}
+	}
+	switch {
+	case findings == 0:
+		fmt.Print(string(out))
+		return 1
+	case counted > 0:
+		return 1
+	}
+	fmt.Println("go vet's findings are all on //nolint lines")
+	return 0
+}
+
+// onNolintLine reports whether line n of file holds //nolint.
+func onNolintLine(file, n string) bool {
+	src, err := os.ReadFile(file)
+	if err != nil {
+		return false
+	}
+	lines := strings.Split(string(src), "\n")
+	var i int
+	if _, err := fmt.Sscan(n, &i); err != nil || i < 1 || i > len(lines) {
+		return false
+	}
+	return strings.Contains(lines[i-1], "//nolint")
+}
+
+// nolintlint lists the //nolint directives that name no linter, outside
+// this program, whose source names the directive.
+func nolintlint() int {
+	code := 0
+	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if path != "." && (strings.HasPrefix(d.Name(), ".") || path == "ci") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for i, line := range strings.Split(string(src), "\n") {
+			_, after, ok := strings.Cut(line, "//nolint")
+			if ok && !strings.HasPrefix(after, ":") {
+				fmt.Printf("%s:%d: //nolint names no linter\n", filepath.ToSlash(path), i+1)
+				code = 1
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return code
 }

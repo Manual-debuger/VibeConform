@@ -4,8 +4,9 @@
 // team's own entries at the end of the list: a later entry wins.
 //
 // Dev dependencies: eslint, @eslint/js, typescript-eslint, globals,
-// eslint-config-prettier.
+// eslint-config-prettier, @eslint-community/eslint-plugin-eslint-comments.
 
+import comments from '@eslint-community/eslint-plugin-eslint-comments/configs'
 import js from '@eslint/js'
 import eslintConfigPrettier from 'eslint-config-prettier'
 import globals from 'globals'
@@ -84,5 +85,19 @@ export default tseslint.config(
     },
   },
   eslintConfigPrettier,
+  // A disable comment names its rules and says why (V-08): a bare
+  // eslint-disable would hide every finding in its file. The plugin's
+  // no-unused-disable does not report under a flat config, so ESLint's own
+  // reportUnusedDisableDirectives reports an unused disable comment.
+  comments.recommended,
+  {
+    rules: {
+      '@eslint-community/eslint-comments/no-unlimited-disable': 'error',
+      '@eslint-community/eslint-comments/require-description': 'error',
+    },
+    linterOptions: {
+      reportUnusedDisableDirectives: 'error',
+    },
+  },
   // The team's own entries go here.
 )
