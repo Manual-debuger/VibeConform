@@ -36,28 +36,39 @@ agent optimizes a proxy metric that becomes a target (Goodhart's law).
    cyclomatic and cognitive complexity are both at least 40 (Q14). V-07
    is a secret: a PEM private-key block (Q16). V-08 is the V-01
    static-analysis defect hidden by every blanket suppression the
-   language commonly uses (Q7). Each rule probes `verify` and
-   `verify-fast` (Q12). Per-kind rules let an adopter waive one kind.
-3. **This reverses ADR 0025 decision 12 for complexity.** That decision
+   language commonly uses (Q7). Per-kind rules let an adopter waive one
+   kind.
+3. **The new rules cost as few entrypoint runs as possible** (Q12,
+   revised the same day for cost). Each rule probes `verify` only:
+   CI runs `verify`, so it is the gate, and the references still put
+   the checks in `verify-fast` for the agent's Stop hook. V-05 applies
+   to Python components only, since in Go and TypeScript a type error
+   is a compile error that V-01 already shows. V-07 is planted once
+   per repository, since a secret does not depend on the language.
+   This cuts the added runs from 8 to 3 for one Go component, and from
+   24 to 8 for a three-language monorepo. The negative control that
+   checks the samples themselves runs only when they or the references
+   change, weekly, and on demand.
+4. **This reverses ADR 0025 decision 12 for complexity.** That decision
    kept one lint floor because "any other lint defect might be
    legitimately allowed". No repository legitimately allows a function
    at complexity 40, and a blanket suppression only exists to switch off
    a gate. The contract still says nothing about lint rules below that.
-4. **Specific suppressions stay the repository's choice** (Q13). An
+5. **Specific suppressions stay the repository's choice** (Q13). An
    agent may silence one finding at one place by naming the rule. The
    setup skill's references require a written reason where the linter
    can enforce one (Go `nolintlint`, ESLint `eslint-comments`). Code
    that already exceeds the reference thresholds when a repository
    adopts them gets a specific suppression with the fixed reason
    `baseline: pre-existing complexity` (Q15), not a raised threshold.
-5. **The guard refuses commands that skip Git hooks** (Q3, Q18). A new
+6. **The guard refuses commands that skip Git hooks** (Q3, Q18). A new
    SHOULD rule, A-09, uses its own guard-corpus subset:
    `git commit --no-verify`, `git commit -n`, `git push --no-verify`,
    and `git -c core.hooksPath=…` with `commit` or `push`. Bypasses
    specific to one hook manager (`LEFTHOOK=0`, `HUSKY=0`) are
    `vibe-guard` built-in rules, not corpus cases. Adding deny cases to
    A-02's corpus would be MAJOR, so A-02 is unchanged.
-6. **Out of the contract** (Q4, Q5): locking lint or test configuration
+7. **Out of the contract** (Q4, Q5): locking lint or test configuration
    behind an unlock, CODEOWNERS, duplication, docstring coverage, file
    length, coverage percentage, mutation score, and every ratchet that
    needs a base revision. Dependency direction differs too much between

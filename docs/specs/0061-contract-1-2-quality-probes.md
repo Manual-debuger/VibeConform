@@ -25,13 +25,15 @@ base revision to ratchet against.
 Contract 1.2.0 adds four planted defects and one guard rule, all SHOULD
 (ADR 0027):
 
-- **V-05**: `verify` and `verify-fast` catch a type error.
-- **V-06**: they catch a function whose cyclomatic and cognitive
+- **V-05**: `verify` catches a type error, in Python components. In Go
+  and TypeScript a type error is a compile error, which V-01 already
+  covers, so V-05 is not applicable there.
+- **V-06**: `verify` catches a function whose cyclomatic and cognitive
   complexity are both at least 40.
-- **V-07**: they catch a secret (a PEM private-key block) in the
-  working tree.
-- **V-08**: they still catch V-01's static-analysis defect when the
-  language's common blanket suppressions cover it.
+- **V-07**: `verify` catches a secret (a PEM private-key block) in the
+  working tree. It is planted once per repository.
+- **V-08**: `verify` still catches V-01's static-analysis defect when
+  the language's common blanket suppressions cover it.
 - **A-09**: the agent guard refuses commands that skip Git hooks.
 
 The contract fixes the planted defect, never a threshold or a tool. Any
@@ -52,7 +54,7 @@ repository enforces its own direction with lint instead of prose.
 7. As an adopter, I want specific suppressions to stay allowed, so that a function that is complex by nature can carry a named, reasoned exception instead of being split apart.
 8. As an adopter, I want each new rule to be a SHOULD with its own ID, so that I can waive one kind, with a reason and an expiry date, and keep the others.
 9. As an adopter on contract 1.1.0, I want my verdict to stay conformant after I upgrade `vibe`, so that the new rules inform me without breaking CI.
-10. As an adopter, I want the report to name which entrypoint missed which defect, so that I know whether `verify`, `verify-fast` or both need the gate.
+10. As an adopter, I want the report to name the component and the defect kind that `verify` missed, so that I know where the gate is missing.
 11. As an adopter, I want a planted defect to fail only because of its own kind, so that an unrelated lint finding cannot make a missing gate look present.
 12. As an adopter with a component that has no tests, I want V-05 to V-08 to say "cannot decide" for it, so that V-01 alone reports the missing tests.
 13. As an adopter, I want the guard to refuse `git commit --no-verify`, so that an agent cannot skip my pre-commit hook.
@@ -65,7 +67,9 @@ repository enforces its own direction with lint instead of prose.
 20. As an adopter, I want an optional reference for dependency direction, so that I can enforce my own layers with a tool my ecosystem already has.
 21. As an adopter on Windows, I want the secret scanner and the new linters to run on Windows and Linux alike, so that conformance does not depend on the platform.
 22. As an adopter, I want my pre-commit hook to scan staged files for secrets, so that a key is caught before it leaves my machine, even though the contract does not check that.
-23. As an agent working in an adopting repository, I want the Stop hook's `verify-fast` to report complexity, type, secret and suppression findings, so that I fix them in the same turn.
+23. As an agent working in a repository that follows the references, I want the Stop hook's `verify-fast` to report complexity, type, secret and suppression findings, so that I fix them in the same turn.
+31. As an adopter, I want the new probes to add as few entrypoint runs as possible, so that the conformance job stays fast.
+32. As an adopter with Go or TypeScript components only, I want V-05 reported as not applicable, so that the audit does not rerun what compilation already shows.
 24. As an agent, I want a specific suppression with a reason to be accepted, so that I am not forced to split a cohesive function to pass a check.
 25. As a maintainer of VibeConform, I want `task audit` on this repository to stay conformant under 1.2.0, so that the contract is dogfooded.
 26. As a maintainer, I want the examples workflow to audit every example under 1.2.0, so that the references this repository cannot dogfood stay conformant.
@@ -85,14 +89,24 @@ repository enforces its own direction with lint instead of prose.
 
 ### V-05 to V-08: planted-defect probes
 
-- Each rule has two probe parts: one for `verify`, one for
-  `verify-fast`. Each part plants its sample in every component, one
-  component at a time, in a reset probe copy, and requires the
-  entrypoint to exit non-zero. The precondition is the same as V-02's:
-  the entrypoint passes without a planted defect, or the part cannot
-  decide. A component without tests leaves the part undecided (V-01
-  already fails it).
-- The finding names the entrypoint, the component and the defect kind.
+- **Each rule probes `verify` only** (ADR 0027, Q12 revised). CI runs
+  `verify`, so it is the gate. `verify-fast` is not probed for these
+  kinds, which halves their cost. The references still put every new
+  check in `verify-fast` too, so an agent's Stop hook reports them, but
+  the contract does not check that.
+- Each rule plants its sample in a reset probe copy, one component at a
+  time, and requires `verify` to exit non-zero. The precondition is
+  V-01's baseline: `verify` passes without a planted defect, or the
+  rule cannot decide. A component without tests leaves the rule
+  undecided (V-01 already fails it).
+- **Where each rule plants**: V-05 in every Python component; V-06 and
+  V-08 in every component; V-07 once, in the first component in
+  configuration order that has tests, because a secret does not depend
+  on the language.
+- **V-05 is not applicable** to a repository without a Python
+  component. In a repository with one, its Go and TypeScript
+  components are skipped, not reported.
+- The finding names the component and the defect kind.
 - The samples join the planted-defect table: new defect kinds "type
   error", "complexity", "secret" and "blanket suppression". Like the
   existing samples, they are contract content: changing one is a
@@ -101,17 +115,14 @@ repository enforces its own direction with lint instead of prose.
   setup skill's reference configuration. A sample that trips an
   unrelated rule (unused code, a missing doc comment, too many return
   statements) would let a repository without the gate pass.
-- **Go samples for V-05, V-06 and V-07 are non-test files.** The
+- **The Go V-06 sample is a non-test file.** The
   existing Go samples are `_test.go` files, and repositories commonly
   relax lint for test files. A Go non-test sample takes the package
   name of the test file beside it, without a `_test` suffix. V-08
   keeps V-01's test file, because it is V-01's sample with
   suppressions added.
-- **V-05, type error**: Go, a variable of type `int` initialized with a
-  string; Python, a function annotated `-> int` that returns a string;
-  TypeScript, an exported `number` constant initialized with a string.
-  In Go and TypeScript this overlaps with compilation. Only Python
-  needs a separate type checker.
+- **V-05, type error**: Python only, a function annotated `-> int` that
+  returns a string.
 - **V-06, complexity**: one exported (Go: exported, with a doc comment)
   function of one integer parameter. It holds 40 consecutive,
   unnested `if` statements that each add a constant to a running total,
@@ -233,12 +244,14 @@ repository enforces its own direction with lint instead of prose.
   processes.** Prior art: the planted-defect tests (V-01, V-02, A-05
   probe part) in the contract's probe tests. The fixture's small
   check program gains a check per new kind, so that a fixture's
-  `verify` or `verify-fast` can catch or miss each kind on purpose.
-  Cases: each rule passes when both entrypoints catch the defect; fails
-  and names the entrypoint when one misses it; is undecided when the
-  baseline fails or a component has no tests. One test asserts that a
-  configuration declaring 1.1.0 keeps a conformant verdict when only
-  the new rules fail.
+  `verify` can catch or miss each kind on purpose. Cases: each rule
+  passes when `verify` catches the defect; fails and names the
+  component when it misses it; is undecided when the baseline fails or
+  a component has no tests. V-05 is not applicable without a Python
+  component. V-07 plants once in a repository with several components.
+  No new rule runs `verify-fast`. One test asserts that a configuration
+  declaring 1.1.0 keeps a conformant verdict when only the new rules
+  fail.
 - **Sample tests**: the Go V-06 sample builds and passes `go vet`;
   the V-07 sample matches gitleaks's private-key pattern shape (header,
   body length, footer). No test file holds the literal PEM header.
@@ -251,11 +264,15 @@ repository enforces its own direction with lint instead of prose.
 - **Seam 3: real toolchains.** `task audit` on this repository and
   `examples.yml` on the three examples reach "conformant" with every
   new rule passing.
-- **Negative control** (in `examples.yml`): for each new sample and
-  language, a job that switches off only the targeted gate (the
-  complexity linters, the type checker, gitleaks, the suppression
-  rules) and shows that the corresponding rule now fails. This proves
-  each sample fails only because of its own kind.
+- **Negative control**: for each new sample and language, a job that
+  switches off only the targeted gate (the complexity linters, the type
+  checker, gitleaks, the suppression rules) and shows that the
+  corresponding rule now fails. This proves each sample fails only
+  because of its own kind. It checks VibeConform's samples, not an
+  adopter's code, so it does not run on every pull request: it runs
+  when a pull request changes the planted samples, the setup skill's
+  references or the examples (a path filter), weekly on a schedule,
+  and on manual dispatch.
 - Bug fixes found on the way get a regression test (AGENTS.md).
 
 ## Out of Scope
@@ -274,6 +291,9 @@ repository enforces its own direction with lint instead of prose.
   (`GIT_CONFIG_*`); hook-manager switches other than `LEFTHOOK=0` and
   `HUSKY=0`.
 - Promoting any new rule to MUST (a contract 2.0 decision).
+- Probing `verify-fast` for the new defect kinds (ADR 0027, Q12
+  revised), and running probe copies in parallel (tool locks such as
+  golangci-lint's and shared build caches make the result unstable).
 - A release of `vibe` itself; the existing release process applies.
 
 ## Constraints
@@ -312,8 +332,9 @@ the spec is revised before the reference is changed.
 1. `vibe audit` reports V-05, V-06, V-07, V-08 and A-09 as SHOULD rules
    under contract 1.2.0, and `vibe explain` describes each.
 2. For each of V-05 to V-08, a fixture whose `verify` misses the defect
-   fails the rule, and the finding names `verify`; the same for
-   `verify-fast`.
+   fails the rule, and the finding names the component. No new rule
+   runs `verify-fast`. V-05 is not applicable without a Python
+   component, and V-07 runs `verify` once per repository.
 3. A configuration declaring 1.1.0 whose only failures are the new rules
    is conformant.
 4. `vibe-guard` refuses every A-09 deny case and allows every A-09
@@ -334,9 +355,13 @@ the spec is revised before the reference is changed.
 
 ## Further Notes
 
-- The audit runs `verify` and `verify-fast` eight more times per
-  component. The conformance job gets slower; `--static` is
-  unaffected.
+- Cost: the new rules add one `verify` run per Python component (V-05),
+  two per component (V-06, V-08) and one per repository (V-07). A
+  single Go component adds 3 runs; the monorepo example (Go, TypeScript,
+  Python) adds 8. The first draft probed `verify-fast` too, in every
+  component, for every kind: 8 and 24 runs. `--static` is unaffected.
+  The conformance job took 3.5 to 4.5 minutes on main before this
+  change.
 - Goodhart's law still applies: an adopter's linter can be tuned to
   catch exactly the planted samples, and an agent can split a function
   into meaningless pieces. ADR 0027 records both as accepted limits.
