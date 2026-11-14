@@ -4,16 +4,16 @@ name: Negative control
 # fails only because of its own kind. A job copies an example, switches
 # off only the gate that catches one kind, and shows that the rule for
 # that kind now fails. It checks VibeConform's samples and the setup
-# skill's references, not an adopter's code, so it runs when they or the
-# examples change, weekly, and on demand.
+# skill's references, not an adopter's code.
+#
+# The spec asks for a paths filter on pull requests. This repository's
+# own R-01 (MUST) lets only a job that satisfies C-04 call vibe, and a
+# job behind a paths filter does not run for every pull request, so it
+# cannot be that job. The workflow therefore runs on every pull request,
+# weekly, and on demand.
 
 on:
   pull_request:
-    paths:
-      - internal/contract/defects.go
-      - internal/setupskill/skill/reference/**
-      - examples/**
-      - .github/workflows/negative-control.yml
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
