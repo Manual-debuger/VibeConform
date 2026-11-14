@@ -100,8 +100,33 @@ jobs:
             *) tar -xzf "$dir/$asset" -C "$dir" gitleaks ;;
           esac
           echo "$dir" >> "$GITHUB_PATH"
+      # The verdict counts only MUST rules, so the SHOULD rules of
+      # contract 1.2.0 that this repository meets (spec 0061, acceptance
+      # criterion 7) are checked from the JSON report: V-06, V-07, V-08
+      # and A-09 pass, and V-05 is not applicable (no Python component).
+      # The step fails on a verdict other than conformant too.
       - name: vibe audit
-        run: vibe audit
+        env:
+          REQUIRED_SHOULD: V-06 V-07 V-08 A-09
+        run: |
+          report="$RUNNER_TEMP/contract.json"
+          status=0
+          vibe audit --json > "$report" || status=$?
+          jq -e '.schema == 1' "$report" > /dev/null || exit 1
+          jq -r '"Verdict: \(.verdict) (\(.reason))", (.rules[] | "  \(.id)  \(.level)  \(.result)", (.findings[]? | "      \(.file): \(.message)"))' "$report"
+          for id in $REQUIRED_SHOULD; do
+            result="$(RULE="$id" jq -r '.rules[] | select(.id == env.RULE) | .result' "$report")"
+            if [ "$result" != "pass" ]; then
+              echo "::error::$id is '${result:-missing}', not 'pass'"
+              status=1
+            fi
+          done
+          result="$(jq -r '.rules[] | select(.id == "V-05") | .result' "$report")"
+          if [ "$result" != "not_applicable" ]; then
+            echo "::error::V-05 is '${result:-missing}', not 'not_applicable'"
+            status=1
+          fi
+          exit "$status"
 
 
   audit:

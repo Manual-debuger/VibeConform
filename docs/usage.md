@@ -615,7 +615,11 @@ separately from the contract; it is `1`.
 
 This repository's `Contract / audit` job
 (`.github/workflows/contract-audit.yml`) runs the full audit on every
-pull request and passes on exit `0`. It builds `vibe` and `vibe-guard`,
+pull request. It passes on exit `0` when, in the JSON report, V-06,
+V-07, V-08 and A-09 pass and V-05 is not applicable: SHOULD rules do
+not change the verdict, so the job checks the ones this repository
+meets (spec 0061). `task audit` checks the same in the text report. It
+builds `vibe` and `vibe-guard`,
 installs the tools the entrypoints call, and sets
 `VIBE_TEST_REQUIRE_TOOLS` so that the tests `verify` runs fail rather
 than skip without uv, pnpm, Python, Node or bash. It is a required
