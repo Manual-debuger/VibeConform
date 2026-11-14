@@ -305,7 +305,7 @@ The setup skill's upgrade flow reads the contract version from it.
 
 `vibe audit` reads `vibe.yaml` version 2 (a top-level `contract:` key,
 see "`vibe.yaml` version 2" below) and checks the repository against the
-rules of the contract version it declares: 25 rules in contract 1.2.0,
+rules of the contract version it declares: 26 rules in contract 1.2.0,
 in six categories (spec 0051, spec 0052, spec 0055). Each rule ends as
 `pass`, `fail`, `not applicable`, `waived`, `cannot decide` or `not
 run`. A full run decides every part of every
@@ -558,7 +558,7 @@ separately from the contract; it is `1`.
   `fail`, `not_applicable`, `waived`, `undecided`, `not_run`. `summary`
   has every token for both levels.
 - Verdict tokens: `conformant`, `not_conformant`, `undecided`.
-- `rules` lists all 25 rules in ID order. `parts[].check` is `static`,
+- `rules` lists all 26 rules in ID order. `parts[].check` is `static`,
   `execution` or `probe`.
 - `waiver` is `null`, or `{"reason", "until", "expired"}`. A rule with a
   waiver and result `not_applicable` has an unused waiver.
@@ -1275,6 +1275,20 @@ audit checks this by probe: it runs the guard corpus through the hook
 (see "`vibe audit`"). Any guard that passes will do; `vibe-guard`, below,
 is the reference, and the setup skill installs it.
 
+**Commands that skip Git hooks** (A-09, SHOULD, contract 1.2.0; guard
+rule ID `git-skip-hooks`). The guard also refuses `git commit
+--no-verify`, `git commit -n` (`-nm wip` too: a short-option cluster is
+read up to the first letter that takes a value, so `-mn` is the message
+"n"), `git push --no-verify`, and `git -c core.hooksPath=…` (the key in
+any case) with `commit` or `push`. `git push -n` is a dry run and runs.
+A-09 has its own corpus cases, which A-02, A-03 and R-01 do not read:
+`vibe audit --explain A-09` lists them. An exception for
+`git-skip-hooks` in `policy.json` lets its command through, as for every
+other rule. `vibe-guard` also refuses `LEFTHOOK=0` and `HUSKY=0` as an
+environment prefix of `git commit` or `git push` (directly or through
+`env`); A-09 does not require that, since each belongs to one hook
+manager.
+
 **It is not a sandbox.** The guard stops common accidents. It is not a
 security boundary: a command it does not recognize runs. For hard
 limits, use Claude Code's permission `deny` rules and its sandbox. When
@@ -1300,13 +1314,20 @@ shouldn't:
   origin :x`) all run. A secret file written through the shell (`echo
   X=1 > .env`) or named without an extension
   (`deploy/secrets/db_password`) is not caught either.
+- **Hooks can be skipped in other ways.** `--no-verify` on `git merge`,
+  `git rebase` or `git am`, Git configuration through environment
+  variables (`GIT_CONFIG_*`), `git config core.hooksPath` written
+  beforehand, an assignment on a line of its own (`export LEFTHOOK=0`),
+  and other hook managers' switches all run.
 - **Some commands are not read:** `cmd /c`, `Start-Process`, shell
   aliases, and glob expansion into flag-like file names.
 
 **Checking it fires.** No automated check can see an agent's own hook
 dispatch. The manual canary: ask the agent to run
 `git branch -D some-branch-that-does-not-exist`. It should be refused
-with `vibe-guard: refused by rule git-branch-force-delete: …`. Don't
+with `vibe-guard: refused by rule git-branch-force-delete: …`. For A-09,
+ask it to run `git commit --no-verify -m canary`: it should be refused
+with `vibe-guard: refused by rule git-skip-hooks: …`. Don't
 assume when an agent picks up a changed configuration: Claude Code
 switched to a new guard mid-session while this was being built, while
 other agents or versions may only read it at startup. Run the canary in
@@ -1418,7 +1439,8 @@ are refused. These IDs take no exception.
   a `reason`, and exactly one of `command` (a word prefix, as exceptions
   use) or `path` (a glob). A command rule may add `args`, a regular
   expression some remaining argument must match.
-- An exception names one of the ten contract rule IDs and lifts it for
+- An exception names one of the contract's guard rule IDs (the ten of
+  1.0.0, and `git-skip-hooks` since 1.2.0) and lifts it for
   one simple command (`match`, compared word by word, never through an
   expansion) or one path glob. Every other rule still applies.
 - An unknown key or an invalid value is a policy error, and every call
@@ -1506,8 +1528,11 @@ unlocked until 2026-10-17T14:05:00Z (/path/to/repo/.git/vibe-unlock)
 **The canary with `vibe-guard`.** Ask the agent to run `git branch -D
 some-branch-that-does-not-exist`: it should be refused with
 `vibe-guard: refused by rule git-branch-force-delete: …`. Ask it to run
-`vibe unlock`: refused under `guardrail-settings`. After installing or
-upgrading `vibe-guard`, run the canary in the session you rely on.
+`vibe unlock`: refused under `guardrail-settings`. Ask it to run `git
+commit --no-verify -m canary`: refused under `git-skip-hooks` (a
+`vibe-guard` older than contract 1.2.0 lets it through). After
+installing or upgrading `vibe-guard`, run the canary in the session you
+rely on.
 
 ### Codex: hooks suspended
 

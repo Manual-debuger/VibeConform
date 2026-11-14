@@ -195,8 +195,8 @@ set these in the project's settings, as GitHub branch protection is set:
 
 Not applicable when `agents` does not include `claude`. Start from
 `reference/agents/settings.json` and `reference/agents/policy.json`:
-`vibe-guard` satisfies A-01 to A-04 and A-08. Install it first (`SKILL.md`,
-step 5).
+`vibe-guard` satisfies A-01 to A-04, A-08 and A-09. Install it first
+(`SKILL.md`, step 5).
 
 The hooks run from the project root. Claude Code runs a hook command in
 the agent's current directory, and Task uses the nearest `Taskfile.yml`
@@ -233,8 +233,8 @@ PreToolUse command exits 2 when `vibe-guard` is missing.
 `exceptions` names a guard rule ID (`rm-rf`, `remove-item-recurse-force`,
 `git-reset-hard`, `git-clean-fd`, `git-push-force`,
 `git-branch-force-delete`, `git-discard-worktree`, `secret-file`,
-`guard-policy-file`, `guardrail-settings`), a `match` and a non-empty
-`reason`. Add no exception the person has not asked for.
+`guard-policy-file`, `guardrail-settings`, `git-skip-hooks`), a `match`
+and a non-empty `reason`. Add no exception the person has not asked for.
 
 ### A-05 (MUST): the agent's turn ends with `verify-fast`
 
@@ -262,6 +262,16 @@ The guard refuses edits of `.claude/settings.json` and `.claude/hooks/`
 without a valid unlock marker, refuses `vibe unlock` and the marker's
 creation, and the Stop hook removes the marker (`vibe-guard relock`).
 `vibe-guard` and the reference Stop command do this.
+
+### A-09 (SHOULD): the guard refuses commands that skip Git hooks
+
+The guard refuses `git commit --no-verify`, `git commit -n` (also in a
+cluster such as `-nm`), `git push --no-verify`, and `git -c
+core.hooksPath=…` with `commit` or `push`. It allows `git push -n`, a
+dry run, and a message such as `-m "-n"`. `vibe-guard hook` does this
+(guard rule ID `git-skip-hooks`); it also refuses `LEFTHOOK=0` and
+`HUSKY=0` before `git commit` or `git push`. Add an exception for
+`git-skip-hooks` only when the person asks for one.
 
 ## D: dependencies and supply chain
 

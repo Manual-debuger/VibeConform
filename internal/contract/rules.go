@@ -120,6 +120,9 @@ type Rule struct {
 	Check string
 	// Source names the specs, ADRs and principles the rule comes from.
 	Source string
+	// Since is the contract version that added the rule, such as "1.2.0",
+	// or "" for a rule of spec 0051's table (contract 1.0.0).
+	Since string
 	// NotApplicableWhen says when the rule is not applicable, or "" when
 	// it always applies.
 	NotApplicableWhen string
@@ -438,6 +441,20 @@ var rules = []Rule{
 				"marker, allowed with a valid marker, and refused with an expired marker. A `Bash` call that runs "+
 				"`vibe unlock`, and any `Write` or `Bash` that creates the marker, are refused. After the Stop hook "+
 				"runs, the marker is gone.", checkA08),
+		},
+		applies: onConfig(needsClaude),
+	},
+	{
+		ID: "A-09", Level: Should, Category: CategoryAgents, Since: "1.2.0",
+		Title: "The guard refuses commands that skip Git hooks",
+		Check: "Probe: every A-09 corpus case is fed to every PreToolUse hook command that matches its tool. A deny " +
+			"case is satisfied as described under \"Guard policy and exceptions\". Every allow case must be allowed.",
+		Source:            "spec 0061, ADR 0027",
+		NotApplicableWhen: notApplicableWithoutClaude,
+		Parts: []Part{
+			probeRun("every A-09 corpus case is fed to every PreToolUse hook command that matches its tool. A deny "+
+				"case is satisfied as described under \"Guard policy and exceptions\". Every allow case must be allowed.",
+				checkA09),
 		},
 		applies: onConfig(needsClaude),
 	},

@@ -118,6 +118,30 @@ func TestAuditExplainDefectSamples(t *testing.T) {
 	}
 }
 
+// --explain A-09 lists A-09's own corpus cases, each with its expected
+// decision, tool and command (spec 0061, "`vibe explain` and the
+// report").
+func TestAuditExplainA09ListsItsCases(t *testing.T) {
+	t.Parallel()
+	r := runVibeAudit(t, "--explain", "A-09")
+	assertExit(t, r, 0)
+	cases := contract.GuardCorpusFor(contract.ProbeA09)
+	if len(cases) != 13 {
+		t.Fatalf("A-09 has %d corpus cases, want the 13 of spec 0061", len(cases))
+	}
+	for _, c := range cases {
+		want := fmt.Sprintf("\n  %-5s  %-10s  %s\n", c.Want, c.Payload.ToolName, c.Target().Command)
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("--explain A-09 lacks %q:\n%s", want, r.stdout)
+		}
+	}
+	for _, w := range []string{"git-skip-hooks", "LEFTHOOK=0", "HUSKY=0"} {
+		if !strings.Contains(r.stdout, w) {
+			t.Errorf("--explain A-09 does not name %s:\n%s", w, r.stdout)
+		}
+	}
+}
+
 // --explain A-02 and A-03 print the guard corpus's counts by guard rule
 // ID (spec 0053, "Report and CLI"). The expected counts are taken from
 // the corpus data.
@@ -125,7 +149,7 @@ func TestAuditExplainGuardCorpusCounts(t *testing.T) {
 	t.Parallel()
 	deny, allow := 0, 0
 	byRule := map[string]int{}
-	for _, c := range contract.GuardCorpus() {
+	for _, c := range contract.GuardCorpusFor("") {
 		if c.Want == contract.WantDeny {
 			deny++
 			byRule[c.Rule]++
@@ -140,12 +164,17 @@ func TestAuditExplainGuardCorpusCounts(t *testing.T) {
 			want := []string{fmt.Sprintf("\nGuard corpus:\n  %d cases: %d deny and %d allow. Deny cases by guard rule ID:\n",
 				deny+allow, deny, allow)}
 			for _, rule := range guardrule.IDs {
-				want = append(want, fmt.Sprintf("\n  %-26s %3d\n", rule, byRule[rule]))
+				if byRule[rule] > 0 {
+					want = append(want, fmt.Sprintf("\n  %-26s %3d\n", rule, byRule[rule]))
+				}
 			}
 			for _, w := range want {
 				if !strings.Contains(r.stdout, w) {
 					t.Errorf("--explain %s lacks %q:\n%s", id, w, r.stdout)
 				}
+			}
+			if strings.Contains(r.stdout, guardrule.GitSkipHooks) {
+				t.Errorf("--explain %s counts A-09's cases:\n%s", id, r.stdout)
 			}
 		})
 	}

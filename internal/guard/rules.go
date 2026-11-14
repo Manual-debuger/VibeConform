@@ -66,6 +66,11 @@ var (
 		"git restore . (or git checkout -- .) discards uncommitted changes in the whole working tree" + askUser,
 		matchDiscardWorktree, false}
 
+	gitSkipHooks = commandRule{gr.GitSkipHooks,
+		"git commit or git push with --no-verify (commit -n), core.hooksPath, LEFTHOOK=0 or HUSKY=0 skips the " +
+			"repository's Git hooks; fix what the hooks report instead" + askUser,
+		matchSkipHooks, false}
+
 	secretFile = pathRule{gr.SecretFile,
 		"this looks like a secret or credential file; ask the user to edit it themselves",
 		func(_ *Guard, p string) bool { return matchSecretFile(p) }, false}
@@ -94,7 +99,8 @@ var (
 // the rm program elsewhere, so a PowerShell rm is read both ways, as
 // Remove-Item first.
 var commandRules = []commandRule{
-	rmRF, removeItemRF, gitResetHard, gitCleanFD, gitPushForce, gitBranchForceDelete, gitDiscardWorktree, selfUnlock,
+	rmRF, removeItemRF, gitResetHard, gitCleanFD, gitPushForce, gitBranchForceDelete, gitDiscardWorktree, gitSkipHooks,
+	selfUnlock,
 }
 
 func commandRulesFor(shell gr.Shell) []commandRule {
@@ -284,6 +290,81 @@ func matchPushForce(args []gr.Word) bool {
 	}
 	for _, w := range a.operands {
 		if strings.HasPrefix(w.Text, "+") || strings.HasPrefix(w.Text, gr.ExpansionMark) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchSkipHooks refuses a git commit or git push that skips the hooks
+// (spec 0061, A-09): --no-verify, commit's -n, or core.hooksPath set by
+// -c or --config-env. A git command whose subcommand is not known
+// counts as matching.
+func matchSkipHooks(c gr.Command) bool {
+	if c.Name() != "git" {
+		return false
+	}
+	sub, args, known := gitSub(c)
+	switch {
+	case !known:
+		return true
+	case sub != "commit" && sub != "push":
+		return false
+	case setsHooksPath(c) || hookManagerOff(c.Assigns):
+		return true
+	case sub == "commit":
+		// A short-option cluster is read up to the first letter that
+		// takes a value: -nm x skips the hooks, -mn is the message "n".
+		a := scanPosix(args, "mFcCt", "message", "file", "reuse-message", "reedit-message", "template",
+			"author", "date", "cleanup", "fixup", "squash", "trailer", "pathspec-from-file")
+		return a.unknown || a.short("n") || a.long("no-verify", len("no-veri"))
+	}
+	// push -n is --dry-run, not --no-verify.
+	a := scanPosix(args, "o", "push-option", "repo", "receive-pack", "exec")
+	return a.unknown || a.long("no-verify", len("no-veri"))
+}
+
+// hookManagerOff reports whether an environment assignment switches the
+// hook manager off: LEFTHOOK=0 or HUSKY=0 (spec 0061, outside the
+// contract's corpus). A value with an expansion may be 0.
+func hookManagerOff(assigns []gr.Word) bool {
+	for _, w := range assigns {
+		name, value, _ := strings.Cut(w.Text, "=")
+		if (name == "LEFTHOOK" || name == "HUSKY") && (value == "0" || !w.Literal) {
+			return true
+		}
+	}
+	return false
+}
+
+// setsHooksPath reports whether git's global options set core.hooksPath.
+// Git configuration keys ignore case; a key with an expansion may be it.
+func setsHooksPath(c gr.Command) bool {
+	words := c.Words[1:]
+	for i := 0; i < len(words); i++ {
+		w := words[i]
+		var setting gr.Word
+		switch {
+		case !w.Literal:
+			return false // the subcommand; gitSub has read it
+		case w.Text == "-c" || w.Text == "--config-env":
+			if i+1 == len(words) {
+				return false
+			}
+			i++
+			setting = words[i]
+		case strings.HasPrefix(w.Text, "--config-env="):
+			setting = gr.Word{Text: strings.TrimPrefix(w.Text, "--config-env="), Literal: true}
+		case slices.Contains(gitGlobalWithArg, w.Text):
+			i++
+			continue
+		case strings.HasPrefix(w.Text, "-"):
+			continue
+		default:
+			return false // the subcommand
+		}
+		key, _, _ := strings.Cut(setting.Text, "=")
+		if setting.Unknown || strings.Contains(key, gr.ExpansionMark) || strings.EqualFold(key, "core.hooksPath") {
 			return true
 		}
 	}

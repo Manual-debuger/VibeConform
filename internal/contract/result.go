@@ -170,7 +170,7 @@ type Report struct {
 	Reason string
 	// FailingMust counts the MUST rules that fail.
 	FailingMust int
-	// Rules holds all 25 rules in report order.
+	// Rules holds every rule in report order.
 	Rules           []RuleResult
 	GuardExceptions []GuardException
 	// GuardExceptionUses are the corpus cases each exception let through

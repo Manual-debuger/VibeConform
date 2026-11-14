@@ -23,7 +23,7 @@ const a08CasePrefix = "A-08 ("
 // a08Cases returns the corpus's A-08 cases, in corpus order.
 func a08Cases() []GuardCase {
 	var out []GuardCase
-	for _, c := range guardCorpus() {
+	for _, c := range corpusFor("") {
 		if c.Rule == guardrule.GuardrailSettings || strings.HasPrefix(c.Name, a08CasePrefix) {
 			out = append(out, c)
 		}

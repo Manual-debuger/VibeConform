@@ -50,7 +50,7 @@ spec 0053 for execution checks and probes, spec 0055 for GitLab CI):
                           ↓
 internal/contract
   vibe.yaml version 2 (a version 1 file is detected and refused)
-  the 25 rules of contract 1.2.0
+  the 26 rules of contract 1.2.0
   static checks of tracked files
   execution checks and probes in a probe copy
   report model (plain data)
@@ -120,7 +120,7 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
 ```
 
 - **`internal/guardrule`** holds what the audit and the guard must agree
-  on: the ten contract guard rule IDs and the guard-internal ones,
+  on: the contract guard rule IDs and the guard-internal ones,
   `policy.json` version 2 parsing, exception matching, the policy file
   paths, the unlock marker's name and format (`vibe unlock` writes it,
   `vibe-guard` reads it, the audit plants it), and the decomposition of a
