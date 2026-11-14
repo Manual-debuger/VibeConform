@@ -440,7 +440,17 @@ above stay as approved; these notes record what was built instead.
 9. **A-09 in `vibe-guard`.** Beyond the corpus, the guard also refuses
    `--config-env` that sets `core.hooksPath`, and a `git commit` or
    `git push` with an unquoted expansion before `--`, since it cannot
-   tell whether the expansion skips the hooks.
+   tell whether the expansion skips the hooks. For the same reason it
+   refuses a `-c` or `--config-env` setting whose key holds an
+   expansion, quoted or not (`git -c "$key=x" commit`), and a
+   `LEFTHOOK` or `HUSKY` assignment whose value is not a literal
+   (`LEFTHOOK="$v" git commit`), not only the value `0`. A literal
+   value other than `0` (`LEFTHOOK=1`) is allowed.
+   `GuardCorpusCounts`, which `vibe audit --explain A-02` and `A-03`
+   print, leaves out a guard rule ID with no deny case in the corpus it
+   counts. A-02's and A-03's corpus has no `git-skip-hooks` case, so
+   their explain output does not list that ID, and it no longer lists
+   any other ID with a count of 0 either.
 10. **Probe test-log cap.** On Windows, every `git` call in the probe
     copy searched `PATH` again, and `go test` records each file stat in
     its test log. With the new probes' extra resets, the `internal/cli`
