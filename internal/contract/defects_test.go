@@ -1,9 +1,13 @@
 package contract
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -59,5 +63,67 @@ func TestGoSamplePackageClause(t *testing.T) {
 				t.Errorf("content = %q, want %q", d.Content, tc.want)
 			}
 		})
+	}
+}
+
+// The V-07 sample is a PEM private-key block in the shape gitleaks's
+// private-key rule reports: a BEGIN line, at least 64 characters of
+// base64 body, and the matching END line (spec 0061, "V-07, secret").
+// It is the same in every language, in a file with a neutral name, and
+// fixed. The patterns below are not a literal header: no file in this
+// repository holds one (AC 6).
+func TestSecretSample(t *testing.T) {
+	t.Parallel()
+	env, comp := goTestRepo(t)
+	d, err := defectFor(env, comp, defectSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Path != "foo/vibe_probe_secret.txt" {
+		t.Errorf("path = %q, want foo/vibe_probe_secret.txt", d.Path)
+	}
+	shape := regexp.MustCompile(`(?m)^-{5}BEGIN PRIVATE KEY-{5}\n((?:[A-Za-z0-9+/=]+\n)+)-{5}END PRIVATE KEY-{5}\n`)
+	m := shape.FindSubmatch(d.Content)
+	if m == nil {
+		t.Fatalf("the sample is not a PEM private-key block:\n%s", d.Content)
+	}
+	body := strings.ReplaceAll(string(m[1]), "\n", "")
+	if len(body) < 64 {
+		t.Errorf("the body has %d base64 characters, want at least 64", len(body))
+	}
+	if _, err := base64.StdEncoding.DecodeString(body); err != nil {
+		t.Errorf("the body is not base64: %v", err)
+	}
+	for _, lang := range []string{LanguageGo, LanguagePython, LanguageTypeScript} {
+		if s := defectSamples[lang][defectSecret]; s != defectSamples[LanguageGo][defectSecret] {
+			t.Errorf("the %s secret sample differs from the Go one: %+v", lang, s)
+		}
+	}
+	again, err := defectFor(env, comp, defectSecret)
+	if err != nil || !bytes.Equal(again.Content, d.Content) {
+		t.Errorf("the sample is not fixed: %q, then %q (%v)", d.Content, again.Content, err)
+	}
+}
+
+// No file in this repository holds a literal PEM private-key header
+// (spec 0061, AC 6): vibe assembles V-07's sample at run time, so a
+// secret scanner finds nothing in vibe's own source. The pattern counts
+// the dashes, so that this file holds none either.
+func TestNoLiteralPrivateKeyHeader(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join("..", "..")
+	repo, err := OpenRepo(context.Background(), root)
+	if err != nil {
+		t.Skipf("cannot list this checkout's files: %v", err)
+	}
+	header := regexp.MustCompile(`-{5}BEGIN[ A-Z0-9_-]*PRIVATE KEY`)
+	for _, f := range repo.Files() {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f))) // #nosec G304 -- this repository's tracked files
+		if err != nil {
+			continue
+		}
+		if header.Match(data) {
+			t.Errorf("%s holds a literal PEM private-key header", f)
+		}
 	}
 }

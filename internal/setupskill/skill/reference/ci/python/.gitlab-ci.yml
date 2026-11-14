@@ -23,6 +23,7 @@ default:
   interruptible: true
 
 variables:
+  GITLEAKS_VERSION: "8.30.1"
   PYTHON_VERSION: "3.12"
   UV_VERSION: "0.13.1"
   TASK_VERSION: "v3.53.1"
@@ -33,6 +34,14 @@ variables:
   extends: .pipelines
   image: ghcr.io/astral-sh/uv:0.13.1-python3.12-trixie@sha256:570b79f6364c2a640aaa73691c58e41939df3a064fb2504a5cd00c87d303f22a
   before_script:
+    # gitleaks for the secrets task in verify: a pinned release, checked
+    # against its SHA-256 before it runs.
+    - |
+      gl="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+      curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${gl}"
+      echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  ${gl}" | sha256sum -c -
+      tar -xzf "${gl}" -C /usr/local/bin gitleaks
+      rm "${gl}"
     - uv tool install go-task-bin==${TASK_VERSION#v}
     - export PATH="$HOME/.local/bin:$PATH"
     - uv sync --frozen
@@ -50,6 +59,13 @@ verify:windows:
   extends: .pipelines
   tags: [saas-windows-medium-amd64]
   before_script:
+    # gitleaks for the secrets task in verify: a pinned release, checked
+    # against its SHA-256 before it runs.
+    - $gl = "$env:TEMP\gitleaks"; New-Item -ItemType Directory -Force -Path $gl | Out-Null
+    - Invoke-WebRequest -Uri "https://github.com/gitleaks/gitleaks/releases/download/v$env:GITLEAKS_VERSION/gitleaks_$($env:GITLEAKS_VERSION)_windows_x64.zip" -OutFile "$gl\gitleaks.zip"
+    - if ((Get-FileHash "$gl\gitleaks.zip" -Algorithm SHA256).Hash -ne "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e") { throw "gitleaks.zip does not match its SHA-256" }
+    - Expand-Archive -Path "$gl\gitleaks.zip" -DestinationPath $gl -Force
+    - $env:Path = "$gl;$env:Path"
     - choco install python312 --version=3.12.10 --yes --no-progress
     - $env:Path = "C:\Python312;C:\Python312\Scripts;$env:USERPROFILE\.local\bin;$env:Path"
     - python -m pip install uv==$env:UV_VERSION

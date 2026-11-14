@@ -11,6 +11,11 @@ pre-commit:
       glob: "*.{go,py,js,jsx,ts,tsx,json,css,md}"
       run: task fmt:check
       fail_text: "Run 'task fmt' to format every component."
+    # The staged changes, scanned for secrets before they are committed.
+    # Git's own variables stay set: gitleaks reads this index.
+    secrets:
+      run: gitleaks git --pre-commit --staged --redact --no-banner
+      fail_text: "gitleaks found a secret in the staged changes: remove it, and rotate it if it is real."
 
 # verify:fast runs every component's own verify:fast, Go tests in short
 # mode; the full suite is CI's, and "task test" runs it by hand.

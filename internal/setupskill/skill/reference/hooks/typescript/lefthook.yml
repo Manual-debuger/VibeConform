@@ -8,6 +8,11 @@ pre-commit:
       glob: "*.{js,jsx,ts,tsx,json,css,md}"
       run: task fmt:check
       fail_text: "Run 'task fmt' to format the staged files."
+    # The staged changes, scanned for secrets before they are committed.
+    # Git's own variables stay set: gitleaks reads this index.
+    secrets:
+      run: gitleaks git --pre-commit --staged --redact --no-banner
+      fail_text: "gitleaks found a secret in the staged changes: remove it, and rotate it if it is real."
 
 # A pre-push hook started from a linked worktree exports GIT_DIR, so a
 # test that runs git would act on the real repository instead of its

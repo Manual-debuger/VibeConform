@@ -263,6 +263,17 @@ var rules = []Rule{
 		},
 	},
 	{
+		ID: "V-07", Level: Should, Category: CategoryVerification,
+		Title: "`verify` catches a secret in the working tree",
+		Check: "Probe: with the secret defect (a PEM private-key block in a plain text file) planted once, in the " +
+			"first component in configuration order that has tests, `verify` exits non-zero.",
+		Source: "spec 0061, ADR 0027",
+		Parts: []Part{
+			probeRun("with the secret defect (a PEM private-key block in a plain text file) planted once, in the "+
+				"first component in configuration order that has tests, `verify` exits non-zero.", checkV07Probe),
+		},
+	},
+	{
 		ID: "H-01", Level: Should, Category: CategoryHooks,
 		Title:  "Hook configuration is committed and installs with one command",
 		Check:  "Static: a recognized hook manager's configuration is committed",

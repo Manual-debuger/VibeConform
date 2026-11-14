@@ -104,7 +104,7 @@ func TestContractTextReportSpecSample(t *testing.T) {
 
 	assertText(t, renderText(t, rep, "v0.12.0"), `vibe audit: contract 1.0.0 (vibe v0.12.0), static checks only
 
-  V  Verification entrypoints              1 pass, 3 not run
+  V  Verification entrypoints              2 pass, 3 not run
   H  Local Git hooks                       1 pass, 1 fail
   C  CI                                    4 pass, 1 waived
   A  Agent guardrails                      2 pass, 1 FAIL, 5 not run
@@ -180,7 +180,7 @@ func TestContractTextReportEverySection(t *testing.T) {
 
 	assertText(t, renderText(t, rep, "test"), `vibe audit: contract 1.0.0 (declared 1.0.3; vibe test)
 
-  V  Verification entrypoints              2 pass, 1 FAIL, 1 cannot decide
+  V  Verification entrypoints              3 pass, 1 FAIL, 1 cannot decide
   H  Local Git hooks                       2 pass
   C  CI                                    4 pass, 1 not applicable
   A  Agent guardrails                      8 not applicable

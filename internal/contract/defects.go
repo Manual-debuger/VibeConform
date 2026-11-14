@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"encoding/base64"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -22,6 +23,8 @@ const (
 	defectFormat         defectKind = "format"
 	defectStaticAnalysis defectKind = "static analysis"
 	defectTest           defectKind = "test"
+	// defectSecret is V-07's kind (spec 0061).
+	defectSecret defectKind = "secret"
 )
 
 // defectSample is one planted file. In Content, {{package}} stands for
@@ -43,6 +46,7 @@ var defectCatchers = map[defectKind]string{
 	defectFormat:         "a format check",
 	defectStaticAnalysis: "static analysis (a type check or linter)",
 	defectTest:           "the tests",
+	defectSecret:         "a secret scanner over the working tree's files",
 }
 
 // defectSamples holds the samples by language and kind. Spec 0053
@@ -61,6 +65,7 @@ var defectSamples = map[string]map[defectKind]defectSample{
 		defectTest: {Name: "vibe_probe_test.go", Content: "// Planted by vibe audit: a test that fails (the test defect).\n\n" +
 			"package {{package}}\n\nimport \"testing\"\n\n" +
 			"func TestVibeProbe(t *testing.T) { t.Fatal(\"planted by vibe audit: this test fails\") }\n"},
+		defectSecret: secretSample,
 	},
 	LanguagePython: {
 		defectFormat: {Name: "vibe_probe_format.py", Content: "# Planted by vibe audit: an unformatted file (the format defect).\n" +
@@ -69,6 +74,7 @@ var defectSamples = map[string]map[defectKind]defectSample{
 			"def vibe_probe() -> int:\n    return vibe_probe_undefined_name\n"},
 		defectTest: {Name: "vibe_probe_test.py", Content: "# Planted by vibe audit: a test that fails (the test defect).\n" +
 			"def test_vibe_probe() -> None:\n    assert False, \"planted by vibe audit: this test fails\"\n"},
+		defectSecret: secretSample,
 	},
 	LanguageTypeScript: {
 		defectFormat: {Name: "vibe_probe_format.ts", Content: "// Planted by vibe audit: an unformatted file (the format defect).\n" +
@@ -77,8 +83,33 @@ var defectSamples = map[string]map[defectKind]defectSample{
 			"export const vibeProbe: number = vibeProbeUndefinedName;\n"},
 		defectTest: {Name: "vibe_probe.test.ts", Content: "// Planted by vibe audit: a test file that throws when it is loaded (the test defect).\n" +
 			"export {};\n\nthrow new Error(\"planted by vibe audit: this test fails\");\n"},
+		defectSecret: secretSample,
 	},
 }
+
+// secretSample is V-07's sample (spec 0061, "V-07, secret"): a plain
+// text file holding a PEM private-key block with a fixed base64 body. A
+// secret does not depend on the language, so every language has the same
+// sample. The boundary lines are assembled here, at run time, so that no
+// file in this repository holds a literal private-key block for secret
+// scanners to report.
+var secretSample = func() defectSample {
+	boundary := func(word string) string {
+		dashes := strings.Repeat("-", 5)
+		return dashes + word + " PRIVATE " + "KEY" + dashes + "\n"
+	}
+	body := base64.StdEncoding.EncodeToString([]byte("Planted by vibe audit: this is not a key, it is the secret defect."))
+	var b strings.Builder
+	b.WriteString("Planted by vibe audit: a PEM private-key block (the secret defect). It is not a key.\n")
+	b.WriteString(boundary("BEGIN"))
+	for len(body) > 64 {
+		b.WriteString(body[:64] + "\n")
+		body = body[64:]
+	}
+	b.WriteString(body + "\n")
+	b.WriteString(boundary("END"))
+	return defectSample{Name: "vibe_probe_secret.txt", Content: b.String()}
+}()
 
 // plantDir returns the first directory, in sorted path order, inside a
 // component that holds a test file of its language, and that test file.

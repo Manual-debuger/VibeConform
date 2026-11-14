@@ -72,6 +72,15 @@ tasks:
     cmds:
       - govulncheck ./...
 
+  # The secret scan (contract rule V-07): gitleaks reads the working
+  # tree's files, not the Git history, with its default rules and the
+  # repository's .gitleaks.toml, and prints its findings redacted. The
+  # pre-commit hook scans the staged changes instead.
+  secrets:
+    desc: Scan the working tree's files for secrets with gitleaks.
+    cmds:
+      - gitleaks dir . --redact --no-banner
+
   # Skipped (Task's status: holds) where there is no .github/workflows, as
   # on GitLab CI, whose reference CI does not install actionlint.
   workflows:lint:
@@ -264,6 +273,7 @@ tasks:
       - task: mod:verify
       - task: security
       - task: workflows:lint
+      - task: secrets
 
   # What the agents' Stop hook and pre-push run: only the cheap,
   # incremental checks. go test and golangci-lint cache their results,
@@ -277,3 +287,4 @@ tasks:
       - task: typecheck
       - task: lint
       - task: test:short
+      - task: secrets
