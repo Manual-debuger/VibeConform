@@ -349,6 +349,12 @@ repository enforces its own direction with lint instead of prose.
    and Linux x64: `reportReturnType`, exit 1.
 5. This repository has few enough functions over the new Go
    thresholds that baseline suppressions are practical.
+   **Confirmed** (issue #150) with golangci-lint 2.15.0: `gocyclo` 15
+   and `gocognit` 20 report 118 findings in 79 functions (54 in
+   non-test files, 25 in test files), on Windows and with
+   `GOOS=linux`. Each function takes one line,
+   `//nolint:<linters> // baseline: pre-existing complexity` at the end
+   of its `func` line, naming only the linters that report it.
 
 Each assumption is checked first during implementation. If one fails,
 the spec is revised before the reference is changed.
