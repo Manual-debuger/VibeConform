@@ -13,6 +13,7 @@ linters:
     - staticcheck
     - unused
     - bodyclose
+    - depguard
     - errorlint
     - gocritic
     - gosec
@@ -22,6 +23,30 @@ linters:
     - unconvert
     - unparam
   settings:
+    # The dependency direction in docs/architecture/overview.md:
+    # internal/contract and internal/guard both depend on
+    # internal/guardrule, never on each other. (internal/guardrule
+    # importing either is an import cycle, which the compiler refuses.)
+    # Tests may cross the line: internal/contract's guard probe tests run
+    # the real vibe-guard. A trailing $ makes a deny entry
+    # an exact match, so that internal/guard does not also deny
+    # internal/guardrule.
+    depguard:
+      rules:
+        contract:
+          files:
+            - "**/internal/contract/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/Manual-debuger/VibeConform/internal/guard$
+              desc: the audit checks a guard as a black box; share code through internal/guardrule
+        guard:
+          files:
+            - "**/internal/guard/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/Manual-debuger/VibeConform/internal/contract
+              desc: vibe-guard imports only internal/guardrule; share code through internal/guardrule
     revive:
       rules:
         - name: exported
