@@ -34,6 +34,12 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 	must := 0
 	for _, r := range Rules() {
 		row, ok := rows[r.ID]
+		if !ok && contract12Rules[r.ID] {
+			if r.Level != Should || r.Source != "spec 0061, ADR 0027" {
+				t.Errorf("%s = %s from %q; spec 0061's rules are SHOULD, from spec 0061 and ADR 0027", r.ID, r.Level, r.Source)
+			}
+			continue
+		}
 		if !ok {
 			t.Errorf("%s is not in spec 0051", r.ID)
 			continue
@@ -71,7 +77,13 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 			must++
 		}
 	}
-	if must != 16 || len(Rules()) != 25 {
-		t.Errorf("%d rules, %d MUST; want 25 and 16", len(Rules()), must)
+	if want := 25 + len(contract12Rules); must != 16 || len(Rules()) != want {
+		t.Errorf("%d rules, %d MUST; want %d and 16", len(Rules()), must, want)
 	}
+}
+
+// contract12Rules are the rules contract 1.2.0 adds (spec 0061), which
+// spec 0051's table does not hold. All are SHOULD.
+var contract12Rules = map[string]bool{
+	"V-08": true,
 }

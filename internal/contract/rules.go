@@ -263,6 +263,17 @@ var rules = []Rule{
 		},
 	},
 	{
+		ID: "V-08", Level: Should, Category: CategoryVerification,
+		Title: "Blanket suppressions do not hide a defect",
+		Check: "Probe: with V-01's static-analysis defect under the language's blanket suppressions planted in each " +
+			"component, `verify` exits non-zero. A component without tests leaves it undecided.",
+		Source: "spec 0061, ADR 0027",
+		Parts: []Part{
+			probeRun("with V-01's static-analysis defect under the language's blanket suppressions planted in each "+
+				"component, `verify` exits non-zero. A component without tests leaves it undecided.", checkV08Probe),
+		},
+	},
+	{
 		ID: "H-01", Level: Should, Category: CategoryHooks,
 		Title:  "Hook configuration is committed and installs with one command",
 		Check:  "Static: a recognized hook manager's configuration is committed",

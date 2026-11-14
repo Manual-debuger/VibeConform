@@ -14,6 +14,11 @@ func reportOf(t *testing.T, static bool, results map[string]contract.RuleResult)
 	t.Helper()
 	rep := &contract.Report{Contract: contract.Versions{Declared: "1.0.0", Audited: "1.0.0"}, Static: static}
 	for _, rule := range contract.Rules() {
+		if strings.HasPrefix(rule.Source, "spec 0061") {
+			// A contract 1.0.0 report: the rules spec 0061 adds in 1.2.0
+			// are not in it.
+			continue
+		}
 		rr, ok := results[rule.ID]
 		if !ok {
 			rr = contract.RuleResult{Result: contract.ResultPass}
