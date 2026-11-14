@@ -22,8 +22,13 @@ Files under `reference/` are loaded on demand:
   `reference/ci/`, `reference/agents/`, `reference/lint/`: reference
   implementations per stack (`go`, `python`, `typescript`, `monorepo`).
   They are examples to adapt, not files to copy blindly.
-- `reference/optional/`: integrations and workflow sections. Use them
-  only when the person asks.
+- Optional references, used only when the person asks for what they
+  cover: editors (`reference/optional/vscode.md`,
+  `reference/optional/zed.md`), language servers
+  (`reference/optional/lsp.md`), `AGENTS.md` workflow sections
+  (`reference/optional/workflow.md`), a docs layout
+  (`reference/optional/docs-layout.md`), and layers enforced by lint
+  (`reference/optional/dependency-direction.md`).
 - `reference/migrate.md`: leaving the template-sync system.
 - `reference/upgrade.md`: moving to a newer `vibe` or contract.
 

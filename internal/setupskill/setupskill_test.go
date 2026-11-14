@@ -58,6 +58,31 @@ func TestSkillLength(t *testing.T) {
 	}
 }
 
+// TestSkillListsEveryOptionalReference: SKILL.md is the skill's index, and
+// an agent reads an optional reference only when the person asks for what
+// it covers, so SKILL.md names each file under reference/optional/.
+func TestSkillListsEveryOptionalReference(t *testing.T) {
+	skill, err := fs.ReadFile(setupskill.FS(), "SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	optional, err := fs.ReadDir(setupskill.FS(), "reference/optional")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(optional) == 0 {
+		t.Fatal("reference/optional/ has no files")
+	}
+	for _, e := range optional {
+		if !bytes.Contains(skill, []byte("`reference/optional/"+e.Name()+"`")) {
+			t.Errorf("SKILL.md does not name reference/optional/%s", e.Name())
+		}
+	}
+	if _, err := fs.Stat(setupskill.FS(), "reference/optional/dependency-direction.md"); err != nil {
+		t.Errorf("the optional dependency-direction reference is missing: %v", err)
+	}
+}
+
 // TestReferenceHooksAreTheGuards: the rendered reference settings run
 // internal/guard's reference PreToolUse and Stop commands, for the
 // version the version rule picks.

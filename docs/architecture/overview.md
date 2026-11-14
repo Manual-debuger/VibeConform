@@ -138,7 +138,9 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   `vibe`; `internal/guard`'s tests run the same corpus through
   `vibe-guard`.
 - The dependency is one way: `internal/contract` → `internal/guardrule`
-  ← `internal/guard`, and tests in each package enforce it.
+  ← `internal/guard`. `task lint` enforces it for non-test code with
+  `depguard` (`.golangci.yml`, spec 0061), and tests in each package
+  check their own imports.
   `internal/setupskill` imports `internal/guard` for the reference
   commands and the version rule (`InstallVersion`: the version the
   install hint names).
