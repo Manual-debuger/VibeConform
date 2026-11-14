@@ -263,6 +263,17 @@ var rules = []Rule{
 		},
 	},
 	{
+		ID: "V-06", Level: Should, Category: CategoryVerification,
+		Title: "`verify` catches an over-complex function",
+		Check: "Probe: with the complexity defect (a function of cyclomatic complexity 41 and cognitive complexity 40) " +
+			"in each component, `verify` exits non-zero. A complexity limit of 40 or less, of either metric, catches it.",
+		Source: "spec 0061, ADR 0027",
+		Parts: []Part{
+			probeRun("with the complexity defect (a function of cyclomatic complexity 41 and cognitive complexity 40) "+
+				"in each component, `verify` exits non-zero. A complexity limit of 40 or less, of either metric, catches it.", checkV06Probe),
+		},
+	},
+	{
 		ID: "H-01", Level: Should, Category: CategoryHooks,
 		Title:  "Hook configuration is committed and installs with one command",
 		Check:  "Static: a recognized hook manager's configuration is committed",

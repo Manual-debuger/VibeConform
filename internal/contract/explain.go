@@ -11,6 +11,14 @@ import (
 var ruleDetails = map[string]func() string{
 	"V-01": func() string { return defectSamplesText(v01Kinds) },
 	"V-02": func() string { return defectSamplesText(v01Kinds) },
+	"V-06": func() string {
+		return fmt.Sprintf("Threshold:\n  The sample's cyclomatic complexity is %d and its cognitive complexity %d,\n"+
+			"  so a limit of %d or less, of either metric, catches it. A specific\n"+
+			"  suppression (one rule at one function, with a reason) is the\n"+
+			"  repository's choice; the sample carries none.\n\n",
+			complexityBranches+1, complexityBranches, complexityBranches) +
+			defectSamplesText([]defectKind{defectComplexity})
+	},
 }
 
 // RuleDetails is what --explain prints after the check of the rule with

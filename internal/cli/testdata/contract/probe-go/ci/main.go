@@ -33,6 +33,8 @@ func main() {
 		// fixture turns that off so that typecheck alone catches the
 		// static-analysis defect and a verify without it misses it.
 		os.Exit(run("go", "test", "-vet=off", "./..."))
+	case "complexity":
+		os.Exit(complexity())
 	case "ok":
 		fmt.Println("ok")
 	case "fail":

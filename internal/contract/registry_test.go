@@ -3,6 +3,7 @@ package contract
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -34,6 +35,10 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 	must := 0
 	for _, r := range Rules() {
 		row, ok := rows[r.ID]
+		if !ok && slices.Contains(spec0061Rules, r.ID) {
+			checkSpec0061Rule(t, r)
+			continue
+		}
 		if !ok {
 			t.Errorf("%s is not in spec 0051", r.ID)
 			continue
@@ -71,7 +76,34 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 			must++
 		}
 	}
-	if must != 16 || len(Rules()) != 25 {
-		t.Errorf("%d rules, %d MUST; want 25 and 16", len(Rules()), must)
+	if want := 25 + len(spec0061Rules); must != 16 || len(Rules()) != want {
+		t.Errorf("%d rules, %d MUST; want %d and 16", len(Rules()), must, want)
+	}
+}
+
+// spec0061Rules are the rules contract 1.2.0 adds. Spec 0061 has no rule
+// table: each is a SHOULD rule of its own probe (ADR 0027).
+var spec0061Rules = []string{
+	"V-06",
+}
+
+func checkSpec0061Rule(t *testing.T, r Rule) {
+	t.Helper()
+	if r.Level != Should || !r.Waivable() {
+		t.Errorf("%s level = %s, spec 0061 says SHOULD", r.ID, r.Level)
+	}
+	if !strings.Contains(r.Source, "spec 0061") {
+		t.Errorf("%s source = %q, want spec 0061", r.ID, r.Source)
+	}
+	if string(r.Category) != r.ID[:1] {
+		t.Errorf("%s category = %s", r.ID, r.Category)
+	}
+	if len(r.Parts) == 0 {
+		t.Errorf("%s has no parts", r.ID)
+	}
+	for _, p := range r.Parts {
+		if !strings.Contains(r.Check, p.Check) || p.Run == nil {
+			t.Errorf("%s %s part %q is not part of its check, or has no check", r.ID, p.Kind, p.Check)
+		}
 	}
 }

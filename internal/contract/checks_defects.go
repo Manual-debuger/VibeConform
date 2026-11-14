@@ -45,6 +45,13 @@ func checkV02Probe(env *Env) PartResult {
 	return defectProbe{rule: "V-02", entrypoint: EntrypointVerifyFast, kinds: v01Kinds}.run(env)
 }
 
+// checkV06Probe: with the complexity defect in each component, verify
+// exits non-zero (spec 0061). A component without tests leaves it
+// undecided.
+func checkV06Probe(env *Env) PartResult {
+	return defectProbe{rule: "V-06", entrypoint: EntrypointVerify, kinds: []defectKind{defectComplexity}}.run(env)
+}
+
 // defectProbe is one rule's planted-defect probe: which defect kinds it
 // plants, in which components, and which entrypoint must exit non-zero
 // with each. A rule with its own defect kinds builds one with them; each
