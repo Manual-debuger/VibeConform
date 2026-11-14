@@ -345,10 +345,12 @@ the spec is revised before the reference is changed.
 6. No file in this repository contains a literal PEM private-key
    header.
 7. `task audit` on this repository says `Verdict: conformant` with
-   every new rule passing and no waiver.
+   V-06 to V-08 and A-09 passing, V-05 not applicable (no Python
+   component), and no waiver.
 8. `examples.yml` audits the three examples as conformant with every
-   new rule passing, and each negative-control job shows the targeted
-   rule failing.
+   new rule passing or, for V-05 in the TypeScript example, not
+   applicable. Each negative-control job shows the targeted rule
+   failing.
 9. The dependency direction between `internal/contract` and
    `internal/guard` is enforced by `task lint`.
 10. `task verify` passes.
