@@ -1,0 +1,84 @@
+name: Negative control
+
+# The negative controls of spec 0061 ("Testing Decisions"): a planted
+# sample must fail only because of its own kind. Each job switches off
+# only the gate that targets one sample in an example, runs the full
+# contract audit with vibe and vibe-guard built from this checkout, and
+# passes when the rule that sample belongs to now fails. It checks
+# VibeConform's samples, not an adopter's code, so it runs when a pull
+# request changes the samples, the setup skill's references or the
+# examples, weekly, and on demand.
+
+on:
+  pull_request:
+    paths:
+      - internal/contract/defects.go
+      - internal/setupskill/skill/reference/**
+      - examples/**
+      - .github/workflows/negative-control.yml
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: negative-control-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.0"
+  TASK_VERSION: "v3.53.1"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # V-07: the Python example without its secrets task. gitleaks is not
+  # installed either, so nothing in verify can report the planted key.
+  v07:
+    name: V-07 fails without the secret scan (examples/python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
+      - name: Build vibe and vibe-guard from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          go build -o "$RUNNER_TEMP/bin/vibe-guard" ./cmd/vibe-guard
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Copy the example, without the secrets task, into a fresh Git repository
+        run: |
+          copy="$RUNNER_TEMP/example"
+          cp -R examples/python "$copy"
+          cd "$copy"
+          grep -q -- '- task: secrets$' Taskfile.yml
+          sed -i '/- task: secrets$/d' Taskfile.yml
+          git init -q -b main
+          git add -A
+          git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy without the secret scan"
+          echo "COPY=$copy" >> "$GITHUB_ENV"
+      - name: V-07 fails
+        working-directory: ${{ env.COPY }}
+        run: |
+          if command -v gitleaks >/dev/null 2>&1; then echo "gitleaks is on PATH"; exit 1; fi
+          rc=0
+          vibe audit --json > "$RUNNER_TEMP/report.json" || rc=$?
+          result=$(jq -r '.rules[] | select(.id == "V-07") | .result' "$RUNNER_TEMP/report.json")
+          echo "V-07: $result (vibe audit exited $rc)"
+          jq -r '.rules[] | select(.id == "V-07") | .findings[]? | .message' "$RUNNER_TEMP/report.json"
+          [ "$result" = "fail" ]
