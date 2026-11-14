@@ -13,7 +13,10 @@ line-length = 100
 extend-exclude = [".claude/skills/vibeconform-setup", ".agents/skills/vibeconform-setup"]
 
 [lint]
-select = ["E4", "E7", "E9", "F", "I", "B", "UP", "RUF100", "DTZ", "S", "BLE"]
+# PGH003 and PGH004 refuse a blanket "# type: ignore" or "# noqa" (V-08):
+# a suppression names its codes. Ruff cannot require a reason, so write
+# one after them: "# noqa: S607  # git is found on PATH on purpose".
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "RUF100", "DTZ", "S", "BLE", "PGH003", "PGH004"]
 # StrEnum changes user-visible str(enum) behavior; migrating API enums needs a product-level review.
 ignore = ["UP042"]
 

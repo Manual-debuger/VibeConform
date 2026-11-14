@@ -305,7 +305,7 @@ The setup skill's upgrade flow reads the contract version from it.
 
 `vibe audit` reads `vibe.yaml` version 2 (a top-level `contract:` key,
 see "`vibe.yaml` version 2" below) and checks the repository against the
-rules of the contract version it declares: 25 rules in contract 1.2.0,
+rules of the contract version it declares: 26 rules in contract 1.2.0,
 in six categories (spec 0051, spec 0052, spec 0055). Each rule ends as
 `pass`, `fail`, `not applicable`, `waived`, `cannot decide` or `not
 run`. A full run decides every part of every
@@ -521,6 +521,15 @@ lists what each version changed up to 1.1.0:
   (V-07) and blanket suppressions (V-08), and a guard rule against
   commands that skip Git hooks (A-09).
 
+What V-08 cannot catch: it plants only the blanket forms
+`vibe audit --explain V-08` lists. A specific suppression, which names
+the rule, is allowed by design (ADR 0027), and nothing checks that it
+gives a reason where the linter cannot require one (Ruff). A
+repository may switch its suppression rules off as long as another
+gate still reports the sample: `go vet` ignores `//nolint`, so a Go
+component whose `verify` runs `go vet` passes V-08 without
+`nolintlint`.
+
 Another MAJOR, or a MINOR above 2, is "cannot decide; upgrade vibe"
 (exit `1`).
 
@@ -558,7 +567,7 @@ separately from the contract; it is `1`.
   `fail`, `not_applicable`, `waived`, `undecided`, `not_run`. `summary`
   has every token for both levels.
 - Verdict tokens: `conformant`, `not_conformant`, `undecided`.
-- `rules` lists all 25 rules in ID order. `parts[].check` is `static`,
+- `rules` lists all 26 rules in report order. `parts[].check` is `static`,
   `execution` or `probe`.
 - `waiver` is `null`, or `{"reason", "until", "expired"}`. A rule with a
   waiver and result `not_applicable` has an unused waiver.

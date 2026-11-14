@@ -109,9 +109,17 @@ jobs:
           git add -A
           git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy"
           echo "COPY=$copy" >> "$GITHUB_ENV"
+      # A conformant verdict allows failing SHOULD rules. The examples pass
+      # spec 0061's rules too: the text report lists a rule that did not
+      # pass in one of its sections, indented by two spaces.
       - name: vibe audit
         working-directory: ${{ env.COPY }}
-        run: vibe audit
+        run: |
+          vibe audit | tee "$RUNNER_TEMP/audit.txt"
+          if grep -E '^  (V-08) ' "$RUNNER_TEMP/audit.txt"; then
+            echo "a rule of spec 0061 does not pass"
+            exit 1
+          fi
 
   monorepo-gitlab:
     name: examples/monorepo (GitLab CI)
