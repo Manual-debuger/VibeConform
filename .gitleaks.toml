@@ -1,0 +1,25 @@
+# This repository's gitleaks configuration (spec 0061, V-07): `task
+# secrets` runs "gitleaks dir ." over the working tree's files, and the
+# pre-commit hook scans the staged changes. gitleaks reads this file by
+# itself. It keeps the default rules and skips the directories that hold
+# no code of this repository: dependencies and build output (dist/ is
+# GoReleaser's). The setup skill's reference configuration is
+# internal/setupskill/skill/reference/secrets/.gitleaks.toml.
+#
+# Known non-secrets: none today. vibe assembles V-07's planted private
+# key at run time, so its source holds no key, and the guard's rules and
+# tests name secret-looking files (.env, id_rsa) without holding secret
+# content, which is what gitleaks reads. A finding that is not a secret
+# goes into an allowlist below with a description that says why.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Dependency and build directories"
+paths = [
+  '''(^|/)node_modules(/|$)''',
+  '''(^|/)\.venv(/|$)''',
+  '''(^|/)dist(/|$)''',
+  '''(^|/)build(/|$)''',
+]

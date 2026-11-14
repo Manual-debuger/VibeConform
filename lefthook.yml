@@ -14,6 +14,11 @@ pre-commit:
       glob: "*.go"
       run: task fmt:check
       fail_text: "Run 'task fmt' to format the Go files."
+    # The staged changes, scanned for secrets before they are committed.
+    # Git's own variables stay set: gitleaks reads this index.
+    secrets:
+      run: gitleaks git --pre-commit --staged --redact --no-banner
+      fail_text: "gitleaks found a secret in the staged changes: remove it, and rotate it if it is real."
 
 # verify:fast: the format check, build, lint and the tests in short mode.
 # The full suite is CI's; "task test" runs it by hand.
