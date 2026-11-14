@@ -16,10 +16,10 @@ Don't include yourself as contributor in commits.
    has no separate `docs/plans/` file. The user approves the spec once.
    Then implement with `/implement-spec`: one integration branch and one
    PR per spec, with tests, verification and a documentation sync.
-3. Preserve the dependency direction documented in
-   `docs/architecture/overview.md` (e.g. `internal/contract` and
-   `internal/guard` both depend on `internal/guardrule`, never on each
-   other).
+3. Preserve the dependency direction in
+   `docs/architecture/overview.md`. `task lint` enforces it with the
+   `depguard` rules in `.golangci.yml`; a new package boundary gets its
+   rule there.
 
 ## Rules
 

@@ -923,7 +923,7 @@ The skill's files:
 | `reference/ci/` | `ci.yml` (verify on Linux and Windows, a vulnerability scan), `audit.yml` (the audit job with the setup action), `dependabot.yml`, the pull request template; per stack, a `.gitlab-ci.yml` for GitLab CI, and `renovate.json`, the update bot on GitLab (spec 0055) |
 | `reference/agents/` | `.claude/settings.json` with the `vibe-guard` hooks, `policy.json` version 2, the `AGENTS.md` Verification section, `CLAUDE.md` |
 | `reference/lint/` | golangci-lint; ruff and pyright; ESLint, Prettier (with a `.prettierignore`) and `tsconfig.json`, each one file. The ESLint, Prettier and Ruff files exclude the skill's own directories |
-| `reference/optional/` | VS Code, Zed, language servers, the `AGENTS.md` workflow sections and a docs layout |
+| `reference/optional/` | VS Code, Zed, language servers, the `AGENTS.md` workflow sections, a docs layout, and dependency direction enforced in `lint` (`depguard`, `import-linter`, `dependency-cruiser`; no contract rule checks it) |
 | `reference/migrate.md` | Leaving the template-sync system |
 | `reference/upgrade.md` | The upgrade flow |
 
