@@ -84,7 +84,7 @@ func newHookRepo(t *testing.T) hookRepo {
 	}
 	r.hooks = cfg.Hooks
 
-	r.write(t, "Taskfile.yml", string(files["reference/taskrunner/monorepo/Taskfile.yml"]))
+	r.write(t, "Taskfile.yml", withoutGitleaks(t, files["reference/taskrunner/monorepo/Taskfile.yml"]))
 	r.write(t, ".claude/settings.json", string(files["reference/agents/settings.json"]))
 	for _, c := range monorepoComponents {
 		r.write(t, c.dir+"/Taskfile.yml", r.stubbed(t, c.id, files[c.taskfile]))
@@ -111,6 +111,24 @@ func newHookRepo(t *testing.T) hookRepo {
 	r.git(t, "add", "-A")
 	r.git(t, "commit", "-q", "-m", "init")
 	return r
+}
+
+// withoutGitleaks returns the root Taskfile with the gitleaks commands of
+// its secrets tasks replaced by a no-op. The test checks where the hooks
+// run, not the scanner, and the CI test jobs have no gitleaks.
+func withoutGitleaks(t *testing.T, taskfile []byte) string {
+	t.Helper()
+	text := string(taskfile)
+	for _, cmd := range []string{"gitleaks dir . --redact --no-banner", "gitleaks git --pre-commit --staged --redact --no-banner"} {
+		if !strings.Contains(text, "- "+cmd+"\n") {
+			t.Fatalf("the monorepo reference Taskfile has no %q command", cmd)
+		}
+		text = strings.ReplaceAll(text, "- "+cmd+"\n", "- echo 'gitleaks stubbed' >/dev/null\n")
+	}
+	if strings.Contains(text, "- gitleaks ") {
+		t.Fatal("the monorepo reference Taskfile runs gitleaks in a command this test does not stub")
+	}
+	return text
 }
 
 // stubbed returns a component's Taskfile with each task's commands
