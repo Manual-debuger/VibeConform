@@ -59,7 +59,7 @@ them, as `reference/rules.md` describes:
 - **V-07, secrets.** Add the `secrets` and `secrets:staged` tasks from
   `reference/taskrunner/<stack>/`, `secrets` to `verify` and
   `verify:fast` (and to `vibe.yaml`'s `verify` when it lists commands),
-  the pre-commit command from `reference/hooks/<stack>/`,
+  the hook reference's pre-commit `secrets` command,
   `reference/secrets/.gitleaks.toml` at the root, and the gitleaks
   install step from `reference/ci/<stack>/` to every CI job that runs
   `verify` or `vibe audit`. Then run `task secrets`. A finding that is a

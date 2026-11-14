@@ -82,8 +82,8 @@ hook references scan the staged changes in pre-commit
 contract does not check. A finding that is a real secret is rotated
 first, then removed. A finding that is not a secret (a test fixture)
 goes into the configuration's allowlist, with a reason. The allowlist
-skips `build/` and `dist/` wherever they are, so a component under one
-of them is not scanned: narrow those paths if that is your layout.
+skips every directory named build or dist, so a component under one of
+them is not scanned: narrow those paths if that is your layout.
 
 ## H: local Git hooks
 
