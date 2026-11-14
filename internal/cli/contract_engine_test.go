@@ -323,7 +323,7 @@ func TestContractAuditReportsEveryRule(t *testing.T) {
 		t.Errorf("contract = %+v, want 1.2.0 declared and audited", rep.Contract)
 	}
 	want := []string{
-		"V-01", "V-02", "V-03", "V-04", "H-01", "H-02", "C-01", "C-02", "C-03", "C-04", "C-05",
+		"V-01", "V-02", "V-03", "V-04", "V-05", "H-01", "H-02", "C-01", "C-02", "C-03", "C-04", "C-05",
 		"A-01", "A-02", "A-03", "A-04", "A-05", "A-06", "A-07", "A-08", "D-01", "D-02", "D-03",
 		"R-01", "R-02", "R-03",
 	}
@@ -332,7 +332,7 @@ func TestContractAuditReportsEveryRule(t *testing.T) {
 		got = append(got, rule.ID)
 	}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
-		t.Errorf("rules = %v, want all 25 in ID order", got)
+		t.Errorf("rules = %v, want every rule in ID order", got)
 	}
 	c02 := rep.rule(t, "C-02")
 	if c02.Level != "MUST" || c02.Category != "C" || c02.Title != "Toolchains and actions are pinned" {

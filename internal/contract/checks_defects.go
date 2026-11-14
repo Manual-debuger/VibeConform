@@ -45,6 +45,35 @@ func checkV02Probe(env *Env) PartResult {
 	return defectProbe{rule: "V-02", entrypoint: EntrypointVerifyFast, kinds: v01Kinds}.run(env)
 }
 
+// checkV05Probe: with the type-error defect planted in each Python
+// component, verify exits non-zero (spec 0061). Other components are
+// skipped: their type errors are compile errors, which V-01 shows.
+func checkV05Probe(env *Env) PartResult {
+	return defectProbe{rule: "V-05", entrypoint: EntrypointVerify, kinds: []defectKind{defectTypeError},
+		components: pythonComponents}.run(env)
+}
+
+// pythonComponents lists the Python components in configuration order.
+func pythonComponents(env *Env) []Component {
+	var out []Component
+	for _, c := range env.Config.Components {
+		if c.Language == LanguagePython {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// hasPythonComponent is V-05's applicability.
+func hasPythonComponent(cfg *Config) (bool, string) {
+	for _, c := range cfg.Components {
+		if c.Language == LanguagePython {
+			return true, ""
+		}
+	}
+	return false, "no component is Python"
+}
+
 // defectProbe is one rule's planted-defect probe: which defect kinds it
 // plants, in which components, and which entrypoint must exit non-zero
 // with each. A rule with its own defect kinds builds one with them; each

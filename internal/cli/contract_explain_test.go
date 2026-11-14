@@ -118,6 +118,31 @@ func TestAuditExplainDefectSamples(t *testing.T) {
 	}
 }
 
+// --explain V-05 prints the type-error sample exactly, Python's only
+// (spec 0061); V-01 does not plant it, so it does not print it.
+func TestAuditExplainTypeErrorSample(t *testing.T) {
+	t.Parallel()
+	sample := "  Python, type error: vibe_probe_type_error.py\n" +
+		"    # Planted by vibe audit: a function annotated -> int that returns a string (the type-error defect).\n" +
+		"    def vibe_probe_type_error() -> int:\n" +
+		"        return \"vibe audit\"\n"
+	r := runVibeAudit(t, "--explain", "V-05")
+	assertExit(t, r, 0)
+	for _, want := range []string{"Not applicable:  when no component is Python", "Planted defects:", sample, "Python components only"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("--explain V-05 does not show %q:\n%s", want, r.stdout)
+		}
+	}
+	for _, unwanted := range []string{"Go, type error", "TypeScript, type error", "Python, format"} {
+		if strings.Contains(r.stdout, unwanted) {
+			t.Errorf("--explain V-05 shows %q:\n%s", unwanted, r.stdout)
+		}
+	}
+	if v01 := runVibeAudit(t, "--explain", "V-01"); strings.Contains(v01.stdout, "type error") {
+		t.Errorf("--explain V-01 shows the type-error sample:\n%s", v01.stdout)
+	}
+}
+
 // --explain A-02 and A-03 print the guard corpus's counts by guard rule
 // ID (spec 0053, "Report and CLI"). The expected counts are taken from
 // the corpus data.

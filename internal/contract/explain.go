@@ -11,6 +11,12 @@ import (
 var ruleDetails = map[string]func() string{
 	"V-01": func() string { return defectSamplesText(v01Kinds) },
 	"V-02": func() string { return defectSamplesText(v01Kinds) },
+	"V-05": func() string {
+		return defectSamplesText([]defectKind{defectTypeError}) +
+			"\n  Planted in Python components only, and run with verify only. Any type\n" +
+			"  checker that verify runs satisfies the rule, such as Pyright in its\n" +
+			"  standard mode or mypy.\n"
+	},
 }
 
 // RuleDetails is what --explain prints after the check of the rule with

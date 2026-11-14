@@ -50,7 +50,7 @@ spec 0053 for execution checks and probes, spec 0055 for GitLab CI):
                           ↓
 internal/contract
   vibe.yaml version 2 (a version 1 file is detected and refused)
-  the 25 rules of contract 1.2.0
+  the 26 rules of contract 1.2.0
   static checks of tracked files
   execution checks and probes in a probe copy
   report model (plain data)

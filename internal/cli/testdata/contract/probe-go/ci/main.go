@@ -33,6 +33,8 @@ func main() {
 		// fixture turns that off so that typecheck alone catches the
 		// static-analysis defect and a verify without it misses it.
 		os.Exit(run("go", "test", "-vet=off", "./..."))
+	case "pytypecheck":
+		os.Exit(pyTypeCheck())
 	case "ok":
 		fmt.Println("ok")
 	case "fail":
@@ -92,6 +94,44 @@ func formatFiles(write bool) int {
 		}
 		fmt.Println(filepath.ToSlash(path))
 		code = 1
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return code
+}
+
+// pyTypeCheck stands in for a Python type checker (V-05): it lists the
+// .py files where a function annotated -> int returns a string literal.
+// Listing a file fails the step.
+func pyTypeCheck() int {
+	code := 0
+	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if path != "." && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".py") {
+			return nil
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		lines := strings.Split(strings.ReplaceAll(string(src), "\r\n", "\n"), "\n")
+		for i := 0; i+1 < len(lines); i++ {
+			if strings.HasSuffix(lines[i], "-> int:") && strings.HasPrefix(strings.TrimSpace(lines[i+1]), "return \"") {
+				fmt.Printf("%s:%d: a string returned from a function annotated -> int\n", filepath.ToSlash(path), i+2)
+				code = 1
+			}
+		}
 		return nil
 	})
 	if err != nil {
