@@ -336,7 +336,8 @@ tasks:
   # The static rules only, in seconds. A static audit never reaches a
   # verdict, because the execution checks and probes do not run, so vibe
   # exits 1 when no rule failed. This task exits 0 then, and keeps exit 2,
-  # a MUST rule that fails. Read the report for undecided rules. vibe
+  # a MUST rule or a required SHOULD rule (vibe.yaml's require, spec 0063)
+  # that fails. Read the report for undecided rules. vibe
   # prints no report when it cannot audit at all (no vibe.yaml, a version
   # 1 or invalid one), and that exit 1 stays 1.
   audit:static:

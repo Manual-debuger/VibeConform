@@ -1,6 +1,6 @@
 # Spec 0063: The tooling holds each fact once
 
-Status: draft (2026-11-15). Issue #164, from the design review #167.
+Status: accepted (2026-11-15). Issue #164, from the design review #167.
 Amends spec 0052 ("vibe.yaml", "The verdict") and spec 0061 (acceptance
 criterion 7, how this repository checks its SHOULD rules). No contract
 change: the contract stays 1.2.0.
@@ -321,3 +321,28 @@ Not verified yet; each is checked before the step that depends on it.
   changes, from two scripts to `require`.
 - `require` is the opposite of a waiver: a waiver lets a SHOULD rule
   fail, `require` makes it count. A rule cannot be both.
+
+## Implementation Notes
+
+- **Green stamp.** The hash script is a Task variable, `STAMP_HASH`, of
+  `hook:stamp:check`, and `hook:stamp:save` takes it through a YAML
+  alias. It is not a separate task, as "Lint, stamp, alias" planned. The
+  stamp tasks would have to run that task with `task`, which cannot run
+  an internal task, so it would have to be non-internal (assumption 5).
+  Also, `reference_stop_test.go` copies only the Stop tasks out of a
+  reference Taskfile, so a separate task would not be in its copy.
+- **Goldens.** No JSON goldens existed. Engine tests cover the
+  `required` key in the JSON report. The text goldens `required` and
+  `required-static` were added.
+- **D-03.** D-03 fails in the static audit on `main` too. It is a
+  SHOULD failure from before this spec, and `require` does not list it.
+- **depguard and tests.** The `doctor` rule covers test files too, like
+  the import test it replaces: doctor's tests import only
+  `internal/contract`. The `setupskill` rule skips test files, like
+  `TestImportsOnlyGuard`: its external test package imports
+  `internal/setupskill`.
+- **Examples workflow.** `examples.yml` adds
+  `require: [V-05, V-06, V-07, V-08, A-09]` to the `vibe.yaml` of each
+  example's scratch copy and runs `vibe audit`, in place of matching the
+  text report. The `vibe.yaml` files under `examples/` do not change:
+  they follow the references, which do not add `require`.

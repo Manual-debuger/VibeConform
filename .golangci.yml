@@ -57,7 +57,10 @@ linters:
     # wins. So the allowed package passes and every other package of the
     # module fails. In the default mode, a non-empty allow list fails
     # every import not in it, the standard library too, and a match in
-    # both lists fails.
+    # both lists fails. The doctor rule covers its tests too, as the
+    # import test it replaces did. The setupskill rule skips tests, as
+    # its import test did: the external test package imports
+    # internal/setupskill itself.
     depguard:
       rules:
         contract:
@@ -78,7 +81,6 @@ linters:
           list-mode: lax
           files:
             - "**/internal/doctor/**"
-            - "!$test"
           allow:
             - github.com/Manual-debuger/VibeConform/internal/contract$
           deny:
