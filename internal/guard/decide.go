@@ -10,7 +10,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -142,7 +141,10 @@ func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit,gocyclo 
 			return Decision{Outcome: Deny, Lifted: d.Lifted, Finding: &Finding{Rule: gr.IDDynamicCommand,
 				Why: "the command name holds an expansion, so what runs is not known", Command: c}}
 		}
-		if readsScriptFromStdin(cmds, i) {
+		// A shell that runs its standard input runs a script the guard
+		// cannot see (curl … | bash). A here-document's script is parsed
+		// by guardrule: its commands follow.
+		if c.ScriptSource == gr.ScriptFromStdin {
 			return Decision{Outcome: Deny, Lifted: d.Lifted, Finding: &Finding{Rule: gr.IDDynamicCommand,
 				Why: "the shell runs a script it reads from standard input, so what runs is not known", Command: c}}
 		}
@@ -271,37 +273,4 @@ func (g *Guard) exception(rule string, matches func(gr.Exception) bool) *gr.Exce
 		}
 	}
 	return nil
-}
-
-var posixShells = []string{"bash", "sh", "zsh", "dash", "ksh", "ash", "mksh"}
-
-// readsScriptFromStdin reports whether cmds[i] is a POSIX shell given no
-// -c string, no script file and no here-document: it runs whatever its
-// standard input holds (curl … | bash), which the guard cannot see.
-func readsScriptFromStdin(cmds []gr.Command, i int) bool {
-	c := cmds[i]
-	name := c.Name()
-	if !slices.Contains(posixShells, name) {
-		return false
-	}
-	for _, w := range c.Words[1:] {
-		if !w.Literal || !strings.HasPrefix(w.Text, "-") && !strings.HasPrefix(w.Text, "+") {
-			return false // a script file, or something the guard reads as one
-		}
-		switch {
-		case w.Text == "--version" || w.Text == "--help":
-			return false
-		case !strings.HasPrefix(w.Text, "--") && strings.Contains(w.Text, "c"):
-			return false // -c: guardrule parses its string
-		}
-	}
-	// A here-document fed to the shell is parsed by guardrule: its
-	// commands follow, one level deeper, found through "<name> <<".
-	if i+1 < len(cmds) {
-		next := cmds[i+1]
-		if next.Depth == c.Depth+1 && len(next.Via) > 0 && next.Via[len(next.Via)-1] == name+" <<" {
-			return false
-		}
-	}
-	return true
 }

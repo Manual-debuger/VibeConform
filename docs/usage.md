@@ -1456,7 +1456,32 @@ payload's `cwd`, walked up to `.git`. Bash commands are parsed as bash,
 PowerShell commands by a small tokenizer (aliases and parameter prefixes
 included). Wrappers (`sudo`, `env`, `xargs`, `find -exec`, `timeout`, …)
 are stripped and `bash -c`, `eval` and `pwsh -c` strings parsed again,
-eight levels deep. It **fails closed**: a command that does not parse
+eight levels deep. A wrapper's options are read as the program reads
+them, abbreviations included: `sudo --us root rm -rf x` is
+`sudo --user root rm -rf x`, and `env --sp '…'` is `env -S '…'`. A long
+option the guard does not know is read both ways, with and without the
+next word as its argument, and the call is refused when either reading
+is: `sudo --newopt root rm -rf x` is refused, `sudo --newopt ls` is
+allowed. Each such option doubles the readings. A command with more
+than 64 readings is not read, and it is refused under
+`dynamic-command`. The words of `env`'s split string are read as
+`env`'s arguments again, as GNU `env` reads them:
+`env -S '-i rm -rf x'` is refused. A POSIX shell's options (`bash`, `sh`, `zsh`, `dash`, `ksh`, …)
+are read the same way, to find the script it runs:
+
+- With `-c`, the first operand is a string, parsed again.
+- Without `-c` or `-s`, the first operand is a script file, which is
+  allowed.
+- Otherwise the shell runs its standard input. A here-document or
+  here-string fed to it is parsed again, also after `-s`
+  (`bash -s x <<'EOF'`). Standard input that is piped or redirected
+  from a file is not seen: `curl … | bash`, `curl … | bash -s foo` and
+  `bash -s x < x.sh` are refused under `dynamic-command`.
+- `-o`, `-O`, `+o`, `+O`, `--rcfile` and `--init-file` take the next
+  word, so `curl … | bash -o posix` has no script file and is refused
+  too.
+
+It **fails closed**: a command that does not parse
 (`parse-error`), a payload that is not JSON or lacks its field
 (`payload-error`), an invalid `policy.json` (`policy-error`) and a command
 name built from an expansion (`dynamic-command`, also `curl … | bash`)

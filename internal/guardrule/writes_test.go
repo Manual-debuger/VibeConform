@@ -133,6 +133,26 @@ func TestWritingPrograms(t *testing.T) {
 	}
 }
 
+// A writer's long option may be a prefix of two letters or more, as
+// getopt_long reads it, whether or not it takes an argument.
+func TestWriterLongOptionAbbreviations(t *testing.T) {
+	cases := []struct {
+		src  string
+		want []string
+	}{
+		{"sed --in s/a/b/ f", []string{"f"}},
+		{"sed --in-pl=.bak --ex s/a/b/ f", []string{"f"}},
+		{"sed --i s/a/b/ f", nil},
+		{"install --dir x y", []string{"x", "y"}},
+		{"cp --no a b", []string{"b"}},
+		{"cp --ta=dir a", []string{"dir", "dir/a"}},
+		{"truncate --si 0 f", []string{"f"}},
+	}
+	for _, c := range cases {
+		expectWrites(t, guardrule.ShellBash, c.src, c.want...)
+	}
+}
+
 // TestWritingCmdlets: the items that PowerShell's writing cmdlets name
 // by -Path, -LiteralPath, -FilePath, -Destination or position. A name
 // that is also a program (rm, cp, tee) is read both ways.

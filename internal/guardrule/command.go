@@ -121,9 +121,54 @@ type Command struct {
 	// through, outermost first: "sudo", "env", "bash -c", "eval",
 	// "pwsh -c", "iex", "find -exec", "bash <<", "env -S".
 	Via []string
+	// ScriptSource is where a POSIX shell (bash, sh, zsh, …) reads the
+	// script it runs, as its options say (spec 0062, "A shell's script").
+	// It is ScriptNone for any other command.
+	ScriptSource ScriptSource
 
 	// stdin is a here-document or here-string fed to the command.
 	stdin *Word
+	// envArgs marks env reading the words of an outer env's split string
+	// as its arguments again. The command it runs is found through that
+	// env -S alone.
+	envArgs bool
+}
+
+// ScriptSource is where a POSIX shell reads the script it runs.
+type ScriptSource int
+
+const (
+	// ScriptNone is for a command that is not a POSIX shell, or one that
+	// runs no script (bash --version).
+	ScriptNone ScriptSource = iota
+	// ScriptFromString is a -c string. Its commands follow the shell's,
+	// one level deeper, found through "<shell> -c".
+	ScriptFromString
+	// ScriptFromFile is a script file, the first operand.
+	ScriptFromFile
+	// ScriptFromStdin is standard input, piped or redirected from a file
+	// (curl … | bash, bash -s x < x.sh). What runs is not seen.
+	ScriptFromStdin
+	// ScriptFromHereDoc is standard input fed by a here-document or
+	// here-string. Its commands follow the shell's, one level deeper,
+	// found through "<shell> <<".
+	ScriptFromHereDoc
+)
+
+func (s ScriptSource) String() string {
+	switch s {
+	case ScriptNone:
+		return "none"
+	case ScriptFromString:
+		return "-c string"
+	case ScriptFromFile:
+		return "script file"
+	case ScriptFromStdin:
+		return "standard input"
+	case ScriptFromHereDoc:
+		return "here-document"
+	}
+	return fmt.Sprintf("ScriptSource(%d)", int(s))
 }
 
 // Dynamic reports whether the command name holds an expansion, so that
@@ -200,13 +245,16 @@ func (e *ParseError) Error() string {
 // source order, each nested command after the command that runs it.
 func Commands(shell Shell, src string) ([]Command, error) {
 	var out []Command
-	if err := decompose(shell, src, 0, nil, &out); err != nil {
+	if err := decompose(shell, src, 0, nil, false, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func decompose(shell Shell, src string, depth int, via []string, out *[]Command) error {
+// decompose parses src and expands its commands. With envArgs, src is
+// env's split string: each command's words are read as env's arguments
+// again, as GNU env reads them (options, assignments, then the command).
+func decompose(shell Shell, src string, depth int, via []string, envArgs bool, out *[]Command) error {
 	if depth > MaxDepth {
 		return &ParseError{Shell: shell, Msg: fmt.Sprintf("commands are nested deeper than %d shells", MaxDepth)}
 	}
@@ -216,6 +264,10 @@ func decompose(shell Shell, src string, depth int, via []string, out *[]Command)
 	}
 	for _, c := range raw {
 		c.Depth, c.Via = depth, via
+		if envArgs && len(c.Words) > 0 {
+			c.Words = append([]Word{literalWord("env")}, c.Words...)
+			c.envArgs = true
+		}
 		if err := expand(c, out); err != nil {
 			return err
 		}
@@ -233,20 +285,32 @@ func parse(shell Shell, src string) ([]Command, error) {
 	return nil, &ParseError{Shell: shell, Msg: "unknown language"}
 }
 
-// expand adds c to out, or the command it wraps, then the commands that
-// c runs from a string.
+// expand adds c to out, or the commands it wraps, then the commands that
+// c runs from a string. A wrapper whose options are read two ways adds
+// the command of each reading; one whose reading runs a string (env -S)
+// is added itself too.
 func expand(c Command, out *[]Command) error {
-	if inner, label, ok := unwrap(c); ok {
+	inners, label := unwrap(c)
+	var scripts []nestedScript
+	c.ScriptSource, scripts = scriptsOf(c)
+	if len(inners) == 0 || len(scripts) > 0 {
+		c.Writes = append(slices.Clone(c.Writes), writtenOperands(c)...)
+		*out = append(*out, c)
+	}
+	for _, inner := range inners {
 		inner.Shell = ShellBash
 		inner.Depth = c.Depth
-		inner.Via = appendVia(c.Via, label)
+		inner.Via = c.Via
+		if !c.envArgs {
+			inner.Via = appendVia(c.Via, label)
+		}
 		inner.Assigns = append(slices.Clone(c.Assigns), inner.Assigns...)
 		inner.Redirects = c.Redirects
 		inner.Writes = c.Writes
-		return expand(inner, out)
+		if err := expand(inner, out); err != nil {
+			return err
+		}
 	}
-	c.Writes = append(slices.Clone(c.Writes), writtenOperands(c)...)
-	*out = append(*out, c)
 	if c.Name() == "find" {
 		for _, seg := range findExecs(c) {
 			if err := expand(seg, out); err != nil {
@@ -254,8 +318,13 @@ func expand(c Command, out *[]Command) error {
 			}
 		}
 	}
-	if n, ok := nested(c); ok {
-		return decompose(n.shell, n.script, c.Depth+1, appendVia(c.Via, n.label), out)
+	// env's only scripts are its split strings, whose words env reads as
+	// its arguments again.
+	envArgs := c.Name() == "env"
+	for _, n := range scripts {
+		if err := decompose(n.shell, n.script, c.Depth+1, appendVia(c.Via, n.label), envArgs, out); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -304,18 +373,31 @@ const psUnknownCommand = "& " + psUnknown
 
 var posixShells = []string{"bash", "sh", "zsh", "dash", "ksh", "ash", "mksh"}
 
-func nested(c Command) (nestedScript, bool) {
+// scriptsOf returns where c reads its script, when c is a POSIX shell,
+// and every string c runs as a script.
+func scriptsOf(c Command) (ScriptSource, []nestedScript) {
+	switch name := c.Name(); {
+	case name == "env":
+		return ScriptNone, envSplitStrings(c.Words[1:])
+	case slices.Contains(posixShells, name):
+		return posixShellScript(name, c.Words[1:], c.stdin)
+	}
+	if n, ok := argumentScript(c); ok {
+		return ScriptNone, []nestedScript{n}
+	}
+	return ScriptNone, nil
+}
+
+// argumentScript returns the one script that pwsh, powershell, eval or
+// Invoke-Expression runs from its arguments.
+func argumentScript(c Command) (nestedScript, bool) {
 	name := c.Name()
 	args := c.Words[min(1, len(c.Words)):]
 	switch {
-	case slices.Contains(posixShells, name):
-		return posixShellScript(name, args, c.stdin)
 	case name == "pwsh" || name == "powershell":
 		return powerShellScript(name, args)
 	case name == "eval" && c.Shell == ShellBash && len(args) > 0:
 		return nestedScript{ShellBash, scriptOf(ShellBash, args), "eval"}, true
-	case name == "env":
-		return envSplitString(args)
 	case c.Cmdlet() == "invoke-expression":
 		var rest []Word
 		for i := 0; i < len(args); i++ {
@@ -331,49 +413,57 @@ func nested(c Command) (nestedScript, bool) {
 	return nestedScript{}, false
 }
 
-// posixShellScript finds the string "sh -c" runs: the first operand
-// after the options, when some option cluster holds c. With no -c and no
-// operand, the shell reads its script from a here-document or
-// here-string, if one is given.
-func posixShellScript(name string, args []Word, stdin *Word) (nestedScript, bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
-	sawC := false
-	for i := 0; i < len(args); i++ {
-		w := args[i]
-		if !w.Literal {
-			if sawC {
-				return nestedScript{ShellBash, scriptOf(ShellBash, args[i:i+1]), name + " -c"}, true
-			}
-			return nestedScript{}, false
-		}
-		t := w.Text
-		switch {
-		case t == "--" || t == "-":
-			continue
-		case strings.HasPrefix(t, "--"):
-			if t == "--rcfile" || t == "--init-file" {
-				i++
-			}
-			continue
-		case len(t) > 1 && (t[0] == '-' || t[0] == '+'):
-			for _, r := range t[1:] {
-				switch r {
-				case 'c':
-					sawC = true
-				case 'o', 'O':
-					i++
-				}
-			}
-			continue
-		}
-		if sawC {
-			return nestedScript{ShellBash, scriptOf(ShellBash, args[i:i+1]), name + " -c"}, true
-		}
-		return nestedScript{}, false // runs a script file
+// posixShellOptions is how a POSIX shell reads its options (bash's
+// documentation; sh, dash, zsh and ksh read -c, -s, -o and -O the same
+// way). -o and -O, written with "-" or "+", take the next word. Long
+// options are matched exactly, as bash matches them; one the table does
+// not hold takes no argument. The first operand ends the options, and a
+// lone "-" ends them as "--" does.
+var posixShellOptions = optionTable{
+	shortArg: "oO",
+	long: map[string]argKind{
+		"rcfile": argRequired, "init-file": argRequired,
+		"version": argNone, "help": argNone, "login": argNone, "noprofile": argNone,
+		"norc": argNone, "posix": argNone, "restricted": argNone, "verbose": argNone,
+		"noediting": argNone, "debugger": argNone, "dump-strings": argNone,
+		"dump-po-strings": argNone, "pretty-print": argNone,
+	},
+	unknownLong: argNone,
+	plus:        true,
+	nextWordArg: true,
+}
+
+// posixShellScript reads a POSIX shell's options and returns where it
+// reads its script, with the script to parse again: the first operand
+// with -c; else, with no -s, a script file when there is an operand; else
+// standard input, parsed again when a here-document or here-string feeds
+// it. With -s the operands are positional parameters.
+func posixShellScript(name string, args []Word, stdin *Word) (ScriptSource, []nestedScript) {
+	readings, ok := readOptions(args, posixShellOptions)
+	if !ok || len(readings) != 1 {
+		// The table has no option read two ways, so this does not happen;
+		// if it did, the script would not be known.
+		return ScriptFromStdin, nil
 	}
-	if !sawC && stdin != nil {
-		return nestedScript{ShellBash, scriptOf(ShellBash, []Word{*stdin}), name + " <<"}, true
+	r := readings[0]
+	operands := r.operands
+	if len(operands) > 0 && operands[0].Literal && operands[0].Text == "-" {
+		operands = operands[1:]
 	}
-	return nestedScript{}, false
+	switch {
+	case r.has("c"):
+		if len(operands) == 0 {
+			return ScriptFromString, nil
+		}
+		return ScriptFromString, []nestedScript{{ShellBash, scriptOf(ShellBash, operands[:1]), name + " -c"}}
+	case r.has("--version", "--help"):
+		return ScriptNone, nil
+	case len(operands) > 0 && !r.has("s"):
+		return ScriptFromFile, nil
+	case stdin != nil:
+		return ScriptFromHereDoc, []nestedScript{{ShellBash, scriptOf(ShellBash, []Word{*stdin}), name + " <<"}}
+	}
+	return ScriptFromStdin, nil
 }
 
 // powerShellScript finds the string pwsh -Command or powershell -Command
