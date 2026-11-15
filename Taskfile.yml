@@ -51,10 +51,11 @@ tasks:
         list | xargs -0 goimports -w || exit 2
         list | xargs -0 gofmt -w || exit 2
 
+  # golangci-lint only: its govet runs the analyzers "go vet ./..." runs
+  # by default (spec 0063), so go vet would check the same code twice.
   lint:
-    desc: Run go vet and golangci-lint.
+    desc: Run golangci-lint (its govet covers go vet).
     cmds:
-      - go vet ./...
       - golangci-lint run
 
   typecheck:

@@ -120,8 +120,8 @@ allowed. The references refuse blanket suppressions in `verify` and
 `verify-fast`:
 
 - Go (`reference/lint/go/.golangci.yml`): golangci-lint's `nolintlint` with `require-specific` and
-  `require-explanation` (`//nolint:govet // reason`). `go vet`, which
-  ignores `//nolint`, also catches the Go sample.
+  `require-explanation` (`//nolint:govet // reason`). `go test`, whose
+  built-in vet checks ignore `//nolint`, also catches the Go sample.
 - Python (`reference/lint/python/ruff.toml`): Ruff's `PGH003` and `PGH004`. Ruff cannot require a reason,
   so write one after the codes (`# noqa: S603  reason`).
 - TypeScript (`reference/lint/typescript/eslint.config.js`):
