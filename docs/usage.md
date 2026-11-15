@@ -1462,7 +1462,11 @@ them, abbreviations included: `sudo --us root rm -rf x` is
 option the guard does not know is read both ways, with and without the
 next word as its argument, and the call is refused when either reading
 is: `sudo --newopt root rm -rf x` is refused, `sudo --newopt ls` is
-allowed. A POSIX shell's options (`bash`, `sh`, `zsh`, `dash`, `ksh`, …)
+allowed. Each such option doubles the readings. A command with more
+than 64 readings is not read, and it is refused under
+`dynamic-command`. The words of `env`'s split string are read as
+`env`'s arguments again, as GNU `env` reads them:
+`env -S '-i rm -rf x'` is refused. A POSIX shell's options (`bash`, `sh`, `zsh`, `dash`, `ksh`, …)
 are read the same way, to find the script it runs:
 
 - With `-c`, the first operand is a string, parsed again.

@@ -785,7 +785,10 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     and an optional argument only when attached. A long option the guard
     does not know, or a prefix shared by options that differ in whether
     they take an argument, reads the wrapped command both ways, and the
-    call is refused when either reading is. A POSIX shell's options are
+    call is refused when either reading is. A command with more than 64
+    readings is not read, and it is refused under `dynamic-command`.
+    The words of `env`'s split string are read as `env`'s arguments
+    again. A POSIX shell's options are
     read by the same reader, and `guardrule` records on each command
     where the shell reads its script: a `-c` string, a script file or
     standard input, and whether a here-document or here-string feeds
