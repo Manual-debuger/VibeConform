@@ -76,6 +76,14 @@ type probeSession struct {
 	// progressMu orders the progress lines of runs that happen
 	// concurrently (A-02 and A-03 feed corpus cases in parallel).
 	progressMu sync.Mutex
+	// gitOnce finds gitExe, the audit's own git, once per session: a PATH
+	// search stats every PATH entry with every PATHEXT extension, and go
+	// test records each stat in its test log (spec 0056, A-05).
+	gitOnce sync.Once
+	gitExe  string
+	// lookPath finds a program on this process's PATH; nil means
+	// exec.LookPath. Tests count the lookups through it.
+	lookPath func(name string) (string, error)
 }
 
 // startProbeSession builds the probe copy and runs setup. A failure is
@@ -153,7 +161,7 @@ func removeAllRetry(dir string) {
 }
 
 // build copies the tracked files into the copy and commits them.
-func (s *probeSession) build(env *Env) *Finding {
+func (s *probeSession) build(env *Env) *Finding { //nolint:gocognit // baseline: pre-existing complexity
 	if err := os.MkdirAll(s.root, 0o750); err != nil {
 		return &Finding{Message: "cannot create the probe copy: " + err.Error()}
 	}
@@ -218,7 +226,17 @@ func (s *probeSession) build(env *Env) *Finding {
 // git runs the audit's own git in the copy, with no variable that could
 // point it at another repository.
 func (s *probeSession) git(args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(s.ctx, "git", args...) // #nosec G204 -- literal git arguments
+	s.gitOnce.Do(func() {
+		look := s.lookPath
+		if look == nil {
+			look = exec.LookPath
+		}
+		s.gitExe = "git"
+		if p, err := look("git"); err == nil {
+			s.gitExe = p
+		}
+	})
+	cmd := exec.CommandContext(s.ctx, s.gitExe, args...) // #nosec G204 -- literal git arguments
 	cmd.Dir = s.root
 	cmd.Env = append(envUnset(os.Environ(), gitRepoVariables...), "LC_ALL=C")
 	var stderr bytes.Buffer

@@ -7,7 +7,7 @@ metadata:
 
 # Set up the VibeConform contract
 
-You take a repository to a conformant `vibe audit` under contract 1.1.0.
+You take a repository to a conformant `vibe audit` under contract 1.2.0.
 The contract names properties, not tools: keep what the repository
 already has whenever it satisfies a rule. `vibe audit` is the judge, not
 this file.
@@ -22,8 +22,15 @@ Files under `reference/` are loaded on demand:
   `reference/ci/`, `reference/agents/`, `reference/lint/`: reference
   implementations per stack (`go`, `python`, `typescript`, `monorepo`).
   They are examples to adapt, not files to copy blindly.
-- `reference/optional/`: integrations and workflow sections. Use them
-  only when the person asks.
+- `reference/secrets/.gitleaks.toml`: the secret scanner's
+  configuration, for every stack.
+- Optional references, used only when the person asks for what they
+  cover: editors (`reference/optional/vscode.md`,
+  `reference/optional/zed.md`), language servers
+  (`reference/optional/lsp.md`), `AGENTS.md` workflow sections
+  (`reference/optional/workflow.md`), a docs layout
+  (`reference/optional/docs-layout.md`), and layers enforced by lint
+  (`reference/optional/dependency-direction.md`).
 - `reference/migrate.md`: leaving the template-sync system.
 - `reference/upgrade.md`: moving to a newer `vibe` or contract.
 
@@ -73,7 +80,7 @@ Keep the team's runner and use its existing targets when they exist:
 `make verify`, `just verify`, `npm run verify`, `task verify`. Use Task
 only when there is no runner (`reference/taskrunner/<stack>/`). Then
 write `vibe.yaml` version 2 from `reference/vibe-yaml/<stack>.yaml`:
-`contract: 1.1.0`, `platforms`, `agents`, `components` when needed, and
+`contract: 1.2.0`, `platforms`, `agents`, `components` when needed, and
 the entrypoints `verify`, `verify-fast`, `fmt`, `fmt-check`, plus `setup`
 when the audit's probe copy must install dependencies first. An
 entrypoint is one command or a list; write the commands exactly as CI and

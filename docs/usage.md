@@ -191,7 +191,7 @@ In a Go repository with `go.mod` at the root, the file is:
 ```yaml
 # vibe.yaml version 2, written by vibe init. vibe audit reads it and
 # checks the repository against the VibeConform contract.
-contract: 1.1.0
+contract: 1.2.0
 platforms: [linux, windows]
 agents: [claude]
 # Declare the four entrypoints: one command each, or a list of commands.
@@ -296,7 +296,7 @@ Prints the `vibe` version and the contract version it implements:
 
 ```console
 $ vibe --version
-vibe version v… (contract 1.1.0)
+vibe version v… (contract 1.2.0)
 ```
 
 The setup skill's upgrade flow reads the contract version from it.
@@ -305,8 +305,8 @@ The setup skill's upgrade flow reads the contract version from it.
 
 `vibe audit` reads `vibe.yaml` version 2 (a top-level `contract:` key,
 see "`vibe.yaml` version 2" below) and checks the repository against the
-rules of the contract version it declares: 25 rules in contract 1.1.0,
-in six categories (spec 0051, spec 0052, spec 0055). Each rule ends as
+rules of the contract version it declares, in six categories (spec
+0051, spec 0052, spec 0055, spec 0061). Each rule ends as
 `pass`, `fail`, `not applicable`, `waived`, `cannot decide` or `not
 run`. A full run decides every part of every
 rule: the static checks, then the execution checks and probes in a
@@ -325,8 +325,9 @@ a *probe copy*: a fresh Git repository in the system's temporary
 directory that holds the working-tree content of every tracked file,
 committed once. Every execution and probe part runs there, one after
 another, from a reset copy: `setup`, A-07, V-03, the baseline runs of
-`verify` and `verify-fast`, the *planted defects* of V-01, V-02 and A-05,
-the guard corpus of A-02, A-03 and A-08, D-01 and R-01. The copy is
+`verify` and `verify-fast`, the *planted defects* of V-01, V-02, V-05,
+V-06, V-07, V-08 and A-05, the guard corpus of A-02, A-03 and A-08, D-01
+and R-01. The copy is
 deleted at the end, also after a failure or an interrupt, and the
 repository's working tree, index and `.git` never change.
 
@@ -338,6 +339,15 @@ repository's working tree, index and `.git` never change.
   Code's default) for hooks,
   `--probe-timeout` for entrypoints. A run over its limit is killed with
   its child processes.
+- **V-07's secret.** V-07 plants a PEM private-key block in
+  `vibe_probe_secret.txt`, once per repository, in the first component
+  in `vibe.yaml` order that has tests, and runs `verify` once with it.
+  `vibe` assembles the block at run time, so its source holds no key.
+  The file is not committed, so a scanner that reads only Git history
+  misses it. What V-07 cannot catch: a secret pushed before CI runs
+  (the references' pre-commit scan is the local guard, and the contract
+  does not check it), a secret in a file the scanner's configuration
+  excludes, and a secret in a shape the scanner has no rule for.
 - **Tools.** The audit needs the tools the entrypoints call (`task`, the
   linters, the test runners) and bash for the hooks. A missing tool, no
   bash, a timeout or a word with an expansion makes the part `cannot
@@ -345,15 +355,37 @@ repository's working tree, index and `.git` never change.
   A-03 probes run whatever the PreToolUse hook runs, so a repository
   using `vibe-guard` needs it installed.
 - **Time.** A full audit runs `verify` and `verify-fast` once each plus
-  three times per component, the Stop hook three times, and the whole
-  guard corpus through the PreToolUse hook twice. On this repository
+  three times per component, `verify` once more per component for each
+  of V-06 (complexity) and V-08 (blanket suppressions), once more per
+  Python component (V-05's type error) and once more in all (V-07's
+  secret), the Stop hook three times, and
+  the whole guard corpus through the PreToolUse hook twice. On this repository
   that is several minutes to an hour, mostly `task test`. `--static`
   stays the quick local run.
 - **Progress.** In text mode each run prints a line on stderr ("vibe
   audit: verify with the static-analysis defect in ."). `--json` keeps
   stdout to the JSON document.
-- `vibe audit --explain V-01` and `V-02` print the defect samples;
+- `vibe audit --explain V-01`, `V-02`, `V-05`, `V-06`, `V-07` and `V-08`
+  print the defect samples;
   `--explain A-02` and `A-03` print the guard corpus counts by rule ID.
+
+**V-06, complexity** (SHOULD, spec 0061). The planted function has
+cyclomatic complexity 42 and cognitive complexity 41. Complexity linters
+report a function above their limit, so any complexity limit of 40 or
+less, of either metric, catches it; the Go sample is a non-test file.
+The contract checks that a limit exists, not how strict it is. What it
+cannot catch: a limit set just low enough to catch the sample (40), a
+specific suppression on new code, and a complex function split into
+meaningless pieces (ADR 0027). Review catches those.
+
+**What the 1.2.0 probes do not check.** V-05 to V-08 probe `verify`
+only (ADR 0027), the gate CI runs. A `verify-fast` without the type,
+complexity, secret and suppression checks still passes them, so the
+agent's Stop hook may not report those defects until CI does. The
+setup skill's references put every new check in `verify-fast` too.
+V-05 plants a plain wrong return type: a type checker in a lenient mode
+that still reports it passes, and a specific suppression
+(`# pyright: ignore[reportReturnType]`) stays allowed.
 
 **Flags:**
 
@@ -412,7 +444,7 @@ fix. On a repository whose only failures are two SHOULD rules, for
 example (long lines shortened):
 
 ```
-vibe audit: contract 1.1.0 (vibe …), static checks only
+vibe audit: contract 1.2.0 (vibe …), static checks only
 
   V  Verification entrypoints              1 pass, 3 not run
   H  Local Git hooks                       2 pass
@@ -456,7 +488,7 @@ Verdict: cannot decide. 10 rules did not run (--static).
 The verdict line is `Verdict: conformant`, `Verdict: not conformant` or
 `Verdict: cannot decide. <reason>`. When the configuration declares a
 different version that this vibe audits, such as `1.0.1` or `1.1.3`,
-the header says `contract 1.1.0 (declared 1.0.1; vibe …)`. The line
+the header says `contract 1.2.0 (declared 1.0.1; vibe …)`. The line
 `CI provider read:` names the CI provider the C rules, D-03 and R-01
 read (`GitHub Actions` or `GitLab CI`); it is left out when they read
 none.
@@ -485,7 +517,7 @@ report:
 
 ```
 Error: vibe.yaml: waivers[0].until: "2026-13-01" is not a date YYYY-MM-DD
-Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements contract 1.1.0, and the configuration declares 1.2.0
+Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements contract 1.2.0, and the configuration declares 1.3.0
 ```
 
 A missing `vibe.yaml`, and a version 1 one (a top-level `standard:` key,
@@ -497,13 +529,13 @@ Error: no vibe.yaml in .: run `vibe init` to write one
 Error: vibe.yaml is version 1 (a top-level standard key), which this vibe no longer reads; to leave the template-sync system, run `vibe init --skill` and follow the migration guide, .claude/skills/vibeconform-setup/reference/migrate.md
 ```
 
-**Contract versions.** This vibe implements contract 1.1.0. A declared
+**Contract versions.** This vibe implements contract 1.2.0. A declared
 version must be `X.Y.Z`. A vibe implements the latest MINOR of its
-MAJOR, so every declared `1.0.n` and `1.1.n` (older or newer PATCH) is
-audited as 1.1.0 (spec 0051, "Versioning"), and the report shows both
-versions when they differ. A repository set up under 1.0.0 or 1.0.1
-keeps its `contract:` line. Spec 0051, "Changes", lists what each
-version changed:
+MAJOR, so every declared `1.0.n`, `1.1.n` and `1.2.n` (older or newer
+PATCH) is audited as 1.2.0 (spec 0051, "Versioning"; spec 0061), and
+the report shows both versions when they differ. A repository set up
+under 1.0.x or 1.1.x keeps its `contract:` line. Spec 0051, "Changes",
+lists what each version changed up to 1.1.0:
 
 - 1.0.1: A-04 fails a `.claude/hooks/policy.json` that `vibe-guard`
   cannot load when a PreToolUse hook runs `vibe-guard hook`, and the
@@ -515,8 +547,22 @@ version changed:
   `gitlabci` manager; R-01 no longer counts `vibe --version` in a CI
   job that calls no entrypoint. A GitHub Actions repository keeps its
   1.0.1 results, apart from that R-01 relaxation.
+- 1.2.0 (spec 0061, ADR 0027): SHOULD rules only, so a 1.1.0
+  repository keeps its verdict. Planted-defect probes of `verify` for
+  a type error (V-05), an over-complex function (V-06), a secret
+  (V-07) and blanket suppressions (V-08), and a guard rule against
+  commands that skip Git hooks (A-09).
 
-Another MAJOR, or a MINOR above 1, is "cannot decide; upgrade vibe"
+What V-08 cannot catch: it plants only the blanket forms
+`vibe audit --explain V-08` lists. A specific suppression, which names
+the rule, is allowed by design (ADR 0027), and nothing checks that it
+gives a reason where the linter cannot require one (Ruff). A
+repository may switch its suppression rules off as long as another
+gate still reports the sample: `go vet` ignores `//nolint`, so a Go
+component whose `verify` runs `go vet` passes V-08 without
+`nolintlint`.
+
+Another MAJOR, or a MINOR above 2, is "cannot decide; upgrade vibe"
 (exit `1`).
 
 **JSON.** `--json` prints one object. `schema` versions this shape,
@@ -526,7 +572,7 @@ separately from the contract; it is `1`.
 {
   "schema": 1,
   "vibe": "v0.12.0",
-  "contract": {"declared": "1.0.0", "audited": "1.1.0"},
+  "contract": {"declared": "1.0.0", "audited": "1.2.0"},
   "static_only": true,
   "verdict": "undecided",
   "reason": "10 rules did not run (--static)",
@@ -553,7 +599,7 @@ separately from the contract; it is `1`.
   `fail`, `not_applicable`, `waived`, `undecided`, `not_run`. `summary`
   has every token for both levels.
 - Verdict tokens: `conformant`, `not_conformant`, `undecided`.
-- `rules` lists all 25 rules in ID order. `parts[].check` is `static`,
+- `rules` lists every rule in ID order. `parts[].check` is `static`,
   `execution` or `probe`.
 - `waiver` is `null`, or `{"reason", "until", "expired"}`. A rule with a
   waiver and result `not_applicable` has an unused waiver.
@@ -569,7 +615,11 @@ separately from the contract; it is `1`.
 
 This repository's `Contract / audit` job
 (`.github/workflows/contract-audit.yml`) runs the full audit on every
-pull request and passes on exit `0`. It builds `vibe` and `vibe-guard`,
+pull request. It passes on exit `0` when, in the JSON report, V-06,
+V-07, V-08 and A-09 pass and V-05 is not applicable: SHOULD rules do
+not change the verdict, so the job checks the ones this repository
+meets (spec 0061). `task audit` checks the same in the text report. It
+builds `vibe` and `vibe-guard`,
 installs the tools the entrypoints call, and sets
 `VIBE_TEST_REQUIRE_TOOLS` so that the tests `verify` runs fail rather
 than skip without uv, pnpm, Python, Node or bash. It is a required
@@ -595,7 +645,7 @@ jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "
   absent, so a local file cannot make a repository look conformant.
 - A file a rule needs that does not parse fails that rule, and the
   finding names the file and the parse error.
-- **Not applicable** in contract 1.1.0: C-03 when the C rules read
+- **Not applicable** in contract 1.2.0: C-03 when the C rules read
   GitLab CI; C-05 when `platforms` has no `windows`; every A rule when
   `agents` has no `claude`; R-02 when `agents` is empty, and R-02's
   `CLAUDE.md` half when `agents` has no `claude`.
@@ -711,7 +761,7 @@ here?". It reads `vibe.yaml` version 2 and the tracked
 ```console
 $ vibe doctor
 PASS        git            git version 2.53.0.windows.1; repository readable
-PASS        vibe.yaml      version 2, contract 1.1.0
+PASS        vibe.yaml      version 2, contract 1.2.0
 PASS        task           C:\Users\me\AppData\Local\Microsoft\WinGet\Links\task.exe; runs verify, verify-fast, fmt, fmt-check
 PASS        bash           C:\Program Files\Git\bin\bash.exe; runs the hook commands
 FAIL        vibe-guard     not on PATH; the PreToolUse hook that runs it fails on every tool call
@@ -788,7 +838,7 @@ first one, and the setup skill completes it. The file is the
 repository's, edited by hand. This repository's own `vibe.yaml`:
 
 ```yaml
-contract: 1.1.0
+contract: 1.2.0
 platforms: [linux, windows]
 agents: [claude, codex]
 # No components: one Go component at the root, found from go.mod.
@@ -808,9 +858,9 @@ entrypoints:
 
 | Field | Required | Meaning |
 |---|---|---|
-| `contract` | yes | The contract version, `X.Y.Z`, such as `1.1.0` |
+| `contract` | yes | The contract version, `X.Y.Z`, such as `1.2.0` |
 | `platforms` | yes | Non-empty list of distinct values from `linux`, `windows`, `macos` |
-| `agents` | yes | List of distinct values from `claude`, `codex`; may be empty (`[]`). Contract 1.1.0 has no Codex rules |
+| `agents` | yes | List of distinct values from `claude`, `codex`; may be empty (`[]`). Contract 1.2.0 has no Codex rules |
 | `components` | no | List of `{path, language}`; `language` is `go`, `python` or `typescript` |
 | `entrypoints` | yes | `verify`, `verify-fast`, `fmt`, `fmt-check`; `setup` is optional |
 | `waivers` | no | List of `{rule, reason, until}` |
@@ -848,7 +898,7 @@ as you gave it.
   pipes or redirections); write a list instead. A missing, empty or
   compound required entrypoint is not a configuration error: V-04 fails,
   and the rest of the report still runs.
-- **Waivers.** `rule` must be a rule ID of contract 1.1.0 and a SHOULD
+- **Waivers.** `rule` must be a rule ID of contract 1.2.0 and a SHOULD
   rule: a MUST rule cannot be waived. `reason` must be non-empty after
   trimming. `until` is a date, `YYYY-MM-DD`, and the waiver is in force
   through the end of that day in UTC. At most one waiver per rule. An
@@ -866,7 +916,7 @@ waivers:
 ## The setup skill
 
 `vibeconform-setup` (spec 0054) takes a repository in any of the
-contract's languages to a conformant `vibe audit` under contract 1.1.0.
+contract's languages to a conformant `vibe audit` under contract 1.2.0.
 `vibe init --skill` writes it; the repository owns it from then on.
 
 What the agent does with it, in order:
@@ -911,14 +961,14 @@ The skill's files:
 | Path | Holds |
 |---|---|
 | `SKILL.md` | The process above, for the agent |
-| `reference/rules.md` | One entry per rule of contract 1.1.0: what satisfies it on GitHub Actions and on GitLab CI, which file to start from |
+| `reference/rules.md` | One entry per rule of contract 1.2.0: what satisfies it on GitHub Actions and on GitLab CI, which file to start from |
 | `reference/vibe-yaml/` | `vibe.yaml` version 2 for Go, Python, TypeScript and a monorepo |
 | `reference/taskrunner/` | Taskfiles per stack, with `verify`, `verify:fast`, `fmt`, `fmt:check` and the agent hook tasks |
 | `reference/hooks/` | `lefthook.yml` per stack |
 | `reference/ci/` | `ci.yml` (verify on Linux and Windows, a vulnerability scan), `audit.yml` (the audit job with the setup action), `dependabot.yml`, the pull request template; per stack, a `.gitlab-ci.yml` for GitLab CI, and `renovate.json`, the update bot on GitLab (spec 0055) |
 | `reference/agents/` | `.claude/settings.json` with the `vibe-guard` hooks, `policy.json` version 2, the `AGENTS.md` Verification section, `CLAUDE.md` |
 | `reference/lint/` | golangci-lint; ruff and pyright; ESLint, Prettier (with a `.prettierignore`) and `tsconfig.json`, each one file. The ESLint, Prettier and Ruff files exclude the skill's own directories |
-| `reference/optional/` | VS Code, Zed, language servers, the `AGENTS.md` workflow sections and a docs layout |
+| `reference/optional/` | VS Code, Zed, language servers, the `AGENTS.md` workflow sections, a docs layout, and dependency direction enforced in `lint` (`depguard`, `import-linter`, `dependency-cruiser`; no contract rule checks it) |
 | `reference/migrate.md` | Leaving the template-sync system |
 | `reference/upgrade.md` | The upgrade flow |
 
@@ -1270,6 +1320,23 @@ audit checks this by probe: it runs the guard corpus through the hook
 (see "`vibe audit`"). Any guard that passes will do; `vibe-guard`, below,
 is the reference, and the setup skill installs it.
 
+**Commands that skip Git hooks** (A-09, SHOULD, contract 1.2.0; guard
+rule ID `git-skip-hooks`). The guard also refuses `git commit
+--no-verify`, `git commit -n` (`-nm wip` too: a short-option cluster is
+read up to the first letter that takes a value, so `-mn` is the message
+"n"), `git push --no-verify`, and `git -c core.hooksPath=…` (the key in
+any case, also through `--config-env`) with `commit` or `push`. It
+refuses a `git commit` or `git push` with an unquoted expansion before
+`--` (`git commit $FLAGS`) too, since it cannot tell what the expansion
+holds. `git push -n` is a dry run and runs.
+A-09 has its own corpus cases, which A-02, A-03 and R-01 do not read:
+`vibe audit --explain A-09` lists them. An exception for
+`git-skip-hooks` in `policy.json` lets its command through, as for every
+other rule. `vibe-guard` also refuses `LEFTHOOK=0` and `HUSKY=0` as an
+environment prefix of `git commit` or `git push` (directly or through
+`env`); A-09 does not require that, since each belongs to one hook
+manager.
+
 **It is not a sandbox.** The guard stops common accidents. It is not a
 security boundary: a command it does not recognize runs. For hard
 limits, use Claude Code's permission `deny` rules and its sandbox. When
@@ -1295,13 +1362,20 @@ shouldn't:
   origin :x`) all run. A secret file written through the shell (`echo
   X=1 > .env`) or named without an extension
   (`deploy/secrets/db_password`) is not caught either.
+- **Hooks can be skipped in other ways.** `--no-verify` on `git merge`,
+  `git rebase` or `git am`, Git configuration through environment
+  variables (`GIT_CONFIG_*`), `git config core.hooksPath` written
+  beforehand, an assignment on a line of its own (`export LEFTHOOK=0`),
+  and other hook managers' switches all run.
 - **Some commands are not read:** `cmd /c`, `Start-Process`, shell
   aliases, and glob expansion into flag-like file names.
 
 **Checking it fires.** No automated check can see an agent's own hook
 dispatch. The manual canary: ask the agent to run
 `git branch -D some-branch-that-does-not-exist`. It should be refused
-with `vibe-guard: refused by rule git-branch-force-delete: …`. Don't
+with `vibe-guard: refused by rule git-branch-force-delete: …`. For A-09,
+ask it to run `git commit --no-verify -m canary`: it should be refused
+with `vibe-guard: refused by rule git-skip-hooks: …`. Don't
 assume when an agent picks up a changed configuration: Claude Code
 switched to a new guard mid-session while this was being built, while
 other agents or versions may only read it at startup. Run the canary in
@@ -1309,7 +1383,7 @@ the session you actually mean to rely on.
 
 ### `vibe-guard`, the reference guard
 
-`vibe-guard` (spec 0053) is the guard contract 1.1.0's guard probes are
+`vibe-guard` (spec 0053) is the guard contract 1.2.0's guard probes are
 written against. It parses commands instead of matching text, so
 respellings such as a quoted command name, `eval`, flags after many
 operands or a variable in a flag are refused. It is a separate binary
@@ -1413,7 +1487,8 @@ are refused. These IDs take no exception.
   a `reason`, and exactly one of `command` (a word prefix, as exceptions
   use) or `path` (a glob). A command rule may add `args`, a regular
   expression some remaining argument must match.
-- An exception names one of the ten contract rule IDs and lifts it for
+- An exception names one of the contract's guard rule IDs (the ten of
+  1.0.0, and `git-skip-hooks` since 1.2.0) and lifts it for
   one simple command (`match`, compared word by word, never through an
   expansion) or one path glob. Every other rule still applies.
 - An unknown key or an invalid value is a policy error, and every call
@@ -1501,12 +1576,15 @@ unlocked until 2026-10-17T14:05:00Z (/path/to/repo/.git/vibe-unlock)
 **The canary with `vibe-guard`.** Ask the agent to run `git branch -D
 some-branch-that-does-not-exist`: it should be refused with
 `vibe-guard: refused by rule git-branch-force-delete: …`. Ask it to run
-`vibe unlock`: refused under `guardrail-settings`. After installing or
-upgrading `vibe-guard`, run the canary in the session you rely on.
+`vibe unlock`: refused under `guardrail-settings`. Ask it to run `git
+commit --no-verify -m canary`: refused under `git-skip-hooks` (a
+`vibe-guard` older than contract 1.2.0 lets it through). After
+installing or upgrading `vibe-guard`, run the canary in the session you
+rely on.
 
 ### Codex: hooks suspended
 
-Contract 1.1.0 has no Codex rules (ADR 0025), and the setup skill writes
+Contract 1.2.0 has no Codex rules (ADR 0025), and the setup skill writes
 no Codex hooks. This repository keeps `.codex/config.toml` (approval
 policy and sandbox mode) and a `.codex/hooks.json` with no hooks (spec
 0024):
@@ -1543,6 +1621,7 @@ alone:
 | Hook | Runs | When |
 |---|---|---|
 | pre-commit | `task fmt:check` | a staged file has an extension `task fmt` covers |
+| pre-commit | `task secrets:staged` (gitleaks over the staged changes, spec 0061) | every commit |
 | pre-push | `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; task verify:fast` | every push |
 
 pre-push runs the fast verification, not the full suite: in Go the
@@ -1584,9 +1663,21 @@ repository is an ordinary file, edited directly.
 - `.github/workflows/examples.yml` copies each of `examples/typescript`,
   `examples/python` and `examples/monorepo` into a fresh Git repository
   and runs the full audit there, on Linux and Windows; each must be
-  conformant. Its GitLab job audits the monorepo example with the
-  reference `.gitlab-ci.yml` in place of the GitHub workflows (the real
-  GitLab pipeline is not run, #74).
+  conformant, and the SHOULD rules of contract 1.2.0 must pass (V-05
+  only with a Python component; without one it is not applicable). Its
+  GitLab job audits the monorepo example with the reference
+  `.gitlab-ci.yml` in place of the GitHub workflows (the real GitLab
+  pipeline is not run, #74).
+- `.github/workflows/negative-control.yml` switches off one gate in an
+  example (Pyright for V-05, the complexity linters for V-06, the
+  `secrets` task for V-07, the suppression rules for V-08) and requires
+  the rule to fail, so that each planted sample is shown to fail only
+  because of its own defect kind. It runs when a pull request changes the samples, the
+  setup skill's references or the examples, weekly, and on demand.
+- `.golangci.yml` enables `gocyclo` (15) and `gocognit` (20). The
+  functions that were over those limits when they were enabled carry
+  `//nolint:gocognit,gocyclo // baseline: pre-existing complexity` (only
+  the linters that report them); new code meets the limits.
 - `Taskfile.local.yml` holds this repository's own tasks (`task build`
   and others), included optionally by `Taskfile.yml`.
 

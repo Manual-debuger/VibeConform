@@ -4,10 +4,13 @@
 // team's own entries at the end of the list: a later entry wins.
 //
 // Dev dependencies: eslint, @eslint/js, typescript-eslint, globals,
-// eslint-config-prettier.
+// eslint-config-prettier, eslint-plugin-sonarjs,
+// @eslint-community/eslint-plugin-eslint-comments.
 
+import comments from '@eslint-community/eslint-plugin-eslint-comments/configs'
 import js from '@eslint/js'
 import eslintConfigPrettier from 'eslint-config-prettier'
+import sonarjs from 'eslint-plugin-sonarjs'
 import globals from 'globals'
 import tseslint from 'typescript-eslint'
 import { existsSync } from 'node:fs'
@@ -83,6 +86,34 @@ export default tseslint.config(
       parserOptions: { projectService: false },
     },
   },
+  {
+    // Complexity limits catch the contract's planted complexity defect
+    // (V-06, a function of cyclomatic complexity 42 and cognitive
+    // complexity 41). A function already over a limit gets a specific
+    // suppression with a reason,
+    // `// eslint-disable-next-line complexity -- baseline: pre-existing complexity`,
+    // not a higher limit.
+    files: ['**/*.{ts,tsx,js,mjs,jsx}'],
+    plugins: { sonarjs },
+    rules: {
+      complexity: ['error', 15],
+      'sonarjs/cognitive-complexity': ['error', 20],
+    },
+  },
   eslintConfigPrettier,
+  // A disable comment names its rules and says why (V-08): a bare
+  // eslint-disable would hide every finding in its file. The plugin's
+  // no-unused-disable does not report under a flat config, so ESLint's own
+  // reportUnusedDisableDirectives reports an unused disable comment.
+  comments.recommended,
+  {
+    rules: {
+      '@eslint-community/eslint-comments/no-unlimited-disable': 'error',
+      '@eslint-community/eslint-comments/require-description': 'error',
+    },
+    linterOptions: {
+      reportUnusedDisableDirectives: 'error',
+    },
+  },
   // The team's own entries go here.
 )

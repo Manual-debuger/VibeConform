@@ -151,7 +151,7 @@ var fullSHA = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 // digest, every include the audit does not follow is pinned (a template:
 // include cannot be), and no script word ends in @latest. Every job
 // counts, whatever its rules.
-func gitlabC02(ci *CI) PartResult {
+func gitlabC02(ci *CI) PartResult { //nolint:gocognit // baseline: pre-existing complexity
 	var findings []Finding
 	type image struct {
 		img  CIImage
@@ -260,7 +260,7 @@ func includeFinding(inc CIInclude) (Finding, bool) {
 // gitlabC05: each verify command is called by a job that runs on a Linux
 // runner and by one that runs on a Windows runner, after parallel: matrix
 // expansion, among every job.
-func gitlabC05(ci *CI, verify []Command) PartResult {
+func gitlabC05(ci *CI, verify []Command) PartResult { //nolint:gocognit // baseline: pre-existing complexity
 	var findings []Finding
 	for _, c := range verify {
 		var platforms, unknown, where []string
@@ -315,7 +315,7 @@ var glVariable = regexp.MustCompile(`\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_
 // matrix combination: a tag containing windows, linux or macos (ignoring
 // case) names it, and a job with no tags and an image: is Linux. unknown
 // describes each combination that names no platform.
-func gitlabPlatforms(j *CIJob) (platforms, unknown []string) {
+func gitlabPlatforms(j *CIJob) (platforms, unknown []string) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	tags := mapValue(j.Node, "tags")
 	image := mapValue(j.Node, string(ImageKey)) != nil
 	for _, combo := range parallelCombos(mapValue(j.Node, "parallel")) {
@@ -394,7 +394,7 @@ var dependencyScanningTemplate = regexp.MustCompile(`^(Jobs|Security)/Dependency
 // gitlabD03: some job's script (after_script included) runs a recognized
 // scanner, or the pipeline includes GitLab's Dependency-Scanning template
 // or dependency-scanning component.
-func gitlabD03(ci *CI) PartResult {
+func gitlabD03(ci *CI) PartResult { //nolint:gocognit // baseline: pre-existing complexity
 	for _, j := range ci.Jobs {
 		for _, s := range j.Scripts {
 			for _, c := range s.Commands {

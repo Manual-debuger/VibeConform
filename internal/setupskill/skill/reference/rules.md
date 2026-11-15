@@ -1,4 +1,4 @@
-# The rules of contract 1.1.0
+# The rules of contract 1.2.0
 
 One entry per rule: its level, what satisfies it, and the reference file
 to start from. Keep anything that already satisfies a rule. The audit is
@@ -63,6 +63,76 @@ network or whole-repository checks. Start from
 `vibe.yaml` declares `verify`, `verify-fast`, `fmt` and `fmt-check`, each
 non-empty. Use the team's runner: `make verify`, `just verify` or
 `npm run verify` are as good as `task verify`.
+
+### V-05 (SHOULD): `verify` catches a type error
+
+Python components only. `verify` exits non-zero with a function annotated
+`-> int` that returns a string, planted beside each Python component's
+first test file. Any type checker satisfies it: the reference runs
+Pyright in `standard` mode (`reference/lint/python/pyrightconfig.json`)
+in the `typecheck` task. A repository with no Python component gets "not
+applicable": in Go and TypeScript a type error is a compile error, which
+V-01 already shows.
+
+### V-06 (SHOULD): `verify` catches an over-complex function
+
+`verify` exits non-zero with a function of cyclomatic complexity 42 and
+cognitive complexity 41 planted in each component (Go: a non-test file).
+Any complexity limit of 40 or less, of either metric, catches it. Start
+from the lint references: `reference/lint/go/.golangci.yml` enables
+`gocyclo` (15) and `gocognit` (20), `reference/lint/python/ruff.toml`
+selects `C901` (15), and `reference/lint/typescript/eslint.config.js`
+enables `complexity` (15) and `sonarjs/cognitive-complexity` (20). The
+lint task runs in `verify` and `verify-fast`. Existing code over the limits gets a
+specific suppression with the reason `baseline: pre-existing complexity`
+(`reference/migrate.md`), not a raised threshold.
+
+### V-07 (SHOULD): `verify` catches a secret in the working tree
+
+`verify` exits non-zero with a PEM private-key block planted in a plain
+text file, `vibe_probe_secret.txt`. The audit plants it once per
+repository, beside the first test file of the first component in
+`vibe.yaml` order that has tests, and does not commit it: the scanner
+must read the working tree's files, not the Git history. Any secret
+scanner that reports the block satisfies the rule. Start from
+`reference/taskrunner/<stack>/` (`secrets`, which runs
+`gitleaks dir . --redact`, in `verify` and `verify:fast`) and
+`reference/secrets/.gitleaks.toml`, which skips dependency and build
+directories and this skill's own directory. The CI references install a
+pinned gitleaks release and check its SHA-256 on Linux and Windows; the
+hook references scan the staged changes in pre-commit
+(`task secrets:staged`, `gitleaks git --pre-commit --staged`), which the
+contract does not check. A finding that is a real secret is rotated
+first, then removed. A finding that is not a secret (a test fixture)
+goes into the configuration's allowlist, with a reason. The allowlist
+skips every directory named build or dist, so a component under one of
+them is not scanned: narrow those paths if that is your layout.
+
+### V-08 (SHOULD): blanket suppressions do not hide a defect
+
+`verify` exits non-zero with V-01's static-analysis defect planted under
+the language's blanket suppressions, in each component: Go `//nolint`
+naming no linter; Python `# type: ignore  # noqa` with no codes;
+TypeScript a file-level `/* eslint-disable */` and `// @ts-ignore` on
+the line before. Only `verify` is probed. A component without tests
+leaves it undecided. Specific suppressions, which name a rule, stay
+allowed. The references refuse blanket suppressions in `verify` and
+`verify-fast`:
+
+- Go (`reference/lint/go/.golangci.yml`): golangci-lint's `nolintlint` with `require-specific` and
+  `require-explanation` (`//nolint:govet // reason`). `go vet`, which
+  ignores `//nolint`, also catches the Go sample.
+- Python (`reference/lint/python/ruff.toml`): Ruff's `PGH003` and `PGH004`. Ruff cannot require a reason,
+  so write one after the codes (`# noqa: S603  reason`).
+- TypeScript (`reference/lint/typescript/eslint.config.js`):
+  `@eslint-community/eslint-plugin-eslint-comments` with
+  `no-unlimited-disable` and `require-description`
+  (`// eslint-disable-next-line no-console -- reason`). The plugin's
+  `no-unused-disable` does not report under a flat config, so ESLint's
+  own `linterOptions.reportUnusedDisableDirectives: 'error'` reports an
+  unused disable comment.
+
+`vibe audit --explain V-08` prints the planted files.
 
 ## H: local Git hooks
 
@@ -195,8 +265,8 @@ set these in the project's settings, as GitHub branch protection is set:
 
 Not applicable when `agents` does not include `claude`. Start from
 `reference/agents/settings.json` and `reference/agents/policy.json`:
-`vibe-guard` satisfies A-01 to A-04 and A-08. Install it first (`SKILL.md`,
-step 5).
+`vibe-guard` satisfies A-01 to A-04, A-08 and A-09. Install it first
+(`SKILL.md`, step 5).
 
 The hooks run from the project root. Claude Code runs a hook command in
 the agent's current directory, and Task uses the nearest `Taskfile.yml`
@@ -233,8 +303,8 @@ PreToolUse command exits 2 when `vibe-guard` is missing.
 `exceptions` names a guard rule ID (`rm-rf`, `remove-item-recurse-force`,
 `git-reset-hard`, `git-clean-fd`, `git-push-force`,
 `git-branch-force-delete`, `git-discard-worktree`, `secret-file`,
-`guard-policy-file`, `guardrail-settings`), a `match` and a non-empty
-`reason`. Add no exception the person has not asked for.
+`guard-policy-file`, `guardrail-settings`, `git-skip-hooks`), a `match`
+and a non-empty `reason`. Add no exception the person has not asked for.
 
 ### A-05 (MUST): the agent's turn ends with `verify-fast`
 
@@ -262,6 +332,16 @@ The guard refuses edits of `.claude/settings.json` and `.claude/hooks/`
 without a valid unlock marker, refuses `vibe unlock` and the marker's
 creation, and the Stop hook removes the marker (`vibe-guard relock`).
 `vibe-guard` and the reference Stop command do this.
+
+### A-09 (SHOULD): the guard refuses commands that skip Git hooks
+
+The guard refuses `git commit --no-verify`, `git commit -n` (also in a
+cluster such as `-nm`), `git push --no-verify`, and `git -c
+core.hooksPath=…` with `commit` or `push`. It allows `git push -n`, a
+dry run, and a message such as `-m "-n"`. `vibe-guard hook` does this
+(guard rule ID `git-skip-hooks`); it also refuses `LEFTHOOK=0` and
+`HUSKY=0` before `git commit` or `git push`. Add an exception for
+`git-skip-hooks` only when the person asks for one.
 
 ## D: dependencies and supply chain
 

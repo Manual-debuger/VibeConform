@@ -232,7 +232,7 @@ type hookCheckCase struct {
 // runHookCheckCases runs every case against every reference Taskfile's
 // hook:check. Exit 0 and an empty stdout hold for every case: agents parse
 // stdout on exit 0.
-func runHookCheckCases(t *testing.T, cases []hookCheckCase, also func(t *testing.T, stack string, repo hookCheckRepo, stderr string)) {
+func runHookCheckCases(t *testing.T, cases []hookCheckCase, also func(t *testing.T, stack string, repo hookCheckRepo, stderr string)) { //nolint:gocognit // baseline: pre-existing complexity
 	t.Helper()
 	task := taskBinary(t)
 	if _, err := exec.LookPath("git"); err != nil {

@@ -94,7 +94,7 @@ func shellWrites(file string) []shellWrite {
 // TestShellWritesToGuardrailFiles: every write form, in Bash and in
 // PowerShell, with no marker, a valid marker and an expired one. An
 // unlock opens the settings and hooks, never policy.json.
-func TestShellWritesToGuardrailFiles(t *testing.T) {
+func TestShellWritesToGuardrailFiles(t *testing.T) { //nolint:gocognit // baseline: pre-existing complexity
 	files := []struct {
 		path string
 		rule string

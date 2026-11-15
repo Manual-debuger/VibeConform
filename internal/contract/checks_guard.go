@@ -34,12 +34,13 @@ type GuardCorpusCount struct {
 	Deny int
 }
 
-// GuardCorpusCounts returns the corpus's deny cases by guard rule ID, in
-// the order of the IDs, and its deny and allow totals. --explain A-02 and
-// A-03 print them.
+// GuardCorpusCounts returns the deny cases of A-02's corpus by guard rule
+// ID, in the order of the IDs and without the IDs it has none of
+// (git-skip-hooks is A-09's), and its deny and allow totals. --explain
+// A-02 and A-03 print them.
 func GuardCorpusCounts() (byRule []GuardCorpusCount, deny, allow int) {
 	n := map[string]int{}
-	for _, c := range guardCorpus() {
+	for _, c := range corpusFor("") {
 		if c.Want == WantDeny {
 			n[c.Rule]++
 			deny++
@@ -48,7 +49,9 @@ func GuardCorpusCounts() (byRule []GuardCorpusCount, deny, allow int) {
 		}
 	}
 	for _, id := range guardrule.IDs {
-		byRule = append(byRule, GuardCorpusCount{Rule: id, Deny: n[id]})
+		if n[id] > 0 {
+			byRule = append(byRule, GuardCorpusCount{Rule: id, Deny: n[id]})
+		}
 	}
 	return byRule, deny, allow
 }
@@ -270,73 +273,125 @@ func checkA02(env *Env) PartResult {
 }
 
 func a02(env *Env, s *probeSession) PartResult {
+	all, deny, ok := feedCorpus(env, s, "A-02", corpusFor(""))
+	if ok {
+		s.guardDeny = &deny
+	}
+	return all
+}
+
+// checkA09: A-09's corpus cases (spec 0061), fed as A-02 feeds its own:
+// every deny case is refused or let through by a policy.json exception,
+// and every allow case is allowed. The exceptions' uses join A-02's in
+// the report.
+func checkA09(env *Env) PartResult {
+	all, _, _ := feedCorpus(env, env.probe, ProbeA09, corpusFor(ProbeA09))
+	return all
+}
+
+// feedCorpus feeds cases to every PreToolUse hook that matches their
+// tools, for the probe of rule, and returns the verdict on every case and
+// the verdict on the deny cases alone. ok is false when it decided
+// before running a case, and deny is then not set.
+func feedCorpus(env *Env, s *probeSession, rule string, cases []GuardCase) (result, denyResult PartResult, ok bool) {
 	hooks, res, ok := preToolUseHooks(env)
 	if !ok {
-		return res
+		return res, PartResult{}, false
 	}
 	if len(hooks) > 0 {
 		if ok, why := s.HasBash(); !ok {
-			return Undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + why})
+			return Undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + why}), PartResult{}, false
 		}
 	}
 	defer func() { _ = s.setUnlock(UnlockNone) }()
 
-	exceptions := policyExceptions(env)
-	deny, all := &verdicts{}, &verdicts{}
-	unmatched := map[string][]string{}
-	var tools []string
-	runs, err := feedCases(s, hooks, guardCorpus(), "the PreToolUse hooks during A-02",
-		func(c GuardCase) string { return "A-02 with " + describeGuardCase(c) }, RunOpts{})
+	runs, err := feedCases(s, hooks, cases, "the PreToolUse hooks during "+rule,
+		func(c GuardCase) string { return rule + " with " + describeGuardCase(c) }, RunOpts{})
 	if err != nil {
-		f := Finding{Message: "cannot decide: cannot write the unlock marker: " + err.Error()}
-		d := Undecided(f)
-		s.guardDeny = &d
-		return d
+		d := Undecided(Finding{Message: "cannot decide: cannot write the unlock marker: " + err.Error()})
+		return d, d, true
 	}
+	t := &corpusTally{env: env, s: s, exceptions: policyExceptions(env), unmatched: map[string][]string{}}
 	for _, run := range runs {
-		c := run.c
-		switch {
-		case c.Want == WantDeny && run.refused():
-		case c.Want == WantDeny && run.undecided() != nil:
-			f := Finding{File: claudeSettingsFile, Message: "cannot decide: " + run.what() + ": " + run.undecided().describe()}
-			all.undecided(f)
-			deny.undecided(f)
-		case c.Want == WantDeny && len(run.runs) == 0 && len(exceptionsFor(exceptions, c, s)) == 0:
-			if _, seen := unmatched[c.Payload.ToolName]; !seen {
-				tools = append(tools, c.Payload.ToolName)
-			}
-			unmatched[c.Payload.ToolName] = append(unmatched[c.Payload.ToolName], fmt.Sprintf("%q", c.Name))
-		case c.Want == WantDeny:
-			if ex := exceptionsFor(exceptions, c, s); len(ex) > 0 {
-				env.guardUses = append(env.guardUses, GuardExceptionUse{Rule: ex[0].Rule, Match: ex[0].Match, Case: c.Name})
-				continue
-			}
-			f := Finding{File: claudeSettingsFile,
-				Message: fmt.Sprintf("%s should be refused (guard rule %s); %s", run.what(), c.Rule, run.exits()),
-				Fix:     guardFix(env, c.Rule)}
-			all.fail(f)
-			deny.fail(f)
-		case run.refused():
-			msg := fmt.Sprintf("%s should be allowed; %s", run.what(), run.exits())
-			if line := run.refusal(); line != "" {
-				msg += ": " + line
-			}
-			all.fail(allowCaseFinding(env, msg, "make the guard allow it: the contract's corpus expects this call allowed"))
-		case run.undecided() != nil:
-			all.undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + run.what() + ": " + run.undecided().describe()})
+		if run.c.Want == WantDeny {
+			t.denyCase(run)
+		} else {
+			t.allowCase(run)
 		}
 	}
-	for _, tool := range tools {
+	t.reportUnmatched()
+	return t.all.result(), t.deny.result(), true
+}
+
+// corpusTally collects feedCorpus's verdicts: on every case, on the deny
+// cases alone, and the deny cases no hook matched, by tool in the order
+// first seen.
+type corpusTally struct {
+	env        *Env
+	s          *probeSession
+	exceptions []guardrule.Exception
+	all, deny  verdicts
+	unmatched  map[string][]string
+	tools      []string
+}
+
+// denyCase judges a deny case: refused, let through by an exception, run
+// by no hook, or let through.
+func (t *corpusTally) denyCase(run caseRun) {
+	c := run.c
+	if run.refused() {
+		return
+	}
+	if u := run.undecided(); u != nil {
+		f := Finding{File: claudeSettingsFile, Message: "cannot decide: " + run.what() + ": " + u.describe()}
+		t.all.undecided(f)
+		t.deny.undecided(f)
+		return
+	}
+	ex := exceptionsFor(t.exceptions, c, t.s)
+	switch {
+	case len(ex) > 0:
+		t.env.guardUses = append(t.env.guardUses, GuardExceptionUse{Rule: ex[0].Rule, Match: ex[0].Match, Case: c.Name})
+	case len(run.runs) == 0:
+		tool := c.Payload.ToolName
+		if _, seen := t.unmatched[tool]; !seen {
+			t.tools = append(t.tools, tool)
+		}
+		t.unmatched[tool] = append(t.unmatched[tool], fmt.Sprintf("%q", c.Name))
+	default:
+		f := Finding{File: claudeSettingsFile,
+			Message: fmt.Sprintf("%s should be refused (guard rule %s); %s", run.what(), c.Rule, run.exits()),
+			Fix:     guardFix(t.env, c.Rule)}
+		t.all.fail(f)
+		t.deny.fail(f)
+	}
+}
+
+// allowCase judges an allow case: a refusal fails it.
+func (t *corpusTally) allowCase(run caseRun) {
+	switch {
+	case run.refused():
+		msg := fmt.Sprintf("%s should be allowed; %s", run.what(), run.exits())
+		if line := run.refusal(); line != "" {
+			msg += ": " + line
+		}
+		t.all.fail(allowCaseFinding(t.env, msg, "make the guard allow it: the contract's corpus expects this call allowed"))
+	case run.undecided() != nil:
+		t.all.undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + run.what() + ": " + run.undecided().describe()})
+	}
+}
+
+// reportUnmatched fails both verdicts once per tool whose deny cases no
+// PreToolUse hook matched.
+func (t *corpusTally) reportUnmatched() {
+	for _, tool := range t.tools {
 		f := Finding{File: claudeSettingsFile,
 			Message: fmt.Sprintf("no PreToolUse hook matches %s, so its %d deny cases are not refused: %s",
-				tool, len(unmatched[tool]), strings.Join(unmatched[tool], ", ")),
+				tool, len(t.unmatched[tool]), strings.Join(t.unmatched[tool], ", ")),
 			Fix: "add a PreToolUse hook whose matcher matches " + tool + " and runs the guard"}
-		all.fail(f)
-		deny.fail(f)
+		t.all.fail(f)
+		t.deny.fail(f)
 	}
-	d := deny.result()
-	s.guardDeny = &d
-	return all.result()
 }
 
 // allowCaseFinding is the finding for an allow case the guard refused. It
@@ -475,7 +530,7 @@ func a03Run(s *probeSession, hooks []settingsHook, sit a03Situation, v *verdicts
 		}
 	}()
 	var deny []GuardCase
-	for _, c := range guardCorpus() {
+	for _, c := range corpusFor("") {
 		if c.Want == WantDeny {
 			deny = append(deny, c)
 		}

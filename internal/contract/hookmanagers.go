@@ -183,7 +183,7 @@ type lefthookFile struct {
 // lefthook reads lefthook.yml (or .lefthook.yml) and the tracked files
 // its extends names. Later files override earlier ones by command name,
 // as lefthook merges them. lefthook-local.yml is personal and not read.
-func (e *Env) lefthook() *hookManager {
+func (e *Env) lefthook() *hookManager { //nolint:gocognit // baseline: pre-existing complexity
 	var main string
 	for _, f := range lefthookFiles {
 		if e.Repo.HasFile(f) {
@@ -328,7 +328,7 @@ var preCommitLegacyStages = map[string]string{
 // or default_stages, or pre-commit. Legacy stage names commit,
 // merge-commit and push count as pre-commit, pre-merge-commit and
 // pre-push.
-func (e *Env) preCommit() *hookManager {
+func (e *Env) preCommit() *hookManager { //nolint:gocognit // baseline: pre-existing complexity
 	if !e.Repo.HasFile(preCommitFile) {
 		return nil
 	}

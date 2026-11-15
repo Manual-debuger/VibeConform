@@ -186,7 +186,7 @@ func (r *glReader) parse(file string, data []byte) (*yaml.Node, error) {
 // expand copies a node with aliases followed and merge keys (<<) applied:
 // a key written in the map wins over a merged one, and an earlier merged
 // map over a later one.
-func (r *glReader) expand(file string, n *yaml.Node, depth int) (*yaml.Node, error) {
+func (r *glReader) expand(file string, n *yaml.Node, depth int) (*yaml.Node, error) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	r.nodes++
 	if r.nodes > gitlabNodeBudget || depth > 1000 {
 		return nil, errors.New("its aliases expand to too large a configuration")
@@ -915,7 +915,7 @@ func gitlabDefaultBranch(env *Env, r *glReader) string {
 
 // countBranchNames counts the literals named in if: conditions and the
 // refs named in only: and except: under n.
-func countBranchNames(n *yaml.Node, named map[string]int) {
+func countBranchNames(n *yaml.Node, named map[string]int) { //nolint:gocognit // baseline: pre-existing complexity
 	switch n.Kind {
 	case yaml.SequenceNode:
 		for _, c := range n.Content {

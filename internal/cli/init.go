@@ -73,7 +73,7 @@ func runInitSkill(cmd *cobra.Command, repoRoot string) error {
 // runInitConfig writes a vibe.yaml version 2 (spec 0059, Desired
 // Behavior 10). It checks what it writes with the audit's own parser, so
 // it never writes a file vibe audit cannot read.
-func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) error {
+func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) error { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	file := filepath.Join(repoRoot, configFileName)
 	if err := refuseExisting(file); err != nil {
 		return err
@@ -181,7 +181,7 @@ var skippedDirs = []string{"node_modules", "vendor"}
 // directory inside another component is not one. The result is sorted by
 // path. nested holds each directory with a manifest that lies inside
 // another component, with that component.
-func detectComponents(files []string) (components []contract.Component, nested []nestedManifest) {
+func detectComponents(files []string) (components []contract.Component, nested []nestedManifest) { //nolint:gocognit // baseline: pre-existing complexity
 	has := map[string]bool{}
 	for _, f := range files {
 		has[f] = true

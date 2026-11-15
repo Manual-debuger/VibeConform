@@ -36,41 +36,127 @@ func checkV01Execution(env *Env) PartResult {
 // checkV01Probe: with each planted defect in each component, verify
 // exits non-zero. A component without tests fails.
 func checkV01Probe(env *Env) PartResult {
-	return defectProbe(env, EntrypointVerify, true)
+	return defectProbe{rule: "V-01", entrypoint: EntrypointVerify, noTestsFail: true}.run(env)
 }
 
 // checkV02Probe: with each planted defect in each component, verify-fast
 // exits non-zero.
 func checkV02Probe(env *Env) PartResult {
-	return defectProbe(env, EntrypointVerifyFast, false)
+	return defectProbe{rule: "V-02", entrypoint: EntrypointVerifyFast}.run(env)
 }
 
-// defectProbe plants every defect kind in every component, one at a
-// time, and runs the entrypoint with each. Its baseline must pass first:
-// otherwise a defect that "made it fail" would prove nothing. noTestsFail
-// says whether a component with no tests fails the part (V-01) or leaves
-// it undecided (V-02).
-func defectProbe(env *Env, name string, noTestsFail bool) PartResult {
-	if f := needEntrypoint(env, name); f != nil {
+// checkV05Probe: with the type-error defect planted in each Python
+// component, verify exits non-zero (spec 0061). Other components are
+// skipped: their type errors are compile errors, which V-01 shows.
+func checkV05Probe(env *Env) PartResult {
+	return defectProbe{rule: "V-05", entrypoint: EntrypointVerify,
+		components: func(env *Env) []Component { return pythonComponents(env.Config) }}.run(env)
+}
+
+// pythonComponents lists the Python components in configuration order.
+func pythonComponents(cfg *Config) []Component {
+	var out []Component
+	for _, c := range cfg.Components {
+		if c.Language == LanguagePython {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// hasPythonComponent is V-05's applicability.
+func hasPythonComponent(cfg *Config) (bool, string) {
+	if len(pythonComponents(cfg)) > 0 {
+		return true, ""
+	}
+	return false, "no component is Python"
+}
+
+// checkV06Probe: with the complexity defect in each component, verify
+// exits non-zero (spec 0061). A component without tests leaves it
+// undecided.
+func checkV06Probe(env *Env) PartResult {
+	return defectProbe{rule: "V-06", entrypoint: EntrypointVerify}.run(env)
+}
+
+// checkV07Probe: with the secret defect planted once per repository,
+// verify exits non-zero (spec 0061). A secret does not depend on the
+// language, so one component is enough: the first in configuration order
+// that has tests.
+func checkV07Probe(env *Env) PartResult {
+	return defectProbe{rule: "V-07", entrypoint: EntrypointVerify, firstWithTests: true}.run(env)
+}
+
+// checkV08Probe: with V-01's static-analysis defect under the language's
+// blanket suppressions planted in each component, verify exits non-zero.
+// A component without tests leaves it undecided (spec 0061).
+func checkV08Probe(env *Env) PartResult {
+	return defectProbe{rule: "V-08", entrypoint: EntrypointVerify}.run(env)
+}
+
+// defectProbe is one rule's planted-defect probe: in which components it
+// plants the rule's defect kinds (ruleDefectKinds), and which entrypoint
+// must exit non-zero with each. A rule with its own defect kinds lists
+// them in ruleDefectKinds; each kind needs a sample in defectSamples, for
+// every language it is planted in, and a catcher in defectCatchers.
+type defectProbe struct {
+	// rule is the ID of the rule the probe decides; its kinds are
+	// ruleDefectKinds[rule], and the Fix names it.
+	rule       string
+	entrypoint string
+	// noTestsFail says whether a component with no tests fails the part
+	// (V-01) or leaves it undecided.
+	noTestsFail bool
+	// components picks the components to plant in, in configuration
+	// order. nil plants in every component.
+	components func(env *Env) []Component
+	// firstWithTests plants in the first picked component that has tests
+	// only. When none has, the first component is reported as having no
+	// tests.
+	firstWithTests bool
+}
+
+// run plants each defect kind in each picked component, one at a time
+// in a reset probe copy, and runs the entrypoint with each. Its baseline
+// must pass first: otherwise a defect that "made it fail" would prove
+// nothing. The baseline runs once, and only when some component has
+// tests.
+func (p defectProbe) run(env *Env) PartResult {
+	if f := needEntrypoint(env, p.entrypoint); f != nil {
 		return Fail(*f)
 	}
-	s := env.probe
+	comps := env.Config.Components
+	if p.components != nil {
+		comps = p.components(env)
+	}
+	if len(comps) == 0 {
+		return Undecided(Finding{Message: "cannot decide: no component to plant a defect in"})
+	}
 	var results []PartResult
 	var baseline *PartResult
-	for _, comp := range env.Config.Components {
+	for _, comp := range comps {
 		if _, _, ok := plantDir(env, comp); !ok {
-			results = append(results, noTests(env, comp, noTestsFail))
+			if !p.firstWithTests {
+				results = append(results, noTests(env, comp, p.noTestsFail))
+			}
 			continue
 		}
 		if baseline == nil {
-			b := baselinePasses(env, name)
+			b := baselinePasses(env, p.entrypoint)
 			baseline = &b
 		}
 		if baseline.Result != ResultPass {
 			results = append(results, *baseline)
-			continue
+		} else {
+			results = append(results, p.component(env, comp))
 		}
-		results = append(results, defectComponent(env, s, name, comp))
+		if p.firstWithTests {
+			break
+		}
+	}
+	if len(results) == 0 {
+		// firstWithTests, and no component has tests.
+		results = append(results, noTests(env, comps[0], p.noTestsFail))
 	}
 	return mergeRuns(dedupe(results)...)
 }
@@ -104,12 +190,15 @@ func baselinePasses(env *Env, name string) PartResult {
 	return Pass()
 }
 
-// defectComponent plants each defect kind in one component and runs the
-// entrypoint with it.
-func defectComponent(env *Env, s *probeSession, name string, comp Component) PartResult {
-	var missedKinds, planted []string
+// component plants each defect kind in one component and runs the
+// entrypoint with it. Its finding names the entrypoint, the component,
+// the planted files and the kinds that did not make the entrypoint fail.
+func (p defectProbe) component(env *Env, comp Component) PartResult {
+	s, name := env.probe, p.entrypoint
+	var missedKinds []defectKind
+	var planted []string
 	var undecided []PartResult
-	for _, kind := range defectKinds {
+	for _, kind := range ruleDefectKinds[p.rule] {
 		if err := s.Reset(); err != nil {
 			return cannotReset(err)
 		}
@@ -129,7 +218,7 @@ func defectComponent(env *Env, s *probeSession, name string, comp Component) Par
 		case !run.Ran():
 			undecided = append(undecided, undecidedRun(run.runOutcome))
 		case run.ExitCode == 0:
-			missedKinds = append(missedKinds, string(kind))
+			missedKinds = append(missedKinds, kind)
 			planted = append(planted, d.Path)
 		}
 	}
@@ -137,34 +226,31 @@ func defectComponent(env *Env, s *probeSession, name string, comp Component) Par
 	if len(missedKinds) > 0 {
 		res = Fail(Finding{File: env.Config.File,
 			Message: fmt.Sprintf("%s (%s) exits 0 in component %s with a planted defect (%s); the defect kinds that did not make it fail: %s",
-				name, strings.Join(env.EntrypointSource(name), "; "), comp.Path, strings.Join(planted, ", "), strings.Join(missedKinds, ", ")),
+				name, strings.Join(env.EntrypointSource(name), "; "), comp.Path, strings.Join(planted, ", "), joinKinds(missedKinds)),
 			Fix: fmt.Sprintf("make entrypoints.%s run %s; vibe audit --explain %s shows the planted files",
-				name, kindTools(missedKinds), ruleFor(name))})
+				name, kindCatchers(missedKinds), p.rule)})
 	}
 	return mergeRuns(append([]PartResult{res}, undecided...)...)
 }
 
-// kindTools names what an entrypoint must run to catch defect kinds.
-func kindTools(kinds []string) string {
+// joinKinds lists defect kinds, comma separated.
+func joinKinds(kinds []defectKind) string {
+	names := make([]string, len(kinds))
+	for i, k := range kinds {
+		names[i] = string(k)
+	}
+	return strings.Join(names, ", ")
+}
+
+// kindCatchers names what an entrypoint must run to catch defect kinds.
+func kindCatchers(kinds []defectKind) string {
 	var tools []string
 	for _, k := range kinds {
-		switch defectKind(k) {
-		case defectFormat:
-			tools = append(tools, "a format check")
-		case defectStaticAnalysis:
-			tools = append(tools, "static analysis (a type check or linter)")
-		case defectTest:
-			tools = append(tools, "the tests")
+		if c, ok := defectCatchers[k]; ok {
+			tools = append(tools, c)
 		}
 	}
 	return strings.Join(tools, " and ")
-}
-
-func ruleFor(entrypoint string) string {
-	if entrypoint == EntrypointVerifyFast {
-		return "V-02"
-	}
-	return "V-01"
 }
 
 func cannotReset(err error) PartResult {

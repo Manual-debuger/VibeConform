@@ -28,10 +28,12 @@ func TestGolangciWaitsForTheLock(t *testing.T) {
 }
 
 // The Git hooks of spec 0057 (Desired Behavior 8–11): pre-commit runs the
-// format check, pre-push clears Git's repository variables and runs the
-// fast verification. Nothing else runs in either hook.
+// format check and, since spec 0061, the secret scan of the staged
+// changes; pre-push clears Git's repository variables and runs the fast
+// verification. Nothing else runs in either hook.
 const (
 	preCommitRun = "task fmt:check"
+	secretsRun   = "task secrets:staged"
 	prePushRun   = "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR; task verify:fast"
 )
 
@@ -69,8 +71,10 @@ func TestLefthookHookStages(t *testing.T) {
 	for _, stack := range []string{"go", "python", "typescript", "monorepo"} {
 		name := "reference/hooks/" + stack + "/lefthook.yml"
 		content := readRef(t, name)
-		if got := lefthookRuns(t, name, content, "pre-commit"); !slices.Equal(got, []string{preCommitRun}) {
-			t.Errorf("%s: pre-commit runs %q, want only %q", name, got, preCommitRun)
+		got := lefthookRuns(t, name, content, "pre-commit")
+		slices.Sort(got)
+		if want := []string{preCommitRun, secretsRun}; !slices.Equal(got, want) {
+			t.Errorf("%s: pre-commit runs %q, want only %q", name, got, want)
 		}
 		if got := lefthookRuns(t, name, content, "pre-push"); !slices.Equal(got, []string{prePushRun}) {
 			t.Errorf("%s: pre-push runs %q, want only %q", name, got, prePushRun)

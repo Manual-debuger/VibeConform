@@ -41,10 +41,18 @@ _Avoid_: sandbox, scratch repo, clone
 
 **Planted defect**:
 A small file the audit writes into the probe copy, in one component, that
-one kind of check must catch: a format error, a static analysis error or
-a failing test. An entrypoint that still passes with it planted has
-missed that kind.
+one kind of check must catch: a format error, a static analysis error, a
+failing test, a type error, an over-complex function, a secret, or a
+static analysis error hidden by blanket suppressions. An entrypoint that
+still passes with it planted has missed that kind.
 _Avoid_: mutant, injected bug, fault
+
+**Suppression**:
+A comment in source code that silences a lint or type-check finding at
+one place. A specific suppression names the rules it silences; a blanket
+suppression names none. A planted defect must still fail `verify` under
+blanket suppressions. Specific suppressions are the repository's choice.
+_Avoid_: exception, waiver, ignore
 
 **Guard corpus**:
 The fixed set of tool calls that any agent guard must refuse or allow.

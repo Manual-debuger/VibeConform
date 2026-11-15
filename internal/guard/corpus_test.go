@@ -56,7 +56,7 @@ func explainArgs(c contract.GuardCase) []string {
 // hook": every deny case is refused (exit 2) by a line that names the
 // case's rule ID, every allow case is allowed silently, and "vibe-guard
 // explain" gives the same decision and rule (#105's done-when).
-func TestCorpus(t *testing.T) {
+func TestCorpus(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	if testing.Short() {
 		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
 	}

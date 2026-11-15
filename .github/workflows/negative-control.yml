@@ -1,0 +1,437 @@
+name: Negative control
+
+# Spec 0061, "Negative control": each planted sample of contract 1.2.0
+# must fail its rule only because of its own defect kind. Each job copies
+# an example into a fresh Git repository, switches off only the gate that
+# catches one kind, runs the full audit and requires that rule to fail.
+# A sample that tripped an unrelated gate would still fail verify there,
+# and the rule would pass. Every job but v07 installs gitleaks, which the
+# examples' verify runs (V-07).
+#
+# It checks VibeConform's samples, not an adopter's code, so it runs when
+# a pull request changes the samples, the setup skill's references or the
+# examples, weekly, and on manual dispatch. The changes job decides that,
+# not on.pull_request.paths: R-01 lets only a C-04 audit job, which runs
+# for every pull request, call vibe.
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: negative-control-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.0"
+  TASK_VERSION: "v3.53.1"
+  GOLANGCI_LINT_VERSION: "v2.15.0"
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.34.5"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  changes:
+    name: Samples, references or examples changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Compare with the base branch
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          run=true
+          if [ "$EVENT" = pull_request ] && ! git diff --name-only "$BASE"...HEAD |
+            grep -qE '^(internal/contract/(defects[^/]*|checks_defects)\.go|internal/setupskill/skill/reference/|examples/|\.github/workflows/negative-control\.yml)'; then
+            run=false
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  v05-python:
+    name: V-05 fails with Pyright switched off (examples/python)
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
+      # gitleaks for the secrets task in verify: a pinned release, checked
+      # against its SHA-256 before it runs.
+      - name: Install gitleaks
+        shell: bash
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          case "$RUNNER_OS" in
+            Windows) asset="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip" sum=d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e ;;
+            *) asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
+          esac
+          dir="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
+          echo "$sum  $dir/$asset" | sha256sum -c -
+          case "$asset" in
+            *.zip) unzip -q -o "$dir/$asset" gitleaks.exe -d "$dir" ;;
+            *) tar -xzf "$dir/$asset" -C "$dir" gitleaks ;;
+          esac
+          echo "$dir" >> "$GITHUB_PATH"
+      - name: Build vibe and vibe-guard from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          go build -o "$RUNNER_TEMP/bin/vibe-guard" ./cmd/vibe-guard
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # The typecheck task is the only step of verify that runs Pyright.
+      - name: Copy the example into a fresh Git repository, Pyright off
+        run: |
+          copy="$RUNNER_TEMP/example"
+          cp -R examples/python "$copy"
+          cd "$copy"
+          grep -q 'uv run pyright' Taskfile.yml
+          sed -i 's/uv run pyright/echo "pyright switched off"/' Taskfile.yml
+          git init -q -b main
+          git add -A
+          git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy"
+          echo "COPY=$copy" >> "$GITHUB_ENV"
+      # V-05 is SHOULD, so the verdict may stay conformant: read the
+      # report, not the exit code.
+      - name: vibe audit
+        working-directory: ${{ env.COPY }}
+        run: vibe audit --json > "$RUNNER_TEMP/audit.json" || true
+      - name: V-05 fails on the type error
+        run: |
+          v05="$(jq -c '.rules[] | select(.id == "V-05")' "$RUNNER_TEMP/audit.json")"
+          echo "$v05" | jq .
+          [ "$(echo "$v05" | jq -r .result)" = fail ] || { echo "::error::V-05 does not fail"; exit 1; }
+          echo "$v05" | jq -e '[.findings[].message | endswith("did not make it fail: type error")] | any' >/dev/null ||
+            { echo "::error::V-05 does not fail on the type error"; exit 1; }
+
+  # V-06: with the complexity linters off, V-06 fails in every component.
+  v06:
+    name: ${{ matrix.rule }} without its gate, examples/${{ matrix.example }}
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # components: the components whose gate is switched off, each of
+          # which the rule's findings must name.
+          - { rule: V-06, example: typescript, components: "." }
+          - { rule: V-06, example: python, components: "." }
+          - { rule: V-06, example: monorepo, components: "services/api services/worker apps/web" }
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      RULE: ${{ matrix.rule }}
+      EXAMPLE: ${{ matrix.example }}
+      COMPONENTS: ${{ matrix.components }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Setup pnpm
+        if: matrix.example != 'python'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - name: Setup Node
+        if: matrix.example != 'python'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install uv
+        if: matrix.example != 'typescript'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
+      - name: Install the Go tools the monorepo's entrypoints call
+        if: matrix.example == 'monorepo'
+        run: |
+          go install golang.org/x/tools/cmd/goimports@v0.51.0
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"$GOLANGCI_LINT_VERSION"
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      # gitleaks for the secrets task in verify: a pinned release, checked
+      # against its SHA-256 before it runs.
+      - name: Install gitleaks
+        shell: bash
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          case "$RUNNER_OS" in
+            Windows) asset="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip" sum=d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e ;;
+            *) asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
+          esac
+          dir="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
+          echo "$sum  $dir/$asset" | sha256sum -c -
+          case "$asset" in
+            *.zip) unzip -q -o "$dir/$asset" gitleaks.exe -d "$dir" ;;
+            *) tar -xzf "$dir/$asset" -C "$dir" gitleaks ;;
+          esac
+          echo "$dir" >> "$GITHUB_PATH"
+      - name: Build vibe and vibe-guard from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          go build -o "$RUNNER_TEMP/bin/vibe-guard" ./cmd/vibe-guard
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # Only the targeted gate goes: each sed must change its file, or the
+      # control would prove nothing.
+      - name: Copy the example and switch off the gate
+        run: |
+          copy="$RUNNER_TEMP/example"
+          cp -R "examples/$EXAMPLE" "$copy"
+          cd "$copy"
+          off() {
+            before=$(cat "$2")
+            sed -i -e "$1" "$2"
+            if [ "$before" = "$(cat "$2")" ]; then echo "::error::$RULE: '$1' did not change $2"; exit 1; fi
+          }
+          eslint_complexity_off() {
+            off "s/^      complexity: \['error', 15\],/      complexity: 'off',/" "$1"
+            off "s#^      'sonarjs/cognitive-complexity': \['error', 20\],#      'sonarjs/cognitive-complexity': 'off',#" "$1"
+          }
+          case "$RULE/$EXAMPLE" in
+            V-06/typescript) eslint_complexity_off eslint.config.js ;;
+            V-06/python) off 's/, "C901"//' ruff.toml ;;
+            V-06/monorepo)
+              off '/^    - gocognit$/d; /^    - gocyclo$/d' services/api/.golangci.yml
+              off 's/, "C901"//' services/worker/ruff.toml
+              eslint_complexity_off apps/web/eslint.config.js
+              ;;
+            *) echo "::error::no gate to switch off for $RULE/$EXAMPLE"; exit 1 ;;
+          esac
+          git init -q -b main
+          git add -A
+          git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy without the $RULE gate"
+          echo "COPY=$copy" >> "$GITHUB_ENV"
+      - name: The rule fails in each component
+        working-directory: ${{ env.COPY }}
+        run: |
+          vibe audit --json > "$RUNNER_TEMP/audit.json" || true
+          jq --arg id "$RULE" '.rules[] | select(.id == $id)' "$RUNNER_TEMP/audit.json"
+          result=$(jq -r --arg id "$RULE" '.rules[] | select(.id == $id) | .result' "$RUNNER_TEMP/audit.json")
+          if [ "$result" != "fail" ]; then echo "::error::$RULE is $result, want fail"; exit 1; fi
+          for c in $COMPONENTS; do
+            if ! jq -e --arg id "$RULE" --arg c "in component $c with" \
+              '.rules[] | select(.id == $id) | .findings | any(.message | contains($c))' "$RUNNER_TEMP/audit.json" >/dev/null; then
+              echo "::error::$RULE does not fail in component $c"
+              exit 1
+            fi
+          done
+
+  # V-07: the Python example without its secrets task. gitleaks is not
+  # installed either, so nothing in verify can report the planted key.
+  v07:
+    name: V-07 fails without the secret scan (examples/python)
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
+      - name: Build vibe and vibe-guard from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          go build -o "$RUNNER_TEMP/bin/vibe-guard" ./cmd/vibe-guard
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Copy the example, without the secrets task, into a fresh Git repository
+        run: |
+          copy="$RUNNER_TEMP/example"
+          cp -R examples/python "$copy"
+          cd "$copy"
+          grep -q -- '- task: secrets$' Taskfile.yml
+          sed -i '/- task: secrets$/d' Taskfile.yml
+          git init -q -b main
+          git add -A
+          git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy without the secret scan"
+          echo "COPY=$copy" >> "$GITHUB_ENV"
+      - name: V-07 fails
+        working-directory: ${{ env.COPY }}
+        run: |
+          if command -v gitleaks >/dev/null 2>&1; then echo "gitleaks is on PATH"; exit 1; fi
+          rc=0
+          vibe audit --json > "$RUNNER_TEMP/report.json" || rc=$?
+          result=$(jq -r '.rules[] | select(.id == "V-07") | .result' "$RUNNER_TEMP/report.json")
+          echo "V-07: $result (vibe audit exited $rc)"
+          jq -r '.rules[] | select(.id == "V-07") | .findings[]? | .message' "$RUNNER_TEMP/report.json"
+          [ "$result" = "fail" ]
+
+  # V-08: with the suppression rules off (Ruff's PGH003 and PGH004,
+  # eslint-comments' rules, golangci-lint's nolintlint), V-08 fails in
+  # every Python and TypeScript component. The Go component still passes:
+  # its verify runs go vet, which ignores //nolint.
+  v08:
+    name: V-08 without suppression rules (examples/${{ matrix.example }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - example: typescript
+            components: "."
+          - example: python
+            components: "."
+          - example: monorepo
+            components: "apps/web services/worker"
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      EXAMPLE: ${{ matrix.example }}
+      COMPONENTS: ${{ matrix.components }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Setup pnpm
+        if: matrix.example != 'python'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - name: Setup Node
+        if: matrix.example != 'python'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install uv
+        if: matrix.example != 'typescript'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install task
+        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
+      - name: Install the Go tools the monorepo's entrypoints call
+        if: matrix.example == 'monorepo'
+        run: |
+          go install golang.org/x/tools/cmd/goimports@v0.51.0
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"$GOLANGCI_LINT_VERSION"
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      # gitleaks for the secrets task in verify: a pinned release, checked
+      # against its SHA-256 before it runs.
+      - name: Install gitleaks
+        shell: bash
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          case "$RUNNER_OS" in
+            Windows) asset="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip" sum=d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e ;;
+            *) asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
+          esac
+          dir="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
+          echo "$sum  $dir/$asset" | sha256sum -c -
+          case "$asset" in
+            *.zip) unzip -q -o "$dir/$asset" gitleaks.exe -d "$dir" ;;
+            *) tar -xzf "$dir/$asset" -C "$dir" gitleaks ;;
+          esac
+          echo "$dir" >> "$GITHUB_PATH"
+      - name: Build vibe and vibe-guard from source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
+          go build -o "$RUNNER_TEMP/bin/vibe-guard" ./cmd/vibe-guard
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # Each edit must change its file, so that a changed reference cannot
+      # make the job pass without switching anything off.
+      - name: Copy the example and switch off its suppression rules
+        run: |
+          copy="$RUNNER_TEMP/example"
+          cp -R "examples/$EXAMPLE" "$copy"
+          cd "$copy"
+          off() { # file sed-script
+            before="$(cat "$1")"
+            sed -i "$2" "$1"
+            if [ "$before" = "$(cat "$1")" ]; then echo "$1: nothing switched off"; exit 1; fi
+          }
+          mapfile -t ruff < <(find . -name ruff.toml -not -path '*/node_modules/*' -not -path '*/.venv/*')
+          mapfile -t golangci < <(find . -name .golangci.yml -not -path '*/node_modules/*')
+          mapfile -t eslint < <(find . -name eslint.config.js -not -path '*/node_modules/*')
+          for f in "${ruff[@]}"; do
+            off "$f" 's/, "PGH003", "PGH004"\]/]/'
+          done
+          for f in "${golangci[@]}"; do
+            off "$f" '/^    - nolintlint$/d'
+          done
+          for f in "${eslint[@]}"; do
+            off "$f" "s|^  // The team's own entries go here.\$|  {\n    rules: {\n      '@eslint-community/eslint-comments/no-unlimited-disable': 'off',\n      '@eslint-community/eslint-comments/require-description': 'off',\n      '@eslint-community/eslint-comments/disable-enable-pair': 'off',\n    },\n  },|"
+            # Keep the edited config Prettier-clean, so that verify's
+            # baseline passes.
+            (cd "$(dirname "$f")" && pnpm install --frozen-lockfile && pnpm exec prettier --write eslint.config.js)
+          done
+          git init -q -b main
+          git add -A
+          git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy without suppression rules"
+          echo "COPY=$copy" >> "$GITHUB_ENV"
+      - name: vibe audit shows V-08 failing in each component
+        working-directory: ${{ env.COPY }}
+        run: |
+          vibe audit --json > "$RUNNER_TEMP/audit.json" || true
+          v08="$(jq -c '.rules[] | select(.id == "V-08")' "$RUNNER_TEMP/audit.json")"
+          echo "$v08" | jq .
+          [ "$(echo "$v08" | jq -r .result)" = fail ] || { echo "V-08 does not fail"; exit 1; }
+          for c in $COMPONENTS; do
+            echo "$v08" | jq -e --arg c "in component $c with" '[.findings[].message | contains($c)] | any' >/dev/null ||
+              { echo "V-08 does not fail in component $c"; exit 1; }
+          done

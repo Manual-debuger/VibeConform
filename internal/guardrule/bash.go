@@ -9,7 +9,7 @@ import (
 
 // parseBash parses src as Bash (the Bash tool runs bash) and returns its
 // simple commands in source order, outer before inner.
-func parseBash(src string) ([]Command, error) {
+func parseBash(src string) ([]Command, error) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	f, err := syntax.NewParser(syntax.Variant(syntax.LangBash)).Parse(strings.NewReader(src), "")
 	if err != nil {
 		return nil, &ParseError{Shell: ShellBash, Msg: err.Error()}
@@ -50,6 +50,9 @@ func parseBash(src string) ([]Command, error) {
 			for _, a := range call.Args {
 				c.Words = append(c.Words, bashWord(a))
 			}
+			for _, a := range call.Assigns {
+				c.Assigns = append(c.Assigns, bashAssign(a))
+			}
 			out = append(out, c)
 		} else if len(c.Redirects) > 0 || len(c.Writes) > 0 {
 			c.stdin = nil
@@ -58,6 +61,24 @@ func parseBash(src string) ([]Command, error) {
 		return true
 	})
 	return out, nil
+}
+
+// bashAssign is an assignment before a command name as one NAME=value
+// word, with quote removal on the value. An array value is Unknown.
+func bashAssign(a *syntax.Assign) Word {
+	name := ""
+	if a.Name != nil {
+		name = a.Name.Value
+	}
+	w := Word{Literal: true}
+	switch {
+	case a.Array != nil:
+		w = Word{Text: ExpansionMark, Unknown: true}
+	case a.Value != nil:
+		w = bashWord(a.Value)
+	}
+	w.Text = name + "=" + w.Text
+	return w
 }
 
 // isDescriptor reports whether s, the word after >&, names a file
@@ -156,7 +177,7 @@ func Unescape(s string, inDouble bool) string {
 }
 
 // ansiC decodes the body of a $'…' string, as bash does.
-func ansiC(s string) string {
+func ansiC(s string) string { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' || i+1 == len(s) {

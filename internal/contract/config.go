@@ -419,7 +419,7 @@ func (p *configParser) entrypoints(v *yaml.Node) error {
 	})
 }
 
-func (p *configParser) waivers(v *yaml.Node) error {
+func (p *configParser) waivers(v *yaml.Node) error { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	if v.Kind == yaml.ScalarNode && v.Tag == "!!null" {
 		return nil
 	}

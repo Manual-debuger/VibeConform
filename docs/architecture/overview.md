@@ -50,7 +50,7 @@ spec 0053 for execution checks and probes, spec 0055 for GitLab CI):
                           ↓
 internal/contract
   vibe.yaml version 2 (a version 1 file is detected and refused)
-  the 25 rules of contract 1.1.0
+  the rules of contract 1.2.0
   static checks of tracked files
   execution checks and probes in a probe copy
   report model (plain data)
@@ -120,7 +120,7 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
 ```
 
 - **`internal/guardrule`** holds what the audit and the guard must agree
-  on: the ten contract guard rule IDs and the guard-internal ones,
+  on: the contract guard rule IDs and the guard-internal ones,
   `policy.json` version 2 parsing, exception matching, the policy file
   paths, the unlock marker's name and format (`vibe unlock` writes it,
   `vibe-guard` reads it, the audit plants it), and the decomposition of a
@@ -138,7 +138,9 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   `vibe`; `internal/guard`'s tests run the same corpus through
   `vibe-guard`.
 - The dependency is one way: `internal/contract` → `internal/guardrule`
-  ← `internal/guard`, and tests in each package enforce it.
+  ← `internal/guard`. `task lint` enforces it for non-test code with
+  `depguard` (`.golangci.yml`, spec 0061), and tests in each package
+  check their own imports.
   `internal/setupskill` imports `internal/guard` for the reference
   commands and the version rule (`InstallVersion`: the version the
   install hint names).

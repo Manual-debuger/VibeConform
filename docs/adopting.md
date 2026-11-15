@@ -21,7 +21,7 @@ You need these on `PATH`, on Windows or Linux:
 | `git` | everything; `vibe` reads the tracked files |
 | `vibe` and `vibe-guard` | the audit, and the agent guard the setup skill installs (step 2) |
 | an AI coding agent | runs the setup skill; Claude Code is the agent the contract's A rules cover |
-| the project's own tools | whatever the entrypoints call. With the setup skill's references: [`task`](https://taskfile.dev), [`lefthook`](https://lefthook.dev), and `golangci-lint`, `goimports`, `govulncheck`, `actionlint` for Go; `node` and `pnpm` for TypeScript; [`uv`](https://docs.astral.sh/uv/) for Python |
+| the project's own tools | whatever the entrypoints call. With the setup skill's references: [`task`](https://taskfile.dev), [`lefthook`](https://lefthook.dev), [`gitleaks`](https://github.com/gitleaks/gitleaks) for every stack, and `golangci-lint`, `goimports`, `govulncheck`, `actionlint` for Go; `node` and `pnpm` for TypeScript; [`uv`](https://docs.astral.sh/uv/) for Python |
 | bash | Claude Code runs hook commands in it; Git for Windows' bash on Windows |
 
 `vibe doctor` (step 6) checks the ones the repository's configuration
@@ -32,7 +32,7 @@ names, so you can install as you go.
 ```sh
 go install github.com/Manual-debuger/VibeConform/cmd/vibe@<version>
 go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@<version>
-vibe --version    # vibe version <version> (contract 1.1.0)
+vibe --version    # vibe version <version> (contract 1.2.0)
 ```
 
 Without Go, download the release archives and check them against

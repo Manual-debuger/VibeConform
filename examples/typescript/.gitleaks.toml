@@ -1,0 +1,25 @@
+# .gitleaks.toml at the repository root: gitleaks reads it by itself,
+# from "gitleaks dir ." (the secrets task) and from the pre-commit hook.
+# It keeps gitleaks's default rules and skips the directories that hold
+# no code of this repository: dependencies, build output, and the
+# VibeConform setup skill's own directory, whose reference files are
+# templates.
+#
+# A finding that is not a secret (a test fixture, say) goes into an
+# allowlist below with a description that says why. A finding that is a
+# real secret is rotated first, then removed; an allowlist does not make
+# it safe.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Dependency and build directories, and the setup skill's directory"
+paths = [
+  '''(^|/)node_modules(/|$)''',
+  '''(^|/)\.venv(/|$)''',
+  '''(^|/)dist(/|$)''',
+  '''(^|/)build(/|$)''',
+  '''(^|/)\.claude/skills/vibeconform-setup(/|$)''',
+  '''(^|/)\.agents/skills/vibeconform-setup(/|$)''',
+]

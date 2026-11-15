@@ -117,7 +117,7 @@ func TestDoctorChecksTheWorkflow(t *testing.T) {
 	}
 	assertLines(t, out,
 		`^PASS +git `,
-		`^PASS +vibe\.yaml +version 2, contract 1\.1\.0`,
+		`^PASS +vibe\.yaml +version 2, contract 1\.2\.0`,
 		`^PASS +task +/stub/task; runs verify, verify-fast, fmt, fmt-check$`,
 		`^PASS +bash +/stub/bash`,
 		`^PASS +vibe-guard +/stub/vibe-guard`,

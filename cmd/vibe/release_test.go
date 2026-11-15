@@ -69,7 +69,7 @@ func TestReleaseMarksPrereleases(t *testing.T) {
 // which drops the leading v. A binary that calls itself 0.12.0-alpha.1
 // instead of v0.12.0-alpha.1 records a vibe_version that task audit's
 // fallback cannot fetch, and does not print the tag it was released as.
-func TestReleaseBuildsBothTools(t *testing.T) {
+func TestReleaseBuildsBothTools(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	cfg := readReleaseConfig(t)
 	want := map[string]string{"vibe": "./cmd/vibe", "vibe-guard": "./cmd/vibe-guard"}
 	if len(cfg.Builds) != len(want) {

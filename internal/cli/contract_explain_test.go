@@ -79,6 +79,38 @@ func TestAuditExplainContent(t *testing.T) {
 	}
 }
 
+// --explain V-07 prints the secret sample once, since every language
+// has the same one, says where it is planted and what satisfies the rule
+// (spec 0061, "`vibe explain` and the report").
+func TestAuditExplainV07(t *testing.T) {
+	t.Parallel()
+	r := runVibeAudit(t, "--explain", "V-07")
+	assertExit(t, r, 0)
+	flat := strings.Join(strings.Fields(r.stdout), " ")
+	for _, want := range []string{
+		"Level: SHOULD", "Checks: probe", "Source: spec 0061, ADR 0027",
+		"Every language, secret: vibe_probe_secret.txt",
+		"    Planted by vibe audit: a PEM private-key block (the secret defect). It is not a key.\n",
+		"BEGIN PRIVATE KEY", "END PRIVATE KEY",
+	} {
+		if !strings.Contains(r.stdout, want) && !strings.Contains(flat, want) {
+			t.Errorf("--explain V-07 does not show %q:\n%s", want, r.stdout)
+		}
+	}
+	for _, want := range []string{
+		"Once per repository, in the first component in configuration order that has tests",
+		"not committed, so the scanner must read the working tree's files, not the Git history",
+		"Any secret scanner that reports it satisfies the rule",
+	} {
+		if !strings.Contains(flat, want) {
+			t.Errorf("--explain V-07 does not say %q:\n%s", want, r.stdout)
+		}
+	}
+	if n := strings.Count(r.stdout, "vibe_probe_secret.txt"); n != 1 {
+		t.Errorf("--explain V-07 names the sample %d times, want once:\n%s", n, r.stdout)
+	}
+}
+
 // --explain V-01 and V-02 print the planted defect samples exactly
 // (spec 0053, "Planted defects"), so that a probe can be reproduced by
 // hand.
@@ -118,14 +150,63 @@ func TestAuditExplainDefectSamples(t *testing.T) {
 	}
 }
 
+// --explain A-09 lists A-09's own corpus cases, each with its expected
+// decision, tool and command (spec 0061, "`vibe explain` and the
+// report").
+func TestAuditExplainA09ListsItsCases(t *testing.T) {
+	t.Parallel()
+	r := runVibeAudit(t, "--explain", "A-09")
+	assertExit(t, r, 0)
+	cases := contract.GuardCorpusFor(contract.ProbeA09)
+	if len(cases) != 13 {
+		t.Fatalf("A-09 has %d corpus cases, want the 13 of spec 0061", len(cases))
+	}
+	for _, c := range cases {
+		want := fmt.Sprintf("\n  %-5s  %-10s  %s\n", c.Want, c.Payload.ToolName, c.Target().Command)
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("--explain A-09 lacks %q:\n%s", want, r.stdout)
+		}
+	}
+	for _, w := range []string{"git-skip-hooks", "LEFTHOOK=0", "HUSKY=0"} {
+		if !strings.Contains(r.stdout, w) {
+			t.Errorf("--explain A-09 does not name %s:\n%s", w, r.stdout)
+		}
+	}
+}
+
+// --explain V-05 prints the type-error sample exactly, Python's only
+// (spec 0061); V-01 does not plant it, so it does not print it.
+func TestAuditExplainTypeErrorSample(t *testing.T) {
+	t.Parallel()
+	sample := "  Python, type error: vibe_probe_type_error.py\n" +
+		"    # Planted by vibe audit: a function annotated -> int that returns a string (the type-error defect).\n" +
+		"    def vibe_probe_type_error() -> int:\n" +
+		"        return \"vibe audit\"\n"
+	r := runVibeAudit(t, "--explain", "V-05")
+	assertExit(t, r, 0)
+	for _, want := range []string{"Not applicable:  when no component is Python", "Planted defects:", sample, "Python components only"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("--explain V-05 does not show %q:\n%s", want, r.stdout)
+		}
+	}
+	for _, unwanted := range []string{"Go, type error", "TypeScript, type error", "Python, format"} {
+		if strings.Contains(r.stdout, unwanted) {
+			t.Errorf("--explain V-05 shows %q:\n%s", unwanted, r.stdout)
+		}
+	}
+	if v01 := runVibeAudit(t, "--explain", "V-01"); strings.Contains(v01.stdout, "type error") {
+		t.Errorf("--explain V-01 shows the type-error sample:\n%s", v01.stdout)
+	}
+}
+
 // --explain A-02 and A-03 print the guard corpus's counts by guard rule
 // ID (spec 0053, "Report and CLI"). The expected counts are taken from
 // the corpus data.
-func TestAuditExplainGuardCorpusCounts(t *testing.T) {
+func TestAuditExplainGuardCorpusCounts(t *testing.T) { //nolint:gocognit // baseline: pre-existing complexity
 	t.Parallel()
 	deny, allow := 0, 0
 	byRule := map[string]int{}
-	for _, c := range contract.GuardCorpus() {
+	for _, c := range contract.GuardCorpusFor("") {
 		if c.Want == contract.WantDeny {
 			deny++
 			byRule[c.Rule]++
@@ -140,12 +221,17 @@ func TestAuditExplainGuardCorpusCounts(t *testing.T) {
 			want := []string{fmt.Sprintf("\nGuard corpus:\n  %d cases: %d deny and %d allow. Deny cases by guard rule ID:\n",
 				deny+allow, deny, allow)}
 			for _, rule := range guardrule.IDs {
-				want = append(want, fmt.Sprintf("\n  %-26s %3d\n", rule, byRule[rule]))
+				if byRule[rule] > 0 {
+					want = append(want, fmt.Sprintf("\n  %-26s %3d\n", rule, byRule[rule]))
+				}
 			}
 			for _, w := range want {
 				if !strings.Contains(r.stdout, w) {
 					t.Errorf("--explain %s lacks %q:\n%s", id, w, r.stdout)
 				}
+			}
+			if strings.Contains(r.stdout, guardrule.GitSkipHooks) {
+				t.Errorf("--explain %s counts A-09's cases:\n%s", id, r.stdout)
 			}
 		})
 	}

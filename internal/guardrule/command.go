@@ -94,6 +94,11 @@ type Command struct {
 	// only for a redirection with no command (">f", "{ …; } >f"), which
 	// is kept so that its target is seen.
 	Words []Word
+	// Assigns are the environment assignments the command runs with, as
+	// NAME=value words: those before its name, then those of the env or
+	// sudo wrappers it was found through. The contract audit does not
+	// read Assigns.
+	Assigns []Word
 	// Redirects are the targets of the command's file redirections
 	// (">f", ">>f", "<f", "2>f"). Here-documents and descriptor
 	// duplications ("2>&1") are not targets.
@@ -235,6 +240,7 @@ func expand(c Command, out *[]Command) error {
 		inner.Shell = ShellBash
 		inner.Depth = c.Depth
 		inner.Via = appendVia(c.Via, label)
+		inner.Assigns = append(slices.Clone(c.Assigns), inner.Assigns...)
 		inner.Redirects = c.Redirects
 		inner.Writes = c.Writes
 		return expand(inner, out)
@@ -329,7 +335,7 @@ func nested(c Command) (nestedScript, bool) {
 // after the options, when some option cluster holds c. With no -c and no
 // operand, the shell reads its script from a here-document or
 // here-string, if one is given.
-func posixShellScript(name string, args []Word, stdin *Word) (nestedScript, bool) {
+func posixShellScript(name string, args []Word, stdin *Word) (nestedScript, bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	sawC := false
 	for i := 0; i < len(args); i++ {
 		w := args[i]
@@ -374,7 +380,7 @@ func posixShellScript(name string, args []Word, stdin *Word) (nestedScript, bool
 // runs: every word after -Command, joined. powershell also runs its
 // first operand as a command; pwsh runs it as a file. An encoded command
 // is unknown, so its nested command is dynamic.
-func powerShellScript(name string, args []Word) (nestedScript, bool) {
+func powerShellScript(name string, args []Word) (nestedScript, bool) { //nolint:gocyclo // baseline: pre-existing complexity
 	label := name + " -c"
 	for i := 0; i < len(args); i++ {
 		w := args[i]

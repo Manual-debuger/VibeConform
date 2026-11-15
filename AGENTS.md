@@ -16,10 +16,10 @@ Don't include yourself as contributor in commits.
    has no separate `docs/plans/` file. The user approves the spec once.
    Then implement with `/implement-spec`: one integration branch and one
    PR per spec, with tests, verification and a documentation sync.
-3. Preserve the dependency direction documented in
-   `docs/architecture/overview.md` (e.g. `internal/contract` and
-   `internal/guard` both depend on `internal/guardrule`, never on each
-   other).
+3. Preserve the dependency direction in
+   `docs/architecture/overview.md`. `task lint` enforces it with the
+   `depguard` rules in `.golangci.yml`; a new package boundary gets its
+   rule there.
 
 ## Rules
 
@@ -132,7 +132,8 @@ Verification:
 - `task verify:fast` while working; `task verify` before declaring
   done. `task verify` runs the tasks CI runs: `task fmt:check`,
   `task typecheck`, `task lint`, `task test`, `task mod:verify`,
-  `task security` and `task workflows:lint`. `task fmt` formats. Do not
+  `task security`, `task workflows:lint` and `task secrets` (gitleaks,
+  spec 0061). `task fmt` formats. Do not
   weaken a test, lint or type check to make a change pass.
 - Finish with a ledger, one line per check: PASS, FAIL or UNVERIFIED.
   Unit tests, CI and a real integration are separate lines.

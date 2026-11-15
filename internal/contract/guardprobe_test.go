@@ -254,16 +254,23 @@ func assertPart(t *testing.T, rep *contract.Report, id string, kind contract.Par
 // casesNamed returns the corpus cases A-02's findings name, sorted.
 func casesNamed(t *testing.T, rep *contract.Report) []string {
 	t.Helper()
+	return casesNamedBy(t, rep, "A-02")
+}
+
+// casesNamedBy returns the corpus cases the probe findings of rule id
+// name, sorted.
+func casesNamedBy(t *testing.T, rep *contract.Report, id string) []string {
+	t.Helper()
 	var out []string
-	for _, f := range part(t, rep, "A-02", contract.Probe).Findings {
+	for _, f := range part(t, rep, id, contract.Probe).Findings {
 		rest, ok := strings.CutPrefix(f.Message, "corpus case ")
 		if !ok {
-			t.Errorf("A-02 finding names no corpus case: %s", f.Message)
+			t.Errorf("%s finding names no corpus case: %s", id, f.Message)
 			continue
 		}
 		var name string
 		if err := json.NewDecoder(strings.NewReader(rest)).Decode(&name); err != nil {
-			t.Errorf("A-02 finding: cannot read the case name: %s", f.Message)
+			t.Errorf("%s finding: cannot read the case name: %s", id, f.Message)
 			continue
 		}
 		out = append(out, name)
@@ -360,6 +367,86 @@ func TestGuardProbesVibeGuard(t *testing.T) {
 		assertPart(t, rep, "A-03", contract.Probe, contract.ResultFail,
 			"with .claude/hooks/policy.json replaced by `{`, ",
 			"refuse every call (exit 2) when .claude/hooks/policy.json does not parse")
+	})
+}
+
+// corpus110Guard is a fixture guard that refuses only the 1.1.0 corpus:
+// it lets the A-09 deny cases (git commit, git push --no-verify, git -c
+// core.hooksPath) through and hands every other call to the reference
+// guard, which fails closed.
+const corpus110Guard = `input=$(cat); case "$input" in *'"git commit'*|*'"git push --no-verify'*|*'"git -c core.hook'*) exit 0;; esac; ` +
+	`printf '%s' "$input" | { ` + "command -v vibe-guard >/dev/null 2>&1 || exit 2; vibe-guard hook; }"
+
+// A-09 (spec 0061): its own corpus cases, fed to the PreToolUse hooks as
+// A-02 feeds its own, with guard exceptions honored.
+func TestGuardProbeA09(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
+	t.Parallel()
+	requireBash(t)
+	bin := builtVibeGuard(t)
+	settings := ".claude/settings.json"
+	policy := ".claude/hooks/policy.json"
+	exception := `{"version": 2, "exceptions": [{"rule": "git-skip-hooks", "match": "git commit --no-verify -m wip", ` +
+		`"reason": "a hook that needs the network"}]}` + "\n"
+	excepted := []string{"A-09: git commit --no-verify", "A-09: git commit --no-verify in PowerShell"}
+
+	t.Run("the reference guard passes A-09", func(t *testing.T) {
+		t.Parallel()
+		rep := audit(t, guardFixture(t, map[string]string{settings: guardSettings(referenceGuard)}),
+			[]string{"A-09"}, bin)
+		assertPart(t, rep, "A-09", contract.Probe, contract.ResultPass)
+	})
+	t.Run("a guard that refuses only the 1.1.0 corpus passes A-02 and A-03 and fails A-09", func(t *testing.T) {
+		t.Parallel()
+		rep := audit(t, guardFixture(t, map[string]string{settings: guardSettings(corpus110Guard)}),
+			[]string{"A-02", "A-03", "A-09"}, bin)
+		assertPart(t, rep, "A-02", contract.Probe, contract.ResultPass)
+		assertPart(t, rep, "A-03", contract.Probe, contract.ResultPass)
+		assertPart(t, rep, "A-09", contract.Probe, contract.ResultFail,
+			`corpus case "A-09: git commit --no-verify" (Bash "git commit --no-verify -m wip") should be refused (guard rule git-skip-hooks)`,
+			"exited 0", "list an exception for git-skip-hooks in .claude/hooks/policy.json")
+		want := []string{
+			"A-09: git -c core.hooksPath commit",
+			"A-09: git -c core.hookspath push (config keys ignore case)",
+			"A-09: git commit --no-verify",
+			"A-09: git commit --no-verify in PowerShell",
+			"A-09: git commit -n",
+			"A-09: git commit -nm",
+			"A-09: git push --no-verify",
+		}
+		if got := casesNamedBy(t, rep, "A-09"); !slices.Equal(got, want) {
+			t.Errorf("A-09 names %q, want %q", got, want)
+		}
+	})
+	t.Run("an exception naming git-skip-hooks lets its command through and is listed", func(t *testing.T) {
+		t.Parallel()
+		rep := audit(t, guardFixture(t, map[string]string{settings: guardSettings(referenceGuard), policy: exception}),
+			[]string{"A-09"}, bin)
+		assertPart(t, rep, "A-09", contract.Probe, contract.ResultPass)
+		var want []contract.GuardExceptionUse
+		for _, c := range excepted {
+			want = append(want, contract.GuardExceptionUse{Rule: "git-skip-hooks", Match: "git commit --no-verify -m wip", Case: c})
+		}
+		if !slices.Equal(rep.GuardExceptionUses, want) {
+			t.Errorf("GuardExceptionUses = %+v, want %+v", rep.GuardExceptionUses, want)
+		}
+	})
+	t.Run("an exception naming git-skip-hooks lets nothing else through", func(t *testing.T) {
+		t.Parallel()
+		rep := audit(t, guardFixture(t, map[string]string{settings: guardSettings(corpus110Guard), policy: exception}),
+			[]string{"A-09"}, bin)
+		assertPart(t, rep, "A-09", contract.Probe, contract.ResultFail)
+		got := casesNamedBy(t, rep, "A-09")
+		if len(got) != 5 {
+			t.Errorf("A-09 names %q, want the five deny cases the exception does not match", got)
+		}
+		for _, c := range excepted {
+			if slices.Contains(got, c) {
+				t.Errorf("A-09 names %q, which the exception lets through", c)
+			}
+		}
 	})
 }
 

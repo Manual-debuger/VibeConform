@@ -111,6 +111,22 @@ tasks:
     cmds:
       - actionlint
 
+  # The secret scan (spec 0061, V-07): gitleaks reads the working tree's
+  # files, not the Git history, with its default rules and .gitleaks.toml,
+  # and prints its findings redacted. The pre-commit hook scans the staged
+  # changes instead.
+  secrets:
+    desc: Scan the working tree's files for secrets with gitleaks.
+    cmds:
+      - gitleaks dir . --redact --no-banner
+
+  # What the pre-commit hook runs: the staged changes only, read from the
+  # index Git hands the hook.
+  secrets:staged:
+    desc: Scan the staged changes for secrets with gitleaks.
+    cmds:
+      - gitleaks git --pre-commit --staged --redact --no-banner
+
   # Called by Claude Code, not by people. The PreToolUse guard is vibe-guard
   # (policy.agent_guard in vibe.yaml), which .claude/settings.json runs
   # directly, so there is no hook:guard task. See
@@ -335,8 +351,27 @@ tasks:
         go build -o "$dir/vibe-guard{{exeExt}}" ./cmd/vibe-guard || exit 1
         export PATH="$dir{{if eq OS "windows"}};{{else}}:{{end}}$PATH"
         if [ -z "{{.STATIC}}" ]; then
-          vibe audit --repo-root .
-          exit $?
+          rc=0
+          report="$(vibe audit --repo-root .)" || rc=$?
+          [ -z "$report" ] || printf '%s\n' "$report"
+          [ "$rc" -eq 0 ] || exit "$rc"
+          # The verdict counts only MUST rules. This repository meets the
+          # SHOULD rules of spec 0061 (acceptance criterion 7): V-06, V-07,
+          # V-08 and A-09 pass, so none is listed in a section of the text
+          # report, and V-05 is not applicable. CI's Contract / audit job
+          # checks the same in the JSON report.
+          nl='
+        '
+          for id in V-06 V-07 V-08 A-09; do
+            case "$nl$report" in
+              *"$nl  $id  "*) echo "task audit: $id does not pass" >&2; rc=1 ;;
+            esac
+          done
+          case "$nl$report$nl" in
+            *"$nl  V-05  SHOULD  no component is Python$nl"*) ;;
+            *) echo "task audit: V-05 is not 'not applicable'" >&2; rc=1 ;;
+          esac
+          exit "$rc"
         fi
         rc=0
         report="$(vibe audit --static --repo-root .)" || rc=$?
@@ -358,22 +393,25 @@ tasks:
       - task: mod:verify
       - task: security
       - task: workflows:lint
+      - task: secrets
 
   # The agents' Stop hook and background check run this after edits (spec
   # 0023), so it keeps only what is cheap and incremental: go test's cache
   # reruns only packages that changed or import something that did, short
   # mode skips the slow tests (spec 0056), and golangci-lint caches its
-  # analysis. security (network), mod:verify, and workflows:lint stay in
-  # verify, which CI runs, and so do the tests short mode skips.
+  # analysis. The secret scan reads the tree in well under a second.
+  # security (network), mod:verify, and workflows:lint stay in verify,
+  # which CI runs, and so do the tests short mode skips.
   verify:fast:
     desc: Fast incremental subset of verify (format, build, lint, tests in
-      short mode); what the agents' Stop hook runs. "task verify" is still
-      the full gate.
+      short mode, secret scan); what the agents' Stop hook runs. "task
+      verify" is still the full gate.
     cmds:
       - task: fmt:check
       - task: typecheck
       - task: lint
       - task: test:short
+      - task: secrets
 
   verify-ci:
     desc: Alias used by CI so the workflow and local docs never drift.

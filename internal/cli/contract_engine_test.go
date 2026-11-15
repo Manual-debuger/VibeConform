@@ -143,7 +143,27 @@ func waiverConfig(rule, until string) fixtureEdit {
 		"waivers:\n  - rule: " + rule + "\n    reason: known gap\n    until: " + until + "\n"}))
 }
 
-func TestContractAuditVerdicts(t *testing.T) {
+// A repository on contract 1.1.0 keeps its verdict under a vibe that
+// implements 1.2.0, even when every rule 1.2.0 added fails (spec 0061,
+// acceptance criterion 3; user story 9).
+func TestContractAuditOlderMinorKeepsVerdictWhenNewRulesFail(t *testing.T) {
+	t.Parallel()
+	added := []string{"V-05", "V-06", "V-07", "V-08", "A-09"}
+	rules := standIn(nil, contract.ResultPass, mustRules("V-04")...)
+	rules = standIn(rules, contract.ResultFail, added...)
+	dir := contractFixture(t, withFile("vibe.yaml", configWith(section{"contract", "contract: 1.1.0\n"})))
+	rep, r := auditJSONRules(t, rules, dir)
+	assertExit(t, r, 0)
+	if rep.Verdict != "conformant" || rep.Contract.Declared != "1.1.0" || rep.Contract.Audited != "1.2.0" {
+		t.Errorf("verdict = %s, contract = %+v, want conformant, 1.1.0 declared, 1.2.0 audited", rep.Verdict, rep.Contract)
+	}
+	// V-05 is not applicable: the fixture has no Python component.
+	for _, id := range added[1:] {
+		assertRule(t, rep, id, "fail")
+	}
+}
+
+func TestContractAuditVerdicts(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	t.Parallel()
 	t.Run("conformant exits 0", func(t *testing.T) {
 		rules := standIn(nil, contract.ResultPass, mustRules("V-04")...)
@@ -207,11 +227,21 @@ func TestContractAuditVerdicts(t *testing.T) {
 		rules := standIn(nil, contract.ResultPass, ruleIDs("", "V-04", "R-02", "R-03")...)
 		rep, r := auditJSONRules(t, rules, contractFixture(t), "--static")
 		assertExit(t, r, 1)
-		if !rep.StaticOnly || rep.Verdict != "undecided" || !strings.Contains(rep.Reason, "10 rules did not run (--static)") {
-			t.Errorf("static_only %v, verdict %s (%q); want undecided, 10 rules did not run", rep.StaticOnly, rep.Verdict, rep.Reason)
+		// Every rule with an execution or probe part does not run, unless
+		// it is not applicable: V-05 has no Python component here.
+		assertRule(t, rep, "V-05", "not_applicable")
+		if !rep.StaticOnly || rep.Verdict != "undecided" || !strings.Contains(rep.Reason, "14 rules did not run (--static)") {
+			t.Errorf("static_only %v, verdict %s (%q); want undecided, 14 rules did not run", rep.StaticOnly, rep.Verdict, rep.Reason)
 		}
-		for _, id := range []string{"V-01", "V-02", "V-03", "A-02", "A-03", "A-05", "A-07", "A-08", "D-01", "R-01"} {
-			assertRule(t, rep, id, "not_run")
+		wantNotRun := []string{"V-01", "V-02", "V-03", "V-06", "V-07", "V-08", "A-02", "A-03", "A-05", "A-07", "A-08", "A-09", "D-01", "R-01"}
+		var notRun []string
+		for _, rule := range rep.Rules {
+			if rule.Result == "not_run" {
+				notRun = append(notRun, rule.ID)
+			}
+		}
+		if !slices.Equal(notRun, wantNotRun) {
+			t.Errorf("rules not run under --static: %v, want %v", notRun, wantNotRun)
 		}
 		a05 := rep.rule(t, "A-05")
 		if len(a05.Parts) != 2 || a05.Parts[0].Check != "static" || a05.Parts[0].Result != "pass" ||
@@ -221,7 +251,7 @@ func TestContractAuditVerdicts(t *testing.T) {
 	})
 }
 
-func TestContractAuditApplicabilityAndWaivers(t *testing.T) {
+func TestContractAuditApplicabilityAndWaivers(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	t.Parallel()
 	t.Run("C-05 not applicable without windows", func(t *testing.T) {
 		rep, _ := auditJSON(t, contractFixture(t,
@@ -274,21 +304,22 @@ func TestContractAuditApplicabilityAndWaivers(t *testing.T) {
 			t.Errorf("text report does not say the waiver is unused:\n%s", r.stdout)
 		}
 	})
-	t.Run("newer PATCH audited as 1.1.0", func(t *testing.T) {
+	t.Run("newer PATCH audited as 1.2.0", func(t *testing.T) {
 		rep, _ := auditJSON(t, contractFixture(t,
-			withFile("vibe.yaml", configWith(section{"contract", "contract: 1.1.7\n"}))), "--static")
-		if rep.Contract.Declared != "1.1.7" || rep.Contract.Audited != "1.1.0" {
-			t.Errorf("contract = %+v, want 1.1.7 declared, 1.1.0 audited", rep.Contract)
+			withFile("vibe.yaml", configWith(section{"contract", "contract: 1.2.7\n"}))), "--static")
+		if rep.Contract.Declared != "1.2.7" || rep.Contract.Audited != "1.2.0" {
+			t.Errorf("contract = %+v, want 1.2.7 declared, 1.2.0 audited", rep.Contract)
 		}
 	})
 	// A vibe audits every repository that declares its MAJOR with the
-	// latest MINOR it implements (spec 0051, "Versioning"; spec 0055).
-	for _, declared := range []string{"1.0.0", "1.0.1"} {
-		t.Run("older MINOR "+declared+" audited as 1.1.0", func(t *testing.T) {
+	// latest MINOR it implements (spec 0051, "Versioning"; spec 0055;
+	// spec 0061, "Contract version").
+	for _, declared := range []string{"1.0.0", "1.0.1", "1.1.0", "1.1.3"} {
+		t.Run("older MINOR "+declared+" audited as 1.2.0", func(t *testing.T) {
 			rep, _ := auditJSON(t, contractFixture(t,
 				withFile("vibe.yaml", configWith(section{"contract", "contract: " + declared + "\n"}))), "--static")
-			if rep.Contract.Declared != declared || rep.Contract.Audited != "1.1.0" {
-				t.Errorf("contract = %+v, want %s declared, 1.1.0 audited", rep.Contract, declared)
+			if rep.Contract.Declared != declared || rep.Contract.Audited != "1.2.0" {
+				t.Errorf("contract = %+v, want %s declared, 1.2.0 audited", rep.Contract, declared)
 			}
 		})
 	}
@@ -298,7 +329,7 @@ func TestContractAuditTextReport(t *testing.T) {
 	t.Parallel()
 	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--static")
 	assertExit(t, r, 1)
-	if !strings.HasPrefix(r.stdout, "vibe audit: contract 1.1.0 (vibe test), static checks only\n") {
+	if !strings.HasPrefix(r.stdout, "vibe audit: contract 1.2.0 (vibe test), static checks only\n") {
 		t.Errorf("header:\n%s", r.stdout)
 	}
 	if !strings.Contains(r.stdout, "\nVerdict: cannot decide. ") {
@@ -318,12 +349,12 @@ func TestContractAuditReportsEveryRule(t *testing.T) {
 	if rep.Vibe != "test" {
 		t.Errorf("vibe = %q, want the running version", rep.Vibe)
 	}
-	if rep.Contract.Declared != "1.1.0" || rep.Contract.Audited != "1.1.0" {
-		t.Errorf("contract = %+v, want 1.1.0 declared and audited", rep.Contract)
+	if rep.Contract.Declared != "1.2.0" || rep.Contract.Audited != "1.2.0" {
+		t.Errorf("contract = %+v, want 1.2.0 declared and audited", rep.Contract)
 	}
 	want := []string{
-		"V-01", "V-02", "V-03", "V-04", "H-01", "H-02", "C-01", "C-02", "C-03", "C-04", "C-05",
-		"A-01", "A-02", "A-03", "A-04", "A-05", "A-06", "A-07", "A-08", "D-01", "D-02", "D-03",
+		"V-01", "V-02", "V-03", "V-04", "V-05", "V-06", "V-07", "V-08", "H-01", "H-02", "C-01", "C-02", "C-03", "C-04", "C-05",
+		"A-01", "A-02", "A-03", "A-04", "A-05", "A-06", "A-07", "A-08", "A-09", "D-01", "D-02", "D-03",
 		"R-01", "R-02", "R-03",
 	}
 	var got []string
@@ -331,7 +362,7 @@ func TestContractAuditReportsEveryRule(t *testing.T) {
 		got = append(got, rule.ID)
 	}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
-		t.Errorf("rules = %v, want all 25 in ID order", got)
+		t.Errorf("rules = %v, want every rule in ID order", got)
 	}
 	c02 := rep.rule(t, "C-02")
 	if c02.Level != "MUST" || c02.Category != "C" || c02.Title != "Toolchains and actions are pinned" {

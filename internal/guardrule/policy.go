@@ -88,7 +88,7 @@ func policyErr(key, format string, args ...any) error {
 // ParsePolicy reads policy.json version 2. Unknown keys and invalid
 // values are errors that name the key, so a typo cannot silently turn a
 // rule off. The error is a *PolicyError.
-func ParsePolicy(data []byte) (*Policy, error) {
+func ParsePolicy(data []byte) (*Policy, error) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	top, err := object(data)
 	if err != nil {
 		return nil, &PolicyError{Msg: "is not a JSON object: " + err.Error()}
@@ -144,7 +144,7 @@ func ParsePolicy(data []byte) (*Policy, error) {
 	return p, nil
 }
 
-func parseRule(at string, raw json.RawMessage) (Rule, error) {
+func parseRule(at string, raw json.RawMessage) (Rule, error) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	m, err := object(raw)
 	if err != nil {
 		return Rule{}, policyErr(at, "is not an object")

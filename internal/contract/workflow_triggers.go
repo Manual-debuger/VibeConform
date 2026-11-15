@@ -63,7 +63,7 @@ func eventNode(wf *Workflow, event string) (*yaml.Node, bool) {
 // filter without a branch filter, a branch filter that admits branch,
 // and (for pull_request) a types filter, if any, that keeps opened,
 // synchronize and reopened.
-func triggeredFor(wf *Workflow, event, branch string) bool {
+func triggeredFor(wf *Workflow, event, branch string) bool { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	filters, ok := eventNode(wf, event)
 	if !ok {
 		return false

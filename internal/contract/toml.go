@@ -11,7 +11,7 @@ import (
 // dates) are kept as their text. It is not a validating parser: D-01
 // only asks whether dependency lists are empty, and a new dependency for
 // that would need an ADR.
-func parseTOML(src string) (map[string]any, error) {
+func parseTOML(src string) (map[string]any, error) { //nolint:gocognit // baseline: pre-existing complexity
 	p := &tomlParser{s: src, line: 1}
 	root := map[string]any{}
 	current := root
@@ -211,7 +211,7 @@ func (p *tomlParser) keyValue(t map[string]any) error {
 	return nil
 }
 
-func (p *tomlParser) value() (any, error) {
+func (p *tomlParser) value() (any, error) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	if p.eof() {
 		return nil, p.errorf("missing value")
 	}

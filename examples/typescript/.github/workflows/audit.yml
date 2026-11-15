@@ -53,6 +53,26 @@ jobs:
       # (false) and checksums (the release's own). Replace the zeros with the
       # commit SHA of that release tag:
       #   git ls-remote https://github.com/Manual-debuger/VibeConform refs/tags/v0.14.0-alpha.1
+      # gitleaks for the secrets task in verify: a pinned release, checked
+      # against its SHA-256 before it runs.
+      - name: Install gitleaks
+        shell: bash
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          case "$RUNNER_OS" in
+            Windows) asset="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip" sum=d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e ;;
+            *) asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
+          esac
+          dir="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
+          echo "$sum  $dir/$asset" | sha256sum -c -
+          case "$asset" in
+            *.zip) unzip -q -o "$dir/$asset" gitleaks.exe -d "$dir" ;;
+            *) tar -xzf "$dir/$asset" -C "$dir" gitleaks ;;
+          esac
+          echo "$dir" >> "$GITHUB_PATH"
       - name: Install vibe and vibe-guard
         uses: Manual-debuger/VibeConform@eda947fa48662feb799762b2570af2974e4501eb # v0.14.0-alpha.1
         with:

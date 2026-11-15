@@ -120,6 +120,9 @@ type Rule struct {
 	Check string
 	// Source names the specs, ADRs and principles the rule comes from.
 	Source string
+	// Since is the contract version that added the rule, such as "1.2.0",
+	// or "" for a rule of spec 0051's table (contract 1.0.0).
+	Since string
 	// NotApplicableWhen says when the rule is not applicable, or "" when
 	// it always applies.
 	NotApplicableWhen string
@@ -216,9 +219,9 @@ func needsAgents(cfg *Config) (bool, string) {
 
 const notApplicableWithoutClaude = "when `agents` does not include `claude`"
 
-// rules is contract 1.0.0's rule table, in report order: 16 MUST and 9
-// SHOULD rules. Rule sentences, checks and sources are spec 0051's,
-// verbatim.
+// rules is the rule table, in report order: contract 1.0.0's 16 MUST and
+// 9 SHOULD rules, whose sentences, checks and sources are spec 0051's
+// verbatim, and the SHOULD rules contract 1.2.0 adds (spec 0061).
 var rules = []Rule{
 	{
 		ID: "V-01", Level: Must, Category: CategoryVerification,
@@ -260,6 +263,52 @@ var rules = []Rule{
 		Source: "ADR 0025 (replaces ADR 0009's protected task names)",
 		Parts: []Part{
 			static("`vibe.yaml` declares every required entrypoint, each non-empty. The other rules check that CI and hooks call them.", checkV04),
+		},
+	},
+	{
+		ID: "V-05", Level: Should, Category: CategoryVerification, Since: "1.2.0",
+		Title: "`verify` catches a type error",
+		Check: "Probe: with the type-error defect planted in each Python component, `verify` exits non-zero. " +
+			"Components in other languages are skipped: there a type error is a compile error, which V-01 shows.",
+		Source:            "spec 0061, ADR 0027",
+		NotApplicableWhen: "when no component is Python",
+		Parts: []Part{
+			probeRun("with the type-error defect planted in each Python component, `verify` exits non-zero. "+
+				"Components in other languages are skipped: there a type error is a compile error, which V-01 shows.", checkV05Probe),
+		},
+		applies: onConfig(hasPythonComponent),
+	},
+	{
+		ID: "V-06", Level: Should, Category: CategoryVerification, Since: "1.2.0",
+		Title: "`verify` catches an over-complex function",
+		Check: "Probe: with the complexity defect (" + complexityFunction + ") " +
+			"in each component, `verify` exits non-zero. " + complexityCatches,
+		Source: "spec 0061, ADR 0027",
+		Parts: []Part{
+			probeRun("with the complexity defect ("+complexityFunction+") "+
+				"in each component, `verify` exits non-zero. "+complexityCatches, checkV06Probe),
+		},
+	},
+	{
+		ID: "V-07", Level: Should, Category: CategoryVerification, Since: "1.2.0",
+		Title: "`verify` catches a secret in the working tree",
+		Check: "Probe: with the secret defect (a PEM private-key block in a plain text file) planted once, in the " +
+			"first component in configuration order that has tests, `verify` exits non-zero.",
+		Source: "spec 0061, ADR 0027",
+		Parts: []Part{
+			probeRun("with the secret defect (a PEM private-key block in a plain text file) planted once, in the "+
+				"first component in configuration order that has tests, `verify` exits non-zero.", checkV07Probe),
+		},
+	},
+	{
+		ID: "V-08", Level: Should, Category: CategoryVerification, Since: "1.2.0",
+		Title: "Blanket suppressions do not hide a defect",
+		Check: "Probe: with V-01's static-analysis defect under the language's blanket suppressions planted in each " +
+			"component, `verify` exits non-zero. A component without tests leaves it undecided.",
+		Source: "spec 0061, ADR 0027",
+		Parts: []Part{
+			probeRun("with V-01's static-analysis defect under the language's blanket suppressions planted in each "+
+				"component, `verify` exits non-zero. A component without tests leaves it undecided.", checkV08Probe),
 		},
 	},
 	{
@@ -438,6 +487,20 @@ var rules = []Rule{
 				"marker, allowed with a valid marker, and refused with an expired marker. A `Bash` call that runs "+
 				"`vibe unlock`, and any `Write` or `Bash` that creates the marker, are refused. After the Stop hook "+
 				"runs, the marker is gone.", checkA08),
+		},
+		applies: onConfig(needsClaude),
+	},
+	{
+		ID: "A-09", Level: Should, Category: CategoryAgents, Since: "1.2.0",
+		Title: "The guard refuses commands that skip Git hooks",
+		Check: "Probe: every A-09 corpus case is fed to every PreToolUse hook command that matches its tool. A deny " +
+			"case is satisfied as described under \"Guard policy and exceptions\". Every allow case must be allowed.",
+		Source:            "spec 0061, ADR 0027",
+		NotApplicableWhen: notApplicableWithoutClaude,
+		Parts: []Part{
+			probeRun("every A-09 corpus case is fed to every PreToolUse hook command that matches its tool. A deny "+
+				"case is satisfied as described under \"Guard policy and exceptions\". Every allow case must be allowed.",
+				checkA09),
 		},
 		applies: onConfig(needsClaude),
 	},

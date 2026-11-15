@@ -22,6 +22,7 @@ default:
   interruptible: true
 
 variables:
+  GITLEAKS_VERSION: "8.30.1"
   GO_VERSION: "1.27.0"
   TASK_VERSION: "v3.53.1"
   GOLANGCI_LINT_VERSION: "v2.15.0"
@@ -32,6 +33,14 @@ variables:
   extends: .pipelines
   image: golang:1.27.0-bookworm@sha256:ded31c68586d2e49e760acc2e65a884b23d032e9bbbed0ae0c55abd3fcaf4452
   before_script:
+    # gitleaks for the secrets task in verify: a pinned release, checked
+    # against its SHA-256 before it runs.
+    - |
+      gl="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+      curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${gl}"
+      echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  ${gl}" | sha256sum -c -
+      tar -xzf "${gl}" -C /usr/local/bin gitleaks
+      rm "${gl}"
     - go install github.com/go-task/task/v3/cmd/task@${TASK_VERSION}
     - go install golang.org/x/tools/cmd/goimports@v0.51.0
     - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
@@ -50,6 +59,13 @@ verify:windows:
   extends: .pipelines
   tags: [saas-windows-medium-amd64]
   before_script:
+    # gitleaks for the secrets task in verify: a pinned release, checked
+    # against its SHA-256 before it runs.
+    - $gl = "$env:TEMP\gitleaks"; New-Item -ItemType Directory -Force -Path $gl | Out-Null
+    - Invoke-WebRequest -Uri "https://github.com/gitleaks/gitleaks/releases/download/v$env:GITLEAKS_VERSION/gitleaks_$($env:GITLEAKS_VERSION)_windows_x64.zip" -OutFile "$gl\gitleaks.zip"
+    - if ((Get-FileHash "$gl\gitleaks.zip" -Algorithm SHA256).Hash -ne "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e") { throw "gitleaks.zip does not match its SHA-256" }
+    - Expand-Archive -Path "$gl\gitleaks.zip" -DestinationPath $gl -Force
+    - $env:Path = "$gl;$env:Path"
     - choco install golang --version=$env:GO_VERSION --yes --no-progress
     - $env:Path = "C:\Program Files\Go\bin;$env:USERPROFILE\go\bin;$env:Path"
     - go install github.com/go-task/task/v3/cmd/task@$env:TASK_VERSION

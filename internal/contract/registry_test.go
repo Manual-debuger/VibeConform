@@ -10,7 +10,7 @@ import (
 // The registry quotes spec 0051 (spec 0052, "Rule registry and results"):
 // each rule's sentence, check, level and source must match the spec's
 // rule table, and each part's check must be a piece of the whole check.
-func TestRegistryQuotesSpec0051(t *testing.T) {
+func TestRegistryQuotesSpec0051(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "specs", "0051-contract-v1.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -31,13 +31,18 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 		t.Fatalf("found %d rule rows in spec 0051, want 25", len(rows))
 	}
 
-	must := 0
+	must, from0051 := 0, 0
 	for _, r := range Rules() {
-		row, ok := rows[r.ID]
-		if !ok {
-			t.Errorf("%s is not in spec 0051", r.ID)
+		if r.Since != "" {
+			checkSpec0061Rule(t, r)
 			continue
 		}
+		row, ok := rows[r.ID]
+		if !ok {
+			t.Errorf("%s is not in spec 0051 and has no Since", r.ID)
+			continue
+		}
+		from0051++
 		if r.Title != row[1] {
 			t.Errorf("%s title = %q, spec says %q", r.ID, r.Title, row[1])
 		}
@@ -71,7 +76,59 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 			must++
 		}
 	}
-	if must != 16 || len(Rules()) != 25 {
-		t.Errorf("%d rules, %d MUST; want 25 and 16", len(Rules()), must)
+	if must != 16 || from0051 != 25 {
+		t.Errorf("%d rules of spec 0051, %d MUST; want 25 and 16", from0051, must)
+	}
+}
+
+// spec0061Solution is the "Solution" section of spec 0061, the list of
+// the rules contract 1.2.0 adds.
+var spec0061Solution = func() string {
+	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "specs", "0061-contract-1-2-quality-probes.md"))
+	if err != nil {
+		return ""
+	}
+	const heading = "\n## Solution\n"
+	s := strings.ReplaceAll(string(data), "\r\n", "\n")
+	i := strings.Index(s, heading)
+	if i < 0 {
+		return ""
+	}
+	s = s[i+len(heading):]
+	if j := strings.Index(s, "\n## "); j >= 0 {
+		s = s[:j]
+	}
+	return s
+}()
+
+// checkSpec0061Rule checks a rule marked with Since, a rule that spec
+// 0051's table does not hold: it was added in contract 1.2.0, spec
+// 0061's Solution lists it as "- **ID**:", it is a SHOULD rule (spec
+// 0061 and ADR 0027: a MINOR adds SHOULD rules only), its source names
+// spec 0061, and its parts are pieces of its check.
+func checkSpec0061Rule(t *testing.T, r Rule) {
+	t.Helper()
+	if spec0061Solution == "" {
+		t.Fatal("cannot read the Solution section of spec 0061")
+	}
+	if r.Since != "1.2.0" {
+		t.Errorf("%s since = %q, want 1.2.0", r.ID, r.Since)
+	}
+	if !strings.Contains(spec0061Solution, "\n- **"+r.ID+"**: ") {
+		t.Errorf("%s: spec 0061's Solution does not list it", r.ID)
+	}
+	if r.Level != Should || !r.Waivable() {
+		t.Errorf("%s level = %s, ADR 0027 says SHOULD", r.ID, r.Level)
+	}
+	if !strings.Contains(r.Source, "spec 0061") {
+		t.Errorf("%s source = %q, want spec 0061 named", r.ID, r.Source)
+	}
+	if string(r.Category) != r.ID[:1] {
+		t.Errorf("%s category = %s", r.ID, r.Category)
+	}
+	for _, p := range r.Parts {
+		if !strings.Contains(r.Check, p.Check) || p.Run == nil {
+			t.Errorf("%s %s part %q is not part of its check, or has no check", r.ID, p.Kind, p.Check)
+		}
 	}
 }
