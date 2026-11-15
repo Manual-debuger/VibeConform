@@ -26,8 +26,12 @@ Don't include yourself as contributor in commits.
 - **`task audit` must pass.** It is the contract audit of this
   repository: it builds `vibe` and `vibe-guard` from the checkout, puts
   them first on `PATH` and runs the full `vibe audit` against
-  `vibe.yaml`. It must say `Verdict: conformant`. CI runs the same audit
-  as the required check `Contract / audit`. `task audit:static` is the
+  `vibe.yaml`. It must say `Verdict: conformant`. CI's required check
+  `Contract / audit` runs `vibe audit` on the same `vibe.yaml`. Its step
+  calls `vibe audit` directly, not `task audit`, because contract rule
+  C-04 requires a CI step that does; keep it that way. `vibe.yaml`'s
+  `require` key lists the SHOULD rules this repository meets, and each
+  counts in the verdict like a MUST rule. `task audit:static` is the
   quick run, which never reaches a verdict.
 - **Guardrail files need a person's unlock.** Do not change
   `.claude/settings.json` or `.claude/hooks/` unless the user has run
