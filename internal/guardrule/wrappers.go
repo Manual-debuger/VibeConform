@@ -18,8 +18,8 @@ import (
 // an argument, is read both ways, so a wrapper may run more than one
 // inner command.
 
-// opts lists long options of one argument kind, for a table.
-func opts(kind argKind, names ...string) map[string]argKind {
+// longOpts lists long options of one argument kind, for a table.
+func longOpts(kind argKind, names ...string) map[string]argKind {
 	m := make(map[string]argKind, len(names))
 	for _, n := range names {
 		m[n] = kind
@@ -27,7 +27,7 @@ func opts(kind argKind, names ...string) map[string]argKind {
 	return m
 }
 
-// longOptions joins the lists of opts.
+// longOptions joins the lists of longOpts.
 func longOptions(lists ...map[string]argKind) map[string]argKind {
 	m := map[string]argKind{}
 	for _, l := range lists {
@@ -48,7 +48,7 @@ func wrapperTable(shortArg, shortOptArg string, long map[string]argKind) optionT
 	}
 }
 
-var helpVersion = opts(argNone, "help", "version")
+var helpVersion = longOpts(argNone, "help", "version")
 
 // wrapperTables follow the programs' documentation: sudo 1.9, GNU
 // coreutils (env, nice, nohup, stdbuf, timeout), GNU time and GNU
@@ -56,19 +56,19 @@ var helpVersion = opts(argNone, "help", "version")
 // are shell builtins and have none.
 var wrapperTables = map[string]optionTable{
 	"sudo": wrapperTable("aCcDghpRrTtUu", "", longOptions(
-		opts(argNone, "askpass", "background", "bell", "edit", "set-home", "help", "login",
+		longOpts(argNone, "askpass", "background", "bell", "edit", "set-home", "help", "login",
 			"remove-timestamp", "reset-timestamp", "list", "non-interactive", "no-update",
 			"preserve-groups", "stdin", "shell", "version", "validate"),
-		opts(argRequired, "auth-type", "close-from", "login-class", "chdir", "chroot", "group",
+		longOpts(argRequired, "auth-type", "close-from", "login-class", "chdir", "chroot", "group",
 			"host", "prompt", "role", "type", "command-timeout", "user", "other-user", "apparmor-profile"),
-		opts(argOptional, "preserve-env"))),
+		longOpts(argOptional, "preserve-env"))),
 	"doas": wrapperTable("aCu", "", nil),
 	"env": func() optionTable {
 		t := wrapperTable("aCPSu", "", longOptions(helpVersion,
-			opts(argNone, "ignore-environment", "null", "list-signal-handling", "debug"),
-			opts(argRequired, "unset", "chdir", "split-string", "argv0"),
-			opts(argOptional, "block-signal", "default-signal", "ignore-signal")))
-		t.ends = []string{"S", "--split-string"}
+			longOpts(argNone, "ignore-environment", "null", "list-signal-handling", "debug"),
+			longOpts(argRequired, "unset", "chdir", "split-string", "argv0"),
+			longOpts(argOptional, "block-signal", "default-signal", "ignore-signal")))
+		t.ends = []string{"S", "--split-string"} // the split string, read by splitString
 		return t
 	}(),
 	"command": wrapperTable("", "", nil),
@@ -76,17 +76,17 @@ var wrapperTables = map[string]optionTable{
 	"exec":    wrapperTable("a", "", nil),
 	"nohup":   wrapperTable("", "", helpVersion),
 	"time": wrapperTable("fo", "", longOptions(helpVersion,
-		opts(argNone, "append", "portability", "quiet", "verbose"),
-		opts(argRequired, "format", "output"))),
-	"nice": wrapperTable("n", "", longOptions(helpVersion, opts(argRequired, "adjustment"))),
+		longOpts(argNone, "append", "portability", "quiet", "verbose"),
+		longOpts(argRequired, "format", "output"))),
+	"nice": wrapperTable("n", "", longOptions(helpVersion, longOpts(argRequired, "adjustment"))),
 	"timeout": wrapperTable("ks", "", longOptions(helpVersion,
-		opts(argNone, "foreground", "preserve-status", "verbose"),
-		opts(argRequired, "kill-after", "signal"))),
-	"stdbuf": wrapperTable("ioe", "", longOptions(helpVersion, opts(argRequired, "input", "output", "error"))),
+		longOpts(argNone, "foreground", "preserve-status", "verbose"),
+		longOpts(argRequired, "kill-after", "signal"))),
+	"stdbuf": wrapperTable("ioe", "", longOptions(helpVersion, longOpts(argRequired, "input", "output", "error"))),
 	"xargs": wrapperTable("adEILnPs", "eil", longOptions(helpVersion,
-		opts(argNone, "null", "open-tty", "interactive", "no-run-if-empty", "show-limits", "verbose", "exit"),
-		opts(argRequired, "arg-file", "delimiter", "max-args", "max-chars", "max-procs", "process-slot-var"),
-		opts(argOptional, "eof", "replace", "max-lines"))),
+		longOpts(argNone, "null", "open-tty", "interactive", "no-run-if-empty", "show-limits", "verbose", "exit"),
+		longOpts(argRequired, "arg-file", "delimiter", "max-args", "max-chars", "max-procs", "process-slot-var"),
+		longOpts(argOptional, "eof", "replace", "max-lines"))),
 }
 
 // unwrap returns the commands a wrapper runs, one for each reading of
@@ -119,7 +119,7 @@ func wrapped(name string, r optionReading) (Command, bool) {
 	switch name {
 	case "env":
 		if splitString(r) != nil {
-			return Command{}, false // nested reads the split string
+			return Command{}, false // scriptsOf reads the split string
 		}
 		assigns, rest = splitAssignments(rest)
 	case "sudo", "doas":
@@ -177,8 +177,10 @@ func splitString(r optionReading) []Word {
 	if len(r.opts) == 0 {
 		return nil
 	}
+	// The options that end env's options are those that give its split
+	// string.
 	o := r.opts[len(r.opts)-1]
-	if (o.name != "S" && o.name != "--split-string") || !o.hasValue {
+	if !slices.Contains(wrapperTables["env"].ends, o.name) || !o.hasValue {
 		return nil
 	}
 	return append([]Word{o.value}, r.operands...)
@@ -319,83 +321,71 @@ func writtenOperands(c Command) []Word {
 // writers reads a program's arguments (without its name) by getopt's
 // conventions and returns the operands it writes.
 var writers = map[string]func(args []Word) []Word{
-	"tee": func(args []Word) []Word { return scanArgs(args, writerTable("", "")).operands },
-	"sed": writtenBySed,
-	"truncate": func(args []Word) []Word {
-		return scanArgs(args, writerTable("sr", "", "size", "reference")).operands
-	},
-	"cp": copyWriter("cp", copyOptions),
-	"mv": copyWriter("mv", copyOptions),
-	"ln": copyWriter("ln", copyOptions),
-	"install": copyWriter("install", writerTable("gmoSt", "",
-		"group", "mode", "owner", "suffix", "target-directory", "strip-program")),
-	"rm":     func(args []Word) []Word { return scanArgs(args, writerTable("", "")).operands },
-	"unlink": func(args []Word) []Word { return scanArgs(args, writerTable("", "")).operands },
+	"tee": readWriter(writerTable("", "", nil), allOperands),
+	"sed": readWriter(writerTable("efl", "i", longOptions(
+		longOpts(argRequired, "expression", "file", "line-length"),
+		longOpts(argOptional, "in-place"))), writtenBySed),
+	"truncate": readWriter(writerTable("sr", "", longOpts(argRequired, "size", "reference")), allOperands),
+	"cp":       readWriter(copyOptions, copyWriter("cp")),
+	"mv":       readWriter(copyOptions, copyWriter("mv")),
+	"ln":       readWriter(copyOptions, copyWriter("ln")),
+	"install": readWriter(writerTable("gmoSt", "", longOptions(copyLong,
+		longOpts(argRequired, "group", "mode", "owner", "strip-program"),
+		longOpts(argNone, "directory"))), copyWriter("install")),
+	"rm":     readWriter(writerTable("", "", nil), allOperands),
+	"unlink": readWriter(writerTable("", "", nil), allOperands),
 	"dd":     writtenByDd,
 }
 
-var copyOptions = writerTable("St", "", "suffix", "target-directory")
+var (
+	copyLong = longOptions(
+		longOpts(argRequired, "suffix", "target-directory"),
+		longOpts(argNone, "no-target-directory"))
+	copyOptions = writerTable("St", "", copyLong)
+)
 
 // writerTable is a writer's option table: the short options that take an
 // argument, those whose argument is optional and attached, and the long
-// options that take one. Any other long option takes none. Options may
-// follow operands, and a long option may be abbreviated to two letters
-// or more ("--ta", four characters with its dashes).
-func writerTable(shortArg, shortOptArg string, long ...string) optionTable {
+// options the writer reads. Any other long option takes no argument.
+// Options may follow operands, and a long option may be abbreviated to
+// two letters or more ("--ta", four characters with its dashes).
+func writerTable(shortArg, shortOptArg string, long map[string]argKind) optionTable {
 	return optionTable{
-		shortArg: shortArg, shortOptArg: shortOptArg, long: opts(argRequired, long...),
+		shortArg: shortArg, shortOptArg: shortOptArg, long: long,
 		abbrev: true, minAbbrev: 2, unknownLong: argNone, permute: true,
 	}
 }
 
-// parsedArgs is a program's argument list read by getopt's conventions.
-type parsedArgs struct {
-	operands []Word
-	// opts are the options given, short ones without "-" ("t"), long ones
-	// with "--" and without a value ("--target-directory"); values holds
-	// each one's argument, or "" for none.
-	opts, values []string
-}
-
-// has reports whether one of names was given. A long name also matches
-// an abbreviation of at least two letters, as getopt_long accepts one.
-func (a parsedArgs) has(names ...string) bool { _, ok := a.value(names...); return ok }
-
-func (a parsedArgs) value(names ...string) (string, bool) {
-	for i, o := range a.opts {
-		for _, n := range names {
-			if o == n || strings.HasPrefix(n, "--") && len(o) >= 4 && strings.HasPrefix(n, o) {
-				return a.values[i], true
-			}
+// readWriter reads a writer's arguments by its table t and returns what
+// written writes in each reading. The scan fails closed: when the
+// options read more than one way, the writer writes what any reading
+// writes; when they give too many readings to read, every argument is
+// written. writtenOperands drops the repeats.
+func readWriter(t optionTable, written func(optionReading) []Word) func([]Word) []Word {
+	return func(args []Word) []Word {
+		readings, ok := readOptions(args, t)
+		if !ok {
+			return args
 		}
+		var out []Word
+		for _, r := range readings {
+			out = append(out, written(r)...)
+		}
+		return out
 	}
-	return "", false
 }
 
-// scanArgs reads args by a writer's table t. "--" ends the options, and
-// a word with an expansion is an operand.
-func scanArgs(args []Word, t optionTable) parsedArgs {
-	var a parsedArgs
-	// A writer's table gives one reading: it reads no option both ways.
-	readings, _ := readOptions(args, t)
-	for _, r := range readings[:min(1, len(readings))] {
-		a.operands = r.operands
-		for _, o := range r.opts {
-			a.opts, a.values = append(a.opts, o.name), append(a.values, o.value.Text)
-		}
-	}
-	return a
-}
+// allOperands: the writer writes every operand.
+func allOperands(r optionReading) []Word { return r.operands }
 
 // writtenBySed: with -i or --in-place, the files sed edits. The first
 // operand is the script unless -e or -f gave one.
-func writtenBySed(args []Word) []Word {
-	a := scanArgs(args, writerTable("efl", "i", "expression", "file", "line-length"))
-	if !a.has("i", "--in-place") {
+func writtenBySed(r optionReading) []Word {
+	if !r.has("i", "--in-place") {
 		return nil
 	}
-	files := a.operands
-	if !a.has("e", "f", "--expression", "--file") && len(files) > 0 {
+	files := r.operands
+	if !r.has("e", "f", "--expression", "--file") && len(files) > 0 {
 		files = files[1:]
 	}
 	return files
@@ -408,17 +398,16 @@ func writtenBySed(args []Word) []Word {
 // sources too, since it removes them. ln with one operand links it into
 // the current directory under its own name; install -d creates every
 // operand.
-func copyWriter(name string, o optionTable) func([]Word) []Word {
-	return func(args []Word) []Word {
-		a := scanArgs(args, o)
-		if name == "install" && a.has("d", "--directory") {
-			return a.operands
+func copyWriter(name string) func(optionReading) []Word {
+	return func(r optionReading) []Word {
+		if name == "install" && r.has("d", "--directory") {
+			return r.operands
 		}
 		var dest Word
-		sources := a.operands
-		switch target, ok := a.value("t", "--target-directory"); {
+		sources := r.operands
+		switch target, ok := r.value("t", "--target-directory"); {
 		case ok:
-			dest = Word{Text: target, Literal: !strings.Contains(target, ExpansionMark)}
+			dest = Word{Text: target.Text, Literal: !strings.Contains(target.Text, ExpansionMark)}
 		case len(sources) >= 2:
 			dest, sources = sources[len(sources)-1], sources[:len(sources)-1]
 		case len(sources) == 1 && name == "ln":
@@ -428,7 +417,7 @@ func copyWriter(name string, o optionTable) func([]Word) []Word {
 			return nil
 		}
 		out := []Word{dest}
-		if !a.has("T", "--no-target-directory") {
+		if !r.has("T", "--no-target-directory") {
 			for _, s := range sources {
 				out = append(out, inside(dest, s))
 			}

@@ -231,6 +231,27 @@ func TestEnvSplitStringSpellings(t *testing.T) {
 	}
 }
 
+// env reads its split string's words as its own arguments again, as
+// GNU env does: options, then assignments, then the command it runs.
+func TestEnvSplitStringIsReadAsEnvArguments(t *testing.T) {
+	cases := []struct {
+		src  string
+		want []string
+	}{
+		{"env -S '-i rm -rf x'", []string{"env -S -i rm -rf x", "rm -rf x @env -S"}},
+		{"env -S '-u X rm -rf x'", []string{"env -S -u X rm -rf x", "rm -rf x @env -S"}},
+		{"env -S '--unset=X -- rm -rf x'", []string{"env -S --unset=X -- rm -rf x", "rm -rf x @env -S"}},
+		{"env -S 'A=1 rm -rf x'", []string{"env -S A=1 rm -rf x", "rm -rf x @env -S"}},
+		{"env -S '-i' rm -rf x", []string{"env -S -i rm -rf x", "rm -rf x @env -S"}},
+		{"env -S '-S \"rm -rf x\"'", []string{"env -S -S \"rm -rf x\"", "env -S rm -rf x @env -S", "rm -rf x @env -S,env -S"}},
+		{"env -S 'ls -l'", []string{"env -S ls -l", "ls -l @env -S"}},
+		{"env -S '-i'", []string{"env -S -i", "env -i @env -S"}},
+	}
+	for _, c := range cases {
+		expect(t, guardrule.ShellBash, c.src, c.want...)
+	}
+}
+
 func TestNestedShellsAreParsedAgain(t *testing.T) {
 	cases := []struct {
 		shell guardrule.Shell

@@ -128,6 +128,10 @@ type Command struct {
 
 	// stdin is a here-document or here-string fed to the command.
 	stdin *Word
+	// envArgs marks env reading the words of an outer env's split string
+	// as its arguments again. The command it runs is found through that
+	// env -S alone.
+	envArgs bool
 }
 
 // ScriptSource is where a POSIX shell reads the script it runs.
@@ -241,13 +245,16 @@ func (e *ParseError) Error() string {
 // source order, each nested command after the command that runs it.
 func Commands(shell Shell, src string) ([]Command, error) {
 	var out []Command
-	if err := decompose(shell, src, 0, nil, &out); err != nil {
+	if err := decompose(shell, src, 0, nil, false, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func decompose(shell Shell, src string, depth int, via []string, out *[]Command) error {
+// decompose parses src and expands its commands. With envArgs, src is
+// env's split string: each command's words are read as env's arguments
+// again, as GNU env reads them (options, assignments, then the command).
+func decompose(shell Shell, src string, depth int, via []string, envArgs bool, out *[]Command) error {
 	if depth > MaxDepth {
 		return &ParseError{Shell: shell, Msg: fmt.Sprintf("commands are nested deeper than %d shells", MaxDepth)}
 	}
@@ -257,6 +264,10 @@ func decompose(shell Shell, src string, depth int, via []string, out *[]Command)
 	}
 	for _, c := range raw {
 		c.Depth, c.Via = depth, via
+		if envArgs && len(c.Words) > 0 {
+			c.Words = append([]Word{literalWord("env")}, c.Words...)
+			c.envArgs = true
+		}
 		if err := expand(c, out); err != nil {
 			return err
 		}
@@ -281,7 +292,7 @@ func parse(shell Shell, src string) ([]Command, error) {
 func expand(c Command, out *[]Command) error {
 	inners, label := unwrap(c)
 	var scripts []nestedScript
-	c.ScriptSource, scripts = nested(c)
+	c.ScriptSource, scripts = scriptsOf(c)
 	if len(inners) == 0 || len(scripts) > 0 {
 		c.Writes = append(slices.Clone(c.Writes), writtenOperands(c)...)
 		*out = append(*out, c)
@@ -289,7 +300,10 @@ func expand(c Command, out *[]Command) error {
 	for _, inner := range inners {
 		inner.Shell = ShellBash
 		inner.Depth = c.Depth
-		inner.Via = appendVia(c.Via, label)
+		inner.Via = c.Via
+		if !c.envArgs {
+			inner.Via = appendVia(c.Via, label)
+		}
 		inner.Assigns = append(slices.Clone(c.Assigns), inner.Assigns...)
 		inner.Redirects = c.Redirects
 		inner.Writes = c.Writes
@@ -304,8 +318,11 @@ func expand(c Command, out *[]Command) error {
 			}
 		}
 	}
+	// env's only scripts are its split strings, whose words env reads as
+	// its arguments again.
+	envArgs := c.Name() == "env"
 	for _, n := range scripts {
-		if err := decompose(n.shell, n.script, c.Depth+1, appendVia(c.Via, n.label), out); err != nil {
+		if err := decompose(n.shell, n.script, c.Depth+1, appendVia(c.Via, n.label), envArgs, out); err != nil {
 			return err
 		}
 	}
@@ -356,22 +373,24 @@ const psUnknownCommand = "& " + psUnknown
 
 var posixShells = []string{"bash", "sh", "zsh", "dash", "ksh", "ash", "mksh"}
 
-// nested returns where c reads its script, when c is a POSIX shell, and
-// the strings c runs as scripts.
-func nested(c Command) (ScriptSource, []nestedScript) {
+// scriptsOf returns where c reads its script, when c is a POSIX shell,
+// and every string c runs as a script.
+func scriptsOf(c Command) (ScriptSource, []nestedScript) {
 	switch name := c.Name(); {
 	case name == "env":
 		return ScriptNone, envSplitStrings(c.Words[1:])
 	case slices.Contains(posixShells, name):
 		return posixShellScript(name, c.Words[1:], c.stdin)
 	}
-	if n, ok := nestedScriptOf(c); ok {
+	if n, ok := argumentScript(c); ok {
 		return ScriptNone, []nestedScript{n}
 	}
 	return ScriptNone, nil
 }
 
-func nestedScriptOf(c Command) (nestedScript, bool) {
+// argumentScript returns the one script that pwsh, powershell, eval or
+// Invoke-Expression runs from its arguments.
+func argumentScript(c Command) (nestedScript, bool) {
 	name := c.Name()
 	args := c.Words[min(1, len(c.Words)):]
 	switch {
