@@ -7,8 +7,9 @@ name: Contract
 # on exit 0; it is a required check, next to CI / gate (spec 0059).
 # "Contract / audit (static)" is the quick one, and not required: `vibe
 # audit --static` never reaches a verdict (exit 1), since execution checks
-# and probes do not run. It passes when no MUST rule failed or could not
-# be decided; MUST rules that did not run are expected.
+# and probes do not run. It passes when no MUST rule, and no rule
+# vibe.yaml requires, failed or could not be decided; rules that did not
+# run are expected.
 
 on:
   pull_request:
@@ -76,33 +77,12 @@ jobs:
         uses: ./.github/actions/install-tools
         with:
           tools: task goimports golangci-lint govulncheck actionlint gitleaks
-      # The verdict counts only MUST rules, so the SHOULD rules of
-      # contract 1.2.0 that this repository meets (spec 0061, acceptance
-      # criterion 7) are checked from the JSON report: V-06, V-07, V-08
-      # and A-09 pass, and V-05 is not applicable (no Python component).
-      # The step fails on a verdict other than conformant too.
+      # The SHOULD rules this repository meets (spec 0061, acceptance
+      # criterion 7) are in vibe.yaml's require list, so the verdict counts
+      # them like MUST rules (spec 0063). The step runs vibe audit itself,
+      # not task audit: C-04 needs a step that does.
       - name: vibe audit
-        env:
-          REQUIRED_SHOULD: V-06 V-07 V-08 A-09
-        run: |
-          report="$RUNNER_TEMP/contract.json"
-          status=0
-          vibe audit --json > "$report" || status=$?
-          jq -e '.schema == 1' "$report" > /dev/null || exit 1
-          jq -r '"Verdict: \(.verdict) (\(.reason))", (.rules[] | "  \(.id)  \(.level)  \(.result)", (.findings[]? | "      \(.file): \(.message)"))' "$report"
-          for id in $REQUIRED_SHOULD; do
-            result="$(RULE="$id" jq -r '.rules[] | select(.id == env.RULE) | .result' "$report")"
-            if [ "$result" != "pass" ]; then
-              echo "::error::$id is '${result:-missing}', not 'pass'"
-              status=1
-            fi
-          done
-          result="$(jq -r '.rules[] | select(.id == "V-05") | .result' "$report")"
-          if [ "$result" != "not_applicable" ]; then
-            echo "::error::V-05 is '${result:-missing}', not 'not_applicable'"
-            status=1
-          fi
-          exit "$status"
+        run: vibe audit
 
 
   audit:
@@ -120,14 +100,15 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin"
           go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: vibe audit --static
-        run: vibe audit --static || true
-      - name: No MUST rule fails or is undecided
+      # One run: the summary and the gate both read its JSON report.
+      - name: No MUST or required rule fails or is undecided
         run: |
-          vibe audit --static --json > "$RUNNER_TEMP/contract.json" || true
-          jq -e '.schema == 1' "$RUNNER_TEMP/contract.json" > /dev/null
-          bad=$(jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "undecided")) | .id' "$RUNNER_TEMP/contract.json")
+          report="$RUNNER_TEMP/contract.json"
+          vibe audit --static --json > "$report" || true
+          jq -e '.schema == 1' "$report" > /dev/null
+          jq -r '"Verdict: \(.verdict) (\(.reason))", (.rules[] | "  \(.id)  \(.level)\(if .required then " (required)" else "" end)  \(.result)", (.findings[]? | "      \(.file): \(.message)"))' "$report"
+          bad=$(jq -r '.rules[] | select((.level == "MUST" or .required) and (.result == "fail" or .result == "undecided")) | .id' "$report")
           if [ -n "$bad" ]; then
-            echo "MUST rules that fail or cannot be decided: $bad"
+            echo "MUST or required rules that fail or cannot be decided: $bad"
             exit 1
           fi
