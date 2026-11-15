@@ -262,7 +262,9 @@ func requireConfig(ids string, more ...section) fixtureEdit {
 func TestContractAuditRequiredRules(t *testing.T) { //nolint:gocognit // one subtest per verdict
 	t.Parallel()
 	// Every rule decides, so that the reason counts only the rules named.
-	passing := func() []contract.Rule { return standIn(nil, contract.ResultPass, ruleIDs("", "V-04", "R-02", "R-03")...) }
+	passing := func() []contract.Rule {
+		return standIn(nil, contract.ResultPass, ruleIDs("", "V-04", "R-02", "R-03")...)
+	}
 	t.Run("a failing required rule exits 2", func(t *testing.T) {
 		rules := standIn(passing(), contract.ResultFail, "V-06")
 		rep, r := auditJSONRules(t, rules, contractFixture(t, requireConfig("V-06")))

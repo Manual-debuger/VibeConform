@@ -503,15 +503,19 @@ in one report. `.claude/settings.local.json` is never read.
 
 | Code | Meaning |
 |---|---|
-| `0` | conformant: every MUST rule passed or is not applicable |
-| `2` | not conformant: a MUST rule failed, and every other MUST rule was decided |
-| `1` | cannot decide: a MUST rule could not be decided or did not run (always the case with `--static`). Also no `vibe.yaml`, a version 1 `vibe.yaml`, an invalid configuration, both or neither of `contract` and `standard`, an unsupported contract version, an unknown `--explain` ID, a directory that is not a Git work tree, or any other tool error |
+| `0` | conformant: every MUST rule and every required SHOULD rule passed or is not applicable |
+| `2` | not conformant: a MUST rule or a required SHOULD rule failed, and every other such rule was decided |
+| `1` | cannot decide: a MUST rule or a required SHOULD rule could not be decided or did not run (always the case with `--static`). Also no `vibe.yaml`, a version 1 `vibe.yaml`, an invalid configuration, both or neither of `contract` and `standard`, an unsupported contract version, an unknown `--explain` ID, a directory that is not a Git work tree, or any other tool error |
 
 A failed MUST rule beside an undecided one is `1`, not `2`: there is no
 verdict until every MUST rule is decided, and the reason says how many
-MUST rules already fail. SHOULD results never change the exit code.
+MUST rules already fail. The results of SHOULD rules never change the
+exit code, except those that `vibe.yaml` lists in `require` (see
+"`vibe.yaml` version 2"): a required SHOULD rule counts like a MUST rule,
+and the reason counts the two kinds apart.
 After a report, the reason also goes to stderr
 (`Error: not conformant: 1 MUST rule fails`,
+`Error: not conformant: 1 MUST rule fails; 2 required SHOULD rules fail`,
 `Error: cannot decide: …`). A configuration error goes to stderr with no
 report:
 
@@ -586,7 +590,8 @@ separately from the contract; it is `1`.
      "result": "fail",
      "parts": [{"check": "static", "result": "fail"}],
      "findings": [{"file": ".github/workflows/ci.yml", "message": "…", "fix": "…"}],
-     "waiver": null}
+     "waiver": null,
+     "required": false}
   ],
   "guard_exceptions": [{"rule": "…", "match": "…", "reason": "…"}],
   "guard_exception_uses": [{"rule": "…", "match": "…", "case": "…"}],
@@ -603,6 +608,9 @@ separately from the contract; it is `1`.
   `execution` or `probe`.
 - `waiver` is `null`, or `{"reason", "until", "expired"}`. A rule with a
   waiver and result `not_applicable` has an unused waiver.
+- `required` is `true` for a SHOULD rule that `vibe.yaml` lists in
+  `require`, and `false` for every other rule, MUST rules included (spec
+  0063). It is a new key; `schema` stays `1`.
 - `local_adjustments[].kind` is `exception` or `rule` (an extra rule).
 - `guard_exception_uses` lists each guard corpus case that an exception
   of `policy.json` let through in A-02's probe (spec 0053). It is a new
@@ -864,6 +872,7 @@ entrypoints:
 | `components` | no | List of `{path, language}`; `language` is `go`, `python` or `typescript` |
 | `entrypoints` | yes | `verify`, `verify-fast`, `fmt`, `fmt-check`; `setup` is optional |
 | `waivers` | no | List of `{rule, reason, until}` |
+| `require` | no | List of distinct SHOULD rule IDs that count in the verdict like MUST rules |
 
 **Validation.** Decoding is strict: an unknown key at any level is an
 error, so a typo cannot silently turn a rule off. Every invalid
@@ -911,6 +920,23 @@ waivers:
   - rule: C-05
     reason: the Windows runners are not set up yet
     until: 2026-12-31
+```
+
+- **Required SHOULD rules.** `require` lists SHOULD rules the repository
+  holds itself to (spec 0063). A required rule counts in the verdict
+  like a MUST rule: when it fails, the verdict is not conformant (exit
+  `2`); when it cannot be decided or does not run, there is no verdict
+  (exit `1`); when it is not applicable, that is fine. The text report
+  marks it `(required)` wherever it lists it, and the JSON report gives
+  it `"required": true`. Each ID must be a rule of contract 1.2.0 and a
+  SHOULD rule (a MUST rule is always required), listed once, and with no
+  waiver, expired or not: a waiver lets a SHOULD rule fail, `require`
+  makes it count. Without `require`, the verdict counts MUST rules only.
+  The first vibe release after v0.14.0-alpha.1 reads `require`; an
+  earlier vibe rejects it as an unknown field.
+
+```yaml
+require: [V-06, V-07, A-09]
 ```
 
 ## The setup skill
