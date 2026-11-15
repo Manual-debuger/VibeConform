@@ -121,9 +121,50 @@ type Command struct {
 	// through, outermost first: "sudo", "env", "bash -c", "eval",
 	// "pwsh -c", "iex", "find -exec", "bash <<", "env -S".
 	Via []string
+	// ScriptSource is where a POSIX shell (bash, sh, zsh, …) reads the
+	// script it runs, as its options say (spec 0062, "A shell's script").
+	// It is ScriptNone for any other command.
+	ScriptSource ScriptSource
 
 	// stdin is a here-document or here-string fed to the command.
 	stdin *Word
+}
+
+// ScriptSource is where a POSIX shell reads the script it runs.
+type ScriptSource int
+
+const (
+	// ScriptNone is for a command that is not a POSIX shell, or one that
+	// runs no script (bash --version).
+	ScriptNone ScriptSource = iota
+	// ScriptFromString is a -c string. Its commands follow the shell's,
+	// one level deeper, found through "<shell> -c".
+	ScriptFromString
+	// ScriptFromFile is a script file, the first operand.
+	ScriptFromFile
+	// ScriptFromStdin is standard input, piped or redirected from a file
+	// (curl … | bash, bash -s x < x.sh). What runs is not seen.
+	ScriptFromStdin
+	// ScriptFromHereDoc is standard input fed by a here-document or
+	// here-string. Its commands follow the shell's, one level deeper,
+	// found through "<shell> <<".
+	ScriptFromHereDoc
+)
+
+func (s ScriptSource) String() string {
+	switch s {
+	case ScriptNone:
+		return "none"
+	case ScriptFromString:
+		return "-c string"
+	case ScriptFromFile:
+		return "script file"
+	case ScriptFromStdin:
+		return "standard input"
+	case ScriptFromHereDoc:
+		return "here-document"
+	}
+	return fmt.Sprintf("ScriptSource(%d)", int(s))
 }
 
 // Dynamic reports whether the command name holds an expansion, so that
@@ -239,7 +280,8 @@ func parse(shell Shell, src string) ([]Command, error) {
 // is added itself too.
 func expand(c Command, out *[]Command) error {
 	inners, label := unwrap(c)
-	scripts := nested(c)
+	var scripts []nestedScript
+	c.ScriptSource, scripts = nested(c)
 	if len(inners) == 0 || len(scripts) > 0 {
 		c.Writes = append(slices.Clone(c.Writes), writtenOperands(c)...)
 		*out = append(*out, c)
@@ -314,23 +356,25 @@ const psUnknownCommand = "& " + psUnknown
 
 var posixShells = []string{"bash", "sh", "zsh", "dash", "ksh", "ash", "mksh"}
 
-// nested returns the strings c runs as scripts.
-func nested(c Command) []nestedScript {
-	if c.Name() == "env" {
-		return envSplitStrings(c.Words[1:])
+// nested returns where c reads its script, when c is a POSIX shell, and
+// the strings c runs as scripts.
+func nested(c Command) (ScriptSource, []nestedScript) {
+	switch name := c.Name(); {
+	case name == "env":
+		return ScriptNone, envSplitStrings(c.Words[1:])
+	case slices.Contains(posixShells, name):
+		return posixShellScript(name, c.Words[1:], c.stdin)
 	}
 	if n, ok := nestedScriptOf(c); ok {
-		return []nestedScript{n}
+		return ScriptNone, []nestedScript{n}
 	}
-	return nil
+	return ScriptNone, nil
 }
 
 func nestedScriptOf(c Command) (nestedScript, bool) {
 	name := c.Name()
 	args := c.Words[min(1, len(c.Words)):]
 	switch {
-	case slices.Contains(posixShells, name):
-		return posixShellScript(name, args, c.stdin)
 	case name == "pwsh" || name == "powershell":
 		return powerShellScript(name, args)
 	case name == "eval" && c.Shell == ShellBash && len(args) > 0:
@@ -350,49 +394,57 @@ func nestedScriptOf(c Command) (nestedScript, bool) {
 	return nestedScript{}, false
 }
 
-// posixShellScript finds the string "sh -c" runs: the first operand
-// after the options, when some option cluster holds c. With no -c and no
-// operand, the shell reads its script from a here-document or
-// here-string, if one is given.
-func posixShellScript(name string, args []Word, stdin *Word) (nestedScript, bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
-	sawC := false
-	for i := 0; i < len(args); i++ {
-		w := args[i]
-		if !w.Literal {
-			if sawC {
-				return nestedScript{ShellBash, scriptOf(ShellBash, args[i:i+1]), name + " -c"}, true
-			}
-			return nestedScript{}, false
-		}
-		t := w.Text
-		switch {
-		case t == "--" || t == "-":
-			continue
-		case strings.HasPrefix(t, "--"):
-			if t == "--rcfile" || t == "--init-file" {
-				i++
-			}
-			continue
-		case len(t) > 1 && (t[0] == '-' || t[0] == '+'):
-			for _, r := range t[1:] {
-				switch r {
-				case 'c':
-					sawC = true
-				case 'o', 'O':
-					i++
-				}
-			}
-			continue
-		}
-		if sawC {
-			return nestedScript{ShellBash, scriptOf(ShellBash, args[i:i+1]), name + " -c"}, true
-		}
-		return nestedScript{}, false // runs a script file
+// posixShellOptions is how a POSIX shell reads its options (bash's
+// documentation; sh, dash, zsh and ksh read -c, -s, -o and -O the same
+// way). -o and -O, written with "-" or "+", take the next word. Long
+// options are matched exactly, as bash matches them; one the table does
+// not hold takes no argument. The first operand ends the options, and a
+// lone "-" ends them as "--" does.
+var posixShellOptions = optionTable{
+	shortArg: "oO",
+	long: map[string]argKind{
+		"rcfile": argRequired, "init-file": argRequired,
+		"version": argNone, "help": argNone, "login": argNone, "noprofile": argNone,
+		"norc": argNone, "posix": argNone, "restricted": argNone, "verbose": argNone,
+		"noediting": argNone, "debugger": argNone, "dump-strings": argNone,
+		"dump-po-strings": argNone, "pretty-print": argNone,
+	},
+	unknownLong: argNone,
+	plus:        true,
+	nextWordArg: true,
+}
+
+// posixShellScript reads a POSIX shell's options and returns where it
+// reads its script, with the script to parse again: the first operand
+// with -c; else, with no -s, a script file when there is an operand; else
+// standard input, parsed again when a here-document or here-string feeds
+// it. With -s the operands are positional parameters.
+func posixShellScript(name string, args []Word, stdin *Word) (ScriptSource, []nestedScript) {
+	readings, ok := readOptions(args, posixShellOptions)
+	if !ok || len(readings) != 1 {
+		// The table has no option read two ways, so this does not happen;
+		// if it did, the script would not be known.
+		return ScriptFromStdin, nil
 	}
-	if !sawC && stdin != nil {
-		return nestedScript{ShellBash, scriptOf(ShellBash, []Word{*stdin}), name + " <<"}, true
+	r := readings[0]
+	operands := r.operands
+	if len(operands) > 0 && operands[0].Literal && operands[0].Text == "-" {
+		operands = operands[1:]
 	}
-	return nestedScript{}, false
+	switch {
+	case r.has("c"):
+		if len(operands) == 0 {
+			return ScriptFromString, nil
+		}
+		return ScriptFromString, []nestedScript{{ShellBash, scriptOf(ShellBash, operands[:1]), name + " -c"}}
+	case r.has("--version", "--help"):
+		return ScriptNone, nil
+	case len(operands) > 0 && !r.has("s"):
+		return ScriptFromFile, nil
+	case stdin != nil:
+		return ScriptFromHereDoc, []nestedScript{{ShellBash, scriptOf(ShellBash, []Word{*stdin}), name + " <<"}}
+	}
+	return ScriptFromStdin, nil
 }
 
 // powerShellScript finds the string pwsh -Command or powershell -Command

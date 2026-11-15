@@ -57,6 +57,14 @@ type optionTable struct {
 	// default. Without it the first operand ends the options, as POSIX
 	// getopt and getopt with a leading "+" read them.
 	permute bool
+	// plus: a word that begins with "+" is a cluster of short options too
+	// (a shell's +o, +O, +e), read like one that begins with "-". Its
+	// options have the same names.
+	plus bool
+	// nextWordArg: a short option that takes an argument always takes the
+	// next word, and the rest of its cluster is read as options, as a
+	// POSIX shell reads -o and -O (bash -oc posix 'ls' is -o posix -c).
+	nextWordArg bool
 }
 
 // option is one option as it was read.
@@ -121,7 +129,7 @@ func (t optionTable) read(args []Word, s readState) (optionReading, []readState)
 	for s.i < len(args) {
 		w := args[s.i]
 		switch {
-		case !w.Literal || w.Text == "-" || !strings.HasPrefix(w.Text, "-"):
+		case !w.Literal || w.Text == "-" || !strings.HasPrefix(w.Text, "-") && !t.isPlusCluster(w.Text):
 			if !t.permute {
 				s.operands = append(s.operands, args[s.i:]...)
 				return s.optionReading, forks
@@ -184,6 +192,10 @@ func (t optionTable) readLong(args []Word, s *readState) (readState, bool) {
 // first option in it that takes an argument takes the rest of the
 // cluster, or else the next word when its argument is required.
 func (t optionTable) readShort(args []Word, s *readState) {
+	if t.nextWordArg {
+		t.readShortNextWord(args, s)
+		return
+	}
 	text := args[s.i].Text
 	for j := 1; j < len(text); j++ {
 		o := option{name: text[j : j+1]}
@@ -205,6 +217,28 @@ func (t optionTable) readShort(args []Word, s *readState) {
 		return
 	}
 	s.i++
+}
+
+// readShortNextWord reads the cluster of short options at s.i as a POSIX
+// shell does: each option in it that takes an argument takes the next
+// word not yet taken, and the cluster goes on.
+func (t optionTable) readShortNextWord(args []Word, s *readState) {
+	next := s.i + 1
+	for _, r := range args[s.i].Text[1:] {
+		o := option{name: string(r)}
+		if strings.ContainsRune(t.shortArg, r) && next < len(args) {
+			o.value, o.hasValue = args[next], true
+			next++
+		}
+		s.opts = append(s.opts, o)
+	}
+	s.i = next
+}
+
+// isPlusCluster reports whether text is a cluster of short options that
+// begins with "+", for a table that reads them.
+func (t optionTable) isPlusCluster(text string) bool {
+	return t.plus && len(text) > 1 && text[0] == '+'
 }
 
 func literalWord(text string) Word { return Word{Text: text, Literal: true} }
