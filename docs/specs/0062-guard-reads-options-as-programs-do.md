@@ -1,7 +1,7 @@
 # Spec 0062: The guard reads wrapper and shell options as the programs do
 
-Status: draft (2026-11-15). Issues #157 and #158, from the design review
-#167. Amends spec 0053 ("vibe-guard", "Parsing"). No contract change.
+Status: draft (2026-11-15). Spec issue #168; issues #157 and #158, from
+the design review #167. Amends spec 0053 ("vibe-guard", "Parsing"). No contract change.
 
 ## Problem
 
