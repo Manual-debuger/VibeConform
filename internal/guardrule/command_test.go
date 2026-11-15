@@ -166,6 +166,71 @@ func TestWrappersAreStripped(t *testing.T) {
 	}
 }
 
+// A wrapper reads a long option as getopt_long does (spec 0062): a
+// unique prefix is that option, so it takes the option's argument.
+func TestWrapperLongOptionAbbreviations(t *testing.T) {
+	cases := []struct{ full, short, want string }{
+		{"sudo --user root rm -rf x", "sudo --us root rm -rf x", "rm -rf x @sudo"},
+		{"sudo --user=root rm -rf x", "sudo --u=root rm -rf x", "rm -rf x @sudo"},
+		{"env --unset X rm -rf x", "env --u X rm -rf x", "rm -rf x @env"},
+		{"env --chdir /tmp rm -rf x", "env --ch /tmp rm -rf x", "rm -rf x @env"},
+		{"timeout --signal KILL 5 rm -rf x", "timeout --sig KILL 5 rm -rf x", "rm -rf x @timeout"},
+		{"timeout --kill-after 1 5 rm -rf x", "timeout --k 1 5 rm -rf x", "rm -rf x @timeout"},
+		{"nice --adjustment 5 rm -rf x", "nice --adj 5 rm -rf x", "rm -rf x @nice"},
+		{"stdbuf --output L rm -rf x", "stdbuf --o L rm -rf x", "rm -rf x @stdbuf"},
+		{"stdbuf --input 0 rm -rf x", "stdbuf --in 0 rm -rf x", "rm -rf x @stdbuf"},
+		{"command time --output f rm -rf x", "command time --o f rm -rf x", "rm -rf x @command,time"},
+		{"/usr/bin/time --format %e rm -rf x", "/usr/bin/time --fo %e rm -rf x", "rm -rf x @time"},
+		{"xargs --arg-file f rm -rf", "xargs --arg f rm -rf", "rm -rf <?> @xargs"},
+		{"xargs --max-args 1 rm -rf", "xargs --max-a 1 rm -rf", "rm -rf <?> @xargs"},
+		{"xargs --delimiter , rm -rf", "xargs --deli , rm -rf", "rm -rf <?> @xargs"},
+		{"xargs --replace=F rm -rf F", "xargs --rep=F rm -rf F", "rm -rf <?> @xargs"},
+	}
+	for _, c := range cases {
+		expect(t, guardrule.ShellBash, c.full, c.want)
+		expect(t, guardrule.ShellBash, c.short, c.want)
+	}
+}
+
+// A long option the guard does not know, or a prefix shared by options
+// that differ in whether they take an argument, is read both ways
+// (spec 0062).
+func TestWrapperUnknownLongOptionIsReadBothWays(t *testing.T) {
+	cases := []struct {
+		src  string
+		want []string
+	}{
+		{"sudo --newopt root rm -rf x", []string{"root rm -rf x @sudo", "rm -rf x @sudo"}},
+		{"sudo --newopt ls", []string{"ls @sudo"}},
+		{"sudo --newopt=x rm -rf y", []string{"rm -rf y @sudo"}},
+		{"env --newopt X rm -rf x", []string{"X rm -rf x @env", "rm -rf x @env"}},
+		{"nohup --newopt rm -rf x", []string{"rm -rf x @nohup", "x @nohup"}},
+		// --max- is max-lines (optional argument), max-args, max-chars and
+		// max-procs (a required one).
+		{"xargs --max- 1 rm -rf", []string{"1 rm -rf <?> @xargs", "rm -rf <?> @xargs"}},
+		{"sudo --zz --yy rm -rf x", []string{"rm -rf x @sudo", "x @sudo"}},
+		// Too many readings: what runs is not known.
+		{"sudo" + strings.Repeat(" --zz", 12) + " ls", []string{"<?> @sudo"}},
+	}
+	for _, c := range cases {
+		expect(t, guardrule.ShellBash, c.src, c.want...)
+	}
+}
+
+// env's split string is found under every spelling env accepts.
+func TestEnvSplitStringSpellings(t *testing.T) {
+	for _, src := range []string{
+		"env -S 'rm -rf x'", "env -S'rm -rf x'", "env -iS 'rm -rf x'",
+		"env --split-string 'rm -rf x'", "env --split-string='rm -rf x'",
+		"env --sp 'rm -rf x'", "env --sp='rm -rf x'", "env -u X -S 'rm -rf x'",
+	} {
+		got := show(t, guardrule.ShellBash, src)
+		if len(got) != 2 || got[1] != "rm -rf x @env -S" {
+			t.Errorf("Commands(%q) = %q, want env, then rm -rf x @env -S", src, got)
+		}
+	}
+}
+
 func TestNestedShellsAreParsedAgain(t *testing.T) {
 	cases := []struct {
 		shell guardrule.Shell

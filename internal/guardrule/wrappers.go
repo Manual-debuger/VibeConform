@@ -10,110 +10,141 @@ import (
 // nohup, time, nice and xargs; and, beyond the spec's list, timeout and
 // stdbuf. find -exec is handled apart, since find is also a command of
 // its own.
+//
+// Each wrapper's options are read by its table, as the program reads
+// them (spec 0062): short option clusters, long options written in full
+// or as a unique prefix, --opt=value and "--". A long option the table
+// does not know, or a prefix of options that differ in whether they take
+// an argument, is read both ways, so a wrapper may run more than one
+// inner command.
 
-// unwrap returns the command a wrapper runs, and the wrapper's label.
-// ok is false when c is no wrapper, or a wrapper that runs nothing.
-func unwrap(c Command) (inner Command, label string, ok bool) { //nolint:gocyclo // baseline: pre-existing complexity
-	name := c.Name()
-	if len(c.Words) < 2 {
-		return Command{}, "", false
+// opts lists long options of one argument kind, for a table.
+func opts(kind argKind, names ...string) map[string]argKind {
+	m := make(map[string]argKind, len(names))
+	for _, n := range names {
+		m[n] = kind
 	}
-	args := c.Words[1:]
-	var rest, assigns []Word
-	switch name {
-	case "sudo", "doas":
-		rest = skipOptions(args, options{withArg: "ugCDhpRrtTU", long: []string{
-			"--user", "--group", "--host", "--close-from", "--chdir", "--prompt", "--chroot",
-			"--role", "--type", "--command-timeout", "--other-user"}})
-		assigns, rest = splitAssignments(rest)
-	case "env":
-		if hasSplitString(args) {
-			return Command{}, "", false
+	return m
+}
+
+// longOptions joins the lists of opts.
+func longOptions(lists ...map[string]argKind) map[string]argKind {
+	m := map[string]argKind{}
+	for _, l := range lists {
+		for n, k := range l {
+			m[n] = k
 		}
-		rest = skipOptions(args, options{withArg: "uCP", long: []string{"--unset", "--chdir"}})
+	}
+	return m
+}
+
+// wrapperTable is a wrapper's option table. A wrapper stops reading
+// options at its first operand, the command it runs. Its long options
+// are all listed, so one it does not list is read both ways.
+func wrapperTable(shortArg, shortOptArg string, long map[string]argKind) optionTable {
+	return optionTable{
+		shortArg: shortArg, shortOptArg: shortOptArg, long: long,
+		abbrev: true, minAbbrev: 1, unknownLong: argUnknown,
+	}
+}
+
+var helpVersion = opts(argNone, "help", "version")
+
+// wrapperTables follow the programs' documentation: sudo 1.9, GNU
+// coreutils (env, nice, nohup, stdbuf, timeout), GNU time and GNU
+// findutils (xargs). doas has no long options; command, builtin and exec
+// are shell builtins and have none.
+var wrapperTables = map[string]optionTable{
+	"sudo": wrapperTable("aCcDghpRrTtUu", "", longOptions(
+		opts(argNone, "askpass", "background", "bell", "edit", "set-home", "help", "login",
+			"remove-timestamp", "reset-timestamp", "list", "non-interactive", "no-update",
+			"preserve-groups", "stdin", "shell", "version", "validate"),
+		opts(argRequired, "auth-type", "close-from", "login-class", "chdir", "chroot", "group",
+			"host", "prompt", "role", "type", "command-timeout", "user", "other-user", "apparmor-profile"),
+		opts(argOptional, "preserve-env"))),
+	"doas": wrapperTable("aCu", "", nil),
+	"env": func() optionTable {
+		t := wrapperTable("aCPSu", "", longOptions(helpVersion,
+			opts(argNone, "ignore-environment", "null", "list-signal-handling", "debug"),
+			opts(argRequired, "unset", "chdir", "split-string", "argv0"),
+			opts(argOptional, "block-signal", "default-signal", "ignore-signal")))
+		t.ends = []string{"S", "--split-string"}
+		return t
+	}(),
+	"command": wrapperTable("", "", nil),
+	"builtin": wrapperTable("", "", nil),
+	"exec":    wrapperTable("a", "", nil),
+	"nohup":   wrapperTable("", "", helpVersion),
+	"time": wrapperTable("fo", "", longOptions(helpVersion,
+		opts(argNone, "append", "portability", "quiet", "verbose"),
+		opts(argRequired, "format", "output"))),
+	"nice": wrapperTable("n", "", longOptions(helpVersion, opts(argRequired, "adjustment"))),
+	"timeout": wrapperTable("ks", "", longOptions(helpVersion,
+		opts(argNone, "foreground", "preserve-status", "verbose"),
+		opts(argRequired, "kill-after", "signal"))),
+	"stdbuf": wrapperTable("ioe", "", longOptions(helpVersion, opts(argRequired, "input", "output", "error"))),
+	"xargs": wrapperTable("adEILnPs", "eil", longOptions(helpVersion,
+		opts(argNone, "null", "open-tty", "interactive", "no-run-if-empty", "show-limits", "verbose", "exit"),
+		opts(argRequired, "arg-file", "delimiter", "max-args", "max-chars", "max-procs", "process-slot-var"),
+		opts(argOptional, "eof", "replace", "max-lines"))),
+}
+
+// unwrap returns the commands a wrapper runs, one for each reading of
+// its options that runs one, and the wrapper's label. inners is empty
+// when c is no wrapper, or a wrapper that runs nothing. A wrapper whose
+// options give too many readings runs a command whose name is not known.
+func unwrap(c Command) (inners []Command, label string) {
+	name := c.Name()
+	t, ok := wrapperTables[name]
+	if !ok || len(c.Words) < 2 {
+		return nil, ""
+	}
+	readings, ok := readOptions(c.Words[1:], t)
+	if !ok {
+		return []Command{{Words: []Word{{Text: ExpansionMark, Unknown: true}}}}, name
+	}
+	for _, r := range readings {
+		inner, runs := wrapped(name, r)
+		if runs && !slices.ContainsFunc(inners, inner.sameWords) {
+			inners = append(inners, inner)
+		}
+	}
+	return inners, name
+}
+
+// wrapped returns the command that wrapper name runs in reading r.
+func wrapped(name string, r optionReading) (Command, bool) {
+	rest := r.operands
+	var assigns []Word
+	switch name {
+	case "env":
+		if splitString(r) != nil {
+			return Command{}, false // nested reads the split string
+		}
+		assigns, rest = splitAssignments(rest)
+	case "sudo", "doas":
 		assigns, rest = splitAssignments(rest)
 	case "command":
-		for _, w := range args {
-			if !w.Literal || !strings.HasPrefix(w.Text, "-") || w.Text == "--" {
-				break
-			}
-			if strings.ContainsAny(w.Text, "vV") {
-				return Command{}, "", false // prints what the name is, runs nothing
-			}
+		if r.has("v", "V") {
+			return Command{}, false // prints what the name is, runs nothing
 		}
-		rest = skipOptions(args, options{})
-	case "builtin", "nohup":
-		rest = skipOptions(args, options{})
-	case "exec":
-		rest = skipOptions(args, options{withArg: "a"})
-	case "time":
-		rest = skipOptions(args, options{withArg: "fo", long: []string{"--format", "--output"}})
-	case "nice":
-		rest = skipOptions(args, options{withArg: "n", long: []string{"--adjustment"}})
 	case "timeout":
-		rest = skipOptions(args, options{withArg: "sk", long: []string{"--signal", "--kill-after"}})
 		if len(rest) > 0 {
 			rest = rest[1:] // the duration
 		}
-	case "stdbuf":
-		rest = skipOptions(args, options{withArg: "ioe", long: []string{"--input", "--output", "--error"}})
 	case "xargs":
-		return unwrapXargs(c)
-	default:
-		return Command{}, "", false
+		return xargsCommand(r)
 	}
 	if len(rest) == 0 {
-		return Command{}, "", false
+		return Command{}, false
 	}
-	return Command{Words: rest, Assigns: assigns}, name, true
+	return Command{Words: rest, Assigns: assigns}, true
 }
 
-type options struct {
-	// withArg lists the short options that take an argument.
-	withArg string
-	// long lists the long options that take an argument (as --opt arg or
-	// --opt=arg).
-	long []string
-	// optArg lists the short options whose argument is optional and only
-	// attached (sed -i.bak). Only the writers read it.
-	optArg string
-}
-
-// skipOptions returns the words after a wrapper's options: the command
-// it runs. A non-literal word ends the options, so a dynamic option list
-// makes the command name dynamic.
-func skipOptions(args []Word, o options) []Word { //nolint:gocognit // baseline: pre-existing complexity
-	for i := 0; i < len(args); i++ {
-		w := args[i]
-		if !w.Literal {
-			return args[i:]
-		}
-		t := w.Text
-		switch {
-		case t == "--":
-			return args[i+1:]
-		case strings.HasPrefix(t, "--"):
-			if !strings.Contains(t, "=") {
-				for _, l := range o.long {
-					if t == l {
-						i++
-					}
-				}
-			}
-		case len(t) > 1 && t[0] == '-':
-			for j := 1; j < len(t); j++ {
-				if strings.IndexByte(o.withArg, t[j]) >= 0 {
-					if j == len(t)-1 {
-						i++
-					}
-					break
-				}
-			}
-		default:
-			return args[i:]
-		}
-	}
-	return nil
+// sameWords reports whether c and d have the same words and assignments.
+func (c Command) sameWords(d Command) bool {
+	eq := func(a, b Word) bool { return a == b }
+	return slices.EqualFunc(c.Words, d.Words, eq) && slices.EqualFunc(c.Assigns, d.Assigns, eq)
 }
 
 // splitAssignments splits leading NAME=value words from the words after
@@ -139,44 +170,32 @@ func isAssignment(s string) bool {
 	return true
 }
 
-func hasSplitString(args []Word) bool {
-	for _, w := range args {
-		if !w.Literal || !strings.HasPrefix(w.Text, "-") || w.Text == "--" {
-			return false
-		}
-		if strings.HasPrefix(w.Text, "--split-string") ||
-			(!strings.HasPrefix(w.Text, "--") && strings.Contains(w.Text, "S")) {
-			return true
-		}
+// splitString returns the words env splits into the command it runs, in
+// reading r: env -S's string, followed by env's other operands. It is
+// nil when r has no split string.
+func splitString(r optionReading) []Word {
+	if len(r.opts) == 0 {
+		return nil
 	}
-	return false
+	o := r.opts[len(r.opts)-1]
+	if (o.name != "S" && o.name != "--split-string") || !o.hasValue {
+		return nil
+	}
+	return append([]Word{o.value}, r.operands...)
 }
 
-// envSplitString finds env -S's string, which env splits into the
-// command it runs, followed by env's other operands.
-func envSplitString(args []Word) (nestedScript, bool) {
-	for i := 0; i < len(args); i++ {
-		w := args[i]
-		if !w.Literal || !strings.HasPrefix(w.Text, "-") || w.Text == "--" {
-			return nestedScript{}, false
-		}
-		var s []Word
-		switch {
-		case strings.HasPrefix(w.Text, "--split-string="):
-			s = append([]Word{{Text: strings.TrimPrefix(w.Text, "--split-string="), Literal: true}}, args[i+1:]...)
-		case w.Text == "--split-string":
-			s = args[i+1:]
-		case !strings.HasPrefix(w.Text, "--") && strings.Contains(w.Text, "S"):
-			if j := strings.IndexByte(w.Text, 'S'); j < len(w.Text)-1 {
-				s = append([]Word{{Text: w.Text[j+1:], Literal: true}}, args[i+1:]...)
-			} else {
-				s = args[i+1:]
-			}
-		default:
+// envSplitStrings returns the scripts env -S runs, one for each reading
+// of env's options that has a split string.
+func envSplitStrings(args []Word) []nestedScript {
+	readings, ok := readOptions(args, wrapperTables["env"])
+	if !ok {
+		return nil // unwrap runs a command whose name is not known
+	}
+	var out []nestedScript
+	for _, r := range readings {
+		s := splitString(r)
+		if s == nil {
 			continue
-		}
-		if len(s) == 0 {
-			return nestedScript{}, false
 		}
 		// The string is split into words and then followed by the other
 		// operands, which are already single words.
@@ -184,9 +203,12 @@ func envSplitString(args []Word) (nestedScript, bool) {
 		for _, o := range s[1:] {
 			parts = append(parts, bashQuoteWord(o))
 		}
-		return nestedScript{ShellBash, strings.Join(parts, " "), "env -S"}, true
+		n := nestedScript{ShellBash, strings.Join(parts, " "), "env -S"}
+		if !slices.Contains(out, n) {
+			out = append(out, n)
+		}
 	}
-	return nestedScript{}, false
+	return out
 }
 
 func bashQuoteWord(w Word) string {
@@ -196,70 +218,27 @@ func bashQuoteWord(w Word) string {
 	return "'" + strings.ReplaceAll(w.Text, "'", `'\''`) + "'"
 }
 
-// unwrapXargs returns the command xargs runs. xargs appends words read
-// from its input, which can be anything, so an Unknown word is added at
-// the end. With a replacement string (-I), each word holding it is
-// Unknown instead.
-func unwrapXargs(c Command) (Command, string, bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
-	args := c.Words[1:]
+// xargsCommand returns the command xargs runs in reading r. xargs
+// appends words read from its input, which can be anything, so an
+// Unknown word is added at the end. With a replacement string (-I), each
+// word holding it is Unknown instead.
+func xargsCommand(r optionReading) (Command, bool) {
 	replace := ""
-	i := 0
-loop:
-	for ; i < len(args); i++ {
-		w := args[i]
-		if !w.Literal {
-			break
-		}
-		t := w.Text
-		switch {
-		case t == "--":
-			i++
-			break loop
-		case strings.HasPrefix(t, "--replace"):
+	for _, o := range r.opts {
+		switch o.name {
+		case "I":
+			replace = o.value.Text
+		case "i", "--replace":
 			replace = "{}"
-			if v, ok := strings.CutPrefix(t, "--replace="); ok {
-				replace = v
+			if o.hasValue {
+				replace = o.value.Text
 			}
-		case strings.HasPrefix(t, "--"):
-			for _, l := range []string{"--arg-file", "--delimiter", "--eof", "--max-lines", "--max-args",
-				"--max-procs", "--max-chars", "--process-slot-var"} {
-				if t == l {
-					i++
-				}
-			}
-		case len(t) > 1 && t[0] == '-':
-			for j := 1; j < len(t); j++ {
-				ch := t[j]
-				if ch == 'i' { // -i[R]: optional argument, attached only
-					replace = "{}"
-					if j < len(t)-1 {
-						replace = t[j+1:]
-					}
-					break
-				}
-				if ch == 'e' || ch == 'l' { // optional argument, attached only
-					break
-				}
-				if strings.IndexByte("adEILnPs", ch) >= 0 {
-					arg := t[j+1:]
-					if arg == "" && i+1 < len(args) {
-						i++
-						arg = args[i].Text
-					}
-					if ch == 'I' {
-						replace = arg
-					}
-					break
-				}
-			}
-		default:
-			break loop
 		}
 	}
-	if i >= len(args) {
-		return Command{}, "", false // runs echo
+	if len(r.operands) == 0 {
+		return Command{}, false // runs echo
 	}
-	words := append([]Word(nil), args[i:]...)
+	words := append([]Word(nil), r.operands...)
 	if replace == "" {
 		words = append(words, Word{Text: ExpansionMark, Unknown: true})
 	} else {
@@ -269,7 +248,7 @@ loop:
 			}
 		}
 	}
-	return Command{Words: words}, "xargs", true
+	return Command{Words: words}, true
 }
 
 func endsExec(w Word) bool { return w.Literal && (w.Text == ";" || w.Text == "+") }
@@ -340,22 +319,34 @@ func writtenOperands(c Command) []Word {
 // writers reads a program's arguments (without its name) by getopt's
 // conventions and returns the operands it writes.
 var writers = map[string]func(args []Word) []Word{
-	"tee": func(args []Word) []Word { return scanArgs(args, options{}).operands },
+	"tee": func(args []Word) []Word { return scanArgs(args, writerTable("", "")).operands },
 	"sed": writtenBySed,
 	"truncate": func(args []Word) []Word {
-		return scanArgs(args, options{withArg: "sr", long: []string{"--size", "--reference"}}).operands
+		return scanArgs(args, writerTable("sr", "", "size", "reference")).operands
 	},
 	"cp": copyWriter("cp", copyOptions),
 	"mv": copyWriter("mv", copyOptions),
 	"ln": copyWriter("ln", copyOptions),
-	"install": copyWriter("install", options{withArg: "gmoSt", long: []string{
-		"--group", "--mode", "--owner", "--suffix", "--target-directory", "--strip-program"}}),
-	"rm":     func(args []Word) []Word { return scanArgs(args, options{}).operands },
-	"unlink": func(args []Word) []Word { return scanArgs(args, options{}).operands },
+	"install": copyWriter("install", writerTable("gmoSt", "",
+		"group", "mode", "owner", "suffix", "target-directory", "strip-program")),
+	"rm":     func(args []Word) []Word { return scanArgs(args, writerTable("", "")).operands },
+	"unlink": func(args []Word) []Word { return scanArgs(args, writerTable("", "")).operands },
 	"dd":     writtenByDd,
 }
 
-var copyOptions = options{withArg: "St", long: []string{"--suffix", "--target-directory"}}
+var copyOptions = writerTable("St", "", "suffix", "target-directory")
+
+// writerTable is a writer's option table: the short options that take an
+// argument, those whose argument is optional and attached, and the long
+// options that take one. Any other long option takes none. Options may
+// follow operands, and a long option may be abbreviated to two letters
+// or more ("--ta", four characters with its dashes).
+func writerTable(shortArg, shortOptArg string, long ...string) optionTable {
+	return optionTable{
+		shortArg: shortArg, shortOptArg: shortOptArg, long: opts(argRequired, long...),
+		abbrev: true, minAbbrev: 2, unknownLong: argNone, permute: true,
+	}
+}
 
 // parsedArgs is a program's argument list read by getopt's conventions.
 type parsedArgs struct {
@@ -381,49 +372,16 @@ func (a parsedArgs) value(names ...string) (string, bool) {
 	return "", false
 }
 
-// scanArgs reads args with o's options taking an argument; sed's -i
-// takes an optional one, attached. Options may follow operands, and "--"
-// ends them. A word with an expansion is an operand.
-func scanArgs(args []Word, o options) parsedArgs { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
+// scanArgs reads args by a writer's table t. "--" ends the options, and
+// a word with an expansion is an operand.
+func scanArgs(args []Word, t optionTable) parsedArgs {
 	var a parsedArgs
-	add := func(opt, value string) { a.opts, a.values = append(a.opts, opt), append(a.values, value) }
-	for i := 0; i < len(args); i++ {
-		w := args[i]
-		t := w.Text
-		switch {
-		case !w.Literal || t == "-" || !strings.HasPrefix(t, "-"):
-			a.operands = append(a.operands, w)
-		case t == "--":
-			a.operands = append(a.operands, args[i+1:]...)
-			return a
-		case strings.HasPrefix(t, "--"):
-			name, value, hasValue := strings.Cut(t, "=")
-			if !hasValue && slices.ContainsFunc(o.long, func(l string) bool {
-				return name == l || len(name) >= 4 && strings.HasPrefix(l, name)
-			}) && i+1 < len(args) {
-				i++
-				value = args[i].Text
-			}
-			add(name, value)
-		default:
-			for j := 1; j < len(t); j++ {
-				ch := t[j : j+1]
-				switch {
-				case strings.Contains(o.withArg, ch):
-					value := t[j+1:]
-					if value == "" && i+1 < len(args) {
-						i++
-						value = args[i].Text
-					}
-					add(ch, value)
-				case strings.Contains(o.optArg, ch):
-					add(ch, t[j+1:])
-				default:
-					add(ch, "")
-					continue
-				}
-				break
-			}
+	// A writer's table gives one reading: it reads no option both ways.
+	readings, _ := readOptions(args, t)
+	for _, r := range readings[:min(1, len(readings))] {
+		a.operands = r.operands
+		for _, o := range r.opts {
+			a.opts, a.values = append(a.opts, o.name), append(a.values, o.value.Text)
 		}
 	}
 	return a
@@ -432,7 +390,7 @@ func scanArgs(args []Word, o options) parsedArgs { //nolint:gocognit,gocyclo // 
 // writtenBySed: with -i or --in-place, the files sed edits. The first
 // operand is the script unless -e or -f gave one.
 func writtenBySed(args []Word) []Word {
-	a := scanArgs(args, options{withArg: "efl", optArg: "i", long: []string{"--expression", "--file", "--line-length"}})
+	a := scanArgs(args, writerTable("efl", "i", "expression", "file", "line-length"))
 	if !a.has("i", "--in-place") {
 		return nil
 	}
@@ -450,7 +408,7 @@ func writtenBySed(args []Word) []Word {
 // sources too, since it removes them. ln with one operand links it into
 // the current directory under its own name; install -d creates every
 // operand.
-func copyWriter(name string, o options) func([]Word) []Word {
+func copyWriter(name string, o optionTable) func([]Word) []Word {
 	return func(args []Word) []Word {
 		a := scanArgs(args, o)
 		if name == "install" && a.has("d", "--directory") {
