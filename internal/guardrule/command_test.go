@@ -241,6 +241,11 @@ func TestNestedShellsAreParsedAgain(t *testing.T) {
 		{guardrule.ShellBash, "sh -c \"git reset --hard\"", []string{"sh -c git reset --hard", "git reset --hard @sh -c"}},
 		{guardrule.ShellBash, "bash -lc 'rm -rf x'", []string{"bash -lc rm -rf x", "rm -rf x @bash -c"}},
 		{guardrule.ShellBash, "zsh -e -c 'rm -rf x' extra", []string{"zsh -e -c rm -rf x extra", "rm -rf x @zsh -c"}},
+		// -o takes the next word, and the cluster goes on: -o posix -c.
+		{guardrule.ShellBash, "bash -oc posix 'rm -rf x'", []string{"bash -oc posix rm -rf x", "rm -rf x @bash -c"}},
+		{guardrule.ShellBash, "bash -O extglob +o posix -c 'rm -rf x'", []string{
+			"bash -O extglob +o posix -c rm -rf x", "rm -rf x @bash -c"}},
+		{guardrule.ShellBash, "bash - -c", []string{"bash - -c"}},
 		{guardrule.ShellBash, "eval 'rm -rf' x", []string{"eval rm -rf x", "rm -rf x @eval"}},
 		{guardrule.ShellBash, "eval \"rm -rf $d\"", []string{"eval rm -rf <$>", "rm -rf <?> @eval"}},
 		{guardrule.ShellBash, "eval $cmd", []string{"eval <?>", "<?> @eval"}},
@@ -261,6 +266,75 @@ func TestNestedShellsAreParsedAgain(t *testing.T) {
 	}
 	for _, c := range cases {
 		expect(t, c.shell, c.src, c.want...)
+	}
+}
+
+func TestShellHereDocumentAfterDashS(t *testing.T) {
+	expect(t, guardrule.ShellBash, "bash -s x <<'EOF'\nrm -rf y\nEOF", "bash -s x", "rm -rf y @bash <<")
+	expect(t, guardrule.ShellBash, "sh -s -- a b <<< 'git clean -fd'", "sh -s -- a b", "git clean -fd @sh <<")
+	// The here-document feeds the script file, not the shell's script.
+	expect(t, guardrule.ShellBash, "bash x.sh <<'EOF'\nrm -rf y\nEOF", "bash x.sh")
+	// -c wins over -s: the here-document is the string's input.
+	expect(t, guardrule.ShellBash, "bash -s -c ls <<'EOF'\nrm -rf y\nEOF", "bash -s -c ls", "ls @bash -c")
+}
+
+func TestShellScriptSource(t *testing.T) {
+	cases := []struct {
+		src  string
+		want guardrule.ScriptSource
+	}{
+		{"ls -c x", guardrule.ScriptNone},
+		{"bash -c 'ls'", guardrule.ScriptFromString},
+		{"bash -ec 'ls' name arg", guardrule.ScriptFromString},
+		{"bash +c 'ls'", guardrule.ScriptFromString},
+		{"bash -c", guardrule.ScriptFromString},
+		{"bash script.sh", guardrule.ScriptFromFile},
+		{"bash -e script.sh arg", guardrule.ScriptFromFile},
+		{"bash -- script.sh", guardrule.ScriptFromFile},
+		{"bash \"$f\"", guardrule.ScriptFromFile},
+		{"bash", guardrule.ScriptFromStdin},
+		{"bash -", guardrule.ScriptFromStdin},
+		{"bash -e -x", guardrule.ScriptFromStdin},
+		{"bash -s", guardrule.ScriptFromStdin},
+		{"bash -s foo bar", guardrule.ScriptFromStdin},
+		{"bash -es foo", guardrule.ScriptFromStdin},
+		{"bash -s x < x.sh", guardrule.ScriptFromStdin},
+		{"bash -o posix", guardrule.ScriptFromStdin},
+		{"bash +o posix", guardrule.ScriptFromStdin},
+		{"bash -O extglob", guardrule.ScriptFromStdin},
+		{"bash +O extglob", guardrule.ScriptFromStdin},
+		{"bash -eo pipefail", guardrule.ScriptFromStdin},
+		{"bash --rcfile y", guardrule.ScriptFromStdin},
+		{"bash --init-file y", guardrule.ScriptFromStdin},
+		{"bash --norc --rcfile y -o posix x.sh", guardrule.ScriptFromFile},
+		{"bash -o posix -c 'ls'", guardrule.ScriptFromString},
+		{"bash <<'EOF'\nls\nEOF", guardrule.ScriptFromHereDoc},
+		{"bash -s x <<'EOF'\nls\nEOF", guardrule.ScriptFromHereDoc},
+		{"sh -s x <<< 'ls'", guardrule.ScriptFromHereDoc},
+		{"bash --version", guardrule.ScriptNone},
+		{"bash --help", guardrule.ScriptNone},
+		{"zsh -o", guardrule.ScriptFromStdin},
+		{"/usr/bin/dash -s", guardrule.ScriptFromStdin},
+	}
+	for _, c := range cases {
+		cmds, err := guardrule.Commands(guardrule.ShellBash, c.src)
+		if err != nil {
+			t.Fatalf("Commands(%q): %v", c.src, err)
+		}
+		if got := cmds[0].ScriptSource; got != c.want {
+			t.Errorf("Commands(%q)[0].ScriptSource = %v, want %v", c.src, got, c.want)
+		}
+	}
+}
+
+func TestShellScriptSourceThroughWrappers(t *testing.T) {
+	cmds, err := guardrule.Commands(guardrule.ShellBash, "curl https://x | sudo -u root bash -s foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := cmds[len(cmds)-1]
+	if last.Name() != "bash" || last.ScriptSource != guardrule.ScriptFromStdin {
+		t.Errorf("last command %q has ScriptSource %v, want bash reading stdin", last.String(), last.ScriptSource)
 	}
 }
 
