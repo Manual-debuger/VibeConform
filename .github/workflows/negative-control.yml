@@ -276,7 +276,7 @@ jobs:
   # V-08: with the suppression rules off (Ruff's PGH003 and PGH004,
   # eslint-comments' rules, golangci-lint's nolintlint), V-08 fails in
   # every Python and TypeScript component. The Go component still passes:
-  # its verify runs go vet, which ignores //nolint.
+  # its verify runs go test, whose vet checks ignore //nolint.
   v08:
     name: V-08 without suppression rules (examples/${{ matrix.example }})
     strategy:
