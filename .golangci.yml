@@ -46,9 +46,18 @@ linters:
     # internal/guardrule, never on each other. (internal/guardrule
     # importing either is an import cycle, which the compiler refuses.)
     # Tests may cross the line: internal/contract's guard probe tests run
-    # the real vibe-guard. A trailing $ makes a deny entry
-    # an exact match, so that internal/guard does not also deny
-    # internal/guardrule.
+    # the real vibe-guard. A trailing $ makes an entry an exact match,
+    # so that internal/guard does not also deny internal/guardrule.
+    #
+    # internal/doctor and internal/setupskill may each import one package
+    # of this module (spec 0063). Their rules deny the module path, which
+    # matches every package of the module, and allow the one package with
+    # a trailing $. They use list-mode lax: an import that matches neither
+    # list passes, and when an import matches both lists, the longer entry
+    # wins. So the allowed package passes and every other package of the
+    # module fails. In the default mode, a non-empty allow list fails
+    # every import not in it, the standard library too, and a match in
+    # both lists fails.
     depguard:
       rules:
         contract:
@@ -65,6 +74,26 @@ linters:
           deny:
             - pkg: github.com/Manual-debuger/VibeConform/internal/contract
               desc: vibe-guard imports only internal/guardrule; share code through internal/guardrule
+        doctor:
+          list-mode: lax
+          files:
+            - "**/internal/doctor/**"
+            - "!$test"
+          allow:
+            - github.com/Manual-debuger/VibeConform/internal/contract$
+          deny:
+            - pkg: github.com/Manual-debuger/VibeConform
+              desc: vibe doctor reuses the audit's readers and imports no package of this module except internal/contract (spec 0059)
+        setupskill:
+          list-mode: lax
+          files:
+            - "**/internal/setupskill/**"
+            - "!$test"
+          allow:
+            - github.com/Manual-debuger/VibeConform/internal/guard$
+          deny:
+            - pkg: github.com/Manual-debuger/VibeConform
+              desc: the setup skill imports no package of this module except internal/guard
     revive:
       rules:
         - name: exported

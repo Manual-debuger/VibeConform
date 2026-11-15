@@ -3,12 +3,7 @@ package setupskill_test
 import (
 	"bytes"
 	"encoding/json"
-	"go/parser"
-	"go/token"
 	"io/fs"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -127,34 +122,5 @@ func TestReferenceStopIsRelockThenStopGate(t *testing.T) {
 	want := "vibe-guard relock 2>/dev/null; " + `cd "${CLAUDE_PROJECT_DIR:-.}" && ` + "{ " + gate + "; }"
 	if got := refStopCommand(t); got != want {
 		t.Errorf("the reference Stop command =\n%s\nwant\n%s", got, want)
-	}
-}
-
-// TestImportsOnlyGuard: among this repository's packages, setupskill
-// imports only internal/guard.
-func TestImportsOnlyGuard(t *testing.T) {
-	const internal = "github.com/Manual-debuger/VibeConform/internal/"
-	paths, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range paths {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		src, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		f, err := parser.ParseFile(token.NewFileSet(), path, src, parser.ImportsOnly)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, imp := range f.Imports {
-			p, _ := strconv.Unquote(imp.Path.Value)
-			if strings.HasPrefix(p, internal) && p != internal+"guard" {
-				t.Errorf("%s imports %s", path, p)
-			}
-		}
 	}
 }
