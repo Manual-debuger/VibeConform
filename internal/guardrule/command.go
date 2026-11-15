@@ -233,20 +233,28 @@ func parse(shell Shell, src string) ([]Command, error) {
 	return nil, &ParseError{Shell: shell, Msg: "unknown language"}
 }
 
-// expand adds c to out, or the command it wraps, then the commands that
-// c runs from a string.
+// expand adds c to out, or the commands it wraps, then the commands that
+// c runs from a string. A wrapper whose options are read two ways adds
+// the command of each reading; one whose reading runs a string (env -S)
+// is added itself too.
 func expand(c Command, out *[]Command) error {
-	if inner, label, ok := unwrap(c); ok {
+	inners, label := unwrap(c)
+	scripts := nested(c)
+	if len(inners) == 0 || len(scripts) > 0 {
+		c.Writes = append(slices.Clone(c.Writes), writtenOperands(c)...)
+		*out = append(*out, c)
+	}
+	for _, inner := range inners {
 		inner.Shell = ShellBash
 		inner.Depth = c.Depth
 		inner.Via = appendVia(c.Via, label)
 		inner.Assigns = append(slices.Clone(c.Assigns), inner.Assigns...)
 		inner.Redirects = c.Redirects
 		inner.Writes = c.Writes
-		return expand(inner, out)
+		if err := expand(inner, out); err != nil {
+			return err
+		}
 	}
-	c.Writes = append(slices.Clone(c.Writes), writtenOperands(c)...)
-	*out = append(*out, c)
 	if c.Name() == "find" {
 		for _, seg := range findExecs(c) {
 			if err := expand(seg, out); err != nil {
@@ -254,8 +262,10 @@ func expand(c Command, out *[]Command) error {
 			}
 		}
 	}
-	if n, ok := nested(c); ok {
-		return decompose(n.shell, n.script, c.Depth+1, appendVia(c.Via, n.label), out)
+	for _, n := range scripts {
+		if err := decompose(n.shell, n.script, c.Depth+1, appendVia(c.Via, n.label), out); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -304,7 +314,18 @@ const psUnknownCommand = "& " + psUnknown
 
 var posixShells = []string{"bash", "sh", "zsh", "dash", "ksh", "ash", "mksh"}
 
-func nested(c Command) (nestedScript, bool) {
+// nested returns the strings c runs as scripts.
+func nested(c Command) []nestedScript {
+	if c.Name() == "env" {
+		return envSplitStrings(c.Words[1:])
+	}
+	if n, ok := nestedScriptOf(c); ok {
+		return []nestedScript{n}
+	}
+	return nil
+}
+
+func nestedScriptOf(c Command) (nestedScript, bool) {
 	name := c.Name()
 	args := c.Words[min(1, len(c.Words)):]
 	switch {
@@ -314,8 +335,6 @@ func nested(c Command) (nestedScript, bool) {
 		return powerShellScript(name, args)
 	case name == "eval" && c.Shell == ShellBash && len(args) > 0:
 		return nestedScript{ShellBash, scriptOf(ShellBash, args), "eval"}, true
-	case name == "env":
-		return envSplitString(args)
 	case c.Cmdlet() == "invoke-expression":
 		var rest []Word
 		for i := 0; i < len(args); i++ {
