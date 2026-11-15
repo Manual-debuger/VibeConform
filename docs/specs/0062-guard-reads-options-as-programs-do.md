@@ -126,7 +126,11 @@ quoting: the guard must not depend on how a command is spelled.
   - `sudo --newopt ls` is allowed.
 - `env`'s split string is found under every spelling `env` accepts:
   `-S`, `-S…` attached, `--split-string`, `--split-string=…` and every
-  unique prefix such as `--sp` and `--sp=…`.
+  unique prefix such as `--sp` and `--sp=…`. Its words are read as
+  `env`'s arguments again, as GNU `env` reads them: options, then
+  assignments, then the command.
+  - `env -S '-i rm -rf x'` and `env -S '-u X rm -rf x'` are refused.
+  - `env -S 'ls -l'` is allowed.
 
 ### A shell's script (#158)
 
