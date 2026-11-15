@@ -251,26 +251,32 @@ func (r *Report) decide() {
 	switch {
 	case bindingOpen > 0:
 		r.Verdict = VerdictUndecided
-		var why []string
-		if undecided > 0 {
-			why = append(why, fmt.Sprintf("%d %s", undecided, plural(undecided, "rule cannot be decided", "rules cannot be decided")))
-		}
-		if notRun > 0 {
-			why = append(why, fmt.Sprintf("%d %s (--static)", notRun, plural(notRun, "rule did not run", "rules did not run")))
-		}
-		if r.FailingMust > 0 {
-			why = append(why, fmt.Sprintf("%d %s", r.FailingMust, plural(r.FailingMust, "MUST rule already fails", "MUST rules already fail")))
-		}
-		if r.FailingRequired > 0 {
-			why = append(why, fmt.Sprintf("%d %s", r.FailingRequired,
-				plural(r.FailingRequired, "required SHOULD rule already fails", "required SHOULD rules already fail")))
-		}
-		r.Reason = strings.Join(why, "; ")
+		r.Reason = r.undecidedReason(undecided, notRun)
 	case r.FailingMust > 0 || r.FailingRequired > 0:
 		r.Verdict = VerdictNotConformant
 	default:
 		r.Verdict = VerdictConformant
 	}
+}
+
+// undecidedReason says why there is no verdict: how many rules cannot be
+// decided or did not run, then how many binding rules already fail.
+func (r *Report) undecidedReason(undecided, notRun int) string {
+	var why []string
+	if undecided > 0 {
+		why = append(why, fmt.Sprintf("%d %s", undecided, plural(undecided, "rule cannot be decided", "rules cannot be decided")))
+	}
+	if notRun > 0 {
+		why = append(why, fmt.Sprintf("%d %s (--static)", notRun, plural(notRun, "rule did not run", "rules did not run")))
+	}
+	if r.FailingMust > 0 {
+		why = append(why, fmt.Sprintf("%d %s", r.FailingMust, plural(r.FailingMust, "MUST rule already fails", "MUST rules already fail")))
+	}
+	if r.FailingRequired > 0 {
+		why = append(why, fmt.Sprintf("%d %s", r.FailingRequired,
+			plural(r.FailingRequired, "required SHOULD rule already fails", "required SHOULD rules already fail")))
+	}
+	return strings.Join(why, "; ")
 }
 
 func plural(n int, one, many string) string {
