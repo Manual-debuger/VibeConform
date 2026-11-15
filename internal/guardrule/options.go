@@ -88,7 +88,20 @@ type optionReading struct {
 
 // has reports whether the reading holds one of the options names.
 func (r optionReading) has(names ...string) bool {
-	return slices.ContainsFunc(r.opts, func(o option) bool { return slices.Contains(names, o.name) })
+	_, ok := r.value(names...)
+	return ok
+}
+
+// value returns the argument of the first option in r that is one of
+// names, and whether there is one. An option that takes no argument has
+// an empty one.
+func (r optionReading) value(names ...string) (Word, bool) {
+	for _, o := range r.opts {
+		if slices.Contains(names, o.name) {
+			return o.value, true
+		}
+	}
+	return Word{}, false
 }
 
 // maxReadings bounds how many readings one argument list gives. A list
