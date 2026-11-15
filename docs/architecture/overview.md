@@ -143,7 +143,8 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   check their own imports.
   `internal/setupskill` imports `internal/guard` for the reference
   commands and the version rule (`InstallVersion`: the version the
-  install hint names).
+  install hint names). The `internal/setupskill` and `internal/doctor`
+  boundaries have `depguard` rules too, and no import tests (spec 0063).
 
 ### The setup skill
 
@@ -159,7 +160,8 @@ cmd/vibe → internal/cli ──→ internal/setupskill ──→ internal/guard
 
 - **Imports.** Among this repository's packages, `internal/setupskill`
   imports only `internal/guard`, for the version rule that fills the
-  skill's one placeholder (the `vibe` version); its tests enforce that.
+  skill's one placeholder (the `vibe` version). A `depguard` rule in
+  `.golangci.yml` enforces that for non-test code (spec 0063).
 - **Embedded bytes.** `.gitattributes` forces LF for
   `internal/setupskill/skill/`, and a test fails on any carriage return
   in an embedded file, so a CRLF working copy cannot change what a build
@@ -248,7 +250,9 @@ internal/
 - **`vibe doctor`** reuses the audit's readers (`contract.Parse`, the
   entrypoint splitter `ParseSimpleCommand`, `ReadClaudeHooks` and
   `ResolveBash`), so it finds programs and bash exactly as the audit
-  would run them.
+  would run them. Among this repository's packages it imports only
+  `internal/contract`; a `depguard` rule in `.golangci.yml` enforces
+  that for non-test code (spec 0063).
 - **The removed commands.** `vibe sync`, `vibe diff` and `vibe check` are
   hidden commands that print the migration guide's path and exit 1.
   `contract.DetectSchema` stays, so that a version 1 `vibe.yaml` gets the
@@ -293,4 +297,9 @@ tooling, never on `vibe` (spec 0017; contract rule R-01 for adopters).
 and `vibe-guard` from the checkout into the Git directory, puts them first
 on `PATH`, and runs the full contract audit (spec 0059). CI runs the same
 audit as the required check `Contract / audit`
-(`.github/workflows/contract-audit.yml`), next to `CI / gate`.
+(`.github/workflows/contract-audit.yml`), next to `CI / gate`. Its
+audit step runs `vibe audit` itself, not `task audit`, because contract
+rule C-04 requires a CI step that does. Both
+runs read the same `vibe.yaml`, whose `require` key lists the SHOULD
+rules this repository holds itself to, so they reach the same verdict
+(spec 0063).
