@@ -89,6 +89,11 @@ in a job of its own, declare `verify` as the list of those commands, such
 as `verify: [task api:verify, task web:verify, task worker:verify]`: CI
 then calls every command of the list, and the jobs stay as they are.
 
+`require` is optional: a list of SHOULD rule IDs, such as
+`require: [V-06, V-07]`, that the verdict then counts like MUST rules.
+Do not add it yourself. Add it only when the person asks to hold the
+repository to SHOULD rules it already passes.
+
 ### 4. Satisfy the rules
 
 Work through `reference/rules.md` category by category: V, H, C, A, D,
