@@ -230,7 +230,7 @@ func TestGitleaksInstallsMatchPins(t *testing.T) {
 		files["internal/setupskill/skill/"+f] = string(b)
 	}
 	repo := os.DirFS(filepath.Join("..", ".."))
-	for _, pattern := range []string{".github/workflows/*.yml", "examples/*/.github/workflows/*.yml"} {
+	for _, pattern := range []string{".github/workflows/*.yml", ".github/actions/*/action.yml", "examples/*/.github/workflows/*.yml"} {
 		matches, err := fs.Glob(repo, pattern)
 		if err != nil {
 			t.Fatal(err)
