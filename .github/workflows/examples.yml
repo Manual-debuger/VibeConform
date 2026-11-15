@@ -97,46 +97,27 @@ jobs:
           go build -o "$RUNNER_TEMP/bin/vibe$(go env GOEXE)" ./cmd/vibe
           go build -o "$RUNNER_TEMP/bin/vibe-guard$(go env GOEXE)" ./cmd/vibe-guard
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # The examples follow the references, so the SHOULD rules of
+      # contract 1.2.0 pass too (spec 0061). The copy's vibe.yaml requires
+      # them (spec 0063), so the verdict counts them like MUST rules: A-09
+      # applies, since every example declares agents: [claude], and V-05
+      # applies in the examples with a Python component. A required rule
+      # that is not applicable is accepted, so V-05 passes the TypeScript
+      # example. The examples' own vibe.yaml files follow the references,
+      # which do not add require.
       - name: Copy the example into a fresh Git repository
         run: |
           copy="$RUNNER_TEMP/example"
           cp -R "examples/$EXAMPLE" "$copy"
           cd "$copy"
+          printf 'require: [V-05, V-06, V-07, V-08, A-09]\n' >> vibe.yaml
           git init -q -b main
           git add -A
           git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy"
           echo "COPY=$copy" >> "$GITHUB_ENV"
-      # The verdict counts only MUST rules. The examples follow the
-      # references, so the SHOULD rules of contract 1.2.0 pass too (spec
-      # 0061): every rule REQUIRED_SHOULD lists (A-09 applies, since every
-      # example declares agents: [claude]), and V-05 in the examples with
-      # a Python component. Without one V-05 is not applicable. The
-      # text report lists every rule that does not pass, indented by two
-      # spaces, so a rule that passes is in no section of it.
       - name: vibe audit
         working-directory: ${{ env.COPY }}
-        env:
-          REQUIRED_SHOULD: V-06 V-07 V-08 A-09
-        run: |
-          report="$RUNNER_TEMP/audit.txt"
-          status=0
-          vibe audit > "$report" || status=$?
-          cat "$report"
-          if [ "$EXAMPLE" = typescript ]; then
-            if ! grep -qx '  V-05  SHOULD  no component is Python' "$report"; then
-              echo "::error::V-05 is not 'not applicable'"
-              status=1
-            fi
-          else
-            REQUIRED_SHOULD="V-05 $REQUIRED_SHOULD"
-          fi
-          for id in $REQUIRED_SHOULD; do
-            if grep -q "^  $id  " "$report"; then
-              echo "::error::$id does not pass"
-              status=1
-            fi
-          done
-          exit "$status"
+        run: vibe audit
 
   monorepo-gitlab:
     name: examples/monorepo (GitLab CI)

@@ -1715,7 +1715,10 @@ repository is an ordinary file, edited directly.
   `examples/python` and `examples/monorepo` into a fresh Git repository
   and runs the full audit there, on Linux and Windows; each must be
   conformant, and the SHOULD rules of contract 1.2.0 must pass (V-05
-  only with a Python component; without one it is not applicable). Its
+  only with a Python component; without one it is not applicable). The
+  copy's `vibe.yaml` gets `require: [V-05, V-06, V-07, V-08, A-09]`, so
+  the verdict counts them; the examples' own `vibe.yaml` files do not
+  have it. Its
   GitLab job audits the monorepo example with the reference
   `.gitlab-ci.yml` in place of the GitHub workflows (the real GitLab
   pipeline is not run, #74).
