@@ -72,7 +72,7 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 // of the execution and probe parts left to run in the probe copy; the
 // rule's result is set once they ran.
 func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, staticOnly bool) (RuleResult, []int) {
-	rr := RuleResult{Rule: rule}
+	rr := RuleResult{Rule: rule, Required: env.Config.Requires(rule.ID)}
 	if w, ok := waivers[rule.ID]; ok {
 		rr.Waiver = &WaiverStatus{Reason: w.Reason, Until: w.Until, Expired: !now.Before(waiverEnd(w))}
 	}

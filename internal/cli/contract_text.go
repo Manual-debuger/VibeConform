@@ -14,7 +14,8 @@ import (
 // line per category, then the sections Failed, Waived, Not applicable,
 // Cannot decide, Not run (--static only), Guard exceptions and Local
 // guardrail adjustments, any notes, and the verdict line. A section with
-// nothing in it prints "(none)".
+// nothing in it prints "(none)". A section marks each required SHOULD
+// rule it lists (spec 0063).
 
 // writeContractText prints the report as text.
 func writeContractText(w io.Writer, rep *contract.Report, vibeVersion string) error {
@@ -30,10 +31,10 @@ func writeContractText(w io.Writer, rep *contract.Report, vibeVersion string) er
 		writeRuleBlock(&b, rr, contract.ResultFail)
 	})
 	writeSection(&b, "Waived", rulesWithWaiver(rep), func(rr contract.RuleResult) {
-		fmt.Fprintf(&b, "%s%s\n", ruleLead(rr.Rule), waiverText(rr))
+		fmt.Fprintf(&b, "%s%s\n", ruleLead(rr), waiverText(rr))
 	})
 	writeSection(&b, "Not applicable", rulesWith(rep, contract.ResultNotApplicable), func(rr contract.RuleResult) {
-		fmt.Fprintf(&b, "%s%s\n", ruleLead(rr.Rule), rr.NotApplicable)
+		fmt.Fprintf(&b, "%s%s\n", ruleLead(rr), rr.NotApplicable)
 	})
 	writeSection(&b, "Cannot decide", rulesWith(rep, contract.ResultUndecided), func(rr contract.RuleResult) {
 		writeRuleBlock(&b, rr, contract.ResultUndecided)
@@ -140,7 +141,7 @@ func writeSection[T any](b *strings.Builder, title string, items []T, entry func
 // writeRuleBlock prints a rule with the findings of its parts that have
 // result: each finding's file and message, then its fix.
 func writeRuleBlock(b *strings.Builder, rr contract.RuleResult, result contract.Result) {
-	fmt.Fprintf(b, "%s%s\n", ruleLead(rr.Rule), rr.Rule.Title)
+	fmt.Fprintf(b, "%s%s\n", ruleLead(rr), rr.Rule.Title)
 	for _, p := range rr.Parts {
 		if p.Result != result {
 			continue
@@ -177,18 +178,33 @@ func writeNotRun(b *strings.Builder, rules []contract.RuleResult) {
 				kinds = append(kinds, string(p.Kind))
 			}
 		}
-		item := rr.Rule.ID
+		var notes []string
+		if rr.Required {
+			notes = append(notes, requiredMark)
+		}
 		if len(kinds) < len(rr.Parts) {
-			item += " (" + strings.Join(kinds, ", ") + ")"
+			notes = append(notes, strings.Join(kinds, ", "))
+		}
+		item := rr.Rule.ID
+		if len(notes) > 0 {
+			item += " (" + strings.Join(notes, "; ") + ")"
 		}
 		items = append(items, item)
 	}
 	fmt.Fprintf(b, "  %s\n", strings.Join(items, " "))
 }
 
-// ruleLead is the start of a rule's line: ID and level in columns.
-func ruleLead(rule contract.Rule) string {
-	return fmt.Sprintf("  %s  %-6s  ", rule.ID, rule.Level)
+// requiredMark marks a SHOULD rule that vibe.yaml requires (spec 0063).
+const requiredMark = "required"
+
+// ruleLead is the start of a rule's line: ID and level in columns, then
+// "(required)" for a required SHOULD rule.
+func ruleLead(rr contract.RuleResult) string {
+	lead := fmt.Sprintf("  %s  %-6s  ", rr.Rule.ID, rr.Rule.Level)
+	if rr.Required {
+		lead += "(" + requiredMark + ") "
+	}
+	return lead
 }
 
 // waiverText says how a declared waiver applied: in force, expired (the

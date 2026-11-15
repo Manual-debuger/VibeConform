@@ -29,8 +29,6 @@ concurrency:
 
 env:
   GO_VERSION: "1.27.0"
-  TASK_VERSION: "v3.53.1"
-  GOLANGCI_LINT_VERSION: "v2.15.0"
   NODE_VERSION: "22"
   PNPM_VERSION: "10.34.5"
   PYTHON_VERSION: "3.12"
@@ -55,7 +53,7 @@ jobs:
         run: |
           run=true
           if [ "$EVENT" = pull_request ] && ! git diff --name-only "$BASE"...HEAD |
-            grep -qE '^(internal/contract/(defects[^/]*|checks_defects)\.go|internal/setupskill/skill/reference/|examples/|\.github/workflows/negative-control\.yml)'; then
+            grep -qE '^(internal/contract/(defects[^/]*|checks_defects)\.go|internal/setupskill/skill/reference/|examples/|\.github/workflows/negative-control\.yml|\.github/actions/install-tools/)'; then
             run=false
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
@@ -80,28 +78,11 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
-      # gitleaks for the secrets task in verify: a pinned release, checked
-      # against its SHA-256 before it runs.
-      - name: Install gitleaks
-        shell: bash
-        env:
-          GITLEAKS_VERSION: "8.30.1"
-        run: |
-          case "$RUNNER_OS" in
-            Windows) asset="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip" sum=d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e ;;
-            *) asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
-          esac
-          dir="$RUNNER_TEMP/gitleaks"
-          mkdir -p "$dir"
-          curl -fsSL -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
-          echo "$sum  $dir/$asset" | sha256sum -c -
-          case "$asset" in
-            *.zip) unzip -q -o "$dir/$asset" gitleaks.exe -d "$dir" ;;
-            *) tar -xzf "$dir/$asset" -C "$dir" gitleaks ;;
-          esac
-          echo "$dir" >> "$GITHUB_PATH"
+      # task and gitleaks, for the secrets task in verify.
+      - name: Install tools
+        uses: ./.github/actions/install-tools
+        with:
+          tools: task gitleaks
       - name: Build vibe and vibe-guard from source
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
@@ -178,35 +159,14 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
-      - name: Install the Go tools the monorepo's entrypoints call
-        if: matrix.example == 'monorepo'
-        run: |
-          go install golang.org/x/tools/cmd/goimports@v0.51.0
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"$GOLANGCI_LINT_VERSION"
-          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
-          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-      # gitleaks for the secrets task in verify: a pinned release, checked
-      # against its SHA-256 before it runs.
-      - name: Install gitleaks
-        shell: bash
-        env:
-          GITLEAKS_VERSION: "8.30.1"
-        run: |
-          case "$RUNNER_OS" in
-            Windows) asset="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip" sum=d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e ;;
-            *) asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
-          esac
-          dir="$RUNNER_TEMP/gitleaks"
-          mkdir -p "$dir"
-          curl -fsSL -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
-          echo "$sum  $dir/$asset" | sha256sum -c -
-          case "$asset" in
-            *.zip) unzip -q -o "$dir/$asset" gitleaks.exe -d "$dir" ;;
-            *) tar -xzf "$dir/$asset" -C "$dir" gitleaks ;;
-          esac
-          echo "$dir" >> "$GITHUB_PATH"
+      # task and gitleaks (for the secrets task in verify), and the Go
+      # tools the monorepo's entrypoints call.
+      - name: Install tools
+        uses: ./.github/actions/install-tools
+        with:
+          tools: >-
+            task gitleaks
+            ${{ matrix.example == 'monorepo' && 'goimports golangci-lint govulncheck actionlint' || '' }}
       - name: Build vibe and vibe-guard from source
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
@@ -280,8 +240,11 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
+      # task only: no gitleaks (see above).
+      - name: Install tools
+        uses: ./.github/actions/install-tools
+        with:
+          tools: task
       - name: Build vibe and vibe-guard from source
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
@@ -313,7 +276,7 @@ jobs:
   # V-08: with the suppression rules off (Ruff's PGH003 and PGH004,
   # eslint-comments' rules, golangci-lint's nolintlint), V-08 fails in
   # every Python and TypeScript component. The Go component still passes:
-  # its verify runs go vet, which ignores //nolint.
+  # its verify runs go test, whose vet checks ignore //nolint.
   v08:
     name: V-08 without suppression rules (examples/${{ matrix.example }})
     strategy:
@@ -358,35 +321,14 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
-      - name: Install the Go tools the monorepo's entrypoints call
-        if: matrix.example == 'monorepo'
-        run: |
-          go install golang.org/x/tools/cmd/goimports@v0.51.0
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"$GOLANGCI_LINT_VERSION"
-          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
-          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-      # gitleaks for the secrets task in verify: a pinned release, checked
-      # against its SHA-256 before it runs.
-      - name: Install gitleaks
-        shell: bash
-        env:
-          GITLEAKS_VERSION: "8.30.1"
-        run: |
-          case "$RUNNER_OS" in
-            Windows) asset="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip" sum=d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e ;;
-            *) asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
-          esac
-          dir="$RUNNER_TEMP/gitleaks"
-          mkdir -p "$dir"
-          curl -fsSL -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
-          echo "$sum  $dir/$asset" | sha256sum -c -
-          case "$asset" in
-            *.zip) unzip -q -o "$dir/$asset" gitleaks.exe -d "$dir" ;;
-            *) tar -xzf "$dir/$asset" -C "$dir" gitleaks ;;
-          esac
-          echo "$dir" >> "$GITHUB_PATH"
+      # task and gitleaks (for the secrets task in verify), and the Go
+      # tools the monorepo's entrypoints call.
+      - name: Install tools
+        uses: ./.github/actions/install-tools
+        with:
+          tools: >-
+            task gitleaks
+            ${{ matrix.example == 'monorepo' && 'goimports golangci-lint govulncheck actionlint' || '' }}
       - name: Build vibe and vibe-guard from source
         run: |
           mkdir -p "$RUNNER_TEMP/bin"

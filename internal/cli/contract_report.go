@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"time"
 
@@ -15,16 +14,13 @@ import (
 // for stderr.
 type contractVerdictError struct {
 	verdict contract.Verdict
-	reason  string
-	failing int
+	// reason is why there is no verdict, or which binding rules fail.
+	reason string
 }
 
 func (e *contractVerdictError) Error() string {
 	if e.verdict == contract.VerdictNotConformant {
-		if e.failing == 1 {
-			return "not conformant: 1 MUST rule fails"
-		}
-		return fmt.Sprintf("not conformant: %d MUST rules fail", e.failing)
+		return "not conformant: " + e.reason
 	}
 	return "cannot decide: " + e.reason
 }
@@ -32,10 +28,14 @@ func (e *contractVerdictError) Error() string {
 // verdictError returns the error vibe audit exits with for a report: nil
 // when conformant.
 func verdictError(rep *contract.Report) error {
-	if rep.Verdict == contract.VerdictConformant {
+	switch rep.Verdict {
+	case contract.VerdictConformant:
 		return nil
+	case contract.VerdictNotConformant:
+		return &contractVerdictError{verdict: rep.Verdict, reason: rep.FailingReason()}
+	default:
+		return &contractVerdictError{verdict: rep.Verdict, reason: rep.Reason}
 	}
-	return &contractVerdictError{verdict: rep.Verdict, reason: rep.Reason, failing: rep.FailingMust}
 }
 
 // The --json report (spec 0052, "Report (#100)"). schema versions this
@@ -78,6 +78,9 @@ type jsonContractRule struct {
 	Parts    []jsonPart        `json:"parts"`
 	Findings []jsonFinding     `json:"findings"`
 	Waiver   *jsonWaiver       `json:"waiver"`
+	// Required is new in spec 0063: true for a SHOULD rule vibe.yaml
+	// requires. A new key keeps schema 1.
+	Required bool `json:"required"`
 }
 
 type jsonPart struct {
@@ -145,7 +148,7 @@ func writeContractJSON(w io.Writer, rep *contract.Report, vibeVersion string) er
 	for _, rr := range rep.Rules {
 		jr := jsonContractRule{
 			ID: rr.Rule.ID, Level: rr.Rule.Level, Category: rr.Rule.Category, Title: rr.Rule.Title,
-			Result: rr.Result, Parts: []jsonPart{}, Findings: []jsonFinding{},
+			Result: rr.Result, Parts: []jsonPart{}, Findings: []jsonFinding{}, Required: rr.Required,
 		}
 		for _, p := range rr.Parts {
 			jr.Parts = append(jr.Parts, jsonPart{Check: p.Kind, Result: p.Result})

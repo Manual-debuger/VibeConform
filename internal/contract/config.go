@@ -34,6 +34,15 @@ type Config struct {
 	// Waivers is the declared waivers, in file order. At most one per
 	// rule, each for a SHOULD rule.
 	Waivers []Waiver
+	// Require is the SHOULD rules the repository holds itself to, in file
+	// order (spec 0063): each counts in the verdict like a MUST rule. None
+	// is waived.
+	Require []string
+}
+
+// Requires reports whether the configuration requires the rule id.
+func (c *Config) Requires(id string) bool {
+	return slices.Contains(c.Require, id)
 }
 
 // The platforms of contract 1.0.0.
@@ -128,7 +137,7 @@ var v1Fields = map[string]string{
 	"ci":           "contract " + Implemented + " reads GitHub Actions or GitLab CI and needs no CI provider",
 }
 
-const v2FieldList = "contract, platforms, agents, components, entrypoints, waivers"
+const v2FieldList = "contract, platforms, agents, components, entrypoints, waivers, require"
 
 // Parse validates a version 2 configuration against the tracked files of
 // repo. file names the configuration in errors. It reports the first
@@ -187,6 +196,8 @@ func (p *configParser) top(m *yaml.Node) error {
 			return p.entrypoints(v)
 		case "waivers":
 			return p.waivers(v)
+		case "require":
+			return p.require(v)
 		}
 		if where, ok := v1Fields[key]; ok {
 			return p.fail(key, "the version 2 schema has no %s field; %s", key, where)
@@ -194,6 +205,11 @@ func (p *configParser) top(m *yaml.Node) error {
 		return p.fail(key, "unknown field; the fields are %s", v2FieldList)
 	})
 	if err != nil {
+		return err
+	}
+	// After every field, so that the check sees the waivers wherever the
+	// file has them.
+	if err := p.requiredAndWaived(); err != nil {
 		return err
 	}
 
@@ -484,6 +500,47 @@ func (p *configParser) waiverRule(at string, v *yaml.Node, w *Waiver) error {
 		}
 	}
 	w.Rule = r.ID
+	return nil
+}
+
+// require reads the SHOULD rules the repository requires (spec 0063).
+func (p *configParser) require(v *yaml.Node) error {
+	if v.Kind == yaml.ScalarNode && v.Tag == "!!null" {
+		return nil
+	}
+	if v.Kind != yaml.SequenceNode {
+		return p.fail("require", "must be a list of SHOULD rule IDs, such as [V-06, A-09]")
+	}
+	for i, item := range v.Content {
+		item = resolve(item)
+		at := fmt.Sprintf("require[%d]", i)
+		r, ok := LookupRule(item.Value)
+		if !isString(item) || !ok {
+			return p.fail(at, "%s is not a rule of contract %s", describe(item), Implemented)
+		}
+		if r.Level != Should {
+			return p.fail(at, "%s is a %s rule; it is always required", r.ID, r.Level)
+		}
+		if j := slices.Index(p.cfg.Require, r.ID); j >= 0 {
+			return p.fail(at, "%s is listed twice (also require[%d])", r.ID, j)
+		}
+		p.cfg.Require = append(p.cfg.Require, r.ID)
+	}
+	return nil
+}
+
+// requiredAndWaived refuses a rule that is both required and waived, the
+// waiver expired or not: a waiver lets a SHOULD rule fail, require makes
+// it count.
+func (p *configParser) requiredAndWaived() error {
+	for i, id := range p.cfg.Require {
+		for j, w := range p.cfg.Waivers {
+			if w.Rule == id {
+				return p.fail(fmt.Sprintf("require[%d]", i),
+					"%s is both required and waived (waivers[%d]); remove it from require or remove its waiver", id, j)
+			}
+		}
+	}
 	return nil
 }
 

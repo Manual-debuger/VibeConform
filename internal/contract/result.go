@@ -114,6 +114,15 @@ type RuleResult struct {
 	NotApplicable string
 	// Waiver is the rule's declared waiver, or nil.
 	Waiver *WaiverStatus
+	// Required is true for a SHOULD rule the configuration requires (spec
+	// 0063): it counts in the verdict like a MUST rule.
+	Required bool
+}
+
+// Binding reports whether the rule's result counts in the verdict: a MUST
+// rule or a required SHOULD rule.
+func (r RuleResult) Binding() bool {
+	return r.Rule.Level == Must || r.Required
 }
 
 // Findings returns the findings of every part, in part order.
@@ -170,6 +179,8 @@ type Report struct {
 	Reason string
 	// FailingMust counts the MUST rules that fail.
 	FailingMust int
+	// FailingRequired counts the required SHOULD rules that fail.
+	FailingRequired int
 	// Rules holds every rule in report order.
 	Rules           []RuleResult
 	GuardExceptions []GuardException
@@ -215,42 +226,76 @@ func combine(parts []PartOutcome) Result {
 	}
 }
 
-// decide sets the report's verdict from its MUST rules. SHOULD results
-// never change it.
+// decide sets the report's verdict from its binding rules: the MUST rules
+// and the required SHOULD rules. Other SHOULD results never change it.
 func (r *Report) decide() {
-	var undecided, notRun int
+	var undecided, notRun, bindingOpen int
 	for _, rr := range r.Rules {
 		switch rr.Result {
 		case ResultUndecided:
 			undecided++
 		case ResultNotRun:
 			notRun++
+		}
+		if !rr.Binding() {
+			continue
+		}
+		switch rr.Result {
 		case ResultFail:
 			if rr.Rule.Level == Must {
 				r.FailingMust++
+			} else {
+				r.FailingRequired++
 			}
+		case ResultUndecided, ResultNotRun:
+			bindingOpen++
 		}
 	}
-	mustOpen := r.Count(Must, ResultUndecided) + r.Count(Must, ResultNotRun)
 	switch {
-	case mustOpen > 0:
+	case bindingOpen > 0:
 		r.Verdict = VerdictUndecided
-		var why []string
-		if undecided > 0 {
-			why = append(why, fmt.Sprintf("%d %s", undecided, plural(undecided, "rule cannot be decided", "rules cannot be decided")))
-		}
-		if notRun > 0 {
-			why = append(why, fmt.Sprintf("%d %s (--static)", notRun, plural(notRun, "rule did not run", "rules did not run")))
-		}
-		if r.FailingMust > 0 {
-			why = append(why, fmt.Sprintf("%d %s", r.FailingMust, plural(r.FailingMust, "MUST rule already fails", "MUST rules already fail")))
-		}
-		r.Reason = strings.Join(why, "; ")
-	case r.FailingMust > 0:
+		r.Reason = r.undecidedReason(undecided, notRun)
+	case r.FailingMust > 0 || r.FailingRequired > 0:
 		r.Verdict = VerdictNotConformant
 	default:
 		r.Verdict = VerdictConformant
 	}
+}
+
+// undecidedReason says why there is no verdict: how many rules cannot be
+// decided or did not run, then how many binding rules already fail.
+func (r *Report) undecidedReason(undecided, notRun int) string {
+	var why []string
+	if undecided > 0 {
+		why = append(why, fmt.Sprintf("%d %s", undecided, plural(undecided, "rule cannot be decided", "rules cannot be decided")))
+	}
+	if notRun > 0 {
+		why = append(why, fmt.Sprintf("%d %s (--static)", notRun, plural(notRun, "rule did not run", "rules did not run")))
+	}
+	why = append(why, r.failing("already ")...)
+	return strings.Join(why, "; ")
+}
+
+// FailingReason says which binding rules fail, such as "1 MUST rule fails;
+// 2 required SHOULD rules fail". It is empty when none fails.
+func (r *Report) FailingReason() string {
+	return strings.Join(r.failing(""), "; ")
+}
+
+// failing counts the failing MUST rules, then the failing required SHOULD
+// rules, each with its verb after adverb, such as "1 MUST rule already
+// fails".
+func (r *Report) failing(adverb string) []string {
+	var why []string
+	for _, k := range []struct {
+		n    int
+		kind string
+	}{{r.FailingMust, "MUST rule"}, {r.FailingRequired, "required SHOULD rule"}} {
+		if k.n > 0 {
+			why = append(why, fmt.Sprintf("%d %s %s%s", k.n, plural(k.n, k.kind, k.kind+"s"), adverb, plural(k.n, "fails", "fail")))
+		}
+	}
+	return why
 }
 
 func plural(n int, one, many string) string {

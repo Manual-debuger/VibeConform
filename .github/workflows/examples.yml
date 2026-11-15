@@ -29,8 +29,6 @@ concurrency:
 
 env:
   GO_VERSION: "1.27.0"
-  TASK_VERSION: "v3.53.1"
-  GOLANGCI_LINT_VERSION: "v2.15.0"
   NODE_VERSION: "22"
   PNPM_VERSION: "10.34.5"
   PYTHON_VERSION: "3.12"
@@ -82,15 +80,14 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install task
-        run: go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
-      - name: Install the Go tools the monorepo's entrypoints call
-        if: matrix.example == 'monorepo'
-        run: |
-          go install golang.org/x/tools/cmd/goimports@v0.51.0
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"$GOLANGCI_LINT_VERSION"
-          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
-          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      # task and gitleaks (for the secrets task in verify) in every
+      # example, and the Go tools the monorepo's entrypoints call.
+      - name: Install tools
+        uses: ./.github/actions/install-tools
+        with:
+          tools: >-
+            task gitleaks
+            ${{ matrix.example == 'monorepo' && 'goimports golangci-lint govulncheck actionlint' || '' }}
       # GOEXE is ".exe" on Windows and empty elsewhere: an extensionless
       # binary is not found by PATH lookup on Windows. First on PATH, so
       # the audit's probes run this checkout's vibe-guard.
@@ -100,66 +97,27 @@ jobs:
           go build -o "$RUNNER_TEMP/bin/vibe$(go env GOEXE)" ./cmd/vibe
           go build -o "$RUNNER_TEMP/bin/vibe-guard$(go env GOEXE)" ./cmd/vibe-guard
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      # gitleaks for the secrets task in verify: a pinned release, checked
-      # against its SHA-256 before it runs.
-      - name: Install gitleaks
-        shell: bash
-        env:
-          GITLEAKS_VERSION: "8.30.1"
-        run: |
-          case "$RUNNER_OS" in
-            Windows) asset="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip" sum=d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e ;;
-            *) asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
-          esac
-          dir="$RUNNER_TEMP/gitleaks"
-          mkdir -p "$dir"
-          curl -fsSL -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
-          echo "$sum  $dir/$asset" | sha256sum -c -
-          case "$asset" in
-            *.zip) unzip -q -o "$dir/$asset" gitleaks.exe -d "$dir" ;;
-            *) tar -xzf "$dir/$asset" -C "$dir" gitleaks ;;
-          esac
-          echo "$dir" >> "$GITHUB_PATH"
+      # The examples follow the references, so the SHOULD rules of
+      # contract 1.2.0 pass too (spec 0061). The copy's vibe.yaml requires
+      # them (spec 0063), so the verdict counts them like MUST rules: A-09
+      # applies, since every example declares agents: [claude], and V-05
+      # applies in the examples with a Python component. A required rule
+      # that is not applicable is accepted, so V-05 passes the TypeScript
+      # example. The examples' own vibe.yaml files follow the references,
+      # which do not add require.
       - name: Copy the example into a fresh Git repository
         run: |
           copy="$RUNNER_TEMP/example"
           cp -R "examples/$EXAMPLE" "$copy"
           cd "$copy"
+          printf 'require: [V-05, V-06, V-07, V-08, A-09]\n' >> vibe.yaml
           git init -q -b main
           git add -A
           git -c user.email=ci@example.com -c user.name=ci commit -q -m "example copy"
           echo "COPY=$copy" >> "$GITHUB_ENV"
-      # The verdict counts only MUST rules. The examples follow the
-      # references, so the SHOULD rules of contract 1.2.0 pass too (spec
-      # 0061): every rule REQUIRED_SHOULD lists (A-09 applies, since every
-      # example declares agents: [claude]), and V-05 in the examples with
-      # a Python component. Without one V-05 is not applicable. The
-      # text report lists every rule that does not pass, indented by two
-      # spaces, so a rule that passes is in no section of it.
       - name: vibe audit
         working-directory: ${{ env.COPY }}
-        env:
-          REQUIRED_SHOULD: V-06 V-07 V-08 A-09
-        run: |
-          report="$RUNNER_TEMP/audit.txt"
-          status=0
-          vibe audit > "$report" || status=$?
-          cat "$report"
-          if [ "$EXAMPLE" = typescript ]; then
-            if ! grep -qx '  V-05  SHOULD  no component is Python' "$report"; then
-              echo "::error::V-05 is not 'not applicable'"
-              status=1
-            fi
-          else
-            REQUIRED_SHOULD="V-05 $REQUIRED_SHOULD"
-          fi
-          for id in $REQUIRED_SHOULD; do
-            if grep -q "^  $id  " "$report"; then
-              echo "::error::$id does not pass"
-              status=1
-            fi
-          done
-          exit "$status"
+        run: vibe audit
 
   monorepo-gitlab:
     name: examples/monorepo (GitLab CI)
@@ -187,39 +145,19 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      # No actionlint: without .github/workflows, verify must not need it.
-      - name: Install task and the Go tools the entrypoints call
-        run: |
-          go install github.com/go-task/task/v3/cmd/task@"$TASK_VERSION"
-          go install golang.org/x/tools/cmd/goimports@v0.51.0
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"$GOLANGCI_LINT_VERSION"
-          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+      # task, the Go tools the entrypoints call and gitleaks (for the
+      # secrets task in verify). No actionlint: without .github/workflows,
+      # verify must not need it.
+      - name: Install tools
+        uses: ./.github/actions/install-tools
+        with:
+          tools: task goimports golangci-lint govulncheck gitleaks
       - name: Build vibe and vibe-guard from source
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
           go build -o "$RUNNER_TEMP/bin/vibe" ./cmd/vibe
           go build -o "$RUNNER_TEMP/bin/vibe-guard" ./cmd/vibe-guard
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      # gitleaks for the secrets task in verify: a pinned release, checked
-      # against its SHA-256 before it runs.
-      - name: Install gitleaks
-        shell: bash
-        env:
-          GITLEAKS_VERSION: "8.30.1"
-        run: |
-          case "$RUNNER_OS" in
-            Windows) asset="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip" sum=d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e ;;
-            *) asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
-          esac
-          dir="$RUNNER_TEMP/gitleaks"
-          mkdir -p "$dir"
-          curl -fsSL -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
-          echo "$sum  $dir/$asset" | sha256sum -c -
-          case "$asset" in
-            *.zip) unzip -q -o "$dir/$asset" gitleaks.exe -d "$dir" ;;
-            *) tar -xzf "$dir/$asset" -C "$dir" gitleaks ;;
-          esac
-          echo "$dir" >> "$GITHUB_PATH"
       # The reference GitLab files in place of .github/: .gitlab-ci.yml
       # with the release named, Renovate for D-02, and the merge request
       # template for R-03.

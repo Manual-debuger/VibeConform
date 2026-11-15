@@ -16,6 +16,13 @@ import (
 // rule's check or a finding's wording changes.
 var updateGoldens = flag.Bool("update", false, "rewrite the contract report goldens; review the diff, then commit it")
 
+func requiredGoldenEdits() []fixtureEdit {
+	return []fixtureEdit{
+		withFile("vibe.yaml", configWith(section{"require", "require: [V-05, V-06, R-03]\n"})),
+		withoutFile(".github/pull_request_template.md"),
+	}
+}
+
 // The text report goldens (spec 0052, "Testing Decisions"): the
 // committed files replace the contract draft's output example. They are
 // LF: .gitattributes gives testdata eol=lf, and the comparison is byte
@@ -45,6 +52,11 @@ func TestContractReportGolden(t *testing.T) { //nolint:gocognit // baseline: pre
 			withFile("AGENTS.md", "Run the checks before you finish.\n"),
 			withoutFile(".github/pull_request_template.md"),
 		}},
+		// Required SHOULD rules (spec 0063) are marked wherever the report
+		// lists them: R-03 fails, V-05 is not applicable, V-06 cannot be
+		// decided or, with --static, does not run.
+		{name: "required", edits: requiredGoldenEdits()},
+		{name: "required-static", edits: requiredGoldenEdits(), args: []string{"--static"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
