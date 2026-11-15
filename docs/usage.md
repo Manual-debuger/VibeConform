@@ -1456,7 +1456,13 @@ payload's `cwd`, walked up to `.git`. Bash commands are parsed as bash,
 PowerShell commands by a small tokenizer (aliases and parameter prefixes
 included). Wrappers (`sudo`, `env`, `xargs`, `find -exec`, `timeout`, …)
 are stripped and `bash -c`, `eval` and `pwsh -c` strings parsed again,
-eight levels deep. It **fails closed**: a command that does not parse
+eight levels deep. A wrapper's options are read as the program reads
+them, abbreviations included: `sudo --us root rm -rf x` is
+`sudo --user root rm -rf x`, and `env --sp '…'` is `env -S '…'`. A long
+option the guard does not know is read both ways, with and without the
+next word as its argument, and the call is refused when either reading
+is: `sudo --newopt root rm -rf x` is refused, `sudo --newopt ls` is
+allowed. It **fails closed**: a command that does not parse
 (`parse-error`), a payload that is not JSON or lacks its field
 (`payload-error`), an invalid `policy.json` (`policy-error`) and a command
 name built from an expansion (`dynamic-command`, also `curl … | bash`)

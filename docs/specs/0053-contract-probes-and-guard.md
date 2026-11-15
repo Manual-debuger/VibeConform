@@ -779,6 +779,13 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     cannot be read. `ask` rules still ask in observe mode. The refusal
     line adds `--tool <tool>` to the explain command for every tool
     other than `Bash`.
+  - **Amended by spec 0062.** A wrapper's options are read as the
+    program reads them, by one option reader in `guardrule`: long
+    options written in full or as a unique prefix, `--opt=value`, `--`,
+    and an optional argument only when attached. A long option the guard
+    does not know, or a prefix shared by options that differ in whether
+    they take an argument, reads the wrapped command both ways, and the
+    call is refused when either reading is.
 - **Tools.** `Bash` and `PowerShell` are commands. `Write`, `Edit`,
   `MultiEdit` and `NotebookEdit` (`notebook_path`) are file edits. Any
   other tool is allowed, because the settings' matcher decides what
