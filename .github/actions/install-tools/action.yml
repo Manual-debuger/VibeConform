@@ -1,0 +1,69 @@
+name: Install tools
+description: >-
+  Installs the CI tools a job asks for, at the versions pinned here: the
+  one place under .github/ that pins them (spec 0063). Go tools are built
+  with go install, so the job sets up Go first. gitleaks is a release
+  archive, checked against its SHA-256 before it goes on PATH, on Linux
+  and Windows runners. Go, Node, pnpm and uv stay on their setup actions.
+  The setup skill's reference CI files keep their own copies: adopters
+  cannot use this repository's local action.
+
+inputs:
+  tools:
+    description: >-
+      The tools to install, separated by spaces or newlines, in any order:
+      task, goimports, golangci-lint, govulncheck, actionlint, gitleaks.
+      An unknown name fails the step.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install ${{ inputs.tools }}
+      shell: bash
+      env:
+        TOOLS: ${{ inputs.tools }}
+        TASK_VERSION: "v3.53.1"
+        GOIMPORTS_VERSION: "v0.51.0"
+        GOLANGCI_LINT_VERSION: "v2.15.0"
+        GOVULNCHECK_VERSION: "v1.8.0"
+        ACTIONLINT_VERSION: "v1.7.12"
+        GITLEAKS_VERSION: "8.30.1"
+        GITLEAKS_LINUX_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        GITLEAKS_WINDOWS_SHA256: "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
+      run: |
+        # gitleaks for the secrets task in verify: a pinned release, checked
+        # against its SHA-256 before it runs.
+        install_gitleaks() {
+          case "$RUNNER_OS" in
+            Windows) asset="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip" sum="$GITLEAKS_WINDOWS_SHA256" ;;
+            Linux) asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" sum="$GITLEAKS_LINUX_SHA256" ;;
+            *) echo "::error::install-tools: no gitleaks archive is pinned for $RUNNER_OS"; return 1 ;;
+          esac
+          dir="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
+          echo "$sum  $dir/$asset" | sha256sum -c -
+          case "$asset" in
+            *.zip) unzip -q -o "$dir/$asset" gitleaks.exe -d "$dir" ;;
+            *) tar -xzf "$dir/$asset" -C "$dir" gitleaks ;;
+          esac
+          echo "$dir" >> "$GITHUB_PATH"
+        }
+
+        if [ -z "${TOOLS//[[:space:]]/}" ]; then
+          echo "::error::install-tools: the tools input names no tool"
+          exit 1
+        fi
+        for tool in $TOOLS; do
+          echo "Installing $tool"
+          case "$tool" in
+            task) go install "github.com/go-task/task/v3/cmd/task@$TASK_VERSION" ;;
+            goimports) go install "golang.org/x/tools/cmd/goimports@$GOIMPORTS_VERSION" ;;
+            golangci-lint) go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$GOLANGCI_LINT_VERSION" ;;
+            govulncheck) go install "golang.org/x/vuln/cmd/govulncheck@$GOVULNCHECK_VERSION" ;;
+            actionlint) go install "github.com/rhysd/actionlint/cmd/actionlint@$ACTIONLINT_VERSION" ;;
+            gitleaks) install_gitleaks ;;
+            *) echo "::error::install-tools: unknown tool '$tool'"; exit 1 ;;
+          esac
+        done
