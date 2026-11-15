@@ -114,6 +114,15 @@ type RuleResult struct {
 	NotApplicable string
 	// Waiver is the rule's declared waiver, or nil.
 	Waiver *WaiverStatus
+	// Required is true for a SHOULD rule the configuration requires (spec
+	// 0063): it counts in the verdict like a MUST rule.
+	Required bool
+}
+
+// Binding reports whether the rule's result counts in the verdict: a MUST
+// rule or a required SHOULD rule.
+func (r RuleResult) Binding() bool {
+	return r.Rule.Level == Must || r.Required
 }
 
 // Findings returns the findings of every part, in part order.
@@ -170,6 +179,8 @@ type Report struct {
 	Reason string
 	// FailingMust counts the MUST rules that fail.
 	FailingMust int
+	// FailingRequired counts the required SHOULD rules that fail.
+	FailingRequired int
 	// Rules holds every rule in report order.
 	Rules           []RuleResult
 	GuardExceptions []GuardException
@@ -215,10 +226,10 @@ func combine(parts []PartOutcome) Result {
 	}
 }
 
-// decide sets the report's verdict from its MUST rules. SHOULD results
-// never change it.
+// decide sets the report's verdict from its binding rules: the MUST rules
+// and the required SHOULD rules. Other SHOULD results never change it.
 func (r *Report) decide() {
-	var undecided, notRun int
+	var undecided, notRun, bindingOpen int
 	for _, rr := range r.Rules {
 		switch rr.Result {
 		case ResultUndecided:
@@ -226,14 +237,19 @@ func (r *Report) decide() {
 		case ResultNotRun:
 			notRun++
 		case ResultFail:
-			if rr.Rule.Level == Must {
+			switch {
+			case rr.Rule.Level == Must:
 				r.FailingMust++
+			case rr.Required:
+				r.FailingRequired++
 			}
 		}
+		if rr.Binding() && (rr.Result == ResultUndecided || rr.Result == ResultNotRun) {
+			bindingOpen++
+		}
 	}
-	mustOpen := r.Count(Must, ResultUndecided) + r.Count(Must, ResultNotRun)
 	switch {
-	case mustOpen > 0:
+	case bindingOpen > 0:
 		r.Verdict = VerdictUndecided
 		var why []string
 		if undecided > 0 {
@@ -245,8 +261,12 @@ func (r *Report) decide() {
 		if r.FailingMust > 0 {
 			why = append(why, fmt.Sprintf("%d %s", r.FailingMust, plural(r.FailingMust, "MUST rule already fails", "MUST rules already fail")))
 		}
+		if r.FailingRequired > 0 {
+			why = append(why, fmt.Sprintf("%d %s", r.FailingRequired,
+				plural(r.FailingRequired, "required SHOULD rule already fails", "required SHOULD rules already fail")))
+		}
 		r.Reason = strings.Join(why, "; ")
-	case r.FailingMust > 0:
+	case r.FailingMust > 0 || r.FailingRequired > 0:
 		r.Verdict = VerdictNotConformant
 	default:
 		r.Verdict = VerdictConformant

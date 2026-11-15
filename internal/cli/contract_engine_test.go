@@ -46,6 +46,8 @@ type jsonRule struct {
 		Until   string `json:"until"`
 		Expired bool   `json:"expired"`
 	} `json:"waiver"`
+	// Required is a pointer so that a missing key shows.
+	Required *bool `json:"required"`
 }
 
 // auditJSON runs vibe audit --json on a fixture and decodes the report.
@@ -249,6 +251,101 @@ func TestContractAuditVerdicts(t *testing.T) { //nolint:gocognit,gocyclo // base
 			t.Errorf("A-05 parts = %+v, want static pass and probe not_run", a05.Parts)
 		}
 	})
+}
+
+func requireConfig(ids string, more ...section) fixtureEdit {
+	return withFile("vibe.yaml", configWith(append(more, section{"require", "require: [" + ids + "]\n"})...))
+}
+
+// A required SHOULD rule counts in the verdict like a MUST rule (spec
+// 0063, "A repository can require SHOULD rules").
+func TestContractAuditRequiredRules(t *testing.T) { //nolint:gocognit // one subtest per verdict
+	t.Parallel()
+	// Every rule decides, so that the reason counts only the rules named.
+	passing := func() []contract.Rule { return standIn(nil, contract.ResultPass, ruleIDs("", "V-04", "R-02", "R-03")...) }
+	t.Run("a failing required rule exits 2", func(t *testing.T) {
+		rules := standIn(passing(), contract.ResultFail, "V-06")
+		rep, r := auditJSONRules(t, rules, contractFixture(t, requireConfig("V-06")))
+		assertExit(t, r, 2)
+		assertStderr(t, r, "not conformant: 1 required SHOULD rule fails")
+		if strings.Contains(r.stderr, "MUST") {
+			t.Errorf("stderr counts a MUST rule:\n%s", r.stderr)
+		}
+		if rep.Verdict != "not_conformant" {
+			t.Errorf("verdict = %s, want not_conformant", rep.Verdict)
+		}
+		if v06 := rep.rule(t, "V-06"); v06.Required == nil || !*v06.Required {
+			t.Errorf("V-06 required = %v, want true", v06.Required)
+		}
+		if v07 := rep.rule(t, "V-07"); v07.Required == nil || *v07.Required {
+			t.Errorf("V-07 required = %v, want false", v07.Required)
+		}
+		if c02 := rep.rule(t, "C-02"); c02.Required == nil || *c02.Required {
+			t.Errorf("C-02 required = %v, want false: MUST rules are not listed in require", c02.Required)
+		}
+	})
+	t.Run("MUST and required failures are counted apart", func(t *testing.T) {
+		rules := standIn(passing(), contract.ResultFail, "V-06", "V-07")
+		dir := contractFixture(t, requireConfig("V-06, V-07",
+			section{"entrypoints", "entrypoints:\n  verify: task verify\n  verify-fast: task verify:fast\n  fmt: task fmt\n"}))
+		_, r := auditJSONRules(t, rules, dir)
+		assertExit(t, r, 2)
+		assertStderr(t, r, "not conformant: 1 MUST rule fails; 2 required SHOULD rules fail")
+	})
+	t.Run("an undecided required rule exits 1", func(t *testing.T) {
+		rules := standIn(passing(), contract.ResultUndecided, "V-06")
+		rep, r := auditJSONRules(t, rules, contractFixture(t, requireConfig("V-06")))
+		assertExit(t, r, 1)
+		if rep.Verdict != "undecided" || !strings.Contains(rep.Reason, "1 rule cannot be decided") {
+			t.Errorf("verdict = %s (%q), want undecided, 1 rule cannot be decided", rep.Verdict, rep.Reason)
+		}
+	})
+	t.Run("a required rule that already fails is named in the reason", func(t *testing.T) {
+		rules := standIn(passing(), contract.ResultFail, "V-06")
+		rules = standIn(rules, contract.ResultUndecided, "V-01")
+		rep, r := auditJSONRules(t, rules, contractFixture(t, requireConfig("V-06")))
+		assertExit(t, r, 1)
+		if want := "1 rule cannot be decided; 1 required SHOULD rule already fails"; rep.Reason != want {
+			t.Errorf("reason = %q, want %q", rep.Reason, want)
+		}
+	})
+	t.Run("a required rule that is not applicable is conformant", func(t *testing.T) {
+		// V-05 is not applicable: the fixture has no Python component.
+		rep, r := auditJSONRules(t, passing(), contractFixture(t, requireConfig("V-05")))
+		assertExit(t, r, 0)
+		assertRule(t, rep, "V-05", "not_applicable")
+		if rep.Verdict != "conformant" {
+			t.Errorf("verdict = %s, want conformant", rep.Verdict)
+		}
+	})
+	t.Run("a failing SHOULD rule that is not required is conformant", func(t *testing.T) {
+		rules := standIn(passing(), contract.ResultFail, "V-07")
+		rules = standIn(rules, contract.ResultPass, "V-06")
+		rep, r := auditJSONRules(t, rules, contractFixture(t, requireConfig("V-06")))
+		assertExit(t, r, 0)
+		assertRule(t, rep, "V-07", "fail")
+		if rep.Verdict != "conformant" {
+			t.Errorf("verdict = %s, want conformant", rep.Verdict)
+		}
+	})
+}
+
+// Every rule object of the JSON report has a boolean required key, also
+// without require (spec 0063).
+func TestContractJSONRuleHasRequiredKey(t *testing.T) {
+	t.Parallel()
+	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--json", "--static")
+	var rep struct {
+		Rules []map[string]json.RawMessage `json:"rules"`
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
+		t.Fatalf("no JSON report: %v\n%s", err, r.stdout)
+	}
+	for _, rule := range rep.Rules {
+		if got := string(rule["required"]); got != "false" {
+			t.Errorf("rule %s: required = %q, want false", rule["id"], got)
+		}
+	}
 }
 
 func TestContractAuditApplicabilityAndWaivers(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity

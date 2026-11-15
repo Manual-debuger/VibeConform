@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
@@ -16,17 +17,32 @@ import (
 type contractVerdictError struct {
 	verdict contract.Verdict
 	reason  string
-	failing int
+	// failingMust and failingRequired count the failing MUST rules and
+	// required SHOULD rules.
+	failingMust, failingRequired int
 }
 
 func (e *contractVerdictError) Error() string {
-	if e.verdict == contract.VerdictNotConformant {
-		if e.failing == 1 {
-			return "not conformant: 1 MUST rule fails"
-		}
-		return fmt.Sprintf("not conformant: %d MUST rules fail", e.failing)
+	if e.verdict != contract.VerdictNotConformant {
+		return "cannot decide: " + e.reason
 	}
-	return "cannot decide: " + e.reason
+	var why []string
+	if e.failingMust > 0 {
+		why = append(why, countFailing(e.failingMust, "MUST rule"))
+	}
+	if e.failingRequired > 0 {
+		why = append(why, countFailing(e.failingRequired, "required SHOULD rule"))
+	}
+	return "not conformant: " + strings.Join(why, "; ")
+}
+
+// countFailing says how many rules of a kind fail, such as "1 MUST rule
+// fails" or "2 required SHOULD rules fail".
+func countFailing(n int, kind string) string {
+	if n == 1 {
+		return "1 " + kind + " fails"
+	}
+	return fmt.Sprintf("%d %ss fail", n, kind)
 }
 
 // verdictError returns the error vibe audit exits with for a report: nil
@@ -35,7 +51,10 @@ func verdictError(rep *contract.Report) error {
 	if rep.Verdict == contract.VerdictConformant {
 		return nil
 	}
-	return &contractVerdictError{verdict: rep.Verdict, reason: rep.Reason, failing: rep.FailingMust}
+	return &contractVerdictError{
+		verdict: rep.Verdict, reason: rep.Reason,
+		failingMust: rep.FailingMust, failingRequired: rep.FailingRequired,
+	}
 }
 
 // The --json report (spec 0052, "Report (#100)"). schema versions this
@@ -78,6 +97,9 @@ type jsonContractRule struct {
 	Parts    []jsonPart        `json:"parts"`
 	Findings []jsonFinding     `json:"findings"`
 	Waiver   *jsonWaiver       `json:"waiver"`
+	// Required is new in spec 0063: true for a SHOULD rule vibe.yaml
+	// requires. A new key keeps schema 1.
+	Required bool `json:"required"`
 }
 
 type jsonPart struct {
@@ -145,7 +167,7 @@ func writeContractJSON(w io.Writer, rep *contract.Report, vibeVersion string) er
 	for _, rr := range rep.Rules {
 		jr := jsonContractRule{
 			ID: rr.Rule.ID, Level: rr.Rule.Level, Category: rr.Rule.Category, Title: rr.Rule.Title,
-			Result: rr.Result, Parts: []jsonPart{}, Findings: []jsonFinding{},
+			Result: rr.Result, Parts: []jsonPart{}, Findings: []jsonFinding{}, Required: rr.Required,
 		}
 		for _, p := range rr.Parts {
 			jr.Parts = append(jr.Parts, jsonPart{Check: p.Kind, Result: p.Result})

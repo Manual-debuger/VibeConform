@@ -232,6 +232,36 @@ func TestContractConfigWaivers(t *testing.T) {
 	})
 }
 
+// require lists the SHOULD rules a repository holds itself to (spec 0063).
+func TestContractConfigRequire(t *testing.T) {
+	t.Parallel()
+	require := func(body string) section { return section{"require", "require: " + body + "\n"} }
+	waiver := func(rule, until string) section {
+		return section{"waivers", "waivers:\n  - rule: " + rule + "\n    reason: r\n    until: " + until + "\n"}
+	}
+	runConfigCases(t, []configCase{
+		{name: "valid", config: configWith(require("[V-05, V-06, A-09]"))},
+		{name: "empty is valid", config: configWith(require("[]"))},
+		{name: "beside a waiver for another rule", config: configWith(waiver("R-03", "2999-12-31"), require("[V-06]"))},
+		{name: "not a list", config: configWith(require("V-06")),
+			want: []string{"vibe.yaml: require: ", "list of SHOULD rule IDs"}},
+		{name: "unknown rule", config: configWith(require("[V-06, X-99]")),
+			want: []string{"vibe.yaml: require[1]: ", "X-99", "not a rule of contract 1.2.0"}},
+		{name: "item not a string", config: configWith(require("[V-06, {rule: V-07}]")),
+			want: []string{"vibe.yaml: require[1]: ", "not a rule of contract 1.2.0"}},
+		{name: "MUST rule", config: configWith(require("[C-02]")),
+			want: []string{"vibe.yaml: require[0]: C-02 is a MUST rule; it is always required"}},
+		{name: "listed twice", config: configWith(require("[V-06, V-07, V-06]")),
+			want: []string{"vibe.yaml: require[2]: ", "V-06 is listed twice (also require[0])"}},
+		{name: "waived and required", config: configWith(waiver("V-06", "2999-12-31"), require("[V-07, V-06]")),
+			want: []string{"vibe.yaml: require[1]: V-06 is both required and waived (waivers[0])"}},
+		{name: "required before its waiver", config: configWith(require("[V-06]"), waiver("V-06", "2999-12-31")),
+			want: []string{"vibe.yaml: require[0]: V-06 is both required and waived (waivers[0])"}},
+		{name: "required and waived by an expired waiver", config: configWith(waiver("V-06", "2000-01-01"), require("[V-06]")),
+			want: []string{"vibe.yaml: require[0]: V-06 is both required and waived (waivers[0])"}},
+	})
+}
+
 // The parser reports the first error in document order.
 func TestContractConfigFirstErrorInDocumentOrder(t *testing.T) {
 	t.Parallel()
