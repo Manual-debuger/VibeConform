@@ -236,15 +236,18 @@ func (r *Report) decide() {
 			undecided++
 		case ResultNotRun:
 			notRun++
+		}
+		if !rr.Binding() {
+			continue
+		}
+		switch rr.Result {
 		case ResultFail:
-			switch {
-			case rr.Rule.Level == Must:
+			if rr.Rule.Level == Must {
 				r.FailingMust++
-			case rr.Required:
+			} else {
 				r.FailingRequired++
 			}
-		}
-		if rr.Binding() && (rr.Result == ResultUndecided || rr.Result == ResultNotRun) {
+		case ResultUndecided, ResultNotRun:
 			bindingOpen++
 		}
 	}
@@ -269,14 +272,30 @@ func (r *Report) undecidedReason(undecided, notRun int) string {
 	if notRun > 0 {
 		why = append(why, fmt.Sprintf("%d %s (--static)", notRun, plural(notRun, "rule did not run", "rules did not run")))
 	}
-	if r.FailingMust > 0 {
-		why = append(why, fmt.Sprintf("%d %s", r.FailingMust, plural(r.FailingMust, "MUST rule already fails", "MUST rules already fail")))
-	}
-	if r.FailingRequired > 0 {
-		why = append(why, fmt.Sprintf("%d %s", r.FailingRequired,
-			plural(r.FailingRequired, "required SHOULD rule already fails", "required SHOULD rules already fail")))
-	}
+	why = append(why, r.failing("already ")...)
 	return strings.Join(why, "; ")
+}
+
+// FailingReason says which binding rules fail, such as "1 MUST rule fails;
+// 2 required SHOULD rules fail". It is empty when none fails.
+func (r *Report) FailingReason() string {
+	return strings.Join(r.failing(""), "; ")
+}
+
+// failing counts the failing MUST rules, then the failing required SHOULD
+// rules, each with its verb after adverb, such as "1 MUST rule already
+// fails".
+func (r *Report) failing(adverb string) []string {
+	var why []string
+	for _, k := range []struct {
+		n    int
+		kind string
+	}{{r.FailingMust, "MUST rule"}, {r.FailingRequired, "required SHOULD rule"}} {
+		if k.n > 0 {
+			why = append(why, fmt.Sprintf("%d %s %s%s", k.n, plural(k.n, k.kind, k.kind+"s"), adverb, plural(k.n, "fails", "fail")))
+		}
+	}
+	return why
 }
 
 func plural(n int, one, many string) string {

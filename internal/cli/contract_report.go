@@ -2,9 +2,7 @@ package cli
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
@@ -16,44 +14,27 @@ import (
 // for stderr.
 type contractVerdictError struct {
 	verdict contract.Verdict
-	reason  string
-	// failingMust and failingRequired count the failing MUST rules and
-	// required SHOULD rules.
-	failingMust, failingRequired int
+	// reason is why there is no verdict, or which binding rules fail.
+	reason string
 }
 
 func (e *contractVerdictError) Error() string {
-	if e.verdict != contract.VerdictNotConformant {
-		return "cannot decide: " + e.reason
+	if e.verdict == contract.VerdictNotConformant {
+		return "not conformant: " + e.reason
 	}
-	var why []string
-	if e.failingMust > 0 {
-		why = append(why, countFailing(e.failingMust, "MUST rule"))
-	}
-	if e.failingRequired > 0 {
-		why = append(why, countFailing(e.failingRequired, "required SHOULD rule"))
-	}
-	return "not conformant: " + strings.Join(why, "; ")
-}
-
-// countFailing says how many rules of a kind fail, such as "1 MUST rule
-// fails" or "2 required SHOULD rules fail".
-func countFailing(n int, kind string) string {
-	if n == 1 {
-		return "1 " + kind + " fails"
-	}
-	return fmt.Sprintf("%d %ss fail", n, kind)
+	return "cannot decide: " + e.reason
 }
 
 // verdictError returns the error vibe audit exits with for a report: nil
 // when conformant.
 func verdictError(rep *contract.Report) error {
-	if rep.Verdict == contract.VerdictConformant {
+	switch rep.Verdict {
+	case contract.VerdictConformant:
 		return nil
-	}
-	return &contractVerdictError{
-		verdict: rep.Verdict, reason: rep.Reason,
-		failingMust: rep.FailingMust, failingRequired: rep.FailingRequired,
+	case contract.VerdictNotConformant:
+		return &contractVerdictError{verdict: rep.Verdict, reason: rep.FailingReason()}
+	default:
+		return &contractVerdictError{verdict: rep.Verdict, reason: rep.Reason}
 	}
 }
 
