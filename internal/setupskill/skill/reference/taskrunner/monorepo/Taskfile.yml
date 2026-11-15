@@ -286,43 +286,45 @@ tasks:
   # green-stamp-examples-app, so the two never stand for each other
   # (spec 0059). Neither task reads stdin, which the Stop hook keeps for
   # hook:done.
+  # The hash is written once, as STAMP_HASH, a variable of
+  # hook:stamp:check that hook:stamp:save takes through a YAML alias. It
+  # sets stamp to the stamp's path and h to the tree's hash, each empty
+  # when git cannot give it. It is not a task of its own: the stamp tasks
+  # would have to start it with "task", which cannot run an internal task,
+  # and the Stop hook's tasks would no longer work when copied on their own.
   hook:stamp:check:
     silent: true
+    vars:
+      STAMP_HASH: &stamp-hash |
+        stamp=""
+        h=""
+        n=green-stamp
+        if p="$(git rev-parse --show-prefix 2>/dev/null)"; then
+          p="${p%/}"
+          [ -z "$p" ] || n="$n-${p//\//-}"
+          stamp="$(git rev-parse --path-format=absolute --git-path "$n" 2>/dev/null)" || stamp=""
+        fi
+        if [ -n "$stamp" ]; then
+          w="$stamp.$$"
+          cp "$(git rev-parse --path-format=absolute --git-path index)" "$w.index" 2>/dev/null || true
+          if GIT_INDEX_FILE="$w.index" git add --intent-to-add -- :/ >/dev/null 2>&1 &&
+            { git rev-parse --verify HEAD && GIT_INDEX_FILE="$w.index" git diff --binary --no-ext-diff --no-textconv --no-color HEAD; } >"$w" 2>/dev/null; then
+            h="$(git hash-object --no-filters -- "$w" 2>/dev/null || true)"
+          fi
+          rm -f "$w" "$w.index"
+        fi
     cmds:
       - |
-        n=green-stamp
-        p="$(git rev-parse --show-prefix 2>/dev/null)" || exit 1
-        p="${p%/}"
-        [ -z "$p" ] || n="$n-${p//\//-}"
-        stamp="$(git rev-parse --path-format=absolute --git-path "$n" 2>/dev/null)" || exit 1
-        [ -f "$stamp" ] || exit 1
-        w="$stamp.$$"
-        h=""
-        cp "$(git rev-parse --path-format=absolute --git-path index)" "$w.index" 2>/dev/null || true
-        if GIT_INDEX_FILE="$w.index" git add --intent-to-add -- :/ >/dev/null 2>&1 &&
-          { git rev-parse --verify HEAD && GIT_INDEX_FILE="$w.index" git diff --binary --no-ext-diff --no-textconv --no-color HEAD; } >"$w" 2>/dev/null; then
-          h="$(git hash-object --no-filters -- "$w" 2>/dev/null || true)"
-        fi
-        rm -f "$w" "$w.index"
-        [ -n "$h" ] && [ "$h" = "$(cat "$stamp")" ]
+        {{.STAMP_HASH}}
+        [ -n "$h" ] && [ -f "$stamp" ] && [ "$h" = "$(cat "$stamp")" ]
 
   hook:stamp:save:
     silent: true
+    vars:
+      STAMP_HASH: *stamp-hash
     cmds:
       - |
-        n=green-stamp
-        p="$(git rev-parse --show-prefix 2>/dev/null)" || exit 0
-        p="${p%/}"
-        [ -z "$p" ] || n="$n-${p//\//-}"
-        stamp="$(git rev-parse --path-format=absolute --git-path "$n" 2>/dev/null)" || exit 0
-        w="$stamp.$$"
-        h=""
-        cp "$(git rev-parse --path-format=absolute --git-path index)" "$w.index" 2>/dev/null || true
-        if GIT_INDEX_FILE="$w.index" git add --intent-to-add -- :/ >/dev/null 2>&1 &&
-          { git rev-parse --verify HEAD && GIT_INDEX_FILE="$w.index" git diff --binary --no-ext-diff --no-textconv --no-color HEAD; } >"$w" 2>/dev/null; then
-          h="$(git hash-object --no-filters -- "$w" 2>/dev/null || true)"
-        fi
-        rm -f "$w" "$w.index"
+        {{.STAMP_HASH}}
         [ -z "$h" ] || printf '%s\n' "$h" >"$stamp" || true
 
   # Runs only when the Stop hook's verify:fast fails:
