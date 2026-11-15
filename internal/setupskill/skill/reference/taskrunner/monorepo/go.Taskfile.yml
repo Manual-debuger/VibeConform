@@ -18,10 +18,11 @@ tasks:
       - test -z "$(gofmt -l .)"
       - test -z "$(goimports -l .)"
 
+  # golangci-lint only: its govet runs the analyzers "go vet ./..." runs
+  # by default, so go vet would check the same code twice.
   lint:
-    desc: Run go vet and golangci-lint.
+    desc: Run golangci-lint (its govet covers go vet).
     cmds:
-      - go vet ./...
       - golangci-lint run
 
   typecheck:
