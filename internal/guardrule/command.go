@@ -292,7 +292,7 @@ func parse(shell Shell, src string) ([]Command, error) {
 func expand(c Command, out *[]Command) error {
 	inners, label := unwrap(c)
 	var scripts []nestedScript
-	c.ScriptSource, scripts = nested(c)
+	c.ScriptSource, scripts = scriptsOf(c)
 	if len(inners) == 0 || len(scripts) > 0 {
 		c.Writes = append(slices.Clone(c.Writes), writtenOperands(c)...)
 		*out = append(*out, c)
@@ -373,22 +373,24 @@ const psUnknownCommand = "& " + psUnknown
 
 var posixShells = []string{"bash", "sh", "zsh", "dash", "ksh", "ash", "mksh"}
 
-// nested returns where c reads its script, when c is a POSIX shell, and
-// the strings c runs as scripts.
-func nested(c Command) (ScriptSource, []nestedScript) {
+// scriptsOf returns where c reads its script, when c is a POSIX shell,
+// and every string c runs as a script.
+func scriptsOf(c Command) (ScriptSource, []nestedScript) {
 	switch name := c.Name(); {
 	case name == "env":
 		return ScriptNone, envSplitStrings(c.Words[1:])
 	case slices.Contains(posixShells, name):
 		return posixShellScript(name, c.Words[1:], c.stdin)
 	}
-	if n, ok := nestedScriptOf(c); ok {
+	if n, ok := argumentScript(c); ok {
 		return ScriptNone, []nestedScript{n}
 	}
 	return ScriptNone, nil
 }
 
-func nestedScriptOf(c Command) (nestedScript, bool) {
+// argumentScript returns the one script that pwsh, powershell, eval or
+// Invoke-Expression runs from its arguments.
+func argumentScript(c Command) (nestedScript, bool) {
 	name := c.Name()
 	args := c.Words[min(1, len(c.Words)):]
 	switch {

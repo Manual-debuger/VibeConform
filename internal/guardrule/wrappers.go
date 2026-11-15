@@ -18,8 +18,8 @@ import (
 // an argument, is read both ways, so a wrapper may run more than one
 // inner command.
 
-// opts lists long options of one argument kind, for a table.
-func opts(kind argKind, names ...string) map[string]argKind {
+// longOpts lists long options of one argument kind, for a table.
+func longOpts(kind argKind, names ...string) map[string]argKind {
 	m := make(map[string]argKind, len(names))
 	for _, n := range names {
 		m[n] = kind
@@ -27,7 +27,7 @@ func opts(kind argKind, names ...string) map[string]argKind {
 	return m
 }
 
-// longOptions joins the lists of opts.
+// longOptions joins the lists of longOpts.
 func longOptions(lists ...map[string]argKind) map[string]argKind {
 	m := map[string]argKind{}
 	for _, l := range lists {
@@ -48,7 +48,7 @@ func wrapperTable(shortArg, shortOptArg string, long map[string]argKind) optionT
 	}
 }
 
-var helpVersion = opts(argNone, "help", "version")
+var helpVersion = longOpts(argNone, "help", "version")
 
 // wrapperTables follow the programs' documentation: sudo 1.9, GNU
 // coreutils (env, nice, nohup, stdbuf, timeout), GNU time and GNU
@@ -56,19 +56,19 @@ var helpVersion = opts(argNone, "help", "version")
 // are shell builtins and have none.
 var wrapperTables = map[string]optionTable{
 	"sudo": wrapperTable("aCcDghpRrTtUu", "", longOptions(
-		opts(argNone, "askpass", "background", "bell", "edit", "set-home", "help", "login",
+		longOpts(argNone, "askpass", "background", "bell", "edit", "set-home", "help", "login",
 			"remove-timestamp", "reset-timestamp", "list", "non-interactive", "no-update",
 			"preserve-groups", "stdin", "shell", "version", "validate"),
-		opts(argRequired, "auth-type", "close-from", "login-class", "chdir", "chroot", "group",
+		longOpts(argRequired, "auth-type", "close-from", "login-class", "chdir", "chroot", "group",
 			"host", "prompt", "role", "type", "command-timeout", "user", "other-user", "apparmor-profile"),
-		opts(argOptional, "preserve-env"))),
+		longOpts(argOptional, "preserve-env"))),
 	"doas": wrapperTable("aCu", "", nil),
 	"env": func() optionTable {
 		t := wrapperTable("aCPSu", "", longOptions(helpVersion,
-			opts(argNone, "ignore-environment", "null", "list-signal-handling", "debug"),
-			opts(argRequired, "unset", "chdir", "split-string", "argv0"),
-			opts(argOptional, "block-signal", "default-signal", "ignore-signal")))
-		t.ends = []string{"S", "--split-string"}
+			longOpts(argNone, "ignore-environment", "null", "list-signal-handling", "debug"),
+			longOpts(argRequired, "unset", "chdir", "split-string", "argv0"),
+			longOpts(argOptional, "block-signal", "default-signal", "ignore-signal")))
+		t.ends = []string{"S", "--split-string"} // the split string, read by splitString
 		return t
 	}(),
 	"command": wrapperTable("", "", nil),
@@ -76,17 +76,17 @@ var wrapperTables = map[string]optionTable{
 	"exec":    wrapperTable("a", "", nil),
 	"nohup":   wrapperTable("", "", helpVersion),
 	"time": wrapperTable("fo", "", longOptions(helpVersion,
-		opts(argNone, "append", "portability", "quiet", "verbose"),
-		opts(argRequired, "format", "output"))),
-	"nice": wrapperTable("n", "", longOptions(helpVersion, opts(argRequired, "adjustment"))),
+		longOpts(argNone, "append", "portability", "quiet", "verbose"),
+		longOpts(argRequired, "format", "output"))),
+	"nice": wrapperTable("n", "", longOptions(helpVersion, longOpts(argRequired, "adjustment"))),
 	"timeout": wrapperTable("ks", "", longOptions(helpVersion,
-		opts(argNone, "foreground", "preserve-status", "verbose"),
-		opts(argRequired, "kill-after", "signal"))),
-	"stdbuf": wrapperTable("ioe", "", longOptions(helpVersion, opts(argRequired, "input", "output", "error"))),
+		longOpts(argNone, "foreground", "preserve-status", "verbose"),
+		longOpts(argRequired, "kill-after", "signal"))),
+	"stdbuf": wrapperTable("ioe", "", longOptions(helpVersion, longOpts(argRequired, "input", "output", "error"))),
 	"xargs": wrapperTable("adEILnPs", "eil", longOptions(helpVersion,
-		opts(argNone, "null", "open-tty", "interactive", "no-run-if-empty", "show-limits", "verbose", "exit"),
-		opts(argRequired, "arg-file", "delimiter", "max-args", "max-chars", "max-procs", "process-slot-var"),
-		opts(argOptional, "eof", "replace", "max-lines"))),
+		longOpts(argNone, "null", "open-tty", "interactive", "no-run-if-empty", "show-limits", "verbose", "exit"),
+		longOpts(argRequired, "arg-file", "delimiter", "max-args", "max-chars", "max-procs", "process-slot-var"),
+		longOpts(argOptional, "eof", "replace", "max-lines"))),
 }
 
 // unwrap returns the commands a wrapper runs, one for each reading of
@@ -119,7 +119,7 @@ func wrapped(name string, r optionReading) (Command, bool) {
 	switch name {
 	case "env":
 		if splitString(r) != nil {
-			return Command{}, false // nested reads the split string
+			return Command{}, false // scriptsOf reads the split string
 		}
 		assigns, rest = splitAssignments(rest)
 	case "sudo", "doas":
@@ -177,8 +177,10 @@ func splitString(r optionReading) []Word {
 	if len(r.opts) == 0 {
 		return nil
 	}
+	// The options that end env's options are those that give its split
+	// string.
 	o := r.opts[len(r.opts)-1]
-	if (o.name != "S" && o.name != "--split-string") || !o.hasValue {
+	if !slices.Contains(wrapperTables["env"].ends, o.name) || !o.hasValue {
 		return nil
 	}
 	return append([]Word{o.value}, r.operands...)
@@ -343,7 +345,7 @@ var copyOptions = writerTable("St", "", "suffix", "target-directory")
 // or more ("--ta", four characters with its dashes).
 func writerTable(shortArg, shortOptArg string, long ...string) optionTable {
 	return optionTable{
-		shortArg: shortArg, shortOptArg: shortOptArg, long: opts(argRequired, long...),
+		shortArg: shortArg, shortOptArg: shortOptArg, long: longOpts(argRequired, long...),
 		abbrev: true, minAbbrev: 2, unknownLong: argNone, permute: true,
 	}
 }
