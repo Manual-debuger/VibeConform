@@ -64,6 +64,26 @@ internal/contract
   and a version 1 file (`contract.ErrConfigV1`) are exit 1; the CLI adds
   the pointer (`vibe init`, or the migration guide). `vibe init --skill`
   writes the setup skill and reads no configuration.
+- **Language records** (spec 0066). Each component language is one
+  record in a source file of its own (`internal/contract/language_*.go`):
+  its identifier and display name, its manifest and dependency reader,
+  the files detection wants beside the manifest, its lockfiles with
+  their check and fix commands, its test file patterns, its planted
+  defect samples and complexity layout, and its Dependabot ecosystems
+  and Renovate managers. `languageRegistry` lists the records in the
+  contract's language order (Go, Python, TypeScript). The valid
+  `language` values, the root manifests, D-01's lockfile order and check
+  text, and the order of the `--explain` samples are derived from it.
+  An internal test fails when a record leaves a fact empty. V-05's
+  Python filter is the one language check outside the records, because
+  V-05 is a Python rule in the contract.
+- **Component detection** (spec 0066). `contract.DetectComponents`
+  reads the tracked file list and returns the components, the nested
+  manifests and whether the audit's implicit root detection finds the
+  same components. The depth limit (`contract.DetectionDepth`), the
+  skipped dependency directories, the priority between manifests and the
+  manifest phrase (`contract.ManifestPhrase`) are the contract's. The
+  audit's root detection and that answer use one function.
 - **Dependency direction.** The CLI imports `internal/contract`, never
   the reverse, and renders its report model as text or JSON
   (`internal/cli/contract_*.go`). `internal/contract/imports_test.go`
@@ -278,9 +298,12 @@ internal/
 - **`vibe init`** (spec 0059) gets the components from
   `contract.DetectComponents`, which reads the tracked file list and
   shares its root rule with the audit's implicit root detection (spec
-  0066). Init only renders what it gets, and checks the file it writes
-  with `contract.Parse`, so it never writes a configuration `vibe audit`
-  cannot read.
+  0066). The contract owns the language records and component
+  detection; init holds no language knowledge and no detection code.
+  Init only renders what it gets, with the contract's manifest phrase
+  in its help text and its "found no component" error, and checks the
+  file it writes with `contract.Parse`, so it never writes a
+  configuration `vibe audit` cannot read.
 - **`vibe doctor`** loads the configuration with `contract.Load` and
   hands the outcome, a load error with the CLI's text included, to
   `doctor.Run`, which chooses the checks and their order (git,

@@ -216,10 +216,13 @@ agents: [claude]
   inside another component is not a component of its own, since
   components do not nest; `vibe init` prints one line for each, such as
   `skipped services/api/tools: inside the component services/api (go);
-  components do not nest`. A single
-  component at the root gets no `components:` key, because the audit
-  finds it from the root manifest; several components, or one in a
-  subdirectory, are listed:
+  components do not nest`. This detection is the contract's, and it
+  uses the audit's own root rule (spec 0066). A single component at the
+  root gets no `components:` key when the audit finds the same component
+  from the root manifests, that is, when the root has only that one of
+  `go.mod`, `pyproject.toml` and `package.json`. Otherwise the
+  components are listed, for example several components, or one in a
+  subdirectory:
 
   ```yaml
   components:
