@@ -60,14 +60,6 @@ func contractGitFixture(t *testing.T, edits ...fixtureEdit) string {
 	return contracttest.GitFixture(t, baselineFixture, edits...)
 }
 
-// fixtureFrom builds a fixture from the tree src with edits applied and
-// returns its root: a listed fixture, unless it needs git
-// (contracttest.Fixture).
-func fixtureFrom(t *testing.T, src string, edits ...fixtureEdit) string {
-	t.Helper()
-	return contracttest.Fixture(t, src, edits...)
-}
-
 // fixtureGit runs git with args in dir.
 func fixtureGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
@@ -220,14 +212,14 @@ type jsonRule struct {
 }
 
 // auditJSON runs vibe audit --json on a fixture and decodes the report.
-func auditJSON(t *testing.T, dir string, args ...string) (jsonReport, auditResult) {
+func auditJSON(t *testing.T, dir string, args ...string) jsonReport {
 	t.Helper()
 	r := runVibeAudit(t, append([]string{"--repo-root", dir, "--json"}, args...)...)
 	var rep jsonReport
 	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
 		t.Fatalf("--json printed no JSON report: %v\nstdout:\n%s\nstderr:\n%s", err, r.stdout, r.stderr)
 	}
-	return rep, r
+	return rep
 }
 
 // rule returns the result of one rule from a report.
@@ -274,7 +266,7 @@ func TestListedFixtureIsAuditedWithoutGit(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".git")); !os.IsNotExist(err) {
 		t.Fatalf("the fixture has a .git (%v), want a plain directory", err)
 	}
-	rep, _ := auditJSON(t, dir, "--static")
+	rep := auditJSON(t, dir, "--static")
 	assertRule(t, rep, "R-02", "pass")
 }
 
