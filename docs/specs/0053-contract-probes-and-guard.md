@@ -216,11 +216,13 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   removed, so that a run cannot reach the real repository.
   `CLAUDE_PROJECT_DIR` is the copy. `PATH` starts with the R-01 shim
   directory (below), except where A-03 replaces it.
-- **Order.** The parts run one after another in a fixed order, and
-  each starts from a reset copy: `setup`; A-07; V-03; the baseline runs
-  of `verify` and `verify-fast`; the planted defects for V-01, V-02 and
-  A-05; A-02; A-03; A-08; D-01. A part whose precondition did not hold
-  is `cannot decide` and names the precondition.
+- **Order.** The parts run one after another, and each starts from a
+  reset copy: `setup` first; then the execution and probe parts in
+  registry order, each after the parts it needs; R-01's execution part
+  last. A part whose precondition did not hold is `cannot decide` and
+  names the precondition.
+  - **Amended by spec 0064.** Parts declare what they need, and the
+    order follows from the needs, not from a list of rule IDs.
 - **`setup`** (spec 0051, decision 2) runs once, first. If it fails,
   every execution and probe part is `cannot decide`, and the finding
   shows the end of its output.

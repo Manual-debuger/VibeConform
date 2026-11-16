@@ -81,6 +81,16 @@ internal/contract
   CLI's tests hand a fixture's known file list in through a repository
   seam (`contract.NewRepo`), so a rule-table case starts no git (spec
   0056).
+- **Parts declare their needs** (spec 0064). An execution or probe
+  part lists the parts it needs on its `Part` (`Needs`): one named part,
+  or every other execution and probe part. Only R-01's execution part
+  declares needs, A-02's probe and every other part. The runner checks
+  the needs before it builds the probe copy and panics on a missing
+  part, a cycle or a static part with a need; a registry test keeps
+  `contract.Rules()` valid. It runs the parts in registry order, each
+  after the parts it needs, and hands each part the results of the
+  needs that ran as an argument (`Needed`); a part sees only the needs
+  it declared.
 - **One CI model, two readers** (spec 0055). The C rules, D-03 and
   R-01 read the repository's CI through one provider-neutral model
   (`ci_model.go`): the CI provider read, its jobs with their commands
