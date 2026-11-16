@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // runInit runs vibe init in dir with the audit's repository seam, so that
@@ -48,12 +49,7 @@ var (
 )
 
 func under(dir string, edits []fixtureEdit) []fixtureEdit {
-	out := make([]fixtureEdit, len(edits))
-	for i, e := range edits {
-		e.path = dir + "/" + e.path
-		out[i] = e
-	}
-	return out
+	return contracttest.Under(dir, edits...)
 }
 
 // TestInitWritesAConfigTheAuditReads: on each fixture vibe init writes a

@@ -413,3 +413,30 @@ Each of these is checked during implementation:
   file family, so that the moves can run in parallel once the helper
   package and `contract.Load` exist.
 - Issue #161 needs `contract.Load`, so it waits for this spec.
+
+## Implementation Notes
+
+- **Baseline of the CLI's contract test cases** (Testing Decisions,
+  "Regression guard for the move"). Before any test moved, the 955
+  test cases (top-level tests and subtests) of `internal/cli`'s
+  `contract_*_test.go`, `config_messages_test.go` and
+  `skill_static_audit_test.go` were recorded on 071357f in
+  [`0065-baseline-test-names.txt`](0065-baseline-test-names.txt), one
+  per line with its file. The doctor test cases are recorded with the
+  doctor move. After the move, each name is found in its new place, or
+  this section lists it with the reason it was merged or dropped.
+- **`contracttest`** (#184). The fixture builder, the listed-fixture
+  opener (`contracttest.OpenRepo`), the audit helper
+  (`contracttest.Audit`) and the report check (`contracttest.Check`,
+  `contracttest.Problems`) live in `internal/contract/contracttest`,
+  with the shared assertions and the baseline `vibe.yaml` builder
+  (`ConfigWith`, `Entrypoints`, `AssertRule`, `AssertPart`,
+  `RunRuleCases`). The CLI's fixture helpers, the report hook,
+  `internal/contract/probetest`, the guard probe tests, the runner
+  tests and the `contract.Load` tests build their fixtures through it,
+  so the builder exists once. The probe and guard probe reports now
+  pass the report check too, which they did not before.
+- **Moved before the rule tests:** `TestFixturePathMapsDotClaude`
+  (baseline: `contract_fixture_test.go`) is now in
+  `internal/contract/contracttest/fixture_test.go`, beside the function
+  it tests. Its assertions are unchanged.

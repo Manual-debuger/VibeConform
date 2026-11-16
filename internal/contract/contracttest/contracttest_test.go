@@ -1,0 +1,178 @@
+package contracttest_test
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
+)
+
+func TestMain(m *testing.M) {
+	// A git hook running the suite exports GIT_DIR; every git the tests
+	// start would then use this repository instead of the fixture.
+	for _, v := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"} {
+		_ = os.Unsetenv(v)
+	}
+	os.Exit(m.Run())
+}
+
+// ConfigWith with no change is the baseline tree's vibe.yaml, so a test
+// that edits one field changes only that field.
+func TestConfigWithNoChangeIsTheBaselineVibeYAML(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile(filepath.Join(contracttest.Baseline, "vibe.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := contracttest.ConfigWith(); got != string(data) {
+		t.Errorf("ConfigWith() =\n%s\nthe baseline's vibe.yaml is\n%s", got, data)
+	}
+}
+
+func repoFiles(t *testing.T, dir string) []string {
+	t.Helper()
+	repo, err := contracttest.OpenRepo(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return repo.Files()
+}
+
+func hasGit(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, ".git"))
+	return err == nil
+}
+
+// A fixture whose files are all tracked is listed, not a Git repository;
+// OpenRepo lists its files, with testdata's dot-claude as .claude and
+// the edits applied.
+func TestFixtureIsListed(t *testing.T) {
+	t.Parallel()
+	dir := contracttest.Fixture(t, contracttest.Baseline,
+		contracttest.WithFile("docs/new.md", "x\n"), contracttest.WithoutFile("CLAUDE.md"))
+	if hasGit(dir) {
+		t.Fatal("a fixture with every file tracked is a Git repository")
+	}
+	repo, err := contracttest.OpenRepo(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{".claude/settings.json", "docs/new.md", "AGENTS.md"} {
+		if !repo.HasFile(f) {
+			t.Errorf("the listed fixture lacks %s: %q", f, repo.Files())
+		}
+	}
+	if repo.HasFile("CLAUDE.md") {
+		t.Errorf("the listed fixture still has the removed CLAUDE.md")
+	}
+}
+
+// A .gitignore or GitFixture make a Git repository whose files git
+// lists.
+func TestFixtureThatNeedsGitIsARepository(t *testing.T) {
+	t.Parallel()
+	for name, build := range map[string]func(t *testing.T) string{
+		"gitignore": func(t *testing.T) string {
+			return contracttest.Fixture(t, contracttest.Baseline, contracttest.WithFile(".gitignore", "build/\n"))
+		},
+		"GitFixture": func(t *testing.T) string { return contracttest.GitFixture(t, contracttest.Baseline) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			dir := build(t)
+			if !hasGit(dir) {
+				t.Fatal("the fixture has no .git")
+			}
+			if !slices.Contains(repoFiles(t, dir), "AGENTS.md") {
+				t.Error("git does not track the baseline's AGENTS.md")
+			}
+		})
+	}
+}
+
+// An untracked file makes a Git repository; the file is in the working
+// tree but git does not track it.
+func TestUntrackedFileIsNotTracked(t *testing.T) {
+	t.Parallel()
+	dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithUntracked("notes.txt", "x\n"))
+	if !hasGit(dir) {
+		t.Fatal("the fixture has no .git")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "notes.txt")); err != nil {
+		t.Errorf("the untracked file is not in the working tree: %v", err)
+	}
+	files := repoFiles(t, dir)
+	if slices.Contains(files, "notes.txt") || !slices.Contains(files, "AGENTS.md") {
+		t.Errorf("git tracks %q, want AGENTS.md and not notes.txt", files)
+	}
+}
+
+// Under moves edits under a directory.
+func TestUnder(t *testing.T) {
+	t.Parallel()
+	dir := contracttest.Fixture(t, t.TempDir(),
+		contracttest.Under("svc/api", contracttest.WithFile("go.mod", "module api\n"))...)
+	if got := repoFiles(t, dir); len(got) != 1 || got[0] != "svc/api/go.mod" {
+		t.Errorf("files = %q, want [svc/api/go.mod]", got)
+	}
+}
+
+// The baseline passes R-02, and RunRuleCases reads a case's edits and
+// its findings.
+func TestRunRuleCases(t *testing.T) {
+	t.Parallel()
+	contracttest.RunRuleCases(t, "R-02", []contracttest.RuleCase{
+		{Name: "baseline", Want: contract.ResultPass},
+		{Name: "AGENTS.md missing", Want: contract.ResultFail,
+			Edits:    []contracttest.Edit{contracttest.WithoutFile("AGENTS.md")},
+			Findings: []string{"AGENTS.md: ", "create"}},
+	})
+}
+
+// Rules keeps registry order, whatever order the IDs are given in.
+func TestRulesKeepsRegistryOrder(t *testing.T) {
+	t.Parallel()
+	var want []string
+	for _, r := range contract.Rules() {
+		if r.ID == "V-04" || r.ID == "R-02" {
+			want = append(want, r.ID)
+		}
+	}
+	for _, order := range [][]string{{"V-04", "R-02"}, {"R-02", "V-04"}} {
+		var got []string
+		for _, r := range contracttest.Rules(t, order...) {
+			got = append(got, r.ID)
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("Rules(%q) = %q, want the registry's order %q", order, got, want)
+		}
+	}
+}
+
+// EmptyProbeEnv's PATH is an empty directory, and no bash is named.
+func TestEmptyProbeEnv(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_GIT_BASH_PATH", "/some/bash")
+	env := contracttest.EmptyProbeEnv(t)
+	var paths []string
+	for _, kv := range env {
+		name, value, _ := strings.Cut(kv, "=")
+		switch {
+		case strings.EqualFold(name, "CLAUDE_CODE_GIT_BASH_PATH"):
+			t.Errorf("the environment names bash: %s", kv)
+		case strings.EqualFold(name, "PATH"):
+			paths = append(paths, value)
+		}
+	}
+	if len(paths) != 1 {
+		t.Fatalf("PATH is set %d times, want once: %q", len(paths), paths)
+	}
+	entries, err := os.ReadDir(paths[0])
+	if err != nil || len(entries) != 0 {
+		t.Errorf("PATH %s is not an empty directory: %v, %d entries", paths[0], err, len(entries))
+	}
+}
