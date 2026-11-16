@@ -195,18 +195,10 @@ func r01GuardHalf(env *Env, needed Needed) PartResult {
 	return Undecided(Finding{Message: "cannot decide whether the A-02 deny cases are refused without vibe: A-02's probe did not run"})
 }
 
-// The lockfiles D-01 recognizes, and the check each runs in the
-// component's directory (spec 0051).
-var lockfileChecks = []struct {
-	file  string
-	check [][]string
-}{
-	{"go.sum", [][]string{{"go", "mod", "tidy"}, {"git", "diff", "--exit-code", "go.mod", "go.sum"}}},
-	{"uv.lock", [][]string{{"uv", "lock", "--check"}}},
-	{"poetry.lock", [][]string{{"poetry", "check", "--lock"}}},
-	{"pnpm-lock.yaml", [][]string{{"pnpm", "install", "--frozen-lockfile", "--lockfile-only"}}},
-	{"package-lock.json", [][]string{{"npm", "ci", "--dry-run"}}},
-}
+// d01Check is D-01's check text, for the rule and its part. Its
+// commands come from the lockfile records, so it names what runs.
+var d01Check = "per component, by the lockfile found. " + lockfileCheckText() +
+	" A component with dependencies and no recognized lockfile fails."
 
 // checkD01: each component's lockfiles match its manifest, and a
 // component with dependencies has a lockfile.
@@ -222,7 +214,7 @@ func d01Component(env *Env, comp Component) PartResult {
 	s := env.probe
 	var results []PartResult
 	found := false
-	for _, lf := range lockfileChecks {
+	for _, lf := range allLockfiles() {
 		file := joinRel(comp.Path, lf.file)
 		if !env.Repo.HasFile(file) {
 			continue
@@ -231,7 +223,7 @@ func d01Component(env *Env, comp Component) PartResult {
 		if err := s.Reset(); err != nil {
 			return Undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
 		}
-		results = append(results, d01Lockfile(s, comp, file, lf.check))
+		results = append(results, d01Lockfile(s, comp, file, lf))
 	}
 	if found {
 		return mergeRuns(results...)
@@ -245,14 +237,16 @@ func d01Component(env *Env, comp Component) PartResult {
 		return Fail(ParseFailure(manifest, err))
 	case deps:
 		return Fail(Finding{File: manifest,
-			Message: fmt.Sprintf("component %s has dependencies and no recognized lockfile (%s)", comp.Path, lockfilesFor(comp.Language)),
-			Fix:     "commit the lockfile your package manager writes, such as " + lockfilesFor(comp.Language)})
+			Message: fmt.Sprintf("component %s has dependencies and no recognized lockfile (%s)", comp.Path, lockfileNames(comp.Language)),
+			Fix:     "commit the lockfile your package manager writes, such as " + lockfileNames(comp.Language)})
 	}
 	return Pass()
 }
 
-func d01Lockfile(s *probeSession, comp Component, file string, check [][]string) PartResult {
-	for _, argv := range check {
+// d01Lockfile runs a lockfile's check commands in the component's
+// directory; file is the lockfile's path from the repository root.
+func d01Lockfile(s *probeSession, comp Component, file string, lf lockfile) PartResult {
+	for _, argv := range lf.check {
 		label := strings.Join(argv, " ") + " in " + comp.Path
 		out := s.RunProgram(label, file, argv, RunOpts{Dir: comp.Path})
 		if !out.Ran() {
@@ -261,27 +255,10 @@ func d01Lockfile(s *probeSession, comp Component, file string, check [][]string)
 		if out.ExitCode != 0 {
 			return Fail(Finding{File: file,
 				Message: fmt.Sprintf("does not match its manifest: %s", out.describe()),
-				Fix:     "update the lockfile with the package manager, such as " + lockfileFix(file) + ", and commit it"})
+				Fix:     "update the lockfile with the package manager, such as " + lf.fix + ", and commit it"})
 		}
 	}
 	return Pass()
-}
-
-func lockfilesFor(language string) string { return languageTable[language].lockfiles }
-
-func lockfileFix(file string) string {
-	switch {
-	case strings.HasSuffix(file, "go.sum"):
-		return "go mod tidy"
-	case strings.HasSuffix(file, "uv.lock"):
-		return "uv lock"
-	case strings.HasSuffix(file, "poetry.lock"):
-		return "poetry lock"
-	case strings.HasSuffix(file, "pnpm-lock.yaml"):
-		return "pnpm install"
-	default:
-		return "npm install"
-	}
 }
 
 // joinRel joins a component path and a file name, slash separated.
