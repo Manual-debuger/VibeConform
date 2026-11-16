@@ -107,8 +107,8 @@ Each of these is checked during implementation:
   If A-02 decides before it feeds a case, that verdict is A-02's whole
   verdict, which is what the fallback write does now. A-02 and A-09
   return the guard exception uses that they found.
-- The runner keeps a results store keyed by part. For each part that
-  ran, it stores the `PartResult` and the `vibe` calls that the shim
+- The runner keeps a results store: results in run order, looked up by
+  part. For each part that ran, it stores the `PartResult` and the `vibe` calls that the shim
   recorded while that part ran.
 - A part gets the results of its needs as an argument, never through
   `Env` or the probe session. It sees only the needs that it declared.
@@ -180,12 +180,13 @@ Each of these is checked during implementation:
   exception uses (A-02, A-09). The exported `Result` and `Findings`
   fields do not change. `Pass`, `Fail`, `Undecided` and `Merge` do not
   change.
-- **The results store.** The runner owns a map keyed by part. For each
-  part, the map holds the part's `PartResult` and the shim calls that
-  were recorded while the part ran. The probe session gives the runner
-  the calls recorded since a mark, instead of keeping one growing list
-  that the parts read. The store lives for one audit and is never
-  reachable from `Env`.
+- **The results store.** The runner keeps the results in run order and
+  looks them up by part. For each part that ran, the store holds the
+  part's `PartResult` and the shim calls that were recorded while the
+  part ran. The probe session gives the runner the calls recorded since
+  the runner last took them, instead of keeping one growing list that
+  the parts read. The store lives for one audit and is never reachable
+  from `Env`.
 - **The order.** First, static parts in registry order (unchanged).
   Then execution and probe parts in a stable topological order. The
   runner always selects the first ready part in rule-list order, and
@@ -195,8 +196,8 @@ Each of these is checked during implementation:
   reset before each part do not change.
 - **Fail fast.** The runner validates the needs before
   `startProbeSession` and panics with `contract: <rule>/<kind> needs
-  <rule>/<kind>, which is not in the rule list` (or names the cycle, or
-  the static part that declares a need). The validation runs in every
+  <rule>/<kind>, which is not in the rule list` (or names the cycle, the
+  static part that declares a need, or the static part that is needed). The validation runs in every
   audit, `--static` included. It does not depend on configuration, so
   applicability does not change the result.
 - **Removed.** `executionOrder`, `partOrder`, `pendingPart.order`, the
@@ -206,8 +207,8 @@ Each of these is checked during implementation:
 - **R-01's behaviour.** R-01 reads A-02's deny verdict from its need.
   If A-02 is absent and Claude Code is in use, R-01 reports the same
   cannot-decide finding as now. If Claude Code is not in use, the guard
-  half passes, as now. R-01 reports the `vibe` calls of every earlier
-  part and of its own runs, each call once.
+  half passes, as now. R-01 reports the `vibe` calls of setup, of every
+  earlier part and of its own runs, each call once.
 - **Spec 0053 amendment.** The "Order" bullet becomes: setup first;
   then the execution and probe parts in registry order, each after the
   parts it needs; R-01's execution part last. Spec 0053 gets a one-line
@@ -318,8 +319,48 @@ Each of these is checked during implementation:
   and the registry test checks the ID. A wrong ID fails the registry
   test, not a run.
 - The progress lines in text mode change order. Before, they started
-  with A-07 and V-03. After, they follow registry order. This is the
-  only visible difference, so the spec amends spec 0053 instead of
-  calling the change "no behaviour change" without qualification.
+  with A-07 and V-03. After, they follow registry order. The spec
+  amends spec 0053 instead of calling the change "no behaviour change"
+  without qualification.
+- R-01 lists the `vibe` calls in run order, so its findings can change
+  order too. When a SessionStart hook and `verify` both call `vibe`,
+  R-01 listed the hook's call first before (A-07 ran first). After, it
+  lists `verify`'s call first, because V-01 runs the `verify` baseline
+  before A-07 runs the hook. Each call is still listed once, and the
+  result does not change. The runner does not re-sort the calls to keep
+  the old order. The progress lines and this order are the only visible
+  differences.
 - Order in #167: this is item 2 of the contract track, after #164
   (spec 0063, merged in #173) and before #162 and #165.
+
+## Implementation Notes
+
+- **Before/after check.** `vibe audit --json` was compared before
+  (`main`, d26a64f) and after the change, with `vibe` and `vibe-guard`
+  built from each tree. This repository, the 46 `contract.Audit` calls
+  of the probetest fixtures and the 14 calls of the guard probe tests
+  give the same JSON. The four probetest cases that list R-01 without
+  A-02 now list A-02 too, and they add only `A-02.json`: not applicable
+  in the three cases without Claude Code, cannot decide in the case
+  whose setup fails. The cases this spec adds have no "before"
+  report, so the check lists them and does not compare them. The final
+  run, on the tree that holds the review fixes, gave the same result.
+- **The store.** The runner keeps the results as a list in run order,
+  not as a map. A part's view looks a needed part up in the list.
+- **Setup's calls.** Setup runs before any part, so its `vibe` calls
+  belong to no part. The runner takes them before the first part, and
+  R-01 gets them through its need on every other part. Before, R-01
+  listed them too, through the session's list. A probetest case covers
+  it.
+- **R-01's own calls.** R-01 takes the calls of its own runs from the
+  run's outcome. A fresh run carries the calls recorded while it ran. A
+  cached baseline run carries none, because the part that ran it first
+  owns them, and R-01 gets them through its need on every other part.
+- **Registry test.** The registry test proves that `contract.Rules()`
+  does not panic through `contract.Audit` with `Static: true`, because
+  the runner validates the needs in every audit. It does not call the
+  sorter.
+- **R-01's finding order.** A probetest case with a SessionStart hook
+  and a `verify` that both call `vibe` shows the order change described
+  under "Further Notes". On `main`, the same case lists the hook's call
+  first. The case keeps the new order.
