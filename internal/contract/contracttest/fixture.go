@@ -9,6 +9,8 @@ package contracttest
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -233,4 +235,32 @@ func Git(t testing.TB, dir string, args ...string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
+}
+
+// TreeHash hashes every file under dir, .git included, by path (slash
+// separated, relative to dir) and content: two calls give equal maps when
+// nothing under dir changed in between.
+func TreeHash(t testing.TB, dir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		data, err := os.ReadFile(p) // #nosec G304 G122 -- a file under the test's own directory
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(data)
+		rel, _ := filepath.Rel(dir, p)
+		out[filepath.ToSlash(rel)] = hex.EncodeToString(sum[:])
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("hashing %s: %v", dir, err)
+	}
+	return out
 }

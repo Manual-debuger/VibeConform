@@ -532,18 +532,6 @@ func TestContractGuardListings(t *testing.T) {
 
 const agentsDependabotFile = ".github/dependabot.yml"
 
-// agentsDependabot is a dependabot.yml with the given updates entries, each
-// "ecosystem directory-key directory-value".
-func agentsDependabot(entries ...string) contracttest.Edit {
-	var b strings.Builder
-	b.WriteString("version: 2\nupdates:\n")
-	for _, e := range entries {
-		f := strings.SplitN(e, " ", 3)
-		b.WriteString("  - package-ecosystem: " + f[0] + "\n    " + f[1] + ": " + f[2] + "\n    schedule:\n      interval: weekly\n")
-	}
-	return contracttest.WithFile(agentsDependabotFile, b.String())
-}
-
 // monorepo declares a Go component at apps/api, a TypeScript one at
 // web and a Python one at tools/py.
 func agentsMonorepo() []contracttest.Edit {
@@ -579,20 +567,20 @@ func TestRuleD02(t *testing.T) {
 		{Name: "dependabot.yaml", Want: "pass", Edits: []contracttest.Edit{
 			contracttest.WithoutFile(agentsDependabotFile), contracttest.WithFile(".github/dependabot.yaml", "version: 2\nupdates:\n"+
 				"  - {package-ecosystem: gomod, directory: /}\n  - {package-ecosystem: github-actions, directory: /}\n")}},
-		{Name: "monorepo, directories and globs", Want: "pass", Edits: append(agentsMonorepo(), agentsDependabot(
+		{Name: "monorepo, directories and globs", Want: "pass", Edits: append(agentsMonorepo(), contracttest.Dependabot(
 			"gomod directories [\"/apps/*\"]", "npm directory /web/", "uv directories [\"/**\"]", "github-actions directory /"))},
-		{Name: "monorepo, a component left out", Want: "fail", Edits: append(agentsMonorepo(), agentsDependabot(
+		{Name: "monorepo, a component left out", Want: "fail", Edits: append(agentsMonorepo(), contracttest.Dependabot(
 			"gomod directories [\"/apps/*\"]", "pip directory /tools", "npm directory /web", "github-actions directory /")),
 			Findings: []string{agentsDependabotFile + ": no updates entry for pip or uv covers component tools/py",
 				"Fix: add an updates entry with package-ecosystem: pip and directory: /tools/py"}},
 		{Name: "a glob in directory is not expanded", Want: "fail",
-			Edits:    []contracttest.Edit{agentsDependabot("gomod directory /*", "github-actions directory /")},
+			Edits:    []contracttest.Edit{contracttest.Dependabot("gomod directory /*", "github-actions directory /")},
 			Findings: []string{"no updates entry for gomod covers component ."}},
 		{Name: "wrong ecosystem", Want: "fail",
-			Edits:    []contracttest.Edit{agentsDependabot("npm directory /", "github-actions directory /")},
+			Edits:    []contracttest.Edit{contracttest.Dependabot("npm directory /", "github-actions directory /")},
 			Findings: []string{agentsDependabotFile + ": no updates entry for gomod covers component .", "directory: /"}},
 		{Name: "no github-actions", Want: "fail",
-			Edits: []contracttest.Edit{agentsDependabot("gomod directory /")},
+			Edits: []contracttest.Edit{contracttest.Dependabot("gomod directory /")},
 			Findings: []string{agentsDependabotFile + ": no updates entry has package-ecosystem github-actions",
 				"Fix: add an updates entry with package-ecosystem: github-actions and directory: /"}},
 		{Name: "a workflow automerges", Want: "fail",

@@ -67,7 +67,7 @@ func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocycl
 		// of dependencies, a manifest below the depth init looks at, and a
 		// manifest inside another component.
 		[]fixtureEdit{
-			dependabot("gomod directory /services/api", "pip directory /tools/py", "npm directory /web/app", "github-actions directory /"),
+			contracttest.Dependabot("gomod directory /services/api", "pip directory /tools/py", "npm directory /web/app", "github-actions directory /"),
 			withFile("docs/site/package.json", "{}\n"),
 			withFile("node_modules/dep/package.json", "{}\n"),
 			withFile("node_modules/dep/tsconfig.json", "{}\n"),
@@ -82,8 +82,8 @@ func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocycl
 		componentsKey bool
 	}{
 		{"go at the root", []fixtureEdit{withoutFile("vibe.yaml")}, []contract.Component{{Path: ".", Language: "go"}}, false},
-		{"python", slices.Concat(withoutGo, pyFiles, []fixtureEdit{dependabot("pip directory /", "github-actions directory /")}), []contract.Component{{Path: ".", Language: "python"}}, false},
-		{"typescript", slices.Concat(withoutGo, tsFiles, []fixtureEdit{dependabot("npm directory /", "github-actions directory /")}), []contract.Component{{Path: ".", Language: "typescript"}}, false},
+		{"python", slices.Concat(withoutGo, pyFiles, []fixtureEdit{contracttest.Dependabot("pip directory /", "github-actions directory /")}), []contract.Component{{Path: ".", Language: "python"}}, false},
+		{"typescript", slices.Concat(withoutGo, tsFiles, []fixtureEdit{contracttest.Dependabot("npm directory /", "github-actions directory /")}), []contract.Component{{Path: ".", Language: "typescript"}}, false},
 		{"monorepo", monorepo, []contract.Component{
 			{Path: "services/api", Language: "go"},
 			{Path: "tools/py", Language: "python"},
@@ -154,7 +154,7 @@ func TestInitRefusesAnExistingConfig(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			dir := contractFixture(t, withFile("vibe.yaml", c.content))
-			before := treeHash(t, dir)
+			before := contracttest.TreeHash(t, dir)
 			out, err := runInit(t, dir)
 			if code := ExitCode(err); code != exitError {
 				t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
@@ -164,7 +164,7 @@ func TestInitRefusesAnExistingConfig(t *testing.T) {
 					t.Errorf("output lacks %q:\n%s", want, out)
 				}
 			}
-			if after := treeHash(t, dir); !maps.Equal(before, after) {
+			if after := contracttest.TreeHash(t, dir); !maps.Equal(before, after) {
 				t.Error("the refused init changed the repository")
 			}
 		})
@@ -217,7 +217,7 @@ func TestInitRaceLostIsAnError(t *testing.T) {
 func TestInitNeedsAComponent(t *testing.T) {
 	t.Parallel()
 	dir := contractFixture(t, withoutGo...)
-	before := treeHash(t, dir)
+	before := contracttest.TreeHash(t, dir)
 	out, err := runInit(t, dir)
 	if code := ExitCode(err); code != exitError {
 		t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
@@ -227,7 +227,7 @@ func TestInitNeedsAComponent(t *testing.T) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}
-	if after := treeHash(t, dir); !maps.Equal(before, after) {
+	if after := contracttest.TreeHash(t, dir); !maps.Equal(before, after) {
 		t.Error("the failed init changed the repository")
 	}
 }

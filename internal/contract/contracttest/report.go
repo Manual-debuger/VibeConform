@@ -59,6 +59,19 @@ func AgentsConfig(list string) Edit {
 	return WithFile("vibe.yaml", ConfigWith(Section{"agents", "agents: " + list + "\n"}))
 }
 
+// Dependabot writes .github/dependabot.yml with one updates entry for
+// each of entries, "ecosystem directory-key directory-value", such as
+// "gomod directory /" or "npm directories [/web, /apps/*]".
+func Dependabot(entries ...string) Edit {
+	var b strings.Builder
+	b.WriteString("version: 2\nupdates:\n")
+	for _, e := range entries {
+		f := strings.SplitN(e, " ", 3)
+		b.WriteString("  - package-ecosystem: " + f[0] + "\n    " + f[1] + ": " + f[2] + "\n    schedule:\n      interval: weekly\n")
+	}
+	return WithFile(".github/dependabot.yml", b.String())
+}
+
 // RuleResult returns one rule's result from a report, or fails the test.
 func RuleResult(t testing.TB, rep *contract.Report, id string) contract.RuleResult {
 	t.Helper()

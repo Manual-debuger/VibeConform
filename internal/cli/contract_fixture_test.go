@@ -2,10 +2,7 @@ package cli
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,19 +63,6 @@ func fixtureGit(t *testing.T, dir string, args ...string) {
 	contracttest.Git(t, dir, args...)
 }
 
-// dependabot is a .github/dependabot.yml with the given updates entries,
-// each "ecosystem directory-key directory-value". vibe init's tests use
-// it; the D-02 tests in internal/contract have their own.
-func dependabot(entries ...string) fixtureEdit {
-	var b strings.Builder
-	b.WriteString("version: 2\nupdates:\n")
-	for _, e := range entries {
-		f := strings.SplitN(e, " ", 3)
-		b.WriteString("  - package-ecosystem: " + f[0] + "\n    " + f[1] + ": " + f[2] + "\n    schedule:\n      interval: weekly\n")
-	}
-	return withFile(".github/dependabot.yml", b.String())
-}
-
 // openFixtureRepo is the audit's repository seam in tests: a listed
 // fixture gets its file list, any other directory contract.OpenRepo.
 var openFixtureRepo contract.RepoOpener = contracttest.OpenRepo
@@ -105,33 +89,6 @@ func runVibeAudit(t *testing.T, args ...string) auditResult {
 	root.SetArgs(append([]string{"audit"}, args...))
 	err := root.Execute()
 	return auditResult{stdout: out.String(), stderr: errOut.String(), code: ExitCode(err)}
-}
-
-// treeHash hashes every file under dir, .git included, by path and
-// content.
-func treeHash(t *testing.T, dir string) map[string]string {
-	t.Helper()
-	out := map[string]string{}
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		sum := sha256.Sum256(data)
-		rel, _ := filepath.Rel(dir, p)
-		out[filepath.ToSlash(rel)] = hex.EncodeToString(sum[:])
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return out
 }
 
 // section is one top-level field of a fixture vibe.yaml, with its text.
