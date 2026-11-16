@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -140,6 +141,152 @@ func runVibeAuditSeams(t *testing.T, seams contractSeams, args ...string) auditR
 	return auditResult{stdout: out.String(), stderr: errOut.String(), code: ExitCode(err)}
 }
 
+// watchReports returns the seam that checks every contract audit report
+// one runVibeAudit call prints for failures without a file or a fix,
+// with contracttest's report check.
+func watchReports(t *testing.T) func(*contract.Report) {
+	t.Helper()
+	return func(rep *contract.Report) {
+		t.Helper()
+		contracttest.Check(t, rep)
+	}
+}
+
+// section is one top-level field of a fixture vibe.yaml, with its text.
+type section struct {
+	key  string
+	body string
+}
+
+// configWith is the baseline vibe.yaml with fields replaced in place (an
+// empty body removes the field) and new fields appended in order.
+func configWith(changes ...section) string {
+	out := make([]contracttest.Section, len(changes))
+	for i, c := range changes {
+		out[i] = contracttest.Section{Key: c.key, Body: c.body}
+	}
+	return contracttest.ConfigWith(out...)
+}
+
+func entrypoints(body string) fixtureEdit {
+	return withFile("vibe.yaml", configWith(section{"entrypoints", "entrypoints:\n" + body}))
+}
+
+// ruleCase is one fixture for one rule: the baseline plus one change,
+// and the result and findings that change must give.
+type ruleCase struct {
+	name     string
+	edits    []fixtureEdit
+	want     string
+	findings []string
+}
+
+func runRuleCases(t *testing.T, id string, cases []ruleCase) {
+	t.Helper()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rep, _ := auditJSON(t, contractFixture(t, tc.edits...), "--static")
+			assertRule(t, rep, id, tc.want, tc.findings...)
+		})
+	}
+}
+
+// jsonReport is the --json report as a consumer reads it (spec 0052,
+// "Report (#100)").
+type jsonReport struct {
+	Schema     int    `json:"schema"`
+	Vibe       string `json:"vibe"`
+	StaticOnly bool   `json:"static_only"`
+	Verdict    string `json:"verdict"`
+	Reason     string `json:"reason"`
+	Contract   struct {
+		Declared string `json:"declared"`
+		Audited  string `json:"audited"`
+	} `json:"contract"`
+	Summary    map[string]map[string]int `json:"summary"`
+	Rules      []jsonRule                `json:"rules"`
+	CIProvider string                    `json:"ci_provider"`
+}
+
+type jsonRule struct {
+	ID       string `json:"id"`
+	Level    string `json:"level"`
+	Category string `json:"category"`
+	Title    string `json:"title"`
+	Result   string `json:"result"`
+	Parts    []struct {
+		Check  string `json:"check"`
+		Result string `json:"result"`
+	} `json:"parts"`
+	Findings []struct {
+		File    string `json:"file"`
+		Message string `json:"message"`
+		Fix     string `json:"fix"`
+	} `json:"findings"`
+	Waiver *struct {
+		Reason  string `json:"reason"`
+		Until   string `json:"until"`
+		Expired bool   `json:"expired"`
+		// Unused is a pointer so that a missing key shows.
+		Unused *bool `json:"unused"`
+	} `json:"waiver"`
+	// Required is a pointer so that a missing key shows.
+	Required *bool `json:"required"`
+}
+
+// auditJSON runs vibe audit --json on a fixture and decodes the report.
+func auditJSON(t *testing.T, dir string, args ...string) (jsonReport, auditResult) {
+	t.Helper()
+	return auditJSONRules(t, nil, dir, args...)
+}
+
+// auditJSONRules is auditJSON with rules in place of the registry.
+func auditJSONRules(t *testing.T, rules []contract.Rule, dir string, args ...string) (jsonReport, auditResult) {
+	t.Helper()
+	r := runVibeAuditRules(t, rules, append([]string{"--repo-root", dir, "--json"}, args...)...)
+	var rep jsonReport
+	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
+		t.Fatalf("--json printed no JSON report: %v\nstdout:\n%s\nstderr:\n%s", err, r.stdout, r.stderr)
+	}
+	return rep, r
+}
+
+// rule returns the result of one rule from a report.
+func (rep jsonReport) rule(t *testing.T, id string) jsonRule {
+	t.Helper()
+	for _, r := range rep.Rules {
+		if r.ID == id {
+			return r
+		}
+	}
+	t.Fatalf("report has no rule %s", id)
+	return jsonRule{}
+}
+
+// findingText joins a rule's findings for substring assertions.
+func (r jsonRule) findingText() string {
+	var b strings.Builder
+	for _, f := range r.Findings {
+		b.WriteString(f.File + ": " + f.Message + " Fix: " + f.Fix + "\n")
+	}
+	return b.String()
+}
+
+func assertRule(t *testing.T, rep jsonReport, id, want string, findings ...string) {
+	t.Helper()
+	r := rep.rule(t, id)
+	if r.Result != want {
+		t.Errorf("%s = %s, want %s\nfindings:\n%s", id, r.Result, want, r.findingText())
+	}
+	text := r.findingText()
+	for _, f := range findings {
+		if !strings.Contains(text, f) {
+			t.Errorf("%s findings missing %q\nfindings:\n%s", id, f, text)
+		}
+	}
+}
+
 // A fixture whose files are all tracked is no Git repository: the audit
 // gets its file list through the repository seam, so a table case starts
 // no git (spec 0056). The audit still reads it as the baseline.
@@ -166,6 +313,48 @@ func TestFixtureThatNeedsGitIsARepository(t *testing.T) {
 			dir := contractFixture(t, edit)
 			if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
 				t.Errorf("the fixture has no .git: %v", err)
+			}
+		})
+	}
+}
+
+// The GitHub workflow names and helpers the GitLab rule tests still use;
+// the GitHub CI rule tests moved to internal/contract (spec 0065).
+const (
+	ciFile    = ".github/workflows/ci.yml"
+	auditFile = ".github/workflows/audit.yml"
+)
+
+// listVerify declares verify as a list of two commands.
+var listVerify = entrypoints("  verify: [task lint, task test]\n  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n")
+
+// noVerify declares every entrypoint but verify.
+var noVerify = entrypoints("  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n")
+
+// runStaticPartCases is runRuleCases for a rule with a static part and
+// other parts: under --static the others are not run, so want is the
+// static part's result, and the findings are the rule's.
+func runStaticPartCases(t *testing.T, id string, cases []ruleCase) {
+	t.Helper()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rep, _ := auditJSON(t, contractFixture(t, tc.edits...), "--static")
+			r := rep.rule(t, id)
+			got := ""
+			for _, p := range r.Parts {
+				if p.Check == "static" {
+					got = p.Result
+				}
+			}
+			if got != tc.want {
+				t.Errorf("%s static part = %q, want %s\nfindings:\n%s", id, got, tc.want, r.findingText())
+			}
+			text := r.findingText()
+			for _, f := range tc.findings {
+				if !strings.Contains(text, f) {
+					t.Errorf("%s findings missing %q\nfindings:\n%s", id, f, text)
+				}
 			}
 		})
 	}
