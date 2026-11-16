@@ -68,6 +68,15 @@ internal/contract
   the reverse, and renders its report model as text or JSON
   (`internal/cli/contract_*.go`). `internal/contract/imports_test.go`
   keeps the removed template-sync package names out of its imports.
+- **Test seam** (ADR 0028, spec 0065). `internal/contract/contracttest`
+  builds fixture repositories from the trees in
+  `internal/contract/testdata`, opens them without git when every file
+  is tracked, and runs `contract.Load` and `contract.Audit` with a check
+  on every report: each failed part has a finding, and each finding
+  names a file and a fix. The tests of `internal/contract` and
+  `internal/cli` import it. Among this module's packages it imports only
+  `internal/contract`, and only test files import it; two `depguard`
+  rules enforce both. The report goldens stay in `internal/cli/testdata`.
 - **Shell parsing.** "Called" means a simple command in the shell parse
   tree, so `internal/contract` depends on `mvdan.cc/sh/v3/syntax` (ADR
   0026). `internal/contract/shell.go` is the only file that imports it;
@@ -258,6 +267,8 @@ cmd/
 internal/
   cli/                      # command tree: init, audit, doctor, unlock; hidden stubs for the removed sync, diff and check
   contract/                 # contract audit: vibe.yaml v2, rule registry, static checks, the CI model with its GitHub Actions and GitLab CI readers, probe copy and probes (spec 0052, 0053, 0055)
+    contracttest/           # the audit's test seam: fixture builder, listed-fixture opener, audit helper with the report check; imported by test files only (ADR 0028)
+    probetest/              # the probe tests that run real tools, in a package of their own for go test's time budget (spec 0053)
   guardrule/                # guard rule IDs, policy.json v2, command parsing shared by the audit and vibe-guard; imports nothing from internal/ (spec 0053)
   guard/                    # vibe-guard: baseline rules, hook/explain/relock, unlock marker, reference commands, version rule; imports only guardrule (spec 0053, 0054)
   setupskill/               # the embedded vibeconform-setup skill, vibe init --skill, and the tests that run its reference hooks; imports only guard (spec 0054)

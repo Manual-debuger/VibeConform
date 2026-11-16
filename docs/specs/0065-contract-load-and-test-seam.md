@@ -425,3 +425,18 @@ Each of these is checked during implementation:
   per line with its file. The doctor test cases are recorded with the
   doctor move. After the move, each name is found in its new place, or
   this section lists it with the reason it was merged or dropped.
+- **`contracttest`** (#184). The fixture builder, the listed-fixture
+  opener (`contracttest.OpenRepo`), the audit helper
+  (`contracttest.Audit`) and the report check (`contracttest.Check`,
+  `contracttest.Problems`) live in `internal/contract/contracttest`,
+  with the shared assertions and the baseline `vibe.yaml` builder
+  (`ConfigWith`, `Entrypoints`, `AssertRule`, `AssertPart`,
+  `RunRuleCases`). The CLI's fixture helpers, the report hook,
+  `internal/contract/probetest`, the guard probe tests, the runner
+  tests and the `contract.Load` tests build their fixtures through it,
+  so the builder exists once. The probe and guard probe reports now
+  pass the report check too, which they did not before.
+- **Moved before the rule tests:** `TestFixturePathMapsDotClaude`
+  (baseline: `contract_fixture_test.go`) is now in
+  `internal/contract/contracttest/fixture_test.go`, beside the function
+  it tests. Its assertions are unchanged.
