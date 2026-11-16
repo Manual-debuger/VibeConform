@@ -28,11 +28,13 @@ type Detection struct {
 	AuditDetectsSame bool
 }
 
-// NestedManifest is a directory with a manifest inside the component In.
-// Components do not nest, so it is not a component of its own.
+// NestedManifest is a directory with a manifest inside another
+// component. Components do not nest, so it is not a component of its own.
 type NestedManifest struct {
+	// Dir is the directory with the manifest.
 	Dir string
-	In  Component
+	// Component is the component Dir lies inside.
+	Component Component
 }
 
 // DetectComponents finds the components among the tracked files (slash
@@ -55,7 +57,7 @@ func DetectComponents(files []string) Detection {
 		}
 		c := Component{Path: dir, Language: language}
 		if i := slices.IndexFunc(d.Components, func(o Component) bool { return within(dir, o.Path) }); i >= 0 {
-			d.Nested = append(d.Nested, NestedManifest{Dir: dir, In: d.Components[i]})
+			d.Nested = append(d.Nested, NestedManifest{Dir: dir, Component: d.Components[i]})
 			continue
 		}
 		d.Components = append(d.Components, c)

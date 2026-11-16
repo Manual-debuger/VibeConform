@@ -99,10 +99,7 @@ func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) err
 	if err := createConfig(repoRoot, data); err != nil {
 		return err
 	}
-	if err := printDetection(cmd.OutOrStdout(), detection); err != nil {
-		return fmt.Errorf("init: %w", err)
-	}
-	return nil
+	return printDetection(cmd.OutOrStdout(), detection)
 }
 
 // createConfig writes data as repoRoot's vibe.yaml. The create is
@@ -127,8 +124,10 @@ func createConfig(repoRoot string, data []byte) error {
 	return nil
 }
 
-// printDetection prints what init wrote and found: the file, each
-// component, each nested manifest and the next step.
+// printDetection prints what init wrote and found, one line at a time:
+// the file, each component, each nested manifest and the next step. A
+// write error is prefixed with "init: ", except the next step's, which
+// is returned as it is.
 func printDetection(w io.Writer, detection contract.Detection) error {
 	lines := []string{"wrote " + configFileName}
 	for _, c := range detection.Components {
@@ -136,10 +135,14 @@ func printDetection(w io.Writer, detection contract.Detection) error {
 	}
 	for _, n := range detection.Nested {
 		lines = append(lines, fmt.Sprintf("skipped %s: inside the component %s (%s); components do not nest",
-			n.Dir, n.In.Path, n.In.Language))
+			n.Dir, n.Component.Path, n.Component.Language))
 	}
-	lines = append(lines, "next: declare the entrypoints in "+configFileName+"; until then vibe audit fails V-04")
-	_, err := io.WriteString(w, strings.Join(lines, "\n")+"\n")
+	for _, line := range lines {
+		if _, err := io.WriteString(w, line+"\n"); err != nil {
+			return fmt.Errorf("init: %w", err)
+		}
+	}
+	_, err := io.WriteString(w, "next: declare the entrypoints in "+configFileName+"; until then vibe audit fails V-04\n")
 	return err
 }
 
