@@ -69,6 +69,31 @@ func fixtureGit(t *testing.T, dir string, args ...string) {
 	contracttest.Git(t, dir, args...)
 }
 
+// The GitLab baseline, for the CLI tests that still build GitLab fixtures
+// (D-02's). The GitLab rule tests moved to internal/contract
+// (rules_gitlab_test.go), which keeps its own copy.
+
+const gitlabFile = ".gitlab-ci.yml"
+
+// glImage is an image pinned by digest, as the baseline uses it.
+const glImage = "golang:1.25@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+// glBase passes C-01 and C-04: verify on a Linux and a Windows runner, a
+// scan, and the audit in a job of its own, none with rules.
+const glBase = "default:\n  image: " + glImage + "\n\n" +
+	"verify:linux:\n  tags: [linux]\n  script:\n    - task verify\n\n" +
+	"verify:windows:\n  tags: [windows]\n  script:\n    - task verify\n\n" +
+	"scan:\n  script:\n    - go install golang.org/x/vuln/cmd/govulncheck@v1.1.4\n    - govulncheck ./...\n\n" +
+	"conformance:audit:\n  script:\n    - vibe audit --static\n"
+
+// gitlab turns the baseline into a GitLab-only repository whose
+// .gitlab-ci.yml is pipeline, plus any further edits.
+func gitlab(pipeline string, more ...fixtureEdit) []fixtureEdit {
+	return append([]fixtureEdit{
+		withoutFile(".github/workflows/ci.yml"), withoutFile(".github/workflows/audit.yml"), withFile(gitlabFile, pipeline),
+	}, more...)
+}
+
 // openFixtureRepo is the audit's repository seam in tests: a listed
 // fixture gets its file list, any other directory contract.OpenRepo.
 var openFixtureRepo contract.RepoOpener = contracttest.OpenRepo
