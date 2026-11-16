@@ -52,6 +52,11 @@ not a check function.
 5. **The CLI's seams shrink** to what its own suite needs. The rule
    list, the report hook and the probe environment leave the CLI.
 
+   > **Note (2026-11-16):** the probe environment stayed. The CLI's
+   > full audits, the golden reports among them, need a narrowed probe
+   > `PATH` so that their output does not depend on the machine. Spec
+   > 0065's Implementation Notes ("The CLI's seams") say why.
+
 ## Consequences
 
 - A rule test reads the report model, so a change to the JSON shape
