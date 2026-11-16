@@ -201,6 +201,30 @@ func TestStandIn(t *testing.T) {
 	}
 }
 
+// StandIn returns a new slice: the rules it is given still decide as
+// before, so a test can build two rule sets from one.
+func TestStandInLeavesItsInputUntouched(t *testing.T) {
+	t.Parallel()
+	in := contracttest.StandIn(nil, contract.ResultPass, "V-01")
+	out := contracttest.StandIn(in, contract.ResultFail, "V-01")
+	result := func(rules []contract.Rule) contract.Result {
+		t.Helper()
+		for _, r := range rules {
+			if r.ID == "V-01" {
+				return r.Parts[0].Run(nil, contract.Needed{}).Result
+			}
+		}
+		t.Fatal("no V-01")
+		return ""
+	}
+	if got := result(in); got != contract.ResultPass {
+		t.Errorf("the input's V-01 = %s after a second StandIn, want pass", got)
+	}
+	if got := result(out); got != contract.ResultFail {
+		t.Errorf("the output's V-01 = %s, want fail", got)
+	}
+}
+
 // RuleIDs lists a level's rules in registry order, without those named;
 // MustRules is RuleIDs of the MUST level.
 func TestRuleIDs(t *testing.T) {
