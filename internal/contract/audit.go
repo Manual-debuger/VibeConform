@@ -50,14 +50,16 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 			pending[partRef{rule: i, part: j}] = true
 		}
 	}
-	runPending(env, rep, list, order, pending, opts.Probe)
+	results := runPending(env, rep, list, order, pending, opts.Probe)
 	for i := range rep.Rules {
 		if rep.Rules[i].Result == "" {
 			rep.Rules[i].Result = combine(rep.Rules[i].Parts)
 		}
 	}
 	rep.GuardExceptions, rep.LocalAdjustments = guardListings(env)
-	rep.GuardExceptionUses = env.guardUses
+	for _, p := range order {
+		rep.GuardExceptionUses = append(rep.GuardExceptionUses, results[keyOf(list, p)].guardUses...)
+	}
 	if ci, _, ok := env.CI(); ok {
 		rep.CIProvider = ci.Provider
 	}
@@ -106,11 +108,11 @@ func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, st
 // runPending runs the pending execution and probe parts in order (see
 // runOrder), in one probe copy built for them, each from a reset copy.
 // Each part gets the results of the parts it needs that ran before it.
-// The copy is deleted (or kept, for --keep-probe-copy) before it
-// returns.
-func runPending(env *Env, rep *Report, list []Rule, order []partRef, pending map[partRef]bool, opts ProbeOptions) {
+// It returns the result of every part that ran, keyed by part. The copy
+// is deleted (or kept, for --keep-probe-copy) before it returns.
+func runPending(env *Env, rep *Report, list []Rule, order []partRef, pending map[partRef]bool, opts ProbeOptions) map[partKey]PartResult {
 	if len(pending) == 0 {
-		return
+		return nil
 	}
 
 	s := startProbeSession(env, opts)
@@ -140,6 +142,7 @@ func runPending(env *Env, rep *Report, list []Rule, order []partRef, pending map
 		results[key] = r
 		po.Result, po.Findings = r.Result, r.Findings
 	}
+	return results
 }
 
 // decided is a part's result, a pass when the check left it empty.

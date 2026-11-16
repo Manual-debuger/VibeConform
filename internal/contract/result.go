@@ -36,10 +36,14 @@ type Finding struct {
 }
 
 // PartResult is what a CheckFunc decides: pass, fail or cannot decide,
-// with the findings that explain it.
+// with the findings that explain it. It also carries every other output
+// that leaves a part (spec 0064).
 type PartResult struct {
 	Result   Result
 	Findings []Finding
+	// guardUses are the corpus cases guard exceptions let through (A-02,
+	// A-09). The report lists them in run order.
+	guardUses []GuardExceptionUse
 }
 
 // Pass is a part that holds.
