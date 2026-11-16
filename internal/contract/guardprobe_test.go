@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -458,8 +459,8 @@ func TestGuardProbeA09(t *testing.T) {
 }
 
 // The report's guard exception uses come from the results of the parts
-// that found them, in run order (spec 0064): a part whose result leaves
-// its uses out adds none to the report.
+// that found them, in run order (spec 0064): a part that does not run
+// adds none to the report.
 func TestGuardProbeExceptionUsesComeFromPartResults(t *testing.T) {
 	if testing.Short() {
 		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
@@ -509,20 +510,22 @@ func TestGuardProbeExceptionUsesComeFromPartResults(t *testing.T) {
 			t.Errorf("GuardExceptionUses = %+v, want %+v", rep.GuardExceptionUses, want)
 		}
 	})
-	t.Run("a result without its uses adds none", func(t *testing.T) {
+	t.Run("a part that does not run adds no uses", func(t *testing.T) {
 		t.Parallel()
-		list := rules("A-02", "A-09")
-		real := list[0].Parts[0].Run
-		// A stand-in for A-02's probe that returns only its result and
-		// findings.
-		list[0].Parts[0].Run = func(env *contract.Env, needed contract.Needed) contract.PartResult {
-			r := real(env, needed)
-			return contract.PartResult{Result: r.Result, Findings: r.Findings}
+		// A-09 is a SHOULD rule, so a waiver keeps its probe from running;
+		// the same policy then lists only A-02's uses.
+		config, err := os.ReadFile(filepath.Join(probeGoFixture, "vibe.yaml"))
+		if err != nil {
+			t.Fatal(err)
 		}
-		rep := auditRules(t, guardFixture(t, files), list, bin)
+		waived := maps.Clone(files)
+		waived["vibe.yaml"] = string(config) +
+			"waivers:\n  - rule: A-09\n    reason: the hooks need the network\n    until: 2999-12-31\n"
+		rep := auditRules(t, guardFixture(t, waived), rules("A-02", "A-09"), bin)
 		assertPart(t, rep, "A-02", contract.Probe, contract.ResultPass)
-		if !slices.Equal(rep.GuardExceptionUses, a09Uses) {
-			t.Errorf("GuardExceptionUses = %+v, want only A-09's %+v", rep.GuardExceptionUses, a09Uses)
+		assertPart(t, rep, "A-09", contract.Probe, contract.ResultWaived)
+		if !slices.Equal(rep.GuardExceptionUses, a02Uses) {
+			t.Errorf("GuardExceptionUses = %+v, want only A-02's %+v", rep.GuardExceptionUses, a02Uses)
 		}
 	})
 }

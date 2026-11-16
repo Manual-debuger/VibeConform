@@ -1,7 +1,9 @@
 package contract
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -135,58 +137,63 @@ func checkSpec0061Rule(t *testing.T, r Rule) {
 }
 
 // The registry's needs (spec 0064) keep vibe audit from the runner's
-// panic: every need names a part of the registry, no static part
-// declares one, and they form no cycle. Only R-01's execution part
-// declares needs: A-02's probe, whose deny verdict it reads, and every
-// other part, whose vibe calls it lists.
+// panic. Only R-01's execution part declares needs: A-02's probe, whose
+// deny verdict it reads, and every other part, whose vibe calls it
+// lists. A static audit of Rules() does not panic: the runner validates
+// the needs in every audit, --static included, so every need resolves,
+// no static part declares one, and they form no cycle.
 func TestRegistryNeedsResolve(t *testing.T) {
-	rules := Rules()
-	if declared, want := declaredNeeds(t, rules), []string{"R-01/execution"}; !slices.Equal(declared, want) {
-		t.Errorf("parts that declare needs: %q, want %q", declared, want)
-	}
-	r01, _ := LookupRule("R-01")
-	for _, p := range r01.Parts {
-		if p.Kind != Execution {
-			continue
-		}
-		if want := []Need{NeedPart("A-02", Probe), NeedEveryOther()}; !slices.Equal(p.Needs, want) {
-			t.Errorf("R-01/execution needs %v, want %v", p.Needs, want)
+	r01 := partKey{rule: "R-01", kind: Execution}
+	for _, r := range Rules() {
+		for _, p := range r.Parts {
+			key := partKey{rule: r.ID, kind: p.Kind}
+			switch {
+			case key == r01:
+				if want := []Need{NeedPart("A-02", Probe), NeedEveryOther()}; !slices.Equal(p.Needs, want) {
+					t.Errorf("%s needs %v, want %v", key, p.Needs, want)
+				}
+			case len(p.Needs) > 0:
+				t.Errorf("%s needs %v, want no needs", key, p.Needs)
+			}
 		}
 	}
 
-	order := runOrder(rules) // panics on a cycle
-	if last := keyOf(rules, order[len(order)-1]); last != (partKey{rule: "R-01", kind: Execution}) {
-		t.Errorf("the last part to run is %s, want R-01/execution", last)
+	cfg, repo := staticFixture(t)
+	rep := Audit(context.Background(), cfg, repo, Options{Static: true})
+	if got, want := len(rep.Rules), len(Rules()); got != want {
+		t.Errorf("the static audit decided %d rules, want %d", got, want)
 	}
 }
 
-// declaredNeeds lists the parts of rules that declare needs, as
-// "<id>/<kind>", and fails the test for a static part that declares one
-// or a need on a part rules does not hold.
-func declaredNeeds(t *testing.T, rules []Rule) []string {
+// staticFixture is a Git repository holding only a go.mod and a
+// vibe.yaml, and its parsed configuration: enough for a static audit.
+func staticFixture(t *testing.T) (*Config, *Repo) {
 	t.Helper()
-	parts := map[partKey]bool{}
-	for _, r := range rules {
-		for _, p := range r.Parts {
-			parts[partKey{rule: r.ID, kind: p.Kind}] = true
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+	dir := t.TempDir()
+	data := []byte("contract: 1.2.0\nplatforms: [linux]\nagents: [claude]\n")
+	for name, content := range map[string][]byte{"vibe.yaml": data, "go.mod": []byte("module fixture\n\ngo 1.22\n")} {
+		if err := os.WriteFile(filepath.Join(dir, name), content, 0o600); err != nil {
+			t.Fatal(err)
 		}
 	}
-	var declared []string
-	for _, r := range rules {
-		for _, p := range r.Parts {
-			if len(p.Needs) == 0 {
-				continue
-			}
-			declared = append(declared, r.ID+"/"+string(p.Kind))
-			if p.Kind == Static {
-				t.Errorf("%s's static part declares needs", r.ID)
-			}
-			for _, n := range p.Needs {
-				if !n.everyOther && !parts[n.part] {
-					t.Errorf("%s/%s needs %s, which is not in the registry", r.ID, p.Kind, n)
-				}
-			}
+	for _, args := range [][]string{{"init", "-q"}, {"add", "-A"}} {
+		cmd := exec.Command("git", args...) // #nosec G204 -- fixed arguments
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
 	}
-	return declared
+	ctx := context.Background()
+	repo, err := OpenRepo(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Parse("vibe.yaml", data, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg, repo
 }

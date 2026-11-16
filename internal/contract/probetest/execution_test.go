@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -183,6 +184,28 @@ func TestRuleR01Execution(t *testing.T) {
 		// The fixture has no guard, so R-01's A-02 half fails as well.
 		assertExecution(t, rep, "R-01", fail)
 		assertListedOnce(t, rep, "R-01", `the SessionStart hook ran "vibe audit --static"`)
+	})
+	t.Run("the calls are listed in run order", func(t *testing.T) {
+		t.Parallel()
+		// V-01 runs the verify baseline before A-07 runs the hook, because
+		// the parts run in registry order (spec 0064). Before spec 0064,
+		// A-07 ran first and the hook's call came first.
+		rep := audit(t, probeFixture(t, sessionStartHooks("startup", "vibe audit --static"),
+			probeConfig(section{"entrypoints", probeEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci call-vibe]\n")})),
+			ids("V-01", "A-02", "A-07", "R-01"), inherit)
+		var calls []string
+		for _, f := range rule(t, rep, "R-01").Findings() {
+			if strings.Contains(f.Message, "and vibe was not available") {
+				calls = append(calls, f.Message)
+			}
+		}
+		want := []string{
+			`verify ran "vibe version", and vibe was not available`,
+			`the SessionStart hook ran "vibe audit --static", and vibe was not available`,
+		}
+		if !slices.Equal(calls, want) {
+			t.Errorf("R-01 lists the calls %q, want %q", calls, want)
+		}
 	})
 	t.Run("with Claude Code and no guard the A-02 deny cases fail R-01", func(t *testing.T) {
 		t.Parallel()
