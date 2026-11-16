@@ -43,58 +43,59 @@ const (
 	loadMarker = "vibe.yaml"
 )
 
-// Each outcome of contract.Load (spec 0065, "Testing Decisions").
-func TestLoad(t *testing.T) {
+// The outcomes of contract.Load (spec 0065, "Testing Decisions"), one
+// test each.
+
+func TestLoadWithoutVibeYAMLIsErrNoConfig(t *testing.T) {
+	t.Parallel()
+	dir, open := loadFixture(t, map[string]string{"go.mod": loadGoMod})
+	_, _, err := contract.Load(context.Background(), dir, "", open)
+	if !errors.Is(err, contract.ErrNoConfig) {
+		t.Fatalf("err = %v, want ErrNoConfig", err)
+	}
+	if !strings.Contains(err.Error(), dir) {
+		t.Errorf("error does not name the root %s: %v", dir, err)
+	}
+}
+
+func TestLoadMissingConfigFileIsAReadError(t *testing.T) {
+	t.Parallel()
+	dir, open := loadFixture(t, map[string]string{"go.mod": loadGoMod, "vibe.yaml": loadValid})
+	path := filepath.Join(dir, "absent.yaml")
+	_, _, err := contract.Load(context.Background(), dir, path, open)
+	if err == nil {
+		t.Fatal("no error for a missing --config file")
+	}
+	if errors.Is(err, contract.ErrNoConfig) {
+		t.Errorf("a missing --config file is ErrNoConfig: %v", err)
+	}
+	if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "absent.yaml") {
+		t.Errorf("err = %v, want a read error naming absent.yaml", err)
+	}
+}
+
+func TestLoadVersion1IsErrConfigV1NamingTheFile(t *testing.T) {
+	t.Parallel()
+	dir, open := loadFixture(t, map[string]string{"go.mod": loadGoMod, "old.yaml": loadV1})
+	path := filepath.Join(dir, "old.yaml")
+	_, _, err := contract.Load(context.Background(), dir, path, open)
+	if !errors.Is(err, contract.ErrConfigV1) {
+		t.Fatalf("err = %v, want ErrConfigV1", err)
+	}
+	if !strings.HasPrefix(err.Error(), path+" ") {
+		t.Errorf("error does not start with the file %s: %v", path, err)
+	}
+}
+
+func TestLoadInvalidFileIsAConfigError(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-
-	t.Run("no vibe.yaml is ErrNoConfig", func(t *testing.T) {
-		t.Parallel()
-		dir, open := loadFixture(t, map[string]string{"go.mod": loadGoMod})
-		_, _, err := contract.Load(ctx, dir, "", open)
-		if !errors.Is(err, contract.ErrNoConfig) {
-			t.Fatalf("err = %v, want ErrNoConfig", err)
-		}
-		if !strings.Contains(err.Error(), dir) {
-			t.Errorf("error does not name the root %s: %v", dir, err)
-		}
-	})
-
-	t.Run("a missing --config file is a read error", func(t *testing.T) {
-		t.Parallel()
-		dir, open := loadFixture(t, map[string]string{"go.mod": loadGoMod, "vibe.yaml": loadValid})
-		path := filepath.Join(dir, "absent.yaml")
-		_, _, err := contract.Load(ctx, dir, path, open)
-		if err == nil {
-			t.Fatal("no error for a missing --config file")
-		}
-		if errors.Is(err, contract.ErrNoConfig) {
-			t.Errorf("a missing --config file is ErrNoConfig: %v", err)
-		}
-		if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "absent.yaml") {
-			t.Errorf("err = %v, want a read error naming absent.yaml", err)
-		}
-	})
-
-	t.Run("version 1 is ErrConfigV1 naming the file", func(t *testing.T) {
-		t.Parallel()
-		dir, open := loadFixture(t, map[string]string{"go.mod": loadGoMod, "old.yaml": loadV1})
-		path := filepath.Join(dir, "old.yaml")
-		_, _, err := contract.Load(ctx, dir, path, open)
-		if !errors.Is(err, contract.ErrConfigV1) {
-			t.Fatalf("err = %v, want ErrConfigV1", err)
-		}
-		if !strings.HasPrefix(err.Error(), path+" ") {
-			t.Errorf("error does not start with the file %s: %v", path, err)
-		}
-	})
-
 	for _, c := range []struct{ name, content, path string }{
 		{"both keys", loadBoth, ""},
 		{"neither key", loadNone, ""},
 		{"an invalid version 2 file", loadBadV2, "platforms[0]"},
 	} {
-		t.Run(c.name+" is a ConfigError", func(t *testing.T) {
+		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			dir, open := loadFixture(t, map[string]string{"go.mod": loadGoMod, "vibe.yaml": c.content})
 			_, _, err := contract.Load(ctx, dir, "", open)
@@ -110,36 +111,36 @@ func TestLoad(t *testing.T) {
 			}
 		})
 	}
+}
 
-	t.Run("a valid file gives the configuration and its repository", func(t *testing.T) {
-		t.Parallel()
-		dir, open := loadFixture(t, map[string]string{"go.mod": loadGoMod, "vibe.yaml": loadValid})
-		var opened *contract.Repo
-		cfg, repo, err := contract.Load(ctx, dir, "", func(ctx context.Context, root string) (*contract.Repo, error) {
-			r, err := open(ctx, root)
-			opened = r
-			return r, err
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cfg.Contract.Declared != "1.2.0" {
-			t.Errorf("declared contract = %q, want 1.2.0", cfg.Contract.Declared)
-		}
-		if repo == nil || repo != opened {
-			t.Errorf("repo = %p, want the opener's %p", repo, opened)
-		}
+func TestLoadValidFileGivesTheConfigurationAndItsRepository(t *testing.T) {
+	t.Parallel()
+	dir, open := loadFixture(t, map[string]string{"go.mod": loadGoMod, "vibe.yaml": loadValid})
+	var opened *contract.Repo
+	cfg, repo, err := contract.Load(context.Background(), dir, "", func(ctx context.Context, root string) (*contract.Repo, error) {
+		r, err := open(ctx, root)
+		opened = r
+		return r, err
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Contract.Declared != "1.2.0" {
+		t.Errorf("declared contract = %q, want 1.2.0", cfg.Contract.Declared)
+	}
+	if repo == nil || repo != opened {
+		t.Errorf("repo = %p, want the opener's %p", repo, opened)
+	}
+}
 
-	t.Run("an opener error is returned", func(t *testing.T) {
-		t.Parallel()
-		dir, _ := loadFixture(t, map[string]string{"go.mod": loadGoMod, "vibe.yaml": loadValid})
-		boom := errors.New("boom")
-		_, _, err := contract.Load(ctx, dir, "", func(context.Context, string) (*contract.Repo, error) { return nil, boom })
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want the opener's", err)
-		}
-	})
+func TestLoadReturnsTheOpenersError(t *testing.T) {
+	t.Parallel()
+	dir, _ := loadFixture(t, map[string]string{"go.mod": loadGoMod, "vibe.yaml": loadValid})
+	boom := errors.New("boom")
+	_, _, err := contract.Load(context.Background(), dir, "", func(context.Context, string) (*contract.Repo, error) { return nil, boom })
+	if !errors.Is(err, boom) {
+		t.Errorf("err = %v, want the opener's", err)
+	}
 }
 
 // ReadConfig is the read-and-detect step on its own, for vibe init: a
