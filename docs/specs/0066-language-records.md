@@ -1,8 +1,8 @@
 # Spec 0066: Each component language is one record, and the contract detects components
 
-Status: accepted (2026-11-16). Issue #161, from the design review #167.
-Builds on spec 0065 (`contract.Load`, and the rule-test seam of ADR
-0028). This is a refactor. The contract stays 1.2.0, and no rule's
+Status: accepted and implemented (2026-11-17, PR #200). Issue #161, from
+the design review #167. Builds on spec 0065 (`contract.Load`, and the
+rule-test seam of ADR 0028). This is a refactor. The contract stays 1.2.0, and no rule's
 result, finding or fix changes.
 
 ## Problem
@@ -341,38 +341,38 @@ phrase, which is the one allowed wording change.
 
 ## Acceptance Criteria
 
-- [ ] Each language has one record with all the facts in Desired
+- [x] Each language has one record with all the facts in Desired
       Behavior, in an ordered registry.
-- [ ] The lockfile check list, the fix `switch`, the separate
+- [x] The lockfile check list, the fix `switch`, the separate
       update-bot tables, the root-manifest list, the `languages` list
       and the explain names list are gone. Each is derived from the
       registry.
-- [ ] D-01's check text is built from the lockfile records, and
+- [x] D-01's check text is built from the lockfile records, and
       `--explain D-01` is byte for byte unchanged.
-- [ ] `contract.DetectComponents` exists, and `contract_test` covers
+- [x] `contract.DetectComponents` exists, and `contract_test` covers
       depth, skipped directories, nesting, priority, `package.json`
       without `tsconfig.json`, and the "audit detects the same" answer.
-- [ ] `vibe init` has no detection code and does not parse an implicit
+- [x] `vibe init` has no detection code and does not parse an implicit
       configuration. Its output and the file it writes are unchanged
       for every CLI case.
-- [ ] `vibe init --help` and the "found no component" error use the
+- [x] `vibe init --help` and the "found no component" error use the
       contract's manifest phrase, and the error is byte for byte
       unchanged.
-- [ ] The completeness test fails when any fact of any record is empty.
+- [x] The completeness test fails when any fact of any record is empty.
       The implementation notes show one red run of it.
-- [ ] The characterization tests in Testing Decisions pass before and
+- [x] The characterization tests in Testing Decisions pass before and
       after the move.
-- [ ] A search of the non-test code finds the language constants,
+- [x] A search of the non-test code finds the language constants,
       manifest names and lockfile names only in the records, comments
       and V-05's filter. The implementation notes record the search.
-- [ ] The goldens, the explain tests and every existing rule test pass
+- [x] The goldens, the explain tests and every existing rule test pass
       unchanged.
-- [ ] No new complexity suppression, and the ones that the moved code no
+- [x] No new complexity suppression, and the ones that the moved code no
       longer needs are removed.
-- [ ] `docs/architecture/overview.md` is updated, and `docs/usage.md`
+- [x] `docs/architecture/overview.md` is updated, and `docs/usage.md`
       and `GLOSSARY.md` where they describe detection.
-- [ ] `task verify` passes.
-- [ ] `task audit` says `Verdict: conformant`.
+- [x] `task verify` passes.
+- [x] `task audit` says `Verdict: conformant`.
 
 ## Further Notes
 
@@ -385,3 +385,103 @@ phrase, which is the one allowed wording change.
   4. documentation.
   Ticket 3 needs only the records' manifests, so it can start after
   ticket 2's record type exists.
+
+## Implementation Notes
+
+- **Tickets.** The work was cut into five tickets, not four: 0066-1 the
+  characterization tests (#195), 0066-2 the lockfile entries (#196),
+  0066-3 the record and registry (#197), 0066-4 `DetectComponents` and
+  the `vibe init` change (#198), and 0066-5 documentation and the
+  search (#199).
+- **Init cases for detection** (Testing Decisions, "Characterization
+  before the move"). The first ticket did not record the init cases'
+  expected components. 0066-4 did it instead:
+  `TestDetectComponentsInitLayouts` (`internal/contract/detect_test.go`)
+  has the layouts of the CLI's `vibe init` cases before this spec,
+  with the components `vibe init` wrote for each. The manifests that
+  are not components (`node_modules`, `vendor`, below the depth,
+  nested, and a `package.json` without `tsconfig.json`) moved out of
+  the CLI's monorepo case into these contract cases. The CLI's monorepo
+  case keeps its three components and still checks the file and the
+  output end to end.
+- **Explain goldens.** The goldens of 0066-1 are in
+  `internal/contract/testdata/explain/`, one per rule. They hold the
+  contract's text without wrapping, not the CLI's wrapped `--explain`
+  output. V-07's golden writes the PEM dashes as `{{five dashes}}`, so
+  that gitleaks does not flag the file. No golden of
+  `internal/cli/testdata` changed.
+- **Fake programs on the probe `PATH`.** The D-01 tests that put a fake
+  program on the probe `PATH` (`fakeProgramPath` in
+  `internal/contract/d01_lockfiles_test.go`) write a shell script, or a
+  batch file on Windows. They ran on Windows only before the PR. CI is
+  their first run on Linux.
+- **Existing tests that changed.** No assertion was weakened:
+  - `TestContractConfigComponents` ("language unknown") and
+    `TestContractConfigComponentDetection` ("no manifest", "two
+    manifests", "three manifests") assert the full error sentence
+    instead of fragments of it.
+  - `TestSecretSample` is an internal test. It read the old sample
+    table, so it now reads each record's secret sample and compares it
+    with the one shared value.
+  - `TestInitNeedsAComponent` asserts the full error, byte for byte,
+    and `TestInitHelpNamesTheManifests` is new.
+- **Completeness test, red run.** With `renovateManagers` set to nil in
+  the TypeScript record, `go test -run TestLanguageRecordsAreComplete
+  ./internal/contract/` fails:
+
+  ```text
+  --- FAIL: TestLanguageRecordsAreComplete (0.00s)
+      languages_test.go:63: language "typescript" has no Renovate manager
+  FAIL
+  FAIL	github.com/Manual-debuger/VibeConform/internal/contract	4.589s
+  ```
+
+  0066-5 repeated the run on the integration branch and got the same
+  failure line. The record was restored after each run.
+- **Complexity suppressions.** The `gocognit` and `gocyclo`
+  suppressions of `runInitConfig` and the `gocognit` suppression of the
+  CLI's `detectComponents` are gone with that code. `detect.go` and the
+  record files have none.
+- **The search** (Acceptance Criteria, Assumption 3). On the
+  integration branch, from the repository root:
+
+  ```sh
+  git grep -nE 'LanguageGo|LanguagePython|LanguageTypeScript|"(go|python|typescript)"|go\.mod|go\.sum|pyproject\.toml|package\.json|tsconfig\.json|uv\.lock|poetry\.lock|pnpm-lock\.yaml|package-lock\.json' \
+    -- '*.go' ':!*_test.go' ':!**/testdata/**'
+  ```
+
+  Every hit is in `internal/contract`. Nothing in `internal/cli`, the
+  doctor, the guard or the setup skill's Go code names a language, a
+  manifest or a lockfile. The hits are:
+  - the three record files, `language_go.go`, `language_python.go` and
+    `language_typescript.go`;
+  - comments in `detect.go`, `languages.go`, `probe.go`, `toml.go` and
+    `updatebots.go`;
+  - V-05's filter, `c.Language == LanguagePython` in
+    `checks_defects.go`;
+  - the declarations of the exported constants `LanguageGo`,
+    `LanguagePython` and `LanguageTypeScript` in `config.go`. The
+    Implementation Decisions keep these constants, and the records use
+    them as their identifiers. So the declarations are a fourth kind of
+    allowed hit, which the acceptance criterion does not name;
+  - `const pkg = "package.json"` in `updatebots.go`. This is not a fact
+    about TypeScript. Renovate reads a `renovate` key in a root
+    `package.json` in every repository, whatever the components'
+    languages are, after the files in `renovateFiles`. It is a fact
+    about Renovate, so it stays with the other Renovate files.
+
+  A second search for the display names (`"Go"`, `"Python"`,
+  `"TypeScript"`) finds only the three records.
+- **Outside the search.** The dependency directories `node_modules`
+  and `vendor` are in two lists: `detectionSkipped` (`detect.go`) and
+  `underVendor` (`defects.go`, where the planted test file goes, spec
+  0053). They are not language records, and this spec's search does
+  not cover them. To use one list in both places is a possible
+  follow-up.
+- **Documentation.** `docs/architecture/overview.md` has a "Language
+  records" and a "Component detection" item in "Contract audit", and
+  its `vibe init` item says that the contract owns both. `docs/usage.md`
+  does not quote `vibe init --help`. Its `vibe init` section now says
+  that detection is the contract's, and when the root's component gets
+  no `components:` key. The glossary's "Component" entry does not
+  describe detection, so it did not change.
