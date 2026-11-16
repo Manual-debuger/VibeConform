@@ -511,19 +511,11 @@ var rules = []Rule{
 	},
 	{
 		ID: "D-01", Level: Must, Category: CategoryDependencies,
-		Title: "Lockfiles are committed and match the declared dependencies",
-		Check: "Execution, per component, by the lockfile found. For `go.sum`: run `go mod tidy`, then " +
-			"`git diff --exit-code go.mod go.sum`. For `uv.lock`: `uv lock --check`. For `poetry.lock`: " +
-			"`poetry check --lock`. For `pnpm-lock.yaml`: `pnpm install --frozen-lockfile --lockfile-only`. " +
-			"For `package-lock.json`: `npm ci --dry-run`. A component with dependencies and no recognized " +
-			"lockfile fails.",
+		Title:  "Lockfiles are committed and match the declared dependencies",
+		Check:  "Execution, " + d01Check,
 		Source: "specs 0010, 0020",
 		Parts: []Part{
-			executionRun("per component, by the lockfile found. For `go.sum`: run `go mod tidy`, then "+
-				"`git diff --exit-code go.mod go.sum`. For `uv.lock`: `uv lock --check`. For `poetry.lock`: "+
-				"`poetry check --lock`. For `pnpm-lock.yaml`: `pnpm install --frozen-lockfile --lockfile-only`. "+
-				"For `package-lock.json`: `npm ci --dry-run`. A component with dependencies and no recognized "+
-				"lockfile fails.", checkD01),
+			executionRun(d01Check, checkD01),
 		},
 	},
 	{
