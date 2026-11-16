@@ -97,6 +97,12 @@ func configLoadError(err error) error {
 // configuration it cannot load prints no report.
 func runContractAudit(cmd *cobra.Command, f auditFlags) error {
 	if f.probeTimeout <= 0 {
+		// A configuration that is missing or not version 2 is reported
+		// before the flag, and one that does not parse after it, as
+		// before contract.Load existed.
+		if _, _, err := contract.ReadConfig(f.repoRoot, f.config); err != nil {
+			return configLoadError(err)
+		}
 		return fmt.Errorf("--probe-timeout must be a positive duration, such as 30m; got %s", f.probeTimeout)
 	}
 	// An interrupt ends the runs in the probe copy, and the copy is still

@@ -60,6 +60,40 @@ func TestAuditConfigMessagesAreUnchanged(t *testing.T) {
 	})
 }
 
+// A run with a bad --probe-timeout and a configuration it cannot load gets
+// the error it got before spec 0065: a vibe.yaml that is missing, version
+// 1 or neither version is reported before the flag, and one that does
+// not parse as version 2 after it (regression: loading through
+// contract.Load moved the flag check first).
+func TestAuditBadProbeTimeoutAndConfigErrorKeepTheirOrder(t *testing.T) {
+	t.Parallel()
+	const wantTimeout = "--probe-timeout must be a positive duration, such as 30m; got 0s"
+	for _, c := range []struct {
+		name  string
+		edits []fixtureEdit
+		want  func(dir string) string
+	}{
+		{"no vibe.yaml", []fixtureEdit{withoutFile("vibe.yaml")}, wantNoConfig},
+		{"version 1", []fixtureEdit{withFile("vibe.yaml", v1Config)}, func(string) string { return wantV1("vibe.yaml") }},
+		{"neither key", []fixtureEdit{withFile("vibe.yaml", "platforms: [linux]\n")}, func(string) string {
+			return "vibe.yaml: has neither contract (version 2) nor standard (version 1); " +
+				"declare the contract version, such as contract: 1.0.0"
+		}},
+		{"invalid version 2", []fixtureEdit{withFile("vibe.yaml", "contract: 1.0.0\nplatforms: [bsd]\n")},
+			func(string) string { return wantTimeout }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir := contractFixture(t, c.edits...)
+			r := runVibeAudit(t, "--repo-root", dir, "--probe-timeout", "0s")
+			assertExit(t, r, exitError)
+			if want := "Error: " + c.want(dir) + "\n"; r.stderr != want {
+				t.Errorf("stderr:\n got %q\nwant %q", r.stderr, want)
+			}
+		})
+	}
+}
+
 // Doctor prints the audit's message on its vibe.yaml line, and exits 1.
 // It changes doctorEnv, so it does not run in parallel.
 func TestDoctorConfigMessagesAreUnchanged(t *testing.T) {
