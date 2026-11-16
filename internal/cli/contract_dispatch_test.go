@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -239,6 +240,31 @@ func TestAuditExplain(t *testing.T) {
 			r := runVibeAudit(t, append([]string{"--explain", "C-02"}, other...)...)
 			assertExit(t, r, 1)
 			assertStderr(t, r, "--explain", other[0])
+		}
+	})
+	t.Run("several other flags are named in cobra's order", func(t *testing.T) {
+		r := runVibeAudit(t, "--static", "--explain", "C-02", "--repo-root", ".", "--json")
+		assertExit(t, r, 1)
+		assertStderr(t, r, "--explain reads no repository and no configuration; drop --json, --repo-root, --static\n")
+	})
+	t.Run("a flag that no list holds", func(t *testing.T) {
+		// The flag exists only in this command tree, so a refusal proves
+		// that --explain visits the set flags and keeps no list of them.
+		root := newRootCmd("test", contractSeams{openRepo: openFixtureRepo})
+		audit, _, err := root.Find([]string{"audit"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		audit.Flags().Bool("added-in-test", false, "a flag vibe audit does not have")
+		var out, errOut bytes.Buffer
+		root.SetOut(&out)
+		root.SetErr(&errOut)
+		root.SetArgs([]string{"audit", "--explain", "C-02", "--added-in-test"})
+		r := auditResult{code: ExitCode(root.Execute()), stdout: out.String(), stderr: errOut.String()}
+		assertExit(t, r, 1)
+		assertStderr(t, r, "--explain reads no repository and no configuration; drop --added-in-test\n")
+		if r.stdout != "" {
+			t.Errorf("--explain printed the rule although it refused:\n%s", r.stdout)
 		}
 	})
 	t.Run("reads no configuration", func(t *testing.T) {
