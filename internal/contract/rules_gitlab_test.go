@@ -23,27 +23,6 @@ const (
 	glGitHubAudit = ".github/workflows/audit.yml"
 )
 
-// glListVerify declares verify as a list of commands; glNoVerify declares
-// no verify entrypoint.
-var (
-	glListVerify = contracttest.Entrypoints("  verify: [task lint, task test]\n  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n")
-	glNoVerify   = contracttest.Entrypoints("  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n")
-)
-
-// glRunStaticPartCases is RunRuleCases for a rule with a static part and
-// other parts: under a static audit the others are not run, so Want is the
-// static part's result, and the findings are the rule's.
-func glRunStaticPartCases(t *testing.T, id string, cases []contracttest.RuleCase) {
-	t.Helper()
-	for _, tc := range cases {
-		t.Run(tc.Name, func(t *testing.T) {
-			t.Parallel()
-			rep := contracttest.Audit(t, contracttest.Fixture(t, contracttest.Baseline, tc.Edits...), contract.Options{Static: true})
-			contracttest.AssertPart(t, rep, id, contract.Static, tc.Want, tc.Findings...)
-		})
-	}
-}
-
 // glImage is an image pinned by digest, as the baseline uses it.
 const glImage = "golang:1.25@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
@@ -155,9 +134,9 @@ func TestRuleC01GitLab(t *testing.T) {
 		{Name: "no verify anywhere", Want: "fail", Edits: gitlab(glOnly("lint:\n  script: echo\n")),
 			Findings: []string{".gitlab-ci.yml: ", "`task verify`", "merge request pipelines", "pushes to main"}},
 		{Name: "list verify, commands in different jobs", Want: "pass", Edits: append(gitlab(glOnly(
-			"lint:\n  script: task lint\ntest:\n  script:\n    - go mod download && task test\n")), glListVerify)},
+			"lint:\n  script: task lint\ntest:\n  script:\n    - go mod download && task test\n")), ciListVerify)},
 		{Name: "list verify, one command not called", Want: "fail",
-			Edits:    append(gitlab(glOnly("lint:\n  script: task lint\n")), glListVerify),
+			Edits:    append(gitlab(glOnly("lint:\n  script: task lint\n")), ciListVerify),
 			Findings: []string{"`task test`"}},
 
 		// Commands: before_script and script count, after_script does not.
@@ -404,7 +383,7 @@ func TestRuleC01GitLab(t *testing.T) {
 			Findings: []string{"job broken must be a map"}},
 		{Name: "a script that is not a string or a list", Want: "fail", Edits: gitlab(glBase + "broken:\n  script: {a: b}\n"),
 			Findings: []string{"job broken: script must be a string or a list of strings"}},
-		{Name: "verify missing points at V-04", Want: "fail", Edits: append(gitlab(glBase), glNoVerify),
+		{Name: "verify missing points at V-04", Want: "fail", Edits: append(gitlab(glBase), ciNoVerify),
 			Findings: []string{"vibe.yaml: ", "V-04"}},
 	})
 }
@@ -501,7 +480,7 @@ func TestRuleC04GitLab(t *testing.T) {
 		{Name: "from a template", Want: "pass", Edits: gitlab(verify + ".audit:\n  script: [vibe audit]\nconformance:audit:\n  extends: .audit\n")},
 		{Name: "vibe without audit", Want: "fail", Edits: audit("", "    - vibe doctor\n")},
 		{Name: "vibe audit by path is not vibe audit", Want: "fail", Edits: audit("", "    - ./bin/vibe audit\n")},
-		{Name: "verify missing points at V-04", Want: "fail", Edits: append(gitlab(glBase), glNoVerify),
+		{Name: "verify missing points at V-04", Want: "fail", Edits: append(gitlab(glBase), ciNoVerify),
 			Findings: []string{"vibe.yaml: ", "V-04"}},
 		{Name: "a .gitlab-ci.yml that does not parse", Want: "fail", Edits: gitlab("x: [\n"),
 			Findings: []string{".gitlab-ci.yml: ", "does not parse"}},
@@ -668,7 +647,7 @@ func TestRuleC05GitLab(t *testing.T) {
 			Edits: gitlab("default:\n  tags: [windows]\n" + glOnly(glVerify("a", "  tags: [linux]\n")+glVerify("b", "")))},
 		{Name: "list verify, one command on Linux only", Want: "fail", Edits: append(only(
 			"lint:\n  tags: [linux]\n  script: [task lint]\n"+
-				"test:\n  parallel:\n    matrix:\n      - T: [linux, windows]\n  tags: [$T]\n  script: [task test]\n"), glListVerify),
+				"test:\n  parallel:\n    matrix:\n      - T: [linux, windows]\n  tags: [$T]\n  script: [task test]\n"), ciListVerify),
 			Findings: []string{"`task lint`"}},
 		{Name: "verify called nowhere", Want: "fail", Edits: only("x:\n  tags: [linux]\n  script: [echo]\n"),
 			Findings: []string{".gitlab-ci.yml: ", "no job calls"}},
@@ -729,7 +708,7 @@ func TestRuleD03GitLabTemplateFailsC02(t *testing.T) {
 // C-04 audit job's; vibe --version in a job that calls no entrypoint.
 func TestRuleR01GitLab(t *testing.T) {
 	t.Parallel()
-	glRunStaticPartCases(t, "R-01", []contracttest.RuleCase{
+	contracttest.RunPartCases(t, "R-01", contract.Static, []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass", Edits: gitlab(glBase)},
 		{Name: "vibe in a script", Want: "fail", Edits: glWithJob("sync:\n  script:\n    - vibe sync && git diff --exit-code\n"),
 			Findings: []string{".gitlab-ci.yml: ", "line 25: job sync, script", "`vibe sync`"}},

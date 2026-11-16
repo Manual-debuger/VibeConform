@@ -153,3 +153,22 @@ func RunRuleCases(t *testing.T, id string, cases []RuleCase) {
 		})
 	}
 }
+
+// RunPartCases is RunRuleCases for one part of a rule that has other
+// parts: a static audit runs only the static parts, so each case's Want
+// is the result of the part of kind, and the findings are the rule's. A
+// case whose part fails must fail the rule too; a passing static part
+// leaves the rule not run, since its other parts did not run.
+func RunPartCases(t *testing.T, id string, kind contract.PartKind, cases []RuleCase) {
+	t.Helper()
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			rep := Audit(t, Fixture(t, Baseline, tc.Edits...), contract.Options{Static: true})
+			AssertPart(t, rep, id, kind, tc.Want, tc.Findings...)
+			if r := RuleResult(t, rep, id); tc.Want == contract.ResultFail && r.Result != contract.ResultFail {
+				t.Errorf("%s = %s, want fail", id, r.Result)
+			}
+		})
+	}
+}

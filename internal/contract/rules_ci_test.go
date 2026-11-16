@@ -333,7 +333,7 @@ func TestRuleC04(t *testing.T) {
 func TestRuleR01(t *testing.T) {
 	t.Parallel()
 	const others = "  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n"
-	ciRunStaticPartCases(t, "R-01", []contracttest.RuleCase{
+	contracttest.RunPartCases(t, "R-01", contract.Static, []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass"},
 		{Name: "vibe by path is not a call of vibe", Want: "pass", Edits: []contracttest.Edit{
 			ciWith(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("sync", "ubuntu-latest", "|\n          \"$RUNNER_TEMP/bin/vibe\" sync"))}},
@@ -453,20 +453,6 @@ func TestRuleR01(t *testing.T) {
 		{Name: "no CI, a hook calls vibe", Want: "fail", Edits: []contracttest.Edit{contracttest.WithoutFile(ciFile), contracttest.WithoutFile(ciAuditFile),
 			contracttest.WithFile(".husky/pre-commit", "vibe sync\n")}},
 	})
-}
-
-// ciRunStaticPartCases is contracttest.RunRuleCases for a rule with a
-// static part and other parts: a static audit does not run the others, so
-// Want is the static part's result, and the findings are the rule's.
-func ciRunStaticPartCases(t *testing.T, id string, cases []contracttest.RuleCase) {
-	t.Helper()
-	for _, tc := range cases {
-		t.Run(tc.Name, func(t *testing.T) {
-			t.Parallel()
-			rep := contracttest.Audit(t, contracttest.Fixture(t, contracttest.Baseline, tc.Edits...), contract.Options{Static: true})
-			contracttest.AssertPart(t, rep, id, contract.Static, tc.Want, tc.Findings...)
-		})
-	}
 }
 
 // ciMatrixJob is a job that runs task verify on runs-on ${{ matrix.os }}
