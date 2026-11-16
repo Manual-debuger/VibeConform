@@ -180,6 +180,19 @@ func requireBash(t *testing.T) {
 // directories first on the probe runs' PATH.
 func audit(t *testing.T, dir string, ids []string, pathFirst ...string) *contract.Report {
 	t.Helper()
+	var rules []contract.Rule
+	for _, r := range contract.Rules() {
+		if slices.Contains(ids, r.ID) {
+			rules = append(rules, r)
+		}
+	}
+	return auditRules(t, dir, rules, pathFirst...)
+}
+
+// auditRules runs rules, in their order, against the repository at dir,
+// with extra directories first on the probe runs' PATH.
+func auditRules(t *testing.T, dir string, rules []contract.Rule, pathFirst ...string) *contract.Report {
+	t.Helper()
 	ctx := context.Background()
 	repo, err := contract.OpenRepo(ctx, dir)
 	if err != nil {
@@ -192,12 +205,6 @@ func audit(t *testing.T, dir string, ids []string, pathFirst ...string) *contrac
 	cfg, err := contract.Parse("vibe.yaml", data, repo)
 	if err != nil {
 		t.Fatal(err)
-	}
-	var rules []contract.Rule
-	for _, r := range contract.Rules() {
-		if slices.Contains(ids, r.ID) {
-			rules = append(rules, r)
-		}
 	}
 	env := os.Environ()
 	if len(pathFirst) > 0 {
@@ -446,6 +453,76 @@ func TestGuardProbeA09(t *testing.T) {
 			if slices.Contains(got, c) {
 				t.Errorf("A-09 names %q, which the exception lets through", c)
 			}
+		}
+	})
+}
+
+// The report's guard exception uses come from the results of the parts
+// that found them, in run order (spec 0064): a part whose result leaves
+// its uses out adds none to the report.
+func TestGuardProbeExceptionUsesComeFromPartResults(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
+	t.Parallel()
+	requireBash(t)
+	bin := builtVibeGuard(t)
+	files := map[string]string{
+		".claude/settings.json": guardSettings(referenceGuard),
+		".claude/hooks/policy.json": `{"version": 2, "exceptions": [` +
+			`{"rule": "rm-rf", "match": "rm -r -f build", "reason": "the build directory is disposable"}, ` +
+			`{"rule": "git-skip-hooks", "match": "git commit --no-verify -m wip", "reason": "a hook that needs the network"}]}` + "\n",
+	}
+	uses := func(rule, match string, cases ...string) []contract.GuardExceptionUse {
+		var out []contract.GuardExceptionUse
+		for _, c := range cases {
+			out = append(out, contract.GuardExceptionUse{Rule: rule, Match: match, Case: c})
+		}
+		return out
+	}
+	a02Uses := uses("rm-rf", "rm -r -f build",
+		"rm -r -f (spec 0047)",
+		"rm with extra blanks",
+		"variant (#105): quoted flags",
+		"variant (#105): sudo with options, by full paths",
+		"variant (#105): sh -c with separate flags")
+	a09Uses := uses("git-skip-hooks", "git commit --no-verify -m wip",
+		"A-09: git commit --no-verify", "A-09: git commit --no-verify in PowerShell")
+	rules := func(ids ...string) []contract.Rule {
+		var out []contract.Rule
+		for _, id := range ids {
+			r, ok := contract.LookupRule(id)
+			if !ok {
+				t.Fatalf("no rule %s", id)
+			}
+			out = append(out, r)
+		}
+		return out
+	}
+
+	t.Run("A-02's uses come before A-09's", func(t *testing.T) {
+		t.Parallel()
+		rep := auditRules(t, guardFixture(t, files), rules("A-02", "A-09"), bin)
+		assertPart(t, rep, "A-02", contract.Probe, contract.ResultPass)
+		assertPart(t, rep, "A-09", contract.Probe, contract.ResultPass)
+		if want := append(slices.Clone(a02Uses), a09Uses...); !slices.Equal(rep.GuardExceptionUses, want) {
+			t.Errorf("GuardExceptionUses = %+v, want %+v", rep.GuardExceptionUses, want)
+		}
+	})
+	t.Run("a result without its uses adds none", func(t *testing.T) {
+		t.Parallel()
+		list := rules("A-02", "A-09")
+		real := list[0].Parts[0].Run
+		// A stand-in for A-02's probe that returns only its result and
+		// findings.
+		list[0].Parts[0].Run = func(env *contract.Env, needed contract.Needed) contract.PartResult {
+			r := real(env, needed)
+			return contract.PartResult{Result: r.Result, Findings: r.Findings}
+		}
+		rep := auditRules(t, guardFixture(t, files), list, bin)
+		assertPart(t, rep, "A-02", contract.Probe, contract.ResultPass)
+		if !slices.Equal(rep.GuardExceptionUses, a09Uses) {
+			t.Errorf("GuardExceptionUses = %+v, want only A-09's %+v", rep.GuardExceptionUses, a09Uses)
 		}
 	})
 }

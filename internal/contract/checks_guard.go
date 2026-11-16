@@ -261,9 +261,10 @@ func guardFix(env *Env, rule string) string {
 
 // checkA02: every corpus case, fed to every PreToolUse hook that matches
 // its tool, is refused (or let through by a policy.json exception) when
-// it is a deny case and allowed when it is an allow case. It returns its
-// deny-case verdict for R-01, which is its whole verdict when it decided
-// before it fed a case, and records the exceptions' uses for the report.
+// it is a deny case and allowed when it is an allow case. Its result
+// also carries the exceptions' uses for the report and its deny-case
+// verdict for R-01, which is its whole verdict when it decided before it
+// fed a case.
 func checkA02(env *Env, _ Needed) PartResult {
 	all, deny, ok := feedCorpus(env, env.probe, "A-02", corpusFor(""))
 	if !ok {
@@ -283,8 +284,9 @@ func checkA09(env *Env, _ Needed) PartResult {
 }
 
 // feedCorpus feeds cases to every PreToolUse hook that matches their
-// tools, for the probe of rule, and returns the verdict on every case and
-// the verdict on the deny cases alone. ok is false when it decided
+// tools, for the probe of rule, and returns the verdict on every case,
+// with the guard exception uses, and the verdict on the deny cases
+// alone. ok is false when it decided
 // before running a case, and deny is then not set.
 func feedCorpus(env *Env, s *probeSession, rule string, cases []GuardCase) (result, denyResult PartResult, ok bool) {
 	hooks, res, ok := preToolUseHooks(env)
@@ -313,12 +315,14 @@ func feedCorpus(env *Env, s *probeSession, rule string, cases []GuardCase) (resu
 		}
 	}
 	t.reportUnmatched()
-	return t.all.result(), t.deny.result(), true
+	result = t.all.result()
+	result.guardUses = t.uses
+	return result, t.deny.result(), true
 }
 
 // corpusTally collects feedCorpus's verdicts: on every case, on the deny
-// cases alone, and the deny cases no hook matched, by tool in the order
-// first seen.
+// cases alone, the deny cases no hook matched, by tool in the order
+// first seen, and the deny cases guard exceptions let through.
 type corpusTally struct {
 	env        *Env
 	s          *probeSession
@@ -326,6 +330,7 @@ type corpusTally struct {
 	all, deny  verdicts
 	unmatched  map[string][]string
 	tools      []string
+	uses       []GuardExceptionUse
 }
 
 // denyCase judges a deny case: refused, let through by an exception, run
@@ -344,7 +349,7 @@ func (t *corpusTally) denyCase(run caseRun) {
 	ex := exceptionsFor(t.exceptions, c, t.s)
 	switch {
 	case len(ex) > 0:
-		t.env.guardUses = append(t.env.guardUses, GuardExceptionUse{Rule: ex[0].Rule, Match: ex[0].Match, Case: c.Name})
+		t.uses = append(t.uses, GuardExceptionUse{Rule: ex[0].Rule, Match: ex[0].Match, Case: c.Name})
 	case len(run.runs) == 0:
 		tool := c.Payload.ToolName
 		if _, seen := t.unmatched[tool]; !seen {

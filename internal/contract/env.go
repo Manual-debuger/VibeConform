@@ -6,9 +6,13 @@ import (
 	"strings"
 )
 
-// Env is what a check reads: the configuration, the tracked files, and
-// the models built from them, each built once per audit. A check never
-// writes.
+// Env holds what the checks of one audit read: the configuration, the
+// tracked files, the models built from them (each computed once and
+// cached), the notes, and the probe session that the execution and
+// probe parts run in. A check reads Env and returns what it decided in
+// its PartResult (spec 0064). Note is the only record a check adds
+// outside its result. A cache filled on first use is not a record: the
+// model is the same whichever check asks first.
 //
 // The audit runs its checks one after another, on one goroutine, and Env
 // relies on that: its caches are plain fields with no locking. A check
@@ -31,8 +35,6 @@ type Env struct {
 	// probe is the probe copy while the execution and probe parts run,
 	// and nil otherwise.
 	probe *probeSession
-	// guardUses are the corpus cases guard exceptions let through (A-02).
-	guardUses []GuardExceptionUse
 }
 
 type fileEntry struct {
