@@ -56,10 +56,13 @@ internal/contract
   report model (plain data)
 ```
 
-- **Configuration.** `vibe audit` reads `vibe.yaml` once.
-  `contract.DetectSchema` tells version 2 (`contract:`) from version 1
-  (`standard:`); a version 1 file, and a missing one, are exit 1 with a
-  pointer (the migration guide, or `vibe init`). `vibe init --skill`
+- **Configuration.** `contract.Load` reads `vibe.yaml` once, opens the
+  repository and parses (spec 0065); `vibe audit` and `vibe doctor` call
+  it. Its read-and-detect step, `contract.ReadConfig`, tells version 2
+  (`contract:`) from version 1 (`standard:`) with `contract.DetectSchema`,
+  and `vibe init` uses it alone. A missing file (`contract.ErrNoConfig`)
+  and a version 1 file (`contract.ErrConfigV1`) are exit 1; the CLI adds
+  the pointer (`vibe init`, or the migration guide). `vibe init --skill`
   writes the setup skill and reads no configuration.
 - **Dependency direction.** The CLI imports `internal/contract`, never
   the reverse, and renders its report model as text or JSON
@@ -273,7 +276,7 @@ internal/
   that for non-test code (spec 0063).
 - **The removed commands.** `vibe sync`, `vibe diff` and `vibe check` are
   hidden commands that print the migration guide's path and exit 1.
-  `contract.DetectSchema` stays, so that a version 1 `vibe.yaml` gets the
+  `contract.ReadConfig` stays, so that a version 1 `vibe.yaml` gets the
   same pointer from `audit`, `doctor` and `init`.
 
 **The release and the setup action** (spec 0054). One release holds both

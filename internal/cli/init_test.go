@@ -206,7 +206,7 @@ func TestInitSaysWhyANestedManifestIsNoComponent(t *testing.T) {
 // returned nil for a missing file).
 func TestInitRaceLostIsAnError(t *testing.T) {
 	t.Parallel()
-	err := createRefused(filepath.Join(t.TempDir(), "vibe.yaml"))
+	err := createRefused(t.TempDir())
 	if code := ExitCode(err); code != exitError {
 		t.Fatalf("exit %d, want %d: %v", code, exitError, err)
 	}
