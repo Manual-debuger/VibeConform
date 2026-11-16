@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -69,8 +68,8 @@ type probeSession struct {
 	setup *entrypointRun
 	// baselines caches the baseline runs of verify and verify-fast.
 	baselines map[string]*entrypointRun
-	// calls are the calls of vibe the shim recorded since the runner's
-	// last mark, in run order (see mark).
+	// calls are the calls of vibe the shim recorded since the runner
+	// last took them, in run order (see takeCalls).
 	calls []shimCall
 	// progressMu orders the progress lines of runs that happen
 	// concurrently (A-02 and A-03 feed corpus cases in parallel).
@@ -449,32 +448,27 @@ func (s *probeSession) HasBash() (bool, string) {
 }
 
 // recordShimCalls stamps the calls of vibe the shim recorded during the
-// run out with the run's label and file, and keeps them until the next
-// mark.
+// run out with the run's label and file, adds them to out, and keeps
+// them on the session until the runner takes them.
 func (s *probeSession) recordShimCalls(out *runOutcome) {
 	if s.shim == nil {
 		return
 	}
 	for _, c := range s.shim.calls() {
 		c.Run, c.File = out.Label, out.File
+		out.ShimCalls = append(out.ShimCalls, c)
 		s.calls = append(s.calls, c)
 	}
 }
 
-// mark returns the calls of vibe recorded since the last mark, in run
-// order, and sets a new mark. The runner marks after setup and after
-// each part, and stores the calls with the part's result (spec 0064).
-func (s *probeSession) mark() []shimCall {
+// takeCalls returns the calls of vibe recorded since the last time it
+// was called, in run order, and clears them. The runner takes them after
+// setup and after each part, and stores them with the part's result
+// (spec 0064).
+func (s *probeSession) takeCalls() []shimCall {
 	calls := s.calls
 	s.calls = nil
 	return calls
-}
-
-// sinceMark returns the calls of vibe recorded since the last mark: the
-// calls of the running part's own runs. A cached baseline run is not
-// one of them; its calls belong to the part that ran it.
-func (s *probeSession) sinceMark() []shimCall {
-	return slices.Clone(s.calls)
 }
 
 // entrypointRun is one entrypoint run: its commands in order, stopping at
@@ -535,7 +529,8 @@ func (s *probeSession) RunEntrypoint(env *Env, name, label string) entrypointRun
 
 // Baseline runs an entrypoint once in the reset copy and remembers the
 // run: V-01, V-02 and R-01 read the same baseline of verify and
-// verify-fast.
+// verify-fast. Only the fresh run carries its calls of vibe; the cached
+// run carries none, because the part that ran it first owns them.
 func (s *probeSession) Baseline(env *Env, name string) (entrypointRun, error) {
 	if run, ok := s.baselines[name]; ok {
 		return *run, nil
@@ -544,7 +539,9 @@ func (s *probeSession) Baseline(env *Env, name string) (entrypointRun, error) {
 		return entrypointRun{}, err
 	}
 	run := s.RunEntrypoint(env, name, name)
-	s.baselines[name] = &run
+	cached := run
+	cached.ShimCalls = nil
+	s.baselines[name] = &cached
 	return run, nil
 }
 

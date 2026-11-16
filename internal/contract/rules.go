@@ -190,9 +190,10 @@ func static(check string, run CheckFunc) Part {
 	return Part{Kind: Static, Check: check, Run: run}
 }
 
-// executionRun is an execution part this vibe implements.
-func executionRun(check string, run CheckFunc) Part {
-	return Part{Kind: Execution, Check: check, Run: run}
+// executionRun is an execution part this vibe implements. It runs after
+// the parts it needs (spec 0064).
+func executionRun(check string, run CheckFunc, needs ...Need) Part {
+	return Part{Kind: Execution, Check: check, Run: run, Needs: needs}
 }
 
 // probeRun is a probe part this vibe implements.
@@ -558,15 +559,10 @@ var rules = []Rule{
 		Parts: []Part{
 			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 "+
 				"and `vibe --version` in a CI job that calls no entrypoint.", checkR01),
-			{
-				Kind: Execution,
-				Check: "with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases " +
-					"are still refused.",
-				Run: checkR01Execution,
-				// R-01 reads A-02's deny verdict and the vibe calls of
-				// every other run, so it runs last.
-				Needs: []Need{NeedPart("A-02", Probe), NeedEveryOther()},
-			},
+			// R-01 reads A-02's deny verdict and the vibe calls of every
+			// other part, so it runs last.
+			executionRun("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
+				"are still refused.", checkR01Execution, NeedPart("A-02", Probe), NeedEveryOther()),
 		},
 	},
 	{

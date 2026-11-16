@@ -123,7 +123,7 @@ func runPending(env *Env, rep *Report, list []Rule, order []partRef, pending map
 
 	// ran holds every part that ran, in run order, for one audit.
 	var ran []partRun
-	setupCalls := s.mark()
+	setupCalls := s.takeCalls()
 	for _, p := range order {
 		if !pending[p] {
 			continue
@@ -141,7 +141,7 @@ func runPending(env *Env, rep *Report, list []Rule, order []partRef, pending map
 		key := keyOf(list, p)
 		r := part.Run(env, Needed{self: key, needs: part.Needs, ran: ran, setupCalls: setupCalls})
 		r.Result, r.Findings = decided(r)
-		ran = append(ran, partRun{key: key, result: r, calls: s.mark()})
+		ran = append(ran, partRun{key: key, result: r, calls: s.takeCalls()})
 		po.Result, po.Findings = r.Result, r.Findings
 	}
 	return ran

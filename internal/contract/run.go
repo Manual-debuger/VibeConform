@@ -53,6 +53,10 @@ type runOutcome struct {
 	ExitCode int
 	// Output is the end of the run's stdout and stderr, interleaved.
 	Output []byte
+	// ShimCalls are the calls of vibe the R-01 shim recorded during the
+	// run. A cached baseline run carries none: the part that ran it
+	// first owns its calls (spec 0064).
+	ShimCalls []shimCall
 }
 
 // Ran reports whether the run ended by itself, with any exit code.

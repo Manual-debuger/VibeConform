@@ -167,7 +167,7 @@ func checkR01Execution(env *Env, needed Needed) PartResult {
 	}
 
 	res := mergeRuns(verify, r01GuardHalf(env, needed))
-	for _, c := range append(needed.vibeCalls(), s.sinceMark()...) {
+	for _, c := range append(needed.vibeCalls(), run.ShimCalls...) {
 		res.Findings = append(res.Findings, Finding{
 			File:    c.File,
 			Message: fmt.Sprintf("%s ran %q, and vibe was not available", c.Run, c.String()),
