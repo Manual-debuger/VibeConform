@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // The probe flags of vibe audit and how it renders what the guard probes
@@ -18,7 +19,7 @@ import (
 
 func TestContractAuditProbeTimeoutMustBePositive(t *testing.T) {
 	t.Parallel()
-	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--probe-timeout", "0s")
+	r := runVibeAudit(t, "--repo-root", contracttest.Fixture(t, contracttest.Baseline), "--probe-timeout", "0s")
 	assertExit(t, r, 1)
 	assertStderr(t, r, "--probe-timeout must be a positive duration")
 }
@@ -40,7 +41,7 @@ func TestContractAuditProbeFlagsOnV1PointAtTheGuide(t *testing.T) {
 // tool on the empty PATH.
 func TestContractAuditProbeFlagsReachTheAudit(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t)
+	dir := contracttest.Fixture(t, contracttest.Baseline)
 	t.Run("text mode prints progress lines and --keep-probe-copy the kept copy's path", func(t *testing.T) {
 		t.Parallel()
 		r := runVibeAudit(t, "--repo-root", dir, "--keep-probe-copy")

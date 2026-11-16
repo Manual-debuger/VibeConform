@@ -2,10 +2,7 @@ package contract_test
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -51,33 +48,6 @@ func probeSessionStartHooks(matcher string, commands ...string) contracttest.Edi
 // do.
 func probeGoHook(step string) string {
 	return "command -v go >/dev/null 2>&1 || exit 2; go run ./ci " + step
-}
-
-// probeTreeHash hashes every file under dir, .git included, by path and
-// content.
-func probeTreeHash(t *testing.T, dir string) map[string]string {
-	t.Helper()
-	out := map[string]string{}
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		sum := sha256.Sum256(data)
-		rel, _ := filepath.Rel(dir, p)
-		out[filepath.ToSlash(rel)] = hex.EncodeToString(sum[:])
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return out
 }
 
 // probeTempEntries lists the entries of the operating system's temporary
@@ -127,12 +97,12 @@ func TestContractAuditNeverWrites(t *testing.T) {
 		probeSessionStartHooks("startup", probeGoHook("session-start-write")),
 	)
 	tmp := probeSetTempDir(t)
-	before := probeTreeHash(t, dir)
+	before := contracttest.TreeHash(t, dir)
 	// The whole registry, the planted defects of V-01 and V-02 included,
 	// in this process's environment.
 	rep := contracttest.Audit(t, dir, contract.Options{})
 	contracttest.RuleResult(t, rep, "V-01")
-	after := probeTreeHash(t, dir)
+	after := contracttest.TreeHash(t, dir)
 	if len(before) != len(after) {
 		t.Errorf("file count changed: %d before, %d after", len(before), len(after))
 	}

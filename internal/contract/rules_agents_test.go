@@ -223,23 +223,6 @@ const (
 	agentsStopHook     = `"Stop": [{"hooks": [{"type": "command", "command": "task verify:fast"}]}]`
 )
 
-// agentsRunPartCases runs static audits for one part of a rule: each
-// case's Want is the result of that part. A failing part fails the rule;
-// a passing static part leaves it not run (its other parts did not run).
-func agentsRunPartCases(t *testing.T, id string, kind contract.PartKind, cases []contracttest.RuleCase) {
-	t.Helper()
-	for _, tc := range cases {
-		t.Run(tc.Name, func(t *testing.T) {
-			t.Parallel()
-			rep := contracttest.Audit(t, contracttest.Fixture(t, contracttest.Baseline, tc.Edits...), contract.Options{Static: true})
-			contracttest.AssertPart(t, rep, id, kind, tc.Want, tc.Findings...)
-			if r := contracttest.RuleResult(t, rep, id); tc.Want == contract.ResultFail && r.Result != contract.ResultFail {
-				t.Errorf("%s = %s, want fail", id, r.Result)
-			}
-		})
-	}
-}
-
 // A-01: PreToolUse hooks match each of Bash, PowerShell, Write, Edit and
 // MultiEdit. A matcher is missing, empty, * or an anchored regular
 // expression.
@@ -291,7 +274,7 @@ func TestRuleA01(t *testing.T) {
 // A-05 (static part): a Stop hook calls verify-fast.
 func TestRuleA05Static(t *testing.T) {
 	t.Parallel()
-	agentsRunPartCases(t, "A-05", "static", []contracttest.RuleCase{
+	contracttest.RunPartCases(t, "A-05", "static", []contracttest.RuleCase{
 		{Name: "baseline, inside a list with redirection", Want: "pass"},
 		{Name: "plain", Want: "pass", Edits: []contracttest.Edit{agentsSettings(agentsStopHook)}},
 		{Name: "a wrapper task is not verify-fast", Want: "fail",
@@ -532,18 +515,6 @@ func TestContractGuardListings(t *testing.T) {
 
 const agentsDependabotFile = ".github/dependabot.yml"
 
-// agentsDependabot is a dependabot.yml with the given updates entries, each
-// "ecosystem directory-key directory-value".
-func agentsDependabot(entries ...string) contracttest.Edit {
-	var b strings.Builder
-	b.WriteString("version: 2\nupdates:\n")
-	for _, e := range entries {
-		f := strings.SplitN(e, " ", 3)
-		b.WriteString("  - package-ecosystem: " + f[0] + "\n    " + f[1] + ": " + f[2] + "\n    schedule:\n      interval: weekly\n")
-	}
-	return contracttest.WithFile(agentsDependabotFile, b.String())
-}
-
 // monorepo declares a Go component at apps/api, a TypeScript one at
 // web and a Python one at tools/py.
 func agentsMonorepo() []contracttest.Edit {
@@ -579,20 +550,20 @@ func TestRuleD02(t *testing.T) {
 		{Name: "dependabot.yaml", Want: "pass", Edits: []contracttest.Edit{
 			contracttest.WithoutFile(agentsDependabotFile), contracttest.WithFile(".github/dependabot.yaml", "version: 2\nupdates:\n"+
 				"  - {package-ecosystem: gomod, directory: /}\n  - {package-ecosystem: github-actions, directory: /}\n")}},
-		{Name: "monorepo, directories and globs", Want: "pass", Edits: append(agentsMonorepo(), agentsDependabot(
+		{Name: "monorepo, directories and globs", Want: "pass", Edits: append(agentsMonorepo(), contracttest.Dependabot(
 			"gomod directories [\"/apps/*\"]", "npm directory /web/", "uv directories [\"/**\"]", "github-actions directory /"))},
-		{Name: "monorepo, a component left out", Want: "fail", Edits: append(agentsMonorepo(), agentsDependabot(
+		{Name: "monorepo, a component left out", Want: "fail", Edits: append(agentsMonorepo(), contracttest.Dependabot(
 			"gomod directories [\"/apps/*\"]", "pip directory /tools", "npm directory /web", "github-actions directory /")),
 			Findings: []string{agentsDependabotFile + ": no updates entry for pip or uv covers component tools/py",
 				"Fix: add an updates entry with package-ecosystem: pip and directory: /tools/py"}},
 		{Name: "a glob in directory is not expanded", Want: "fail",
-			Edits:    []contracttest.Edit{agentsDependabot("gomod directory /*", "github-actions directory /")},
+			Edits:    []contracttest.Edit{contracttest.Dependabot("gomod directory /*", "github-actions directory /")},
 			Findings: []string{"no updates entry for gomod covers component ."}},
 		{Name: "wrong ecosystem", Want: "fail",
-			Edits:    []contracttest.Edit{agentsDependabot("npm directory /", "github-actions directory /")},
+			Edits:    []contracttest.Edit{contracttest.Dependabot("npm directory /", "github-actions directory /")},
 			Findings: []string{agentsDependabotFile + ": no updates entry for gomod covers component .", "directory: /"}},
 		{Name: "no github-actions", Want: "fail",
-			Edits: []contracttest.Edit{agentsDependabot("gomod directory /")},
+			Edits: []contracttest.Edit{contracttest.Dependabot("gomod directory /")},
 			Findings: []string{agentsDependabotFile + ": no updates entry has package-ecosystem github-actions",
 				"Fix: add an updates entry with package-ecosystem: github-actions and directory: /"}},
 		{Name: "a workflow automerges", Want: "fail",
@@ -664,26 +635,6 @@ func TestRuleD02(t *testing.T) {
 	})
 }
 
-// agentsGLBase is the GitLab family's baseline pipeline (glBase), a copy
-// for D-02's GitLab cases: verify on a Linux and a Windows runner, a scan
-// and the audit in a job of its own.
-const agentsGLBase = "default:\n  image: golang:1.25@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n\n" +
-	"verify:linux:\n  tags: [linux]\n  script:\n    - task verify\n\n" +
-	"verify:windows:\n  tags: [windows]\n  script:\n    - task verify\n\n" +
-	"scan:\n  script:\n    - go install golang.org/x/vuln/cmd/govulncheck@v1.1.4\n    - govulncheck ./...\n\n" +
-	"conformance:audit:\n  script:\n    - vibe audit --static\n"
-
-// agentsGitlab turns the baseline into a GitLab-only repository whose
-// .gitlab-ci.yml is pipeline, plus any further edits (the GitLab family's
-// gitlab, a copy).
-func agentsGitlab(pipeline string, more ...contracttest.Edit) []contracttest.Edit {
-	return append([]contracttest.Edit{
-		contracttest.WithoutFile(".github/workflows/ci.yml"),
-		contracttest.WithoutFile(".github/workflows/audit.yml"),
-		contracttest.WithFile(".gitlab-ci.yml", pipeline),
-	}, more...)
-}
-
 // D-02 on GitLab CI (spec 0055, D-02; regression for pilot finding F-14):
 // Renovate covers each component and gitlabci, and gitlabci-include when
 // enabledManagers is set and the pipeline has includes it does not follow.
@@ -691,7 +642,7 @@ func agentsGitlab(pipeline string, more ...contracttest.Edit) []contracttest.Edi
 func TestRuleD02GitLab(t *testing.T) {
 	t.Parallel()
 	const projectInclude = "include:\n  - project: acme/ci\n    ref: v1.2.0\n    file: /templates/go.yml\n\n"
-	gl := func(more ...contracttest.Edit) []contracttest.Edit { return agentsGitlab(agentsGLBase, more...) }
+	gl := func(more ...contracttest.Edit) []contracttest.Edit { return gitlab(glBase, more...) }
 	contracttest.RunRuleCases(t, "D-02", []contracttest.RuleCase{
 		{Name: "renovate.json without enabledManagers", Want: "pass",
 			Edits: gl(agentsRenovate("renovate.json", `{"extends": ["config:recommended"]}`)...)},
@@ -723,24 +674,24 @@ func TestRuleD02GitLab(t *testing.T) {
 			Edits:    gl(agentsRenovate(".gitlab/renovate.json", `{"enabledManagers": ["gomod"]}`)...),
 			Findings: []string{".gitlab/renovate.json: enabledManagers leaves out gitlabci"}},
 		{Name: "includes and enabledManagers without gitlabci-include", Want: "fail",
-			Edits: agentsGitlab(projectInclude+agentsGLBase, agentsRenovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`)...),
+			Edits: gitlab(projectInclude+glBase, agentsRenovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`)...),
 			Findings: []string{"renovate.json: enabledManagers leaves out gitlabci-include", "line 2",
 				"Fix: add gitlabci-include to enabledManagers"}},
 		{Name: "includes and enabledManagers with gitlabci-include", Want: "pass",
-			Edits: agentsGitlab(projectInclude+agentsGLBase, agentsRenovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci", "gitlabci-include"]}`)...)},
+			Edits: gitlab(projectInclude+glBase, agentsRenovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci", "gitlabci-include"]}`)...)},
 		{Name: "includes without enabledManagers", Want: "pass",
-			Edits: agentsGitlab(projectInclude+agentsGLBase, agentsRenovate("renovate.json", `{}`)...)},
+			Edits: gitlab(projectInclude+glBase, agentsRenovate("renovate.json", `{}`)...)},
 		{Name: "a local include needs no gitlabci-include", Want: "pass",
-			Edits: agentsGitlab("include:\n  - local: ci/lint.yml\n\n"+agentsGLBase, slices.Concat(
+			Edits: gitlab("include:\n  - local: ci/lint.yml\n\n"+glBase, slices.Concat(
 				[]contracttest.Edit{contracttest.WithFile("ci/lint.yml", "lint:\n  script: echo lint\n")},
 				agentsRenovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`))...)},
 		// gitlabci-include updates project: includes only.
 		{Name: "component, template and remote includes need no gitlabci-include", Want: "pass",
-			Edits: agentsGitlab("include:\n  - component: gitlab.com/acme/lint/lint@1.0.0\n  - template: Jobs/SAST.gitlab-ci.yml\n"+
-				"  - remote: https://example.com/ci.yml\n\n"+agentsGLBase,
+			Edits: gitlab("include:\n  - component: gitlab.com/acme/lint/lint@1.0.0\n  - template: Jobs/SAST.gitlab-ci.yml\n"+
+				"  - remote: https://example.com/ci.yml\n\n"+glBase,
 				agentsRenovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`)...)},
 		{Name: "a project include after other kinds is the one named", Want: "fail",
-			Edits: agentsGitlab("include:\n  - template: Jobs/SAST.gitlab-ci.yml\n  - project: acme/ci\n    file: /go.yml\n\n"+agentsGLBase,
+			Edits: gitlab("include:\n  - template: Jobs/SAST.gitlab-ci.yml\n  - project: acme/ci\n    file: /go.yml\n\n"+glBase,
 				agentsRenovate("renovate.json", `{"enabledManagers": ["gomod", "gitlabci"]}`)...),
 			Findings: []string{"enabledManagers leaves out gitlabci-include", "project include at .gitlab-ci.yml line 3"}},
 	})
@@ -761,7 +712,7 @@ func TestRuleD02GitLabRenovateOnGitHub(t *testing.T) {
 // A-07 (static part): a SessionStart hook exists.
 func TestRuleA07Static(t *testing.T) {
 	t.Parallel()
-	agentsRunPartCases(t, "A-07", "static", []contracttest.RuleCase{
+	contracttest.RunPartCases(t, "A-07", "static", []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass"},
 		{Name: "any matcher", Want: "pass", Edits: []contracttest.Edit{agentsSettings(agentsSessionHook)}},
 		{Name: "no SessionStart hook", Want: "fail", Edits: []contracttest.Edit{agentsSettings(agentsPreHook + ", " + agentsStopHook)},

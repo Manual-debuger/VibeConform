@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // reportOf builds a report the way the audit would: every rule of the
@@ -340,7 +341,7 @@ func assertJSONWaiver(t *testing.T, rep jsonReport, id, until string, expired, u
 // without require (spec 0063).
 func TestContractJSONRuleHasRequiredKey(t *testing.T) {
 	t.Parallel()
-	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--json", "--static")
+	r := runVibeAudit(t, "--repo-root", contracttest.Fixture(t, contracttest.Baseline), "--json", "--static")
 	rep := decodeJSONReport(t, r.stdout)
 	if len(rep.Rules) == 0 {
 		t.Fatalf("the report has no rules\n%s", r.stdout)
@@ -354,7 +355,7 @@ func TestContractJSONRuleHasRequiredKey(t *testing.T) {
 
 func TestContractAuditTextReport(t *testing.T) {
 	t.Parallel()
-	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--static")
+	r := runVibeAudit(t, "--repo-root", contracttest.Fixture(t, contracttest.Baseline), "--static")
 	assertExit(t, r, 1)
 	if !strings.HasPrefix(r.stdout, "vibe audit: contract 1.2.0 (vibe test), static checks only\n") {
 		t.Errorf("header:\n%s", r.stdout)

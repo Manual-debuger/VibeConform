@@ -59,6 +59,19 @@ func AgentsConfig(list string) Edit {
 	return WithFile("vibe.yaml", ConfigWith(Section{"agents", "agents: " + list + "\n"}))
 }
 
+// Dependabot writes .github/dependabot.yml with one updates entry for
+// each of entries, "ecosystem directory-key directory-value", such as
+// "gomod directory /" or "npm directories [/web, /apps/*]".
+func Dependabot(entries ...string) Edit {
+	var b strings.Builder
+	b.WriteString("version: 2\nupdates:\n")
+	for _, e := range entries {
+		f := strings.SplitN(e, " ", 3)
+		b.WriteString("  - package-ecosystem: " + f[0] + "\n    " + f[1] + ": " + f[2] + "\n    schedule:\n      interval: weekly\n")
+	}
+	return WithFile(".github/dependabot.yml", b.String())
+}
+
 // RuleResult returns one rule's result from a report, or fails the test.
 func RuleResult(t testing.TB, rep *contract.Report, id string) contract.RuleResult {
 	t.Helper()
@@ -137,6 +150,25 @@ func RunRuleCases(t *testing.T, id string, cases []RuleCase) {
 			t.Parallel()
 			rep := Audit(t, Fixture(t, Baseline, tc.Edits...), contract.Options{Static: true})
 			AssertRule(t, rep, id, tc.Want, tc.Findings...)
+		})
+	}
+}
+
+// RunPartCases is RunRuleCases for one part of a rule that has other
+// parts: a static audit runs only the static parts, so each case's Want
+// is the result of the part of kind, and the findings are the rule's. A
+// case whose part fails must fail the rule too; a passing static part
+// leaves the rule not run, since its other parts did not run.
+func RunPartCases(t *testing.T, id string, kind contract.PartKind, cases []RuleCase) {
+	t.Helper()
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			rep := Audit(t, Fixture(t, Baseline, tc.Edits...), contract.Options{Static: true})
+			AssertPart(t, rep, id, kind, tc.Want, tc.Findings...)
+			if r := RuleResult(t, rep, id); tc.Want == contract.ResultFail && r.Result != contract.ResultFail {
+				t.Errorf("%s = %s, want fail", id, r.Result)
+			}
 		})
 	}
 }

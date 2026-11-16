@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // The two skill directories vibe init --skill writes (spec 0054, "vibe
@@ -142,11 +144,11 @@ func TestInitSkillWritesNothingElse(t *testing.T) {
 	writeTestFile(t, filepath.Join(dir, ".claude", "settings.json"), "{}\n")
 	writeTestFile(t, filepath.Join(dir, ".claude", "skills", "other", "SKILL.md"), "another skill\n")
 	writeTestFile(t, filepath.Join(dir, ".agents", "skills", "vibeconform-setupx", "keep.md"), "a neighbour\n")
-	before := treeHash(t, dir)
+	before := contracttest.TreeHash(t, dir)
 	if out, err := initSkill(t, "v0.12.0", dir); err != nil {
 		t.Fatalf("vibe init --skill: %v\n%s", err, out)
 	}
-	after := treeHash(t, dir)
+	after := contracttest.TreeHash(t, dir)
 	for p, h := range after {
 		if inSkillDir(p) {
 			continue

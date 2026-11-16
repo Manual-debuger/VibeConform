@@ -4,16 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"maps"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 	"github.com/Manual-debuger/VibeConform/internal/doctor"
 )
 
@@ -70,58 +69,18 @@ func (m machine) env() doctor.Env {
 	}
 }
 
-// load writes files into a new directory and loads its configuration as
-// the CLI does, through contract.Load, with an opener that lists exactly
-// those files. It returns the directory and the outcome, a load error
-// included.
-func load(t *testing.T, files map[string]string) (string, doctor.Loaded) {
+// load builds a fixture from the contract baseline with edits applied
+// (contracttest, ADR 0028) and loads its configuration as the CLI does,
+// through contract.Load and contracttest.OpenRepo. The baseline declares
+// the four entrypoints, each run by task, and its .claude/settings.json
+// has command hooks whose guard hook is a task, not vibe-guard. It
+// returns the directory and the outcome, a load error included.
+func load(t *testing.T, edits ...contracttest.Edit) (string, doctor.Loaded) {
 	t.Helper()
-	dir := t.TempDir()
-	var names []string
-	for name, content := range files {
-		path := filepath.Join(dir, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		names = append(names, name)
-	}
-	open := func(_ context.Context, root string) (*contract.Repo, error) {
-		return contract.NewRepo(root, names), nil
-	}
-	cfg, repo, err := contract.Load(context.Background(), dir, "", open)
+	dir := contracttest.Fixture(t, contracttest.Baseline, edits...)
+	cfg, repo, err := contract.Load(context.Background(), dir, "", contracttest.OpenRepo)
 	return dir, doctor.Loaded{Config: cfg, Repo: repo, Err: err}
 }
-
-// with returns the baseline's files with the given ones added, replaced,
-// or removed when their content is empty.
-func with(files map[string]string) map[string]string {
-	out := map[string]string{
-		"go.mod":                "module fixture\n\ngo 1.22\n",
-		"vibe.yaml":             baselineConfig,
-		".claude/settings.json": baselineSettings,
-	}
-	for name, content := range files {
-		if content == "" {
-			delete(out, name)
-			continue
-		}
-		out[name] = content
-	}
-	return out
-}
-
-// baselineConfig declares the four entrypoints, each run by task.
-const baselineConfig = "contract: 1.2.0\nplatforms: [linux, windows]\nagents: [claude]\nentrypoints:\n" +
-	"  verify: task verify\n  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n"
-
-// baselineSettings has command hooks; its guard hook is a task, not
-// vibe-guard.
-const baselineSettings = `{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "task -x hook:guard"}]}],
- "Stop": [{"hooks": [{"type": "command", "command": "task verify:fast 1>&2 || exit 2"}]}]}}
-`
 
 // guardSettings is a .claude/settings.json whose PreToolUse hook runs
 // vibe-guard, as the setup skill's reference does.
@@ -149,15 +108,15 @@ func assertResults(t *testing.T, got, want []doctor.Result) {
 func TestDoctorConfigurationLikeAudit(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
-		name  string
-		files map[string]string
+		name string
+		edit contracttest.Edit
 	}{
-		{"no file", with(map[string]string{"vibe.yaml": ""})},
-		{"version 1", with(map[string]string{"vibe.yaml": "standard: prod-go\nversion: v1\n"})},
+		{"no file", contracttest.WithoutFile("vibe.yaml")},
+		{"version 1", contracttest.WithFile("vibe.yaml", "standard: prod-go\nversion: v1\n")},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			dir, loaded := load(t, c.files)
+			dir, loaded := load(t, c.edit)
 			if loaded.Err == nil {
 				t.Fatal("the configuration loaded")
 			}
@@ -175,7 +134,7 @@ func TestDoctorConfigurationLikeAudit(t *testing.T) {
 // hooks and vibe-guard, one line each, and fails nothing.
 func TestDoctorChecksTheWorkflow(t *testing.T) {
 	t.Parallel()
-	dir, loaded := load(t, with(map[string]string{".claude/settings.json": guardSettings}))
+	dir, loaded := load(t, contracttest.WithFile(".claude/settings.json", guardSettings))
 	assertResults(t, run(dir, machine{}, loaded), []doctor.Result{
 		gitPass,
 		{Status: doctor.Pass, Name: "vibe.yaml", Detail: "version 2, contract 1.2.0"},
@@ -201,7 +160,7 @@ func TestDoctorReportsWhatIsMissing(t *testing.T) {
 	} {
 		t.Run(c.missing, func(t *testing.T) {
 			t.Parallel()
-			dir, loaded := load(t, with(map[string]string{".claude/settings.json": guardSettings}))
+			dir, loaded := load(t, contracttest.WithFile(".claude/settings.json", guardSettings))
 			report := doctor.Run(context.Background(), machine{missing: []string{c.missing}}.env(), dir, loaded)
 			if !slices.Contains(report.Results, c.want) {
 				t.Errorf("no line %+v in %+v", c.want, report.Results)
@@ -217,7 +176,7 @@ func TestDoctorReportsWhatIsMissing(t *testing.T) {
 // hook is a task, so vibe-guard is not checked.
 func TestDoctorChecksVibeGuardOnlyWhenAHookCallsIt(t *testing.T) {
 	t.Parallel()
-	dir, loaded := load(t, with(nil))
+	dir, loaded := load(t)
 	for _, res := range run(dir, machine{missing: []string{"vibe-guard"}}, loaded) {
 		if res.Name == "vibe-guard" {
 			t.Errorf("doctor checked vibe-guard, which no hook calls: %+v", res)
@@ -231,13 +190,13 @@ func TestDoctorChecksVibeGuardOnlyWhenAHookCallsIt(t *testing.T) {
 // is not one simple command is left to V-04.
 func TestDoctorEntrypointPrograms(t *testing.T) {
 	t.Parallel()
-	dir, loaded := load(t, with(map[string]string{
-		"vibe.yaml": "contract: 1.1.0\nplatforms: [linux]\nagents: [claude]\nentrypoints:\n" +
-			"  setup: task setup\n  verify: [task verify, ./scripts/check.sh]\n  verify-fast: make fast\n" +
-			"  fmt: task fmt && task lint\n  fmt-check: ./scripts/gone.sh\n",
-		"scripts/check.sh":      "#!/bin/sh\n",
-		".claude/settings.json": "",
-	}))
+	dir, loaded := load(t,
+		contracttest.WithFile("vibe.yaml", "contract: 1.1.0\nplatforms: [linux]\nagents: [claude]\nentrypoints:\n"+
+			"  setup: task setup\n  verify: [task verify, ./scripts/check.sh]\n  verify-fast: make fast\n"+
+			"  fmt: task fmt && task lint\n  fmt-check: ./scripts/gone.sh\n"),
+		contracttest.WithFile("scripts/check.sh", "#!/bin/sh\n"),
+		contracttest.WithoutFile(".claude/settings.json"),
+	)
 	got := run(dir, machine{missing: []string{"make"}}, loaded)
 	if len(got) < 2 {
 		t.Fatalf("results = %+v", got)
@@ -259,11 +218,11 @@ func TestDoctorEntrypointPrograms(t *testing.T) {
 // needs bash, and fails nothing.
 func TestDoctorAfterInit(t *testing.T) {
 	t.Parallel()
-	dir, loaded := load(t, with(map[string]string{
-		"vibe.yaml": "# vibe.yaml version 2, written by vibe init.\ncontract: 1.2.0\nplatforms: [linux, windows]\nagents: [claude]\n" +
-			"# entrypoints:\n#   verify: task verify\n",
-		".claude/settings.json": "",
-	}))
+	dir, loaded := load(t,
+		contracttest.WithFile("vibe.yaml", "# vibe.yaml version 2, written by vibe init.\ncontract: 1.2.0\nplatforms: [linux, windows]\nagents: [claude]\n"+
+			"# entrypoints:\n#   verify: task verify\n"),
+		contracttest.WithoutFile(".claude/settings.json"),
+	)
 	report := doctor.Run(context.Background(), machine{missing: []string{"bash"}}.env(), dir, loaded)
 	if len(report.Results) < 2 {
 		t.Fatalf("results = %+v", report.Results)
@@ -280,28 +239,10 @@ func TestDoctorAfterInit(t *testing.T) {
 // TestDoctorWritesNothing: doctor diagnoses and never mutates.
 func TestDoctorWritesNothing(t *testing.T) {
 	t.Parallel()
-	dir, loaded := load(t, with(map[string]string{".claude/settings.json": guardSettings}))
-	before := snapshot(t, dir)
+	dir, loaded := load(t, contracttest.WithFile(".claude/settings.json", guardSettings))
+	before := contracttest.TreeHash(t, dir)
 	run(dir, machine{}, loaded)
-	if after := snapshot(t, dir); !maps.Equal(before, after) {
+	if after := contracttest.TreeHash(t, dir); !maps.Equal(before, after) {
 		t.Errorf("doctor changed the repository:\nbefore %v\nafter  %v", slices.Sorted(maps.Keys(before)), slices.Sorted(maps.Keys(after)))
 	}
-}
-
-// snapshot maps every file under dir to its content.
-func snapshot(t *testing.T, dir string) map[string]string {
-	t.Helper()
-	files := map[string]string{}
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		data, err := os.ReadFile(path) // #nosec G304 -- walking the test's own temp directory
-		files[path] = string(data)
-		return err
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return files
 }

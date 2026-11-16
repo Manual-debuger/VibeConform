@@ -133,6 +133,33 @@ func TestLoadReturnsTheOpenersError(t *testing.T) {
 	}
 }
 
+// A nil RepoOpener opens the repository with contract.OpenRepo, so a
+// caller with an optional opener (vibe init's) passes it through instead
+// of repeating Load's default.
+func TestNilRepoOpenerOpensWithGit(t *testing.T) {
+	t.Parallel()
+	dir := contracttest.GitFixture(t, t.TempDir(), contracttest.WithFile("go.mod", loadGoMod),
+		contracttest.WithUntracked("notes.txt", "x\n"))
+	var open contract.RepoOpener
+	repo, err := open.Open(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := repo.Files(); len(got) != 1 || got[0] != "go.mod" {
+		t.Errorf("files = %q, want git's tracked files [go.mod]", got)
+	}
+}
+
+// A RepoOpener that is set opens the repository itself.
+func TestRepoOpenerOpensWithItself(t *testing.T) {
+	t.Parallel()
+	opened := contract.NewRepo(t.TempDir(), []string{"a.txt"})
+	open := contract.RepoOpener(func(context.Context, string) (*contract.Repo, error) { return opened, nil })
+	if repo, err := open.Open(context.Background(), "unused"); err != nil || repo != opened {
+		t.Errorf("Open = %p, %v, want the opener's %p", repo, err, opened)
+	}
+}
+
 // ReadConfig is the read-and-detect step on its own, for vibe init: a
 // version 2 file comes back with its label and content.
 func TestReadConfigReturnsAVersion2File(t *testing.T) {

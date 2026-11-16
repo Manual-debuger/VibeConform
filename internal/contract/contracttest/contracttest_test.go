@@ -201,17 +201,40 @@ func TestStandIn(t *testing.T) {
 	}
 }
 
-// RuleIDs lists a level's rules in registry order, without those named;
-// MustRules is RuleIDs of the MUST level.
+// StandIn returns a new slice: the rules it is given still decide as
+// before, so a test can build two rule sets from one.
+func TestStandInLeavesItsInputUntouched(t *testing.T) {
+	t.Parallel()
+	in := contracttest.StandIn(nil, contract.ResultPass, "V-01")
+	out := contracttest.StandIn(in, contract.ResultFail, "V-01")
+	result := func(rules []contract.Rule) contract.Result {
+		t.Helper()
+		for _, r := range rules {
+			if r.ID == "V-01" {
+				return r.Parts[0].Run(nil, contract.Needed{}).Result
+			}
+		}
+		t.Fatal("no V-01")
+		return ""
+	}
+	if got := result(in); got != contract.ResultPass {
+		t.Errorf("the input's V-01 = %s after a second StandIn, want pass", got)
+	}
+	if got := result(out); got != contract.ResultFail {
+		t.Errorf("the output's V-01 = %s, want fail", got)
+	}
+}
+
+// RuleIDs lists a level's rules in registry order, without those named.
 func TestRuleIDs(t *testing.T) {
 	t.Parallel()
 	all := contracttest.RuleIDs("")
 	if len(all) != len(contract.Rules()) || all[0] != contract.Rules()[0].ID {
 		t.Errorf(`RuleIDs("") = %q, want every rule in registry order`, all)
 	}
-	must := contracttest.MustRules("V-04")
+	must := contracttest.RuleIDs(contract.Must, "V-04")
 	if slices.Contains(must, "V-04") || !slices.Contains(must, "V-01") || slices.Contains(must, "R-02") {
-		t.Errorf("MustRules(V-04) = %q, want the MUST rules but V-04", must)
+		t.Errorf("RuleIDs(MUST, V-04) = %q, want the MUST rules but V-04", must)
 	}
 	if got := contracttest.RuleIDs(contract.Should, "R-02"); slices.Contains(got, "R-02") || !slices.Contains(got, "R-03") {
 		t.Errorf("RuleIDs(SHOULD, R-02) = %q, want the SHOULD rules but R-02", got)

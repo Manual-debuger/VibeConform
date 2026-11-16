@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 	"github.com/Manual-debuger/VibeConform/internal/doctor"
 )
 
@@ -28,9 +29,8 @@ func TestEntrypointsAbsolutePOSIXPath(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			dir, loaded := load(t, with(map[string]string{
-				"vibe.yaml": "contract: 1.2.0\nplatforms: [linux]\nagents: []\nentrypoints:\n  verify: /usr/bin/make verify\n",
-			}))
+			dir, loaded := load(t, contracttest.WithFile("vibe.yaml",
+				"contract: 1.2.0\nplatforms: [linux]\nagents: []\nentrypoints:\n  verify: /usr/bin/make verify\n"))
 			if loaded.Err != nil {
 				t.Fatal(loaded.Err)
 			}

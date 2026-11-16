@@ -52,7 +52,7 @@ func engWaiverConfig(rule, until string) contracttest.Edit {
 func TestContractAuditOlderMinorKeepsVerdictWhenNewRulesFail(t *testing.T) {
 	t.Parallel()
 	added := []string{"V-05", "V-06", "V-07", "V-08", "A-09"}
-	rules := contracttest.StandIn(nil, contract.ResultPass, contracttest.MustRules("V-04")...)
+	rules := contracttest.StandIn(nil, contract.ResultPass, contracttest.RuleIDs(contract.Must, "V-04")...)
 	rules = contracttest.StandIn(rules, contract.ResultFail, added...)
 	dir := contracttest.Fixture(t, contracttest.Baseline,
 		contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: 1.1.0\n"})))
@@ -70,7 +70,7 @@ func TestContractAuditVerdicts(t *testing.T) { //nolint:gocognit,gocyclo // base
 	t.Parallel()
 	t.Run("conformant exits 0", func(t *testing.T) {
 		t.Parallel()
-		rules := contracttest.StandIn(nil, contract.ResultPass, contracttest.MustRules("V-04")...)
+		rules := contracttest.StandIn(nil, contract.ResultPass, contracttest.RuleIDs(contract.Must, "V-04")...)
 		rep := engAudit(t, contracttest.Fixture(t, contracttest.Baseline), rules)
 		engVerdict(t, rep, contract.VerdictConformant, "")
 		if rep.Reason != "" {
@@ -79,14 +79,14 @@ func TestContractAuditVerdicts(t *testing.T) { //nolint:gocognit,gocyclo // base
 	})
 	t.Run("a failed SHOULD rule does not change it", func(t *testing.T) {
 		t.Parallel()
-		rules := contracttest.StandIn(nil, contract.ResultPass, contracttest.MustRules("V-04")...)
+		rules := contracttest.StandIn(nil, contract.ResultPass, contracttest.RuleIDs(contract.Must, "V-04")...)
 		rep := engAudit(t, contracttest.Fixture(t, contracttest.Baseline, contracttest.WithoutFile(".github/pull_request_template.md")), rules)
 		engVerdict(t, rep, contract.VerdictConformant, "")
 		contracttest.AssertRule(t, rep, "R-03", contract.ResultFail)
 	})
 	t.Run("an undecided SHOULD rule does not change it", func(t *testing.T) {
 		t.Parallel()
-		rules := contracttest.StandIn(nil, contract.ResultPass, contracttest.MustRules("V-04")...)
+		rules := contracttest.StandIn(nil, contract.ResultPass, contracttest.RuleIDs(contract.Must, "V-04")...)
 		rules = contracttest.StandIn(rules, contract.ResultUndecided, "H-01")
 		rep := engAudit(t, contracttest.Fixture(t, contracttest.Baseline), rules)
 		engVerdict(t, rep, contract.VerdictConformant, "")
@@ -94,7 +94,7 @@ func TestContractAuditVerdicts(t *testing.T) { //nolint:gocognit,gocyclo // base
 	})
 	t.Run("a failed MUST rule exits 2", func(t *testing.T) {
 		t.Parallel()
-		rules := contracttest.StandIn(nil, contract.ResultPass, contracttest.MustRules("V-04")...)
+		rules := contracttest.StandIn(nil, contract.ResultPass, contracttest.RuleIDs(contract.Must, "V-04")...)
 		dir := contracttest.Fixture(t, contracttest.Baseline,
 			contracttest.Entrypoints("  verify: task verify\n  verify-fast: task verify:fast\n  fmt: task fmt\n"))
 		rep := engAudit(t, dir, rules)

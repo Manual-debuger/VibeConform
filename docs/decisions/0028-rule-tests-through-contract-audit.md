@@ -68,3 +68,10 @@ not a check function.
   a report field is now a test change in `internal/contract`, where
   the field lives.
 - Spec 0052's "Testing Decisions" is amended to point here.
+
+> **Correction (2026-11-16).** The CLI suite has no JSON golden file;
+> only the text reports have goldens (`TestContractReportGolden`). The
+> JSON wiring is covered by `TestContractJSONReportFromTheModel`, which
+> renders a report model as JSON and decodes it through the suite's one
+> JSON mirror, and by the CLI tests that run `vibe audit --json` (spec
+> 0065, Implementation Notes).

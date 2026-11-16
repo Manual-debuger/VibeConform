@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // unlockResult is what one vibe unlock run printed and returned.
@@ -32,7 +34,7 @@ func runVibeUnlock(t *testing.T, args ...string) unlockResult {
 func gitInit(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	fixtureGit(t, dir, "init", "-q")
+	contracttest.Git(t, dir, "init", "-q")
 	return dir
 }
 
@@ -128,9 +130,9 @@ func TestUnlockMinutesOutOfRange(t *testing.T) {
 func TestUnlockLinkedWorktreeSharesCommonDir(t *testing.T) {
 	t.Parallel()
 	dir := gitInit(t)
-	fixtureGit(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init")
+	contracttest.Git(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init")
 	wt := filepath.Join(t.TempDir(), "wt")
-	fixtureGit(t, dir, "worktree", "add", "-q", wt)
+	contracttest.Git(t, dir, "worktree", "add", "-q", wt)
 	before := time.Now()
 	if r := runVibeUnlock(t, "--repo-root", wt); r.err != nil {
 		t.Fatalf("vibe unlock: %v\n%s", r.err, r.stderr)

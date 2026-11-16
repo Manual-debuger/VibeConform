@@ -447,10 +447,13 @@ Each of these is checked during implementation:
   `contract.Parse`. The CLI's `configLoadError` adds the "run
   `vibe init`" text and the migration pointer for `audit` and `doctor`.
   One ordering is kept from before: with a `--probe-timeout` that is not
-  positive, `vibe audit` first runs `contract.ReadConfig` and reports a
-  missing, version 1, both-key or neither-key `vibe.yaml`, and only then
-  the flag; a file that does not open or parse is reported after the
-  flag, as before. `TestAuditBadProbeTimeoutAndConfigErrorKeepTheirOrder`
+  positive, `vibe audit` runs `contract.ReadConfig` and then reports the
+  flag. The file is read once on that path: `ReadConfig` reports a
+  missing, unreadable, version 1, both-key or neither-key `vibe.yaml`,
+  and otherwise the flag error follows. Nothing opens the repository or
+  parses the file there, so a version 2 file that does not parse gets
+  the flag error, as before.
+  `TestAuditBadProbeTimeoutAndConfigErrorKeepTheirOrder`
   (`internal/cli/config_messages_test.go`) holds that order.
 - **`--explain` and the JSON waiver** (#182). The guard corpus counts
   are in `contract.RuleDetails("A-02")` and `("A-03")`, and the
@@ -458,7 +461,14 @@ Each of these is checked during implementation:
   flags with `pflag`, so `go.mod` lists `github.com/spf13/pflag` as a
   direct requirement. It is the same version that cobra already
   required, so no dependency is new. The repository has no JSON golden
-  file, so only the text goldens exist.
+  file, so only the text goldens exist. The phrase "golden text and JSON
+  reports" in Desired Behavior and ADR 0028 means the text goldens
+  (`TestContractReportGolden`) and, for JSON, the CLI's JSON tests:
+  `TestContractJSONReportFromTheModel`, which renders a report model
+  and decodes it through the one JSON mirror, and the CLI tests that
+  run `vibe audit --json` (`TestContractJSONRuleHasRequiredKey`,
+  `TestListedFixtureIsAuditedWithoutGit`, the `--json` cases of the
+  dispatch tests and of `TestContractAuditProbeFlagsReachTheAudit`).
 - **`doctor.Run`** (#183). The `depguard` rule `doctor` covers
   `internal/doctor`'s test files too, and its allow list gained
   `internal/doctor` itself, so that the external `doctor_test` package
@@ -520,8 +530,8 @@ Each of these is checked during implementation:
   - New CLI renderer test from the GitLab move:
     `TestContractTextReportCIProvider`.
   - contracttest gained `StandIn` (it clones `Parts`; the CLI's version
-    wrote into the registry's slice), `MustRules`, `RuleIDs` and
-    `AgentsConfig` for the families that share them.
+    wrote into the registry's slice), `RuleIDs` and `AgentsConfig` for
+    the families that share them.
 - **The CLI's seams** (#190, Assumption 1). `contractSeams` holds the
   repository opener, doctor's environment and the probe environment.
   The rule list and the report hook are gone: no CLI case needed a
@@ -549,3 +559,41 @@ Each of these is checked during implementation:
   `contracttest.Fixture`, runs `contracttest.Audit` with
   `contract.Options{Static: true}` and reads the report model, so its
   reports pass the report check as they did through the CLI's hook.
+- **Code review fixes** (after #190). No test case was dropped or
+  renamed, and no assertion was weakened:
+  - The fixtures exist once (User Story 22). `contracttest.Dependabot`
+    replaces the CLI's `dependabot` and D-02's `agentsDependabot`;
+    `contracttest.TreeHash` replaces the CLI's `treeHash` and the probe
+    tests' `probeTreeHash`. The `depguard` rule `doctor` allows
+    `internal/contract/contracttest`, and the doctor tests build their
+    fixtures from the contract baseline through it instead of their own
+    builder and baseline `vibe.yaml`. The rule `contracttest-importers`
+    still keeps it out of doctor's non-test files.
+  - Package `contract_test` has one part-case runner,
+    `contracttest.RunPartCases` (it replaces `ciRunStaticPartCases`,
+    `glRunStaticPartCases` and `agentsRunPartCases`; the C and GitLab
+    families now also get its check that a failing part fails the
+    rule), one GitLab baseline (`glBase`, `gitlab`) and one pair of
+    verify entrypoints (`ciListVerify`, `ciNoVerify`).
+  - The CLI tests call contracttest directly. The forwarding helpers
+    (`withFile`, `withoutFile`, `withUntracked`, `contractFixture`,
+    `contractGitFixture`, `fixtureGit`, `baselineFixture`,
+    `fixtureEdit`, `openFixtureRepo`) and the `section`/`configWith`
+    copy of `contracttest.Section` are gone.
+  - `contracttest.StandIn` returns a new slice and leaves its input as
+    it was (`TestStandInLeavesItsInputUntouched`).
+  - `contract.RepoOpener.Open` holds the nil-opener default.
+    `contract.Load` and `vibe init` pass a possibly nil opener through
+    it, so the CLI's `contractSeams.open` is gone.
+  - `contracttest.MustRules` is inlined: its five callers in
+    `engine_test.go` call `RuleIDs(contract.Must, ...)`.
+  - `vibe init`'s `refuseExisting` keeps `errors.As(err,
+    *fs.PathError)`. `ReadConfig` documents its errors as
+    `ErrNoConfig`, `ErrConfigV1`, `*ConfigError` and a wrapped
+    `*fs.PathError`, and init's message prints the `*fs.PathError`
+    alone. A new sentinel would still need that error for the
+    message, so it would add an export and simplify nothing.
+  - `TestContractAuditProbeFlagsReachTheAudit` keeps two full audits on
+    one fixture, in parallel. Progress lines are printed in text mode
+    and not with `--json`, so one run cannot show both, and no other
+    CLI test runs a full `--json` audit to share.

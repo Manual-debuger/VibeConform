@@ -39,6 +39,15 @@ func (e *loadError) Unwrap() error { return e.sentinel }
 // OpenRepo is the real one; a test hands in a fixture's file list.
 type RepoOpener func(ctx context.Context, root string) (*Repo, error)
 
+// Open opens the repository at root with open, or with OpenRepo when
+// open is nil, so a caller passes an optional opener through.
+func (open RepoOpener) Open(ctx context.Context, root string) (*Repo, error) {
+	if open == nil {
+		return OpenRepo(ctx, root)
+	}
+	return open(ctx, root)
+}
+
 // ReadConfig reads the configuration at configPath, or vibe.yaml at root
 // when configPath is empty, and returns its label and content when it is
 // version 2. The label is configPath as given, or ConfigFile. It is the
@@ -82,10 +91,7 @@ func Load(ctx context.Context, root, configPath string, open RepoOpener) (*Confi
 	if err != nil {
 		return nil, nil, err
 	}
-	if open == nil {
-		open = OpenRepo
-	}
-	repo, err := open(ctx, root)
+	repo, err := open.Open(ctx, root)
 	if err != nil {
 		return nil, nil, err
 	}

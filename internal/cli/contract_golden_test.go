@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // updateGoldens rewrites the text report goldens from the current audit:
@@ -16,10 +18,10 @@ import (
 // rule's check or a finding's wording changes.
 var updateGoldens = flag.Bool("update", false, "rewrite the contract report goldens; review the diff, then commit it")
 
-func requiredGoldenEdits() []fixtureEdit {
-	return []fixtureEdit{
-		withFile("vibe.yaml", configWith(section{"require", "require: [V-05, V-06, R-03]\n"})),
-		withoutFile(".github/pull_request_template.md"),
+func requiredGoldenEdits() []contracttest.Edit {
+	return []contracttest.Edit{
+		contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(contracttest.Section{Key: "require", Body: "require: [V-05, V-06, R-03]\n"})),
+		contracttest.WithoutFile(".github/pull_request_template.md"),
 	}
 }
 
@@ -32,25 +34,25 @@ func TestContractReportGolden(t *testing.T) { //nolint:gocognit // baseline: pre
 	t.Parallel()
 	cases := []struct {
 		name  string
-		edits []fixtureEdit
+		edits []contracttest.Edit
 		args  []string
 	}{
 		{name: "baseline"},
 		{name: "static", args: []string{"--static"}},
-		{name: "mixed", edits: []fixtureEdit{
+		{name: "mixed", edits: []contracttest.Edit{
 			// V-04 fails (MUST); R-02 fails (SHOULD) with an expired
 			// waiver; R-03 is waived; C-05 is not applicable, so its
 			// waiver is unused.
-			withFile("vibe.yaml", configWith(
-				section{"platforms", "platforms: [linux]\n"},
-				section{"entrypoints", "entrypoints:\n  verify: task verify\n  verify-fast: task verify:fast\n  fmt-check: task fmt:check\n"},
-				section{"waivers", "waivers:\n" +
+			contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(
+				contracttest.Section{Key: "platforms", Body: "platforms: [linux]\n"},
+				contracttest.Section{Key: "entrypoints", Body: "entrypoints:\n  verify: task verify\n  verify-fast: task verify:fast\n  fmt-check: task fmt:check\n"},
+				contracttest.Section{Key: "waivers", Body: "waivers:\n" +
 					"  - rule: R-02\n    reason: rewriting AGENTS.md\n    until: 2000-01-01\n" +
 					"  - rule: R-03\n    reason: templates move to the org repository\n    until: 2999-12-31\n" +
 					"  - rule: C-05\n    reason: one platform for now\n    until: 2999-12-31\n"},
 			)),
-			withFile("AGENTS.md", "Run the checks before you finish.\n"),
-			withoutFile(".github/pull_request_template.md"),
+			contracttest.WithFile("AGENTS.md", "Run the checks before you finish.\n"),
+			contracttest.WithoutFile(".github/pull_request_template.md"),
 		}},
 		// Required SHOULD rules (spec 0063) are marked wherever the report
 		// lists them: R-03 fails, V-05 is not applicable, V-06 cannot be
@@ -60,7 +62,7 @@ func TestContractReportGolden(t *testing.T) { //nolint:gocognit // baseline: pre
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r := runVibeAudit(t, append([]string{"--repo-root", contractGitFixture(t, tc.edits...)}, tc.args...)...)
+			r := runVibeAudit(t, append([]string{"--repo-root", contracttest.GitFixture(t, contracttest.Baseline, tc.edits...)}, tc.args...)...)
 			assertExit(t, r, 1)
 			golden := filepath.Join("testdata", "contract", "report", tc.name+".golden")
 			if *updateGoldens {
