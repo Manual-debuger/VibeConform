@@ -1,0 +1,49 @@
+Check:
+Probe: with V-01's static-analysis defect under the language's blanket suppressions planted in each component, `verify` exits non-zero. A component without tests leaves it undecided.
+
+Part check (probe):
+with V-01's static-analysis defect under the language's blanket suppressions planted in each component, `verify` exits non-zero. A component without tests leaves it undecided.
+
+Details:
+Blanket suppressions:
+  V-01's static-analysis defect, with the language's common blanket
+  suppressions on the defect's line or for its file. Specific
+  suppressions, which name a rule, are not part of any sample.
+    Go: //nolint, naming no linter.
+    Python: # type: ignore  # noqa, with no codes.
+    TypeScript: a file-level eslint-disable comment naming no rule, and
+    // @ts-ignore on the line before the defect.
+  Any gate in verify that still reports the defect satisfies the rule:
+  golangci-lint's nolintlint (require-specific), Ruff's PGH004, ESLint's
+  eslint-comments/no-unlimited-disable, or a checker that ignores the
+  comments (go vet ignores //nolint).
+
+Planted defects:
+  One at a time, each into the first directory, in sorted path order,
+  inside a component that holds a test file of its language; the copy is
+  reset between defects. In Go samples, {{package}} is the package clause
+  of the test file beside it, without a _test suffix in a file that is not
+  a _test.go file.
+
+  Go, blanket suppression: vibe_probe_blanket_suppression_test.go
+    // Planted by vibe audit: a Printf call whose arguments do not match its format
+    // (the static-analysis defect), under a blanket suppression.
+
+    package {{package}}
+
+    import "fmt"
+
+    func vibeProbeStaticAnalysis() { fmt.Printf("%d\n", "vibe audit") } //nolint
+
+  Python, blanket suppression: vibe_probe_blanket_suppression.py
+    # Planted by vibe audit: a reference to an undefined name (the static-analysis defect),
+    # under blanket suppressions.
+    def vibe_probe() -> int:
+        return vibe_probe_undefined_name  # type: ignore  # noqa
+
+  TypeScript, blanket suppression: vibe_probe_blanket_suppression.ts
+    // Planted by vibe audit: a reference to an undefined name (the static-analysis defect),
+    // under blanket suppressions.
+    /* eslint-disable */
+    // @ts-ignore
+    export const vibeProbe: number = vibeProbeUndefinedName

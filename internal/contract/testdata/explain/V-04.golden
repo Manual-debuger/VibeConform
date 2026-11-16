@@ -1,0 +1,5 @@
+Check:
+Static: `vibe.yaml` declares every required entrypoint, each non-empty. The other rules check that CI and hooks call them.
+
+Part check (static):
+`vibe.yaml` declares every required entrypoint, each non-empty. The other rules check that CI and hooks call them.
