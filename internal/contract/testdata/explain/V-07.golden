@@ -1,0 +1,21 @@
+Check:
+Probe: with the secret defect (a PEM private-key block in a plain text file) planted once, in the first component in configuration order that has tests, `verify` exits non-zero.
+
+Part check (probe):
+with the secret defect (a PEM private-key block in a plain text file) planted once, in the first component in configuration order that has tests, `verify` exits non-zero.
+
+Details:
+Planted defect:
+  Once per repository, in the first component in configuration order that
+  has tests: into its first directory, in sorted path order, that holds a
+  test file of its language. The file is written to the probe copy's
+  working tree and is not committed, so the scanner must read the working
+  tree's files, not the Git history. Any secret scanner that reports it
+  satisfies the rule.
+
+  Every language, secret: vibe_probe_secret.txt
+    Planted by vibe audit: a PEM private-key block (the secret defect). It is not a key.
+    {{five dashes}}BEGIN PRIVATE KEY{{five dashes}}
+    UGxhbnRlZCBieSB2aWJlIGF1ZGl0OiB0aGlzIGlzIG5vdCBhIGtleSwgaXQgaXMg
+    dGhlIHNlY3JldCBkZWZlY3Qu
+    {{five dashes}}END PRIVATE KEY{{five dashes}}
