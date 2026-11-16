@@ -1,6 +1,6 @@
 # Spec 0065: The contract loads its own configuration, and rule tests go through it
 
-Status: draft (2026-11-16). Issues #162 and #165, from the design review
+Status: accepted (2026-11-16). Issues #162 and #165, from the design review
 #167. ADR 0028 records the test-seam decision and amends spec 0052's
 "Testing Decisions". No contract change: the contract stays 1.2.0, and
 no rule's result, finding or fix changes.
