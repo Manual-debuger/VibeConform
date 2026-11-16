@@ -15,7 +15,7 @@ import (
 
 // checkV04: every required entrypoint is declared and non-empty, and each
 // command of every declared entrypoint is one simple command.
-func checkV04(env *Env) PartResult {
+func checkV04(env *Env, _ Needed) PartResult {
 	names := RequiredEntrypoints
 	if _, ok := env.Config.Entrypoints[EntrypointSetup]; ok {
 		names = append(names[:len(names):len(names)], EntrypointSetup)
@@ -34,7 +34,7 @@ func checkV04(env *Env) PartResult {
 // Claude Code is in use, CLAUDE.md contains the string AGENTS.md. The
 // rule is not applicable with no agents; its CLAUDE.md half without
 // claude.
-func checkR02(env *Env) PartResult {
+func checkR02(env *Env, _ Needed) PartResult {
 	halves := []PartResult{agentsMDNamesVerify(env)}
 	if slices.Contains(env.Config.Agents, AgentClaude) {
 		halves = append(halves, claudeMDPointsToAgentsMD(env))
@@ -99,7 +99,7 @@ var prTemplateHeading = regexp.MustCompile(`^ {0,3}#{1,6}(?:[ \t]|$)`)
 
 // checkR03: every tracked pull request template has an ATX heading
 // containing "verif", case-insensitive.
-func checkR03(env *Env) PartResult {
+func checkR03(env *Env, _ Needed) PartResult {
 	var templates []string
 	for _, f := range env.Repo.Files() {
 		if isPRTemplate(f) {

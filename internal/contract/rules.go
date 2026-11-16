@@ -96,8 +96,9 @@ const (
 )
 
 // CheckFunc decides one part of a rule against a repository. It reads
-// only what env offers and never writes.
-type CheckFunc func(env *Env) PartResult
+// env and the results of the parts it declared it needs, and returns
+// what it decided (spec 0064).
+type CheckFunc func(env *Env, needed Needed) PartResult
 
 // Part is one part of a rule's check.
 type Part struct {
@@ -106,6 +107,9 @@ type Part struct {
 	Check string
 	// Run decides the part. Every part of contract 1.0.0 has one.
 	Run CheckFunc
+	// Needs are the parts an execution or probe part runs after; its Run
+	// receives their results (spec 0064). Static parts declare none.
+	Needs []Need
 }
 
 // Rule is one rule of contract 1.0.0 (spec 0051, "Rules"). The report
@@ -554,8 +558,15 @@ var rules = []Rule{
 		Parts: []Part{
 			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 "+
 				"and `vibe --version` in a CI job that calls no entrypoint.", checkR01),
-			executionRun("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
-				"are still refused.", checkR01Execution),
+			{
+				Kind: Execution,
+				Check: "with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases " +
+					"are still refused.",
+				Run: checkR01Execution,
+				// R-01 reads A-02's deny verdict and the vibe calls of
+				// every other run, so it runs last.
+				Needs: []Need{NeedPart("A-02", Probe), NeedEveryOther()},
+			},
 		},
 	},
 	{

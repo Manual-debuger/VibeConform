@@ -3,6 +3,7 @@ package contract
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -131,4 +132,61 @@ func checkSpec0061Rule(t *testing.T, r Rule) {
 			t.Errorf("%s %s part %q is not part of its check, or has no check", r.ID, p.Kind, p.Check)
 		}
 	}
+}
+
+// The registry's needs (spec 0064) keep vibe audit from the runner's
+// panic: every need names a part of the registry, no static part
+// declares one, and they form no cycle. Only R-01's execution part
+// declares needs: A-02's probe, whose deny verdict it reads, and every
+// other part, whose vibe calls it lists.
+func TestRegistryNeedsResolve(t *testing.T) {
+	rules := Rules()
+	if declared, want := declaredNeeds(t, rules), []string{"R-01/execution"}; !slices.Equal(declared, want) {
+		t.Errorf("parts that declare needs: %q, want %q", declared, want)
+	}
+	r01, _ := LookupRule("R-01")
+	for _, p := range r01.Parts {
+		if p.Kind != Execution {
+			continue
+		}
+		if want := []Need{NeedPart("A-02", Probe), NeedEveryOther()}; !slices.Equal(p.Needs, want) {
+			t.Errorf("R-01/execution needs %v, want %v", p.Needs, want)
+		}
+	}
+
+	order := runOrder(rules) // panics on a cycle
+	if last := keyOf(rules, order[len(order)-1]); last != (partKey{rule: "R-01", kind: Execution}) {
+		t.Errorf("the last part to run is %s, want R-01/execution", last)
+	}
+}
+
+// declaredNeeds lists the parts of rules that declare needs, as
+// "<id>/<kind>", and fails the test for a static part that declares one
+// or a need on a part rules does not hold.
+func declaredNeeds(t *testing.T, rules []Rule) []string {
+	t.Helper()
+	parts := map[partKey]bool{}
+	for _, r := range rules {
+		for _, p := range r.Parts {
+			parts[partKey{rule: r.ID, kind: p.Kind}] = true
+		}
+	}
+	var declared []string
+	for _, r := range rules {
+		for _, p := range r.Parts {
+			if len(p.Needs) == 0 {
+				continue
+			}
+			declared = append(declared, r.ID+"/"+string(p.Kind))
+			if p.Kind == Static {
+				t.Errorf("%s's static part declares needs", r.ID)
+			}
+			for _, n := range p.Needs {
+				if !n.everyOther && !parts[n.part] {
+					t.Errorf("%s/%s needs %s, which is not in the registry", r.ID, p.Kind, n)
+				}
+			}
+		}
+	}
+	return declared
 }

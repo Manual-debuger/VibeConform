@@ -140,17 +140,18 @@ func TestRuleR01Execution(t *testing.T) {
 		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
 	}
 	t.Parallel()
-	// Without Claude Code there is no A-02 half.
+	// Without Claude Code A-02 is not applicable and R-01 has no A-02
+	// half; R-01 still needs A-02 in the rule list (spec 0064).
 	noAgents := section{"agents", "agents: []\n"}
 	t.Run("verify without vibe passes", func(t *testing.T) {
 		t.Parallel()
-		rep := audit(t, probeFixture(t, probeConfig(noAgents)), ids("R-01"), inherit)
+		rep := audit(t, probeFixture(t, probeConfig(noAgents)), ids("A-02", "R-01"), inherit)
 		assertExecution(t, rep, "R-01", pass)
 	})
 	t.Run("verify that calls vibe fails and lists the call", func(t *testing.T) {
 		t.Parallel()
 		rep := audit(t, probeFixture(t, probeConfig(noAgents,
-			section{"entrypoints", probeEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci call-vibe]\n")})), ids("R-01"), inherit)
+			section{"entrypoints", probeEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci call-vibe]\n")})), ids("A-02", "R-01"), inherit)
 		assertExecution(t, rep, "R-01", fail, "vibe not available", `verify ran "vibe version"`)
 	})
 	t.Run("a hook that calls vibe is listed", func(t *testing.T) {
@@ -169,7 +170,7 @@ func TestRuleR01Execution(t *testing.T) {
 	t.Run("a verify that runs too long cannot decide", func(t *testing.T) {
 		t.Parallel()
 		rep := audit(t, probeFixture(t, probeConfig(noAgents,
-			section{"entrypoints", probeEntrypoints("  verify: go run ./ci sleep\n")})), ids("R-01"),
+			section{"entrypoints", probeEntrypoints("  verify: go run ./ci sleep\n")})), ids("A-02", "R-01"),
 			contract.ProbeOptions{Timeout: 3 * time.Second})
 		assertExecution(t, rep, "R-01", undecided, "timed out after 3s")
 	})
@@ -184,7 +185,7 @@ func TestProbeSetup(t *testing.T) {
 	t.Parallel()
 	t.Run("a failing setup leaves every part undecided", func(t *testing.T) {
 		t.Parallel()
-		parts := ids("V-03", "A-07", "D-01", "R-01")
+		parts := ids("V-03", "A-07", "D-01", "A-02", "R-01")
 		rep := audit(t, probeFixture(t, withEntrypoints("  setup: go run ./ci fail\n")), parts, inherit)
 		for _, id := range parts {
 			if r := rule(t, rep, id); r.Result != undecided {

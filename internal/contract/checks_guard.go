@@ -263,7 +263,7 @@ func guardFix(env *Env, rule string) string {
 // its tool, is refused (or let through by a policy.json exception) when
 // it is a deny case and allowed when it is an allow case. It records its
 // deny-case verdict for R-01 and the exceptions' uses for the report.
-func checkA02(env *Env) PartResult {
+func checkA02(env *Env, _ Needed) PartResult {
 	s := env.probe
 	res := a02(env, s)
 	if s.guardDeny == nil {
@@ -284,7 +284,7 @@ func a02(env *Env, s *probeSession) PartResult {
 // every deny case is refused or let through by a policy.json exception,
 // and every allow case is allowed. The exceptions' uses join A-02's in
 // the report.
-func checkA09(env *Env) PartResult {
+func checkA09(env *Env, _ Needed) PartResult {
 	all, _, _ := feedCorpus(env, env.probe, ProbeA09, corpusFor(ProbeA09))
 	return all
 }
@@ -498,7 +498,7 @@ func systemPath(env []string) string {
 
 // checkA03: every deny case is refused in each situation of
 // a03Situations. Exceptions do not count.
-func checkA03(env *Env) PartResult {
+func checkA03(env *Env, _ Needed) PartResult {
 	s := env.probe
 	hooks, res, ok := preToolUseHooks(env)
 	if !ok {

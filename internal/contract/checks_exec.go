@@ -38,7 +38,7 @@ func mergeRuns(results ...PartResult) PartResult {
 
 // checkV03: with the format defect planted in each component, fmt-check
 // leaves only the planted file in git status, unchanged.
-func checkV03(env *Env) PartResult {
+func checkV03(env *Env, _ Needed) PartResult {
 	if f := needEntrypoint(env, EntrypointFmtCheck); f != nil {
 		return Fail(*f)
 	}
@@ -96,7 +96,7 @@ func v03Component(env *Env, s *probeSession, comp Component) PartResult {
 
 // checkA07Execution: every SessionStart hook that matches startup exits
 // 0 in the reset copy and leaves git status empty.
-func checkA07Execution(env *Env) PartResult {
+func checkA07Execution(env *Env, _ Needed) PartResult {
 	if !env.Repo.HasFile(claudeSettingsFile) {
 		// The static part fails for it.
 		return Pass()
@@ -143,7 +143,7 @@ func a07Hook(s *probeSession, command string, limit time.Duration) PartResult {
 // checkR01Execution: with vibe replaced by the shim, the baseline verify
 // passes and the A-02 deny cases are still refused. The findings list
 // every call of vibe the shim recorded in any run of the audit.
-func checkR01Execution(env *Env) PartResult {
+func checkR01Execution(env *Env, _ Needed) PartResult {
 	if f := needEntrypoint(env, EntrypointVerify); f != nil {
 		return Fail(*f)
 	}
@@ -209,7 +209,7 @@ var lockfileChecks = []struct {
 
 // checkD01: each component's lockfiles match its manifest, and a
 // component with dependencies has a lockfile.
-func checkD01(env *Env) PartResult {
+func checkD01(env *Env, _ Needed) PartResult {
 	var results []PartResult
 	for _, comp := range env.Config.Components {
 		results = append(results, d01Component(env, comp))

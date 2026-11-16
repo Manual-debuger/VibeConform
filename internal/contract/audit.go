@@ -1,9 +1,7 @@
 package contract
 
 import (
-	"cmp"
 	"context"
-	"slices"
 	"time"
 )
 
@@ -42,16 +40,17 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 		waivers[w.Rule] = w
 	}
 
+	order := runOrder(list)
 	rep := &Report{Contract: cfg.Contract, Static: opts.Static}
-	var pending []pendingPart
+	pending := map[partRef]bool{}
 	for i, rule := range list {
 		rr, parts := auditRule(env, rule, waivers, now, opts.Static)
 		rep.Rules = append(rep.Rules, rr)
 		for _, j := range parts {
-			pending = append(pending, pendingPart{rule: i, part: j, order: partOrder(rule.ID, rule.Parts[j].Kind)})
+			pending[partRef{rule: i, part: j}] = true
 		}
 	}
-	runPending(env, rep, list, pending, opts.Probe)
+	runPending(env, rep, list, order, pending, opts.Probe)
 	for i := range rep.Rules {
 		if rep.Rules[i].Result == "" {
 			rep.Rules[i].Result = combine(rep.Rules[i].Parts)
@@ -95,7 +94,7 @@ func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, st
 		case staticOnly && part.Kind != Static:
 			po.Result = ResultNotRun
 		case part.Kind == Static:
-			po.Result, po.Findings = decided(part.Run(env))
+			po.Result, po.Findings = decided(part.Run(env, Needed{}))
 		default:
 			pending = append(pending, j)
 		}
@@ -104,52 +103,27 @@ func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, st
 	return rr, pending
 }
 
-// pendingPart is an execution or probe part waiting for the probe copy.
-type pendingPart struct {
-	rule, part, order int
-}
-
-// executionOrder is the fixed order of the execution and probe parts
-// (spec 0053, "Order"), after setup. R-01's execution part comes last: it
-// reads the baseline verify, A-02's deny cases and every shim call the
-// other parts recorded.
-var executionOrder = []string{
-	"A-07/execution",
-	"V-03/execution",
-	"V-01/execution", "V-02/probe",
-	"V-01/probe", "V-05/probe", "V-06/probe", "V-07/probe", "V-08/probe", "A-05/probe",
-	"A-02/probe",
-	"A-03/probe",
-	"A-08/probe",
-	"A-09/probe",
-	"D-01/execution",
-	"R-01/execution",
-}
-
-// partOrder is a part's place in executionOrder. A part the order does
-// not name, such as a test's stand-in, runs before R-01.
-func partOrder(id string, kind PartKind) int {
-	if i := slices.Index(executionOrder, id+"/"+string(kind)); i >= 0 {
-		return i * 10
-	}
-	return (len(executionOrder)-1)*10 - 5
-}
-
-// runPending runs the execution and probe parts in their fixed order, in
-// one probe copy built for them, each from a reset copy. The copy is
-// deleted (or kept, for --keep-probe-copy) before it returns.
-func runPending(env *Env, rep *Report, list []Rule, pending []pendingPart, opts ProbeOptions) {
+// runPending runs the pending execution and probe parts in order (see
+// runOrder), in one probe copy built for them, each from a reset copy.
+// Each part gets the results of the parts it needs that ran before it.
+// The copy is deleted (or kept, for --keep-probe-copy) before it
+// returns.
+func runPending(env *Env, rep *Report, list []Rule, order []partRef, pending map[partRef]bool, opts ProbeOptions) {
 	if len(pending) == 0 {
 		return
 	}
-	slices.SortStableFunc(pending, func(a, b pendingPart) int { return cmp.Compare(a.order, b.order) })
 
 	s := startProbeSession(env, opts)
 	defer s.close()
 	env.probe = s
 	defer func() { env.probe = nil }()
 
-	for _, p := range pending {
+	// results holds the result of every part that ran, for one audit.
+	results := map[partKey]PartResult{}
+	for _, p := range order {
+		if !pending[p] {
+			continue
+		}
 		part := list[p.rule].Parts[p.part]
 		po := &rep.Rules[p.rule].Parts[p.part]
 		if f := s.precondition(env); f != nil {
@@ -160,7 +134,11 @@ func runPending(env *Env, rep *Report, list []Rule, pending []pendingPart, opts 
 			po.Result, po.Findings = ResultUndecided, []Finding{{Message: "cannot decide: cannot reset the probe copy: " + err.Error()}}
 			continue
 		}
-		po.Result, po.Findings = decided(part.Run(env))
+		key := keyOf(list, p)
+		r := part.Run(env, Needed{self: key, needs: part.Needs, results: results})
+		r.Result, r.Findings = decided(r)
+		results[key] = r
+		po.Result, po.Findings = r.Result, r.Findings
 	}
 }
 
