@@ -80,7 +80,7 @@ func (p *guardPolicy) exceptions() ([]json.RawMessage, error) {
 // non-empty match and reason. Other keys are the guard's and not read,
 // unless the guard is vibe-guard: then vibe-guard must load the file
 // (contract 1.0.1).
-func checkA04(env *Env) PartResult {
+func checkA04(env *Env, _ Needed) PartResult {
 	p, res, ok := env.readGuardPolicy()
 	if !ok {
 		return res

@@ -1,8 +1,11 @@
 package contract
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -131,4 +134,66 @@ func checkSpec0061Rule(t *testing.T, r Rule) {
 			t.Errorf("%s %s part %q is not part of its check, or has no check", r.ID, p.Kind, p.Check)
 		}
 	}
+}
+
+// The registry's needs (spec 0064) keep vibe audit from the runner's
+// panic. Only R-01's execution part declares needs: A-02's probe, whose
+// deny verdict it reads, and every other part, whose vibe calls it
+// lists. A static audit of Rules() does not panic: the runner validates
+// the needs in every audit, --static included, so every need resolves,
+// no static part declares one, and they form no cycle.
+func TestRegistryNeedsResolve(t *testing.T) {
+	r01 := partKey{rule: "R-01", kind: Execution}
+	for _, r := range Rules() {
+		for _, p := range r.Parts {
+			key := partKey{rule: r.ID, kind: p.Kind}
+			switch {
+			case key == r01:
+				if want := []Need{NeedPart("A-02", Probe), NeedEveryOther()}; !slices.Equal(p.Needs, want) {
+					t.Errorf("%s needs %v, want %v", key, p.Needs, want)
+				}
+			case len(p.Needs) > 0:
+				t.Errorf("%s needs %v, want no needs", key, p.Needs)
+			}
+		}
+	}
+
+	cfg, repo := staticFixture(t)
+	rep := Audit(context.Background(), cfg, repo, Options{Static: true})
+	if got, want := len(rep.Rules), len(Rules()); got != want {
+		t.Errorf("the static audit decided %d rules, want %d", got, want)
+	}
+}
+
+// staticFixture is a Git repository holding only a go.mod and a
+// vibe.yaml, and its parsed configuration: enough for a static audit.
+func staticFixture(t *testing.T) (*Config, *Repo) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+	dir := t.TempDir()
+	data := []byte("contract: 1.2.0\nplatforms: [linux]\nagents: [claude]\n")
+	for name, content := range map[string][]byte{"vibe.yaml": data, "go.mod": []byte("module fixture\n\ngo 1.22\n")} {
+		if err := os.WriteFile(filepath.Join(dir, name), content, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, args := range [][]string{{"init", "-q"}, {"add", "-A"}} {
+		cmd := exec.Command("git", args...) // #nosec G204 -- fixed arguments
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	ctx := context.Background()
+	repo, err := OpenRepo(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Parse("vibe.yaml", data, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg, repo
 }

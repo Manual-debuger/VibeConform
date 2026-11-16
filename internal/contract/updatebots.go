@@ -89,7 +89,7 @@ const renovateFix = "add renovate.json with Renovate covering each component's m
 // either may cover a component, and automerge in either fails it. When
 // the C rules read GitLab CI, only Renovate counts, and it must cover
 // gitlabci instead of github-actions (spec 0055, D-02).
-func checkD02(env *Env) PartResult { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
+func checkD02(env *Env, _ Needed) PartResult { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	_, gitlab := env.gitLabCI()
 	var bots []*updateBot
 	dependabotBot := dependabot(env)

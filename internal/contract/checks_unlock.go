@@ -46,7 +46,7 @@ func unlockState(state string) string {
 const relockFix = "add a Stop hook that runs `vibe-guard relock`"
 
 // checkA08 decides A-08's probe.
-func checkA08(env *Env) PartResult {
+func checkA08(env *Env, _ Needed) PartResult {
 	s := env.probe
 	settings, res, ok := env.readClaudeSettings("add a PreToolUse hook that runs the guard")
 	if !ok {

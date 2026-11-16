@@ -57,6 +57,10 @@ func main() {
 		time.Sleep(10 * time.Minute)
 	case "call-vibe":
 		os.Exit(run("vibe", "version"))
+	case "call-vibe-anyway":
+		// Calls vibe and succeeds whatever vibe does, as a setup that
+		// tolerates a missing vibe would.
+		run("vibe", "version")
 	case "stop":
 		os.Exit(stop(true))
 	case "stop-always":

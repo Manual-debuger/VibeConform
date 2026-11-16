@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -140,18 +141,40 @@ func TestRuleR01Execution(t *testing.T) {
 		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
 	}
 	t.Parallel()
-	// Without Claude Code there is no A-02 half.
+	// Without Claude Code A-02 is not applicable and R-01 has no A-02
+	// half; R-01 still needs A-02 in the rule list (spec 0064).
 	noAgents := section{"agents", "agents: []\n"}
 	t.Run("verify without vibe passes", func(t *testing.T) {
 		t.Parallel()
-		rep := audit(t, probeFixture(t, probeConfig(noAgents)), ids("R-01"), inherit)
+		rep := audit(t, probeFixture(t, probeConfig(noAgents)), ids("A-02", "R-01"), inherit)
 		assertExecution(t, rep, "R-01", pass)
 	})
 	t.Run("verify that calls vibe fails and lists the call", func(t *testing.T) {
 		t.Parallel()
 		rep := audit(t, probeFixture(t, probeConfig(noAgents,
-			section{"entrypoints", probeEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci call-vibe]\n")})), ids("R-01"), inherit)
+			section{"entrypoints", probeEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci call-vibe]\n")})), ids("A-02", "R-01"), inherit)
 		assertExecution(t, rep, "R-01", fail, "vibe not available", `verify ran "vibe version"`)
+	})
+	t.Run("a call during the verify baseline V-01 started is listed once", func(t *testing.T) {
+		t.Parallel()
+		// V-01's execution part asks for the verify baseline first, so the
+		// shim records the call while V-01 runs; R-01 gets the cached run
+		// and still lists the call, once (spec 0064).
+		rep := audit(t, probeFixture(t, probeConfig(noAgents,
+			section{"entrypoints", probeEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci call-vibe]\n")})), ids("V-01", "A-02", "R-01"), inherit)
+		assertExecution(t, rep, "V-01", fail, "in the probe copy, verify")
+		assertExecution(t, rep, "R-01", fail, "vibe not available")
+		assertListedOnce(t, rep, "R-01", `verify ran "vibe version"`)
+	})
+	t.Run("a call during setup is listed once", func(t *testing.T) {
+		t.Parallel()
+		// setup runs before any part, so its call belongs to no part;
+		// R-01 still lists it (regression test, spec 0064). verify passes
+		// without vibe, so the listed call alone does not fail R-01.
+		rep := audit(t, probeFixture(t, probeConfig(noAgents,
+			section{"entrypoints", probeEntrypoints("  setup: go run ./ci call-vibe-anyway\n")})), ids("A-02", "R-01"), inherit)
+		assertExecution(t, rep, "R-01", pass)
+		assertListedOnce(t, rep, "R-01", `setup ran "vibe version"`)
 	})
 	t.Run("a hook that calls vibe is listed", func(t *testing.T) {
 		t.Parallel()
@@ -159,7 +182,30 @@ func TestRuleR01Execution(t *testing.T) {
 		rep := audit(t, probeFixture(t, sessionStartHooks("startup", "vibe audit --static")), ids("A-02", "A-07", "R-01"), inherit)
 		assertExecution(t, rep, "A-07", fail, "exited 127", "vibe is not available during the R-01 probe")
 		// The fixture has no guard, so R-01's A-02 half fails as well.
-		assertExecution(t, rep, "R-01", fail, `the SessionStart hook ran "vibe audit --static"`)
+		assertExecution(t, rep, "R-01", fail)
+		assertListedOnce(t, rep, "R-01", `the SessionStart hook ran "vibe audit --static"`)
+	})
+	t.Run("the calls are listed in run order", func(t *testing.T) {
+		t.Parallel()
+		// V-01 runs the verify baseline before A-07 runs the hook, because
+		// the parts run in registry order (spec 0064). Before spec 0064,
+		// A-07 ran first and the hook's call came first.
+		rep := audit(t, probeFixture(t, sessionStartHooks("startup", "vibe audit --static"),
+			probeConfig(section{"entrypoints", probeEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci call-vibe]\n")})),
+			ids("V-01", "A-02", "A-07", "R-01"), inherit)
+		var calls []string
+		for _, f := range rule(t, rep, "R-01").Findings() {
+			if strings.Contains(f.Message, "and vibe was not available") {
+				calls = append(calls, f.Message)
+			}
+		}
+		want := []string{
+			`verify ran "vibe version", and vibe was not available`,
+			`the SessionStart hook ran "vibe audit --static", and vibe was not available`,
+		}
+		if !slices.Equal(calls, want) {
+			t.Errorf("R-01 lists the calls %q, want %q", calls, want)
+		}
 	})
 	t.Run("with Claude Code and no guard the A-02 deny cases fail R-01", func(t *testing.T) {
 		t.Parallel()
@@ -169,7 +215,7 @@ func TestRuleR01Execution(t *testing.T) {
 	t.Run("a verify that runs too long cannot decide", func(t *testing.T) {
 		t.Parallel()
 		rep := audit(t, probeFixture(t, probeConfig(noAgents,
-			section{"entrypoints", probeEntrypoints("  verify: go run ./ci sleep\n")})), ids("R-01"),
+			section{"entrypoints", probeEntrypoints("  verify: go run ./ci sleep\n")})), ids("A-02", "R-01"),
 			contract.ProbeOptions{Timeout: 3 * time.Second})
 		assertExecution(t, rep, "R-01", undecided, "timed out after 3s")
 	})
@@ -184,7 +230,7 @@ func TestProbeSetup(t *testing.T) {
 	t.Parallel()
 	t.Run("a failing setup leaves every part undecided", func(t *testing.T) {
 		t.Parallel()
-		parts := ids("V-03", "A-07", "D-01", "R-01")
+		parts := ids("V-03", "A-07", "D-01", "A-02", "R-01")
 		rep := audit(t, probeFixture(t, withEntrypoints("  setup: go run ./ci fail\n")), parts, inherit)
 		for _, id := range parts {
 			if r := rule(t, rep, id); r.Result != undecided {

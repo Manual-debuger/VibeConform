@@ -115,7 +115,7 @@ func standIn(rules []contract.Rule, result contract.Result, ids ...string) []con
 			continue
 		}
 		for j := range rules[i].Parts {
-			rules[i].Parts[j].Run = func(*contract.Env) contract.PartResult {
+			rules[i].Parts[j].Run = func(*contract.Env, contract.Needed) contract.PartResult {
 				return contract.PartResult{Result: result, Findings: []contract.Finding{
 					{File: "stand-in.txt", Message: "stand-in " + string(result), Fix: "none"},
 				}}

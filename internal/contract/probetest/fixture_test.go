@@ -335,6 +335,21 @@ func assertPart(t *testing.T, rep *contract.Report, id string, kind contract.Par
 	}
 }
 
+// assertListedOnce checks that exactly one finding of a rule holds text.
+func assertListedOnce(t *testing.T, rep *contract.Report, id, text string) {
+	t.Helper()
+	rr := rule(t, rep, id)
+	n := 0
+	for _, f := range rr.Findings() {
+		if strings.Contains(f.Message, text) {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%s lists %q %d times, want once\nfindings:\n%s", id, text, n, findingText(rr))
+	}
+}
+
 // assertExecution checks a rule's execution part.
 func assertExecution(t *testing.T, rep *contract.Report, id string, want contract.Result, findings ...string) {
 	t.Helper()

@@ -33,7 +33,7 @@ func ciRead(env *Env) (ci *CI, res PartResult, ok bool) {
 // checkC03: every workflow has top-level permissions of read-all, {} or a
 // map whose every value is read or none. On GitLab CI the rule is not
 // applicable, which the registry decides before it runs.
-func checkC03(env *Env) PartResult {
+func checkC03(env *Env, _ Needed) PartResult {
 	ci, res, ok := ciRead(env)
 	if !ok || ci.Provider == CIGitLab {
 		return res
@@ -94,7 +94,7 @@ func scalarOr(n *yaml.Node, alt string) string {
 
 // checkC01: the workflows that count for pull requests, and those that
 // count for pushes to the default branch, each call every verify command.
-func checkC01(env *Env) PartResult {
+func checkC01(env *Env, _ Needed) PartResult {
 	verify, missing := env.Entrypoint(EntrypointVerify)
 	if missing != nil {
 		return Fail(*missing)
@@ -148,7 +148,7 @@ var pinnedRef = regexp.MustCompile(`@[0-9a-fA-F]{40}$`)
 // checkC02: every job-level and step-level uses: that is not a local ./
 // path ends in @ and 40 hexadecimal characters, and no word of a run:
 // step ends in @latest, in every workflow.
-func checkC02(env *Env) PartResult { //nolint:gocognit // baseline: pre-existing complexity
+func checkC02(env *Env, _ Needed) PartResult { //nolint:gocognit // baseline: pre-existing complexity
 	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
@@ -192,7 +192,7 @@ func checkC02(env *Env) PartResult { //nolint:gocognit // baseline: pre-existing
 // checkC04: a job of a workflow that counts for pull requests (reusable
 // workflows followed) has a step whose simple command starts with the
 // words vibe audit, and none of its steps calls a verify command.
-func checkC04(env *Env) PartResult {
+func checkC04(env *Env, _ Needed) PartResult {
 	verify, missing := env.Entrypoint(EntrypointVerify)
 	if missing != nil {
 		return Fail(*missing)
@@ -265,7 +265,7 @@ func runsAudit(j *Job) bool {
 // runner and by one that runs on a Windows runner, after matrix
 // expansion, in any workflow. The rule is not applicable without windows
 // in platforms; the registry decides that before it runs.
-func checkC05(env *Env) PartResult { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
+func checkC05(env *Env, _ Needed) PartResult { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	verify, missing := env.Entrypoint(EntrypointVerify)
 	if missing != nil {
 		return Fail(*missing)
@@ -344,7 +344,7 @@ var scanners = [][]string{
 }
 
 // checkD03: some workflow step runs a recognized scanner.
-func checkD03(env *Env) PartResult {
+func checkD03(env *Env, _ Needed) PartResult {
 	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
@@ -375,7 +375,7 @@ func checkD03(env *Env) PartResult {
 // entrypoint (spec 0055). On GitLab CI every job's before_script, script
 // and after_script are read. Without CI only the entrypoints and hook
 // commands are read; a CI file that does not parse fails it.
-func checkR01(env *Env) PartResult {
+func checkR01(env *Env, _ Needed) PartResult {
 	calls := entrypointVibeCalls(env)
 	hookCalls, res := hookVibeCalls(env)
 	calls = append(calls, hookCalls...)
