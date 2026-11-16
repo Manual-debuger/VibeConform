@@ -94,9 +94,9 @@ func TestSecretSample(t *testing.T) {
 	if _, err := base64.StdEncoding.DecodeString(body); err != nil {
 		t.Errorf("the body is not base64: %v", err)
 	}
-	for _, lang := range []string{LanguageGo, LanguagePython, LanguageTypeScript} {
-		if s := defectSamples[lang][defectSecret]; s != defectSamples[LanguageGo][defectSecret] {
-			t.Errorf("the %s secret sample differs from the Go one: %+v", lang, s)
+	for _, lang := range languageRegistry {
+		if s, _ := lang.sample(defectSecret); s != secretSample {
+			t.Errorf("the %s secret sample differs from the shared one: %+v", lang.id, s)
 		}
 	}
 	again, err := defectFor(env, comp, defectSecret)

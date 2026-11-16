@@ -1,16 +1,21 @@
 package contract
 
 import (
-	"encoding/json"
 	"path"
+	"slices"
 	"strings"
-
-	"golang.org/x/mod/modfile"
 )
 
-// languageFacts is what the execution and probe parts know about a
-// component language, in one place.
+// languageFacts is the record of one component language: everything vibe
+// knows about it (spec 0066, "One record per language"). Each language's
+// record is in a source file of its own, with its samples and its
+// dependency reader, and languageRegistry lists the records.
 type languageFacts struct {
+	// id is the language's identifier, the configuration's language
+	// value.
+	id string
+	// name is the language's display name, as --explain prints it.
+	name string
 	// manifest is the file that declares the component's dependencies.
 	manifest string
 	// hasDependencies reads the manifest: whether it declares
@@ -22,6 +27,29 @@ type languageFacts struct {
 	// testFiles are the file name patterns that mark a directory as
 	// holding tests (spec 0053, "Placement").
 	testFiles []string
+	// samples are the language's planted defect samples by kind (spec
+	// 0053, "Planted defects"), except V-06's, which complexity lays
+	// out. Spec 0053 quotes each one; change both together.
+	samples map[defectKind]defectSample
+	// complexity is how the language writes V-06's sample.
+	complexity complexityLayout
+	// dependabotEcosystems are the package-ecosystem values that cover
+	// the language (D-02). A fix names the first.
+	dependabotEcosystems []string
+	// renovateManagers are the Renovate managers that cover the language
+	// (D-02). enabledManagers leaves a component out when it names none
+	// of them. A fix names the first.
+	renovateManagers []string
+}
+
+// sample is the language's planted sample of a defect kind, and whether
+// it has one.
+func (l languageFacts) sample(kind defectKind) (defectSample, bool) {
+	if kind == defectComplexity {
+		return complexitySample(l.complexity), true
+	}
+	s, ok := l.samples[kind]
+	return s, ok
 }
 
 // lockfile is one lockfile D-01 recognizes: its file name, the commands
@@ -33,41 +61,29 @@ type lockfile struct {
 	fix   string
 }
 
-var languageTable = map[string]languageFacts{
-	LanguageGo: {
-		manifest:        "go.mod",
-		hasDependencies: goModHasDependencies,
-		lockfiles: []lockfile{
-			{
-				file:  "go.sum",
-				check: [][]string{{"go", "mod", "tidy"}, {"git", "diff", "--exit-code", "go.mod", "go.sum"}},
-				fix:   "go mod tidy",
-			},
-		},
-		testFiles: []string{"*_test.go"},
-	},
-	LanguagePython: {
-		manifest:        "pyproject.toml",
-		hasDependencies: pyprojectHasDependencies,
-		lockfiles: []lockfile{
-			{file: "uv.lock", check: [][]string{{"uv", "lock", "--check"}}, fix: "uv lock"},
-			{file: "poetry.lock", check: [][]string{{"poetry", "check", "--lock"}}, fix: "poetry lock"},
-		},
-		testFiles: []string{"test_*.py", "*_test.py"},
-	},
-	LanguageTypeScript: {
-		manifest:        "package.json",
-		hasDependencies: packageJSONHasDependencies,
-		lockfiles: []lockfile{
-			{
-				file:  "pnpm-lock.yaml",
-				check: [][]string{{"pnpm", "install", "--frozen-lockfile", "--lockfile-only"}},
-				fix:   "pnpm install",
-			},
-			{file: "package-lock.json", check: [][]string{{"npm", "ci", "--dry-run"}}, fix: "npm install"},
-		},
-		testFiles: []string{"*.test.ts", "*.spec.ts", "*.test.tsx", "*.spec.tsx"},
-	},
+// languageRegistry holds the language records in the contract's language
+// order. Every list that depends on that order is derived from it: the
+// valid language values, D-01's lockfile order and the order --explain
+// prints the samples in.
+var languageRegistry = []languageFacts{goLanguage, pythonLanguage, typeScriptLanguage}
+
+// lookupLanguage returns the record of the language with this
+// identifier, and whether there is one.
+func lookupLanguage(id string) (languageFacts, bool) {
+	i := slices.IndexFunc(languageRegistry, func(l languageFacts) bool { return l.id == id })
+	if i < 0 {
+		return languageFacts{}, false
+	}
+	return languageRegistry[i], true
+}
+
+// languageIDs are the valid language values, in language order.
+func languageIDs() []string {
+	ids := make([]string, len(languageRegistry))
+	for i, l := range languageRegistry {
+		ids[i] = l.id
+	}
+	return ids
 }
 
 // allLockfiles are every language's lockfiles, in language order and
@@ -75,8 +91,8 @@ var languageTable = map[string]languageFacts{
 // each of them, whatever the component's language.
 func allLockfiles() []lockfile {
 	var all []lockfile
-	for _, language := range languages {
-		all = append(all, languageTable[language].lockfiles...)
+	for _, l := range languageRegistry {
+		all = append(all, l.lockfiles...)
 	}
 	return all
 }
@@ -84,8 +100,9 @@ func allLockfiles() []lockfile {
 // lockfileNames names a language's lockfiles for a finding, such as
 // "uv.lock or poetry.lock".
 func lockfileNames(language string) string {
+	l, _ := lookupLanguage(language)
 	var names []string
-	for _, lf := range languageTable[language].lockfiles {
+	for _, lf := range l.lockfiles {
 		names = append(names, lf.file)
 	}
 	return orList(names)
@@ -113,7 +130,8 @@ func lockfileCheckText() string {
 // isTestFile reports whether a file name marks its directory as holding
 // tests of a language.
 func isTestFile(language, name string) bool {
-	for _, pattern := range languageTable[language].testFiles {
+	l, _ := lookupLanguage(language)
+	for _, pattern := range l.testFiles {
 		if ok, _ := path.Match(pattern, name); ok {
 			return true
 		}
@@ -124,7 +142,8 @@ func isTestFile(language, name string) bool {
 // testFilePattern names a language's test files for a fix, such as "a
 // test_*.py or *_test.py file".
 func testFilePattern(language string) string {
-	return "a " + orList(languageTable[language].testFiles) + " file"
+	l, _ := lookupLanguage(language)
+	return "a " + orList(l.testFiles) + " file"
 }
 
 // orList joins items as "a", "a or b" or "a, b or c".
@@ -133,26 +152,4 @@ func orList(items []string) string {
 		return strings.Join(items, "")
 	}
 	return strings.Join(items[:len(items)-1], ", ") + " or " + items[len(items)-1]
-}
-
-func goModHasDependencies(manifest string, data []byte) (bool, error) {
-	f, err := modfile.ParseLax(manifest, data, nil)
-	if err != nil {
-		return false, err
-	}
-	return len(f.Require) > 0, nil
-}
-
-func packageJSONHasDependencies(_ string, data []byte) (bool, error) {
-	var pkg map[string]json.RawMessage
-	if err := json.Unmarshal(data, &pkg); err != nil {
-		return false, err
-	}
-	for _, key := range []string{"dependencies", "devDependencies", "optionalDependencies", "peerDependencies"} {
-		var m map[string]any
-		if raw, ok := pkg[key]; ok && json.Unmarshal(raw, &m) == nil && len(m) > 0 {
-			return true, nil
-		}
-	}
-	return false, nil
 }
