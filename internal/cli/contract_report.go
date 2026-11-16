@@ -98,6 +98,7 @@ type jsonWaiver struct {
 	Reason  string `json:"reason"`
 	Until   string `json:"until"`
 	Expired bool   `json:"expired"`
+	Unused  bool   `json:"unused"`
 }
 
 type jsonGuardException struct {
@@ -157,7 +158,10 @@ func writeContractJSON(w io.Writer, rep *contract.Report, vibeVersion string) er
 			jr.Findings = append(jr.Findings, jsonFinding(f))
 		}
 		if rr.Waiver != nil {
-			jr.Waiver = &jsonWaiver{Reason: rr.Waiver.Reason, Until: rr.Waiver.Until.Format(time.DateOnly), Expired: rr.Waiver.Expired}
+			jr.Waiver = &jsonWaiver{
+				Reason: rr.Waiver.Reason, Until: rr.Waiver.Until.Format(time.DateOnly),
+				Expired: rr.Waiver.Expired, Unused: rr.Waiver.Unused,
+			}
 		}
 		out.Rules = append(out.Rules, jr)
 	}

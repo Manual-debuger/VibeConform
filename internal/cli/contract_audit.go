@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 )
@@ -157,14 +158,16 @@ func runContractAudit(cmd *cobra.Command, f auditFlags, label string, data []byt
 }
 
 // runExplain explains one rule. It reads no repository and no
-// configuration, so any other audit flag is an error.
+// configuration, so any other flag the user set is an error. It visits
+// the set flags, in cobra's order (sorted by name), and keeps no list of
+// them, so that a flag added later is refused too.
 func runExplain(cmd *cobra.Command, f auditFlags) error {
 	var others []string
-	for _, name := range []string{"repo-root", "config", "static", "json", "probe-timeout", "keep-probe-copy"} {
-		if cmd.Flags().Changed(name) {
-			others = append(others, "--"+name)
+	cmd.Flags().Visit(func(flag *pflag.Flag) {
+		if flag.Name != "explain" {
+			others = append(others, "--"+flag.Name)
 		}
-	}
+	})
 	if len(others) > 0 {
 		return fmt.Errorf("--explain reads no repository and no configuration; drop %s", strings.Join(others, ", "))
 	}

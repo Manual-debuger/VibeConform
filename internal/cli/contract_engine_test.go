@@ -45,6 +45,8 @@ type jsonRule struct {
 		Reason  string `json:"reason"`
 		Until   string `json:"until"`
 		Expired bool   `json:"expired"`
+		// Unused is a pointer so that a missing key shows.
+		Unused *bool `json:"unused"`
 	} `json:"waiver"`
 	// Required is a pointer so that a missing key shows.
 	Required *bool `json:"required"`
@@ -374,6 +376,9 @@ func TestContractAuditApplicabilityAndWaivers(t *testing.T) { //nolint:gocognit,
 		if w == nil || w.Reason != "known gap" || w.Until != "2999-12-31" || w.Expired {
 			t.Errorf("R-03 waiver = %+v, want in force until 2999-12-31", w)
 		}
+		if w != nil && (w.Unused == nil || *w.Unused) {
+			t.Errorf("R-03 waiver unused = %v, want false: the waiver applied", w.Unused)
+		}
 		if got := rep.Summary["SHOULD"]["waived"]; got != 1 {
 			t.Errorf("summary SHOULD waived = %d, want 1", got)
 		}
@@ -393,8 +398,11 @@ func TestContractAuditApplicabilityAndWaivers(t *testing.T) { //nolint:gocognit,
 			section{"platforms", "platforms: [linux]\n"},
 			section{"waivers", "waivers:\n  - rule: C-05\n    reason: known gap\n    until: 2999-12-31\n"}))), "--static")
 		assertRule(t, rep, "C-05", "not_applicable")
-		if w := rep.rule(t, "C-05").Waiver; w == nil || w.Expired {
-			t.Errorf("C-05 waiver = %+v, want the unused waiver listed", w)
+		if w := rep.rule(t, "C-05").Waiver; w == nil || w.Expired || w.Unused == nil || !*w.Unused {
+			t.Errorf("C-05 waiver = %+v, want the unused waiver listed with unused true", w)
+		}
+		if rep.Schema != 1 {
+			t.Errorf("schema = %d, want 1: unused is a new key", rep.Schema)
 		}
 		r := runVibeAudit(t, "--repo-root", contractFixture(t, withFile("vibe.yaml", configWith(
 			section{"platforms", "platforms: [linux]\n"},
