@@ -606,8 +606,10 @@ separately from the contract; it is `1`.
 - Verdict tokens: `conformant`, `not_conformant`, `undecided`.
 - `rules` lists every rule in ID order. `parts[].check` is `static`,
   `execution` or `probe`.
-- `waiver` is `null`, or `{"reason", "until", "expired"}`. A rule with a
-  waiver and result `not_applicable` has an unused waiver.
+- `waiver` is `null`, or `{"reason", "until", "expired", "unused"}`.
+  `unused` is `true` when the rule is not applicable, so the waiver did
+  not apply, which the text report prints as "waiver unused" (spec
+  0065). It is a new key; `schema` stays `1`.
 - `required` is `true` for a SHOULD rule that `vibe.yaml` lists in
   `require`, and `false` for every other rule, MUST rules included (spec
   0063). It is a new key; `schema` stays `1`.
