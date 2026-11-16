@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // The messages for a missing or version 1 vibe.yaml are part of what an
@@ -32,7 +34,7 @@ func TestAuditConfigMessagesAreUnchanged(t *testing.T) {
 	t.Parallel()
 	t.Run("no vibe.yaml", func(t *testing.T) {
 		t.Parallel()
-		dir := contractFixture(t, withoutFile("vibe.yaml"))
+		dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithoutFile("vibe.yaml"))
 		r := runVibeAudit(t, "--repo-root", dir)
 		assertExit(t, r, exitError)
 		if want := "Error: " + wantNoConfig(dir) + "\n"; r.stderr != want {
@@ -41,7 +43,7 @@ func TestAuditConfigMessagesAreUnchanged(t *testing.T) {
 	})
 	t.Run("version 1", func(t *testing.T) {
 		t.Parallel()
-		dir := contractFixture(t, withFile("vibe.yaml", v1Config))
+		dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithFile("vibe.yaml", v1Config))
 		r := runVibeAudit(t, "--repo-root", dir)
 		assertExit(t, r, exitError)
 		if want := "Error: " + wantV1("vibe.yaml") + "\n"; r.stderr != want {
@@ -50,7 +52,7 @@ func TestAuditConfigMessagesAreUnchanged(t *testing.T) {
 	})
 	t.Run("version 1 by --config", func(t *testing.T) {
 		t.Parallel()
-		dir := contractFixture(t, withFile("old.yaml", v1Config))
+		dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithFile("old.yaml", v1Config))
 		cfg := filepath.Join(dir, "old.yaml")
 		r := runVibeAudit(t, "--repo-root", dir, "--config", cfg)
 		assertExit(t, r, exitError)
@@ -70,21 +72,21 @@ func TestAuditBadProbeTimeoutAndConfigErrorKeepTheirOrder(t *testing.T) {
 	const wantTimeout = "--probe-timeout must be a positive duration, such as 30m; got 0s"
 	for _, c := range []struct {
 		name  string
-		edits []fixtureEdit
+		edits []contracttest.Edit
 		want  func(dir string) string
 	}{
-		{"no vibe.yaml", []fixtureEdit{withoutFile("vibe.yaml")}, wantNoConfig},
-		{"version 1", []fixtureEdit{withFile("vibe.yaml", v1Config)}, func(string) string { return wantV1("vibe.yaml") }},
-		{"neither key", []fixtureEdit{withFile("vibe.yaml", "platforms: [linux]\n")}, func(string) string {
+		{"no vibe.yaml", []contracttest.Edit{contracttest.WithoutFile("vibe.yaml")}, wantNoConfig},
+		{"version 1", []contracttest.Edit{contracttest.WithFile("vibe.yaml", v1Config)}, func(string) string { return wantV1("vibe.yaml") }},
+		{"neither key", []contracttest.Edit{contracttest.WithFile("vibe.yaml", "platforms: [linux]\n")}, func(string) string {
 			return "vibe.yaml: has neither contract (version 2) nor standard (version 1); " +
 				"declare the contract version, such as contract: 1.0.0"
 		}},
-		{"invalid version 2", []fixtureEdit{withFile("vibe.yaml", "contract: 1.0.0\nplatforms: [bsd]\n")},
+		{"invalid version 2", []contracttest.Edit{contracttest.WithFile("vibe.yaml", "contract: 1.0.0\nplatforms: [bsd]\n")},
 			func(string) string { return wantTimeout }},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			dir := contractFixture(t, c.edits...)
+			dir := contracttest.Fixture(t, contracttest.Baseline, c.edits...)
 			r := runVibeAudit(t, "--repo-root", dir, "--probe-timeout", "0s")
 			assertExit(t, r, exitError)
 			if want := "Error: " + c.want(dir) + "\n"; r.stderr != want {
@@ -99,15 +101,15 @@ func TestDoctorConfigMessagesAreUnchanged(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
 		name  string
-		edits []fixtureEdit
+		edits []contracttest.Edit
 		want  func(dir string) string
 	}{
-		{"no vibe.yaml", []fixtureEdit{withoutFile("vibe.yaml")}, wantNoConfig},
-		{"version 1", []fixtureEdit{withFile("vibe.yaml", v1Config)}, func(string) string { return wantV1("vibe.yaml") }},
+		{"no vibe.yaml", []contracttest.Edit{contracttest.WithoutFile("vibe.yaml")}, wantNoConfig},
+		{"version 1", []contracttest.Edit{contracttest.WithFile("vibe.yaml", v1Config)}, func(string) string { return wantV1("vibe.yaml") }},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			dir := contractFixture(t, c.edits...)
+			dir := contracttest.Fixture(t, contracttest.Baseline, c.edits...)
 			out, err := runDoctorIn(t, dir)
 			if code := ExitCode(err); code != exitError {
 				t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
@@ -131,7 +133,7 @@ func TestInitRefusalMessagesAreUnchanged(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			dir := contractFixture(t, withFile("vibe.yaml", c.content))
+			dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithFile("vibe.yaml", c.content))
 			_, err := runInit(t, dir)
 			if err == nil {
 				t.Fatal("vibe init wrote over an existing vibe.yaml")

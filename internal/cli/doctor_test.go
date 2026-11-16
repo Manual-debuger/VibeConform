@@ -10,6 +10,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 	"github.com/Manual-debuger/VibeConform/internal/doctor"
 )
 
@@ -51,7 +52,7 @@ func stubDoctorEnv(missing ...string) func() doctor.Env {
 // programs named missing are not found.
 func runDoctorIn(t *testing.T, dir string, missing ...string) (string, error) {
 	t.Helper()
-	root := newRootCmd("test", contractSeams{openRepo: openFixtureRepo, doctorEnv: stubDoctorEnv(missing...)})
+	root := newRootCmd("test", contractSeams{openRepo: contracttest.OpenRepo, doctorEnv: stubDoctorEnv(missing...)})
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&bytes.Buffer{})
@@ -83,7 +84,7 @@ func TestDoctorChecksTheWorkflow(t *testing.T) {
 	t.Parallel()
 	t.Run("nothing fails", func(t *testing.T) {
 		t.Parallel()
-		dir := contractFixture(t, withFile(".claude/settings.json", guardSettings))
+		dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithFile(".claude/settings.json", guardSettings))
 		out, err := runDoctorIn(t, dir)
 		if err != nil {
 			t.Fatalf("doctor: %v\n%s", err, out)
@@ -101,7 +102,7 @@ func TestDoctorChecksTheWorkflow(t *testing.T) {
 	})
 	t.Run("a check fails", func(t *testing.T) {
 		t.Parallel()
-		dir := contractFixture(t, withFile(".claude/settings.json", guardSettings))
+		dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithFile(".claude/settings.json", guardSettings))
 		out, err := runDoctorIn(t, dir, "task")
 		if code := ExitCode(err); code != exitError {
 			t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)

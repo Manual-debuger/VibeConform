@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
@@ -19,53 +18,11 @@ import (
 // temporary directory and changed by the test's edits: the baseline plus
 // one change, so that a test shows which change flips which result. The
 // fixture builder is contracttest's, which internal/contract's tests use
-// too; the helpers below are its names in this package. The cli TestMain
+// too, and the tests here call it directly: contracttest.Fixture for a
+// listed fixture, contracttest.GitFixture for the tests that read git
+// itself (the default branch, git failures, the golden reports), and
+// contracttest.OpenRepo as the audit's repository seam. The cli TestMain
 // clears GIT_DIR and its relatives, so every git here uses the fixture.
-
-// baselineFixture is the tree every contract fixture starts from.
-var baselineFixture = contracttest.Baseline
-
-// fixtureEdit changes a fixture before or after git add.
-type fixtureEdit = contracttest.Edit
-
-// withFile writes path (slash separated) with content before git add, so
-// the file is tracked.
-func withFile(path, content string) fixtureEdit { return contracttest.WithFile(path, content) }
-
-// withoutFile removes path from the fixture before git add.
-func withoutFile(path string) fixtureEdit { return contracttest.WithoutFile(path) }
-
-// withUntracked writes path after git add, so the file exists in the
-// working tree but is not tracked.
-func withUntracked(path, content string) fixtureEdit {
-	return contracttest.WithUntracked(path, content)
-}
-
-// contractFixture builds a fixture from the baseline with edits applied
-// and returns its root. See contracttest.Fixture for when it is a Git
-// repository.
-func contractFixture(t *testing.T, edits ...fixtureEdit) string {
-	t.Helper()
-	return contracttest.Fixture(t, baselineFixture, edits...)
-}
-
-// contractGitFixture builds a fixture from the baseline that is always a
-// Git repository, for the tests that read git itself: the default branch,
-// git failures, the golden reports.
-func contractGitFixture(t *testing.T, edits ...fixtureEdit) string {
-	t.Helper()
-	return contracttest.GitFixture(t, baselineFixture, edits...)
-}
-
-// fixtureGit runs git with args in dir.
-func fixtureGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	contracttest.Git(t, dir, args...)
-}
-
-// openFixtureRepo is the audit's repository seam in tests: a listed
-// fixture gets its file list, any other directory contract.OpenRepo.
-var openFixtureRepo contract.RepoOpener = contracttest.OpenRepo
 
 // auditResult is what one vibe audit run printed and its exit code.
 type auditResult struct {
@@ -82,29 +39,13 @@ type auditResult struct {
 // contract.Audit in this process's environment.
 func runVibeAudit(t *testing.T, args ...string) auditResult {
 	t.Helper()
-	root := newRootCmd("test", contractSeams{probeEnv: contracttest.EmptyProbeEnv(t), openRepo: openFixtureRepo})
+	root := newRootCmd("test", contractSeams{probeEnv: contracttest.EmptyProbeEnv(t), openRepo: contracttest.OpenRepo})
 	var out, errOut bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&errOut)
 	root.SetArgs(append([]string{"audit"}, args...))
 	err := root.Execute()
 	return auditResult{stdout: out.String(), stderr: errOut.String(), code: ExitCode(err)}
-}
-
-// section is one top-level field of a fixture vibe.yaml, with its text.
-type section struct {
-	key  string
-	body string
-}
-
-// configWith is the baseline vibe.yaml with fields replaced in place (an
-// empty body removes the field) and new fields appended in order.
-func configWith(changes ...section) string {
-	out := make([]contracttest.Section, len(changes))
-	for i, c := range changes {
-		out[i] = contracttest.Section{Key: c.key, Body: c.body}
-	}
-	return contracttest.ConfigWith(out...)
 }
 
 // jsonReport is the --json report as a consumer reads it (spec 0052,
@@ -219,7 +160,7 @@ func assertRule(t *testing.T, rep jsonReport, id, want string, findings ...strin
 // no git (spec 0056). The audit still reads it as the baseline.
 func TestListedFixtureIsAuditedWithoutGit(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t)
+	dir := contracttest.Fixture(t, contracttest.Baseline)
 	if _, err := os.Stat(filepath.Join(dir, ".git")); !os.IsNotExist(err) {
 		t.Fatalf("the fixture has a .git (%v), want a plain directory", err)
 	}
@@ -231,13 +172,13 @@ func TestListedFixtureIsAuditedWithoutGit(t *testing.T) {
 // repository: only git decides what such a fixture tracks.
 func TestFixtureThatNeedsGitIsARepository(t *testing.T) {
 	t.Parallel()
-	for name, edit := range map[string]fixtureEdit{
-		"untracked": withUntracked("notes.txt", "x\n"),
-		"gitignore": withFile(".gitignore", "build/\n"),
+	for name, edit := range map[string]contracttest.Edit{
+		"untracked": contracttest.WithUntracked("notes.txt", "x\n"),
+		"gitignore": contracttest.WithFile(".gitignore", "build/\n"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			dir := contractFixture(t, edit)
+			dir := contracttest.Fixture(t, contracttest.Baseline, edit)
 			if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
 				t.Errorf("the fixture has no .git: %v", err)
 			}
