@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -52,6 +53,11 @@ func runnerFixture(t *testing.T) (*contract.Config, *contract.Repo) {
 	return cfg, repo
 }
 
+// partName names a part as the runner's messages do: "<id>/<kind>".
+func partName(id string, kind contract.PartKind) string {
+	return id + "/" + string(kind)
+}
+
 // runner records the order in which stand-in parts are called.
 type runner struct {
 	called []string
@@ -61,7 +67,7 @@ type runner struct {
 // fails with "from <id>" when check is nil.
 func (r *runner) part(id string, kind contract.PartKind, check func(contract.Needed) contract.PartResult, needs ...contract.Need) contract.Part {
 	return contract.Part{Kind: kind, Needs: needs, Run: func(_ *contract.Env, needed contract.Needed) contract.PartResult {
-		r.called = append(r.called, id+"/"+string(kind))
+		r.called = append(r.called, partName(id, kind))
 		if check == nil {
 			return contract.Fail(contract.Finding{Message: "from " + id})
 		}
@@ -93,8 +99,8 @@ func seen(parts ...string) func(contract.Needed) contract.PartResult {
 	return func(needed contract.Needed) contract.PartResult {
 		var out []contract.Finding
 		for _, p := range parts {
-			id, kind := p[:4], contract.PartKind(p[5:])
-			got, ok := needed.Result(id, kind)
+			id, kind, _ := strings.Cut(p, "/")
+			got, ok := needed.Result(id, contract.PartKind(kind))
 			switch {
 			case !ok:
 				out = append(out, contract.Finding{Message: p + ": absent"})
@@ -205,10 +211,13 @@ func assertContains(t *testing.T, text string, parts ...string) {
 
 func TestInvalidNeedsPanicBeforeTheProbeCopy(t *testing.T) {
 	cfg, repo := runnerFixture(t)
+	const notInList = "which is not in the rule list"
 	for _, tc := range []struct {
 		name  string
 		rules func(r *runner) []contract.Rule
 		want  []string
+		// not is text the message must not hold.
+		not []string
 	}{
 		{
 			name: "a need on a part not in the rule list",
@@ -256,12 +265,37 @@ func TestInvalidNeedsPanicBeforeTheProbeCopy(t *testing.T) {
 				}
 			},
 			want: []string{"contract: T-01/static needs T-02/probe", "static"},
+			not:  []string{notInList},
+		},
+		{
+			name: "a static part with a need on a part not in the rule list",
+			rules: func(r *runner) []contract.Rule {
+				return []contract.Rule{r.rule("T-01", contract.Static, nil, contract.NeedPart("T-02", contract.Probe))}
+			},
+			want: []string{"contract: T-01/static needs T-02/probe", "a static part declares no needs"},
+			not:  []string{notInList},
+		},
+		{
+			name: "a need on a static part in the rule list",
+			rules: func(r *runner) []contract.Rule {
+				return []contract.Rule{
+					r.rule("T-01", contract.Execution, nil, contract.NeedPart("T-02", contract.Static)),
+					r.rule("T-02", contract.Static, nil),
+				}
+			},
+			want: []string{"contract: T-01/execution needs T-02/static", "a static part"},
+			not:  []string{notInList},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &runner{}
 			text := panicText(t, func() { runAudit(t, cfg, repo, false, tc.rules(r)...) })
 			assertContains(t, text, tc.want...)
+			for _, n := range tc.not {
+				if strings.Contains(text, n) {
+					t.Errorf("%q says %q", text, n)
+				}
+			}
 			assertCalled(t, r)
 		})
 	}
@@ -275,10 +309,13 @@ func TestStaticAuditValidatesNeedsAndRunsNoPart(t *testing.T) {
 	})
 	assertContains(t, text, "T-01/execution needs T-02/probe")
 
-	rep := runAudit(t, cfg, repo, true,
-		r.rule("T-01", contract.Execution, nil, contract.NeedPart("T-02", contract.Probe)),
-		r.rule("T-02", contract.Probe, nil),
-	)
+	rules := func(r *runner) []contract.Rule {
+		return []contract.Rule{
+			r.rule("T-01", contract.Execution, nil, contract.NeedPart("T-02", contract.Probe)),
+			r.rule("T-02", contract.Probe, nil),
+		}
+	}
+	rep, kept := auditKeepingCopy(t, cfg, repo, true, rules(r))
 	assertCalled(t, r)
 	for _, p := range []struct {
 		id   string
@@ -288,6 +325,34 @@ func TestStaticAuditValidatesNeedsAndRunsNoPart(t *testing.T) {
 			t.Errorf("%s/%s is %s, want %s", p.id, p.kind, got, contract.ResultNotRun)
 		}
 	}
+	if kept != "" {
+		t.Errorf("the static audit built a probe copy: %q", kept)
+	}
+
+	// The same rules without Static build the copy, so the check above
+	// can see one.
+	if _, kept := auditKeepingCopy(t, cfg, repo, false, rules(&runner{})); !strings.Contains(kept, "keeping the probe copy at") {
+		t.Errorf("the audit without Static kept no probe copy: %q", kept)
+	}
+}
+
+// auditKeepingCopy runs rules with ProbeOptions.KeepCopy, in a temporary
+// directory of its own, and returns the report and what the audit wrote
+// on Stderr: the kept copy's path, or nothing when it built no copy.
+func auditKeepingCopy(t *testing.T, cfg *contract.Config, repo *contract.Repo, static bool, rules []contract.Rule) (*contract.Report, string) {
+	t.Helper()
+	tmp := t.TempDir()
+	if runtime.GOOS == "windows" {
+		t.Setenv("TMP", tmp)
+		t.Setenv("TEMP", tmp)
+	} else {
+		t.Setenv("TMPDIR", tmp)
+	}
+	var stderr strings.Builder
+	rep := contract.Audit(context.Background(), cfg, repo, contract.Options{
+		Rules: rules, Static: static, Probe: contract.ProbeOptions{KeepCopy: true, Stderr: &stderr},
+	})
+	return rep, stderr.String()
 }
 
 func TestPartSeesOnlyItsDeclaredNeeds(t *testing.T) {

@@ -104,7 +104,7 @@ func (n Needed) vibeCalls() []shimCall {
 
 func (n Needed) declares(k partKey) bool {
 	for _, need := range n.needs {
-		if need.everyOther && k != n.self || !need.everyOther && need.part == k {
+		if (need.everyOther && k != n.self) || (!need.everyOther && need.part == k) {
 			return true
 		}
 	}
@@ -120,8 +120,8 @@ type partRef struct {
 // execution and probe parts in the order they run: a stable topological
 // order that always takes the first ready part in rule-list order, and
 // in part order inside a rule. It panics, naming the part and its need,
-// when a static part declares a need, a need names a part the list does
-// not hold, or the needs form a cycle. Only a test's Options.Rules can
+// when a static part declares a need, a need names a static part or a
+// part the list does not hold, or the needs form a cycle. Only a test's Options.Rules can
 // reach the panic: a registry test keeps Rules() valid.
 func runOrder(list []Rule) []partRef {
 	parts := runParts(list)
@@ -159,8 +159,8 @@ func runParts(list []Rule) []partRef {
 }
 
 // needEdges maps each part to the parts it runs after. It panics on a
-// need the list does not hold and on two parts that each need every
-// other part.
+// need on a static part, on a need the list does not hold and on two
+// parts that each need every other part.
 func needEdges(list []Rule, parts []partRef) map[partRef][]partRef {
 	after := map[partRef][]partRef{}
 	var everyOther []partRef
@@ -172,7 +172,10 @@ func needEdges(list []Rule, parts []partRef) map[partRef][]partRef {
 				continue
 			}
 			i := slices.IndexFunc(parts, func(q partRef) bool { return keyOf(list, q) == need.part })
-			if i < 0 {
+			switch {
+			case i < 0 && need.part.kind == Static:
+				panic(fmt.Sprintf("contract: %s needs %s, a static part; only execution and probe parts can be needed", keyOf(list, p), need))
+			case i < 0:
 				panic(fmt.Sprintf("contract: %s needs %s, which is not in the rule list", keyOf(list, p), need))
 			}
 			after[p] = append(after[p], parts[i])
