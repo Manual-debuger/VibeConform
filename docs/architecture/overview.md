@@ -275,8 +275,10 @@ internal/
   doctor/                   # vibe doctor's checks; imports only contract, for the configuration, hook reader and bash resolution (spec 0059)
 ```
 
-- **`vibe init`** (spec 0059) detects components from the tracked files
-  with a small function in `internal/cli`, and checks the file it writes
+- **`vibe init`** (spec 0059) gets the components from
+  `contract.DetectComponents`, which reads the tracked file list and
+  shares its root rule with the audit's implicit root detection (spec
+  0066). Init only renders what it gets, and checks the file it writes
   with `contract.Parse`, so it never writes a configuration `vibe audit`
   cannot read.
 - **`vibe doctor`** loads the configuration with `contract.Load` and

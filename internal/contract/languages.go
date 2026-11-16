@@ -16,6 +16,9 @@ type languageFacts struct {
 	// hasDependencies reads the manifest: whether it declares
 	// dependencies (spec 0053, D-01).
 	hasDependencies func(manifest string, data []byte) (bool, error)
+	// companions are the files DetectComponents also wants beside the
+	// manifest before a directory is a component of the language.
+	companions []string
 	// lockfiles are the lockfiles D-01 recognizes for the language, in
 	// the order D-01 checks them (spec 0051, D-01).
 	lockfiles []lockfile
@@ -58,6 +61,7 @@ var languageTable = map[string]languageFacts{
 	LanguageTypeScript: {
 		manifest:        "package.json",
 		hasDependencies: packageJSONHasDependencies,
+		companions:      []string{"tsconfig.json"},
 		lockfiles: []lockfile{
 			{
 				file:  "pnpm-lock.yaml",
