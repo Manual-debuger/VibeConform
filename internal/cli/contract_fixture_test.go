@@ -192,30 +192,6 @@ func configWith(changes ...section) string {
 	return contracttest.ConfigWith(out...)
 }
 
-func entrypoints(body string) fixtureEdit {
-	return withFile("vibe.yaml", configWith(section{"entrypoints", "entrypoints:\n" + body}))
-}
-
-// ruleCase is one fixture for one rule: the baseline plus one change,
-// and the result and findings that change must give.
-type ruleCase struct {
-	name     string
-	edits    []fixtureEdit
-	want     string
-	findings []string
-}
-
-func runRuleCases(t *testing.T, id string, cases []ruleCase) {
-	t.Helper()
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			rep, _ := auditJSON(t, contractFixture(t, tc.edits...), "--static")
-			assertRule(t, rep, id, tc.want, tc.findings...)
-		})
-	}
-}
-
 // jsonReport is the --json report as a consumer reads it (spec 0052,
 // "Report (#100)").
 type jsonReport struct {
@@ -337,48 +313,6 @@ func TestFixtureThatNeedsGitIsARepository(t *testing.T) {
 			dir := contractFixture(t, edit)
 			if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
 				t.Errorf("the fixture has no .git: %v", err)
-			}
-		})
-	}
-}
-
-// The GitHub workflow names and helpers the GitLab rule tests still use;
-// the GitHub CI rule tests moved to internal/contract (spec 0065).
-const (
-	ciFile    = ".github/workflows/ci.yml"
-	auditFile = ".github/workflows/audit.yml"
-)
-
-// listVerify declares verify as a list of two commands.
-var listVerify = entrypoints("  verify: [task lint, task test]\n  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n")
-
-// noVerify declares every entrypoint but verify.
-var noVerify = entrypoints("  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n")
-
-// runStaticPartCases is runRuleCases for a rule with a static part and
-// other parts: under --static the others are not run, so want is the
-// static part's result, and the findings are the rule's.
-func runStaticPartCases(t *testing.T, id string, cases []ruleCase) {
-	t.Helper()
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			rep, _ := auditJSON(t, contractFixture(t, tc.edits...), "--static")
-			r := rep.rule(t, id)
-			got := ""
-			for _, p := range r.Parts {
-				if p.Check == "static" {
-					got = p.Result
-				}
-			}
-			if got != tc.want {
-				t.Errorf("%s static part = %q, want %s\nfindings:\n%s", id, got, tc.want, r.findingText())
-			}
-			text := r.findingText()
-			for _, f := range tc.findings {
-				if !strings.Contains(text, f) {
-					t.Errorf("%s findings missing %q\nfindings:\n%s", id, f, text)
-				}
 			}
 		})
 	}
