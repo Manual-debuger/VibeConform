@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/doctor"
 )
 
 // auditFlags are vibe audit's flags (spec 0052, "Package and command").
@@ -47,6 +48,11 @@ type contractSeams struct {
 	// contract.OpenRepo. Tests hand in the file list of a fixture they
 	// built, so that a fixture needs no git.
 	openRepo contract.RepoOpener
+	// doctorEnv is the machine vibe doctor checks; nil means
+	// doctor.System. Tests stand in a machine, so that the CLI suite
+	// asserts on this code, not on what the machine running it has
+	// installed.
+	doctorEnv func() doctor.Env
 }
 
 // open lists the tracked files of the repository at root, through the

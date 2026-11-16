@@ -95,8 +95,8 @@ func TestAuditBadProbeTimeoutAndConfigErrorKeepTheirOrder(t *testing.T) {
 }
 
 // Doctor prints the audit's message on its vibe.yaml line, and exits 1.
-// It changes doctorEnv, so it does not run in parallel.
 func TestDoctorConfigMessagesAreUnchanged(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		edits []fixtureEdit
@@ -106,8 +106,8 @@ func TestDoctorConfigMessagesAreUnchanged(t *testing.T) {
 		{"version 1", []fixtureEdit{withFile("vibe.yaml", v1Config)}, func(string) string { return wantV1("vibe.yaml") }},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			dir := contractFixture(t, c.edits...)
-			stubDoctorEnv(t)
 			out, err := runDoctorIn(t, dir)
 			if code := ExitCode(err); code != exitError {
 				t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
