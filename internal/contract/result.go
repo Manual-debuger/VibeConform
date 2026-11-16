@@ -40,6 +40,9 @@ type Finding struct {
 type PartResult struct {
 	Result   Result
 	Findings []Finding
+	// deny is A-02's verdict on its deny cases, which R-01's execution
+	// part reads from its need on A-02 (spec 0064). Only A-02 sets it.
+	deny *PartResult
 }
 
 // Pass is a part that holds.

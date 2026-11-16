@@ -142,8 +142,9 @@ func a07Hook(s *probeSession, command string, limit time.Duration) PartResult {
 
 // checkR01Execution: with vibe replaced by the shim, the baseline verify
 // passes and the A-02 deny cases are still refused. The findings list
-// every call of vibe the shim recorded in any run of the audit.
-func checkR01Execution(env *Env, _ Needed) PartResult {
+// every call of vibe the shim recorded in any run of the audit: setup's,
+// those of every other part (needed), and those of R-01's own runs.
+func checkR01Execution(env *Env, needed Needed) PartResult {
 	if f := needEntrypoint(env, EntrypointVerify); f != nil {
 		return Fail(*f)
 	}
@@ -165,8 +166,8 @@ func checkR01Execution(env *Env, _ Needed) PartResult {
 		verify = Pass()
 	}
 
-	res := mergeRuns(verify, r01GuardHalf(env))
-	for _, c := range s.shimCalls {
+	res := mergeRuns(verify, r01GuardHalf(env, needed))
+	for _, c := range append(needed.vibeCalls(), s.sinceMark()...) {
 		res.Findings = append(res.Findings, Finding{
 			File:    c.File,
 			Message: fmt.Sprintf("%s ran %q, and vibe was not available", c.Run, c.String()),
@@ -178,18 +179,18 @@ func checkR01Execution(env *Env, _ Needed) PartResult {
 
 // r01GuardHalf is R-01's second half: the A-02 deny cases are still
 // refused with the shim in place. A-02's probe (#103) runs every case
-// with the shim on PATH and records its deny-case verdict in
-// probeSession.guardDeny; this half reads it. Without Claude Code there
-// is no guard to check.
-func r01GuardHalf(env *Env) PartResult {
+// with the shim on PATH and returns its deny-case verdict; this half
+// reads it from R-01's need on A-02. Without Claude Code there is no
+// guard to check.
+func r01GuardHalf(env *Env, needed Needed) PartResult {
 	if ok, _ := needsClaude(env.Config); !ok {
 		return Pass()
 	}
-	if g := env.probe.guardDeny; g != nil {
+	if g, ok := needed.guardDeny(); ok {
 		if g.Result == ResultPass {
 			return Pass()
 		}
-		return *g
+		return g
 	}
 	return Undecided(Finding{Message: "cannot decide whether the A-02 deny cases are refused without vibe: A-02's probe did not run"})
 }

@@ -261,22 +261,15 @@ func guardFix(env *Env, rule string) string {
 
 // checkA02: every corpus case, fed to every PreToolUse hook that matches
 // its tool, is refused (or let through by a policy.json exception) when
-// it is a deny case and allowed when it is an allow case. It records its
-// deny-case verdict for R-01 and the exceptions' uses for the report.
+// it is a deny case and allowed when it is an allow case. It returns its
+// deny-case verdict for R-01, which is its whole verdict when it decided
+// before it fed a case, and records the exceptions' uses for the report.
 func checkA02(env *Env, _ Needed) PartResult {
-	s := env.probe
-	res := a02(env, s)
-	if s.guardDeny == nil {
-		s.guardDeny = &res
+	all, deny, ok := feedCorpus(env, env.probe, "A-02", corpusFor(""))
+	if !ok {
+		deny = all
 	}
-	return res
-}
-
-func a02(env *Env, s *probeSession) PartResult {
-	all, deny, ok := feedCorpus(env, s, "A-02", corpusFor(""))
-	if ok {
-		s.guardDeny = &deny
-	}
+	all.deny = &deny
 	return all
 }
 

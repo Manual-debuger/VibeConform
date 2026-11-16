@@ -105,7 +105,8 @@ func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, st
 
 // runPending runs the pending execution and probe parts in order (see
 // runOrder), in one probe copy built for them, each from a reset copy.
-// Each part gets the results of the parts it needs that ran before it.
+// Each part gets the results of the parts it needs that ran before it,
+// and the calls of vibe the shim recorded while they ran.
 // The copy is deleted (or kept, for --keep-probe-copy) before it
 // returns.
 func runPending(env *Env, rep *Report, list []Rule, order []partRef, pending map[partRef]bool, opts ProbeOptions) {
@@ -118,8 +119,9 @@ func runPending(env *Env, rep *Report, list []Rule, order []partRef, pending map
 	env.probe = s
 	defer func() { env.probe = nil }()
 
-	// results holds the result of every part that ran, for one audit.
-	results := map[partKey]PartResult{}
+	// ran holds every part that ran, in run order, for one audit.
+	var ran []partRun
+	setupCalls := s.mark()
 	for _, p := range order {
 		if !pending[p] {
 			continue
@@ -135,9 +137,9 @@ func runPending(env *Env, rep *Report, list []Rule, order []partRef, pending map
 			continue
 		}
 		key := keyOf(list, p)
-		r := part.Run(env, Needed{self: key, needs: part.Needs, results: results})
+		r := part.Run(env, Needed{self: key, needs: part.Needs, ran: ran, setupCalls: setupCalls})
 		r.Result, r.Findings = decided(r)
-		results[key] = r
+		ran = append(ran, partRun{key: key, result: r, calls: s.mark()})
 		po.Result, po.Findings = r.Result, r.Findings
 	}
 }

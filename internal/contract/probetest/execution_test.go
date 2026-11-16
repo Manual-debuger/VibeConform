@@ -154,13 +154,35 @@ func TestRuleR01Execution(t *testing.T) {
 			section{"entrypoints", probeEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci call-vibe]\n")})), ids("A-02", "R-01"), inherit)
 		assertExecution(t, rep, "R-01", fail, "vibe not available", `verify ran "vibe version"`)
 	})
+	t.Run("a call during the verify baseline V-01 started is listed once", func(t *testing.T) {
+		t.Parallel()
+		// V-01's execution part asks for the verify baseline first, so the
+		// shim records the call while V-01 runs; R-01 gets the cached run
+		// and still lists the call, once (spec 0064).
+		rep := audit(t, probeFixture(t, probeConfig(noAgents,
+			section{"entrypoints", probeEntrypoints("  verify: [go run ./ci fmt-check, go run ./ci call-vibe]\n")})), ids("V-01", "A-02", "R-01"), inherit)
+		assertExecution(t, rep, "V-01", fail, "in the probe copy, verify")
+		assertExecution(t, rep, "R-01", fail, "vibe not available")
+		assertListedOnce(t, rep, "R-01", `verify ran "vibe version"`)
+	})
+	t.Run("a call during setup is listed once", func(t *testing.T) {
+		t.Parallel()
+		// setup runs before any part, so its call belongs to no part;
+		// R-01 still lists it (regression test, spec 0064). verify passes
+		// without vibe, so the listed call alone does not fail R-01.
+		rep := audit(t, probeFixture(t, probeConfig(noAgents,
+			section{"entrypoints", probeEntrypoints("  setup: go run ./ci call-vibe-anyway\n")})), ids("A-02", "R-01"), inherit)
+		assertExecution(t, rep, "R-01", pass)
+		assertListedOnce(t, rep, "R-01", `setup ran "vibe version"`)
+	})
 	t.Run("a hook that calls vibe is listed", func(t *testing.T) {
 		t.Parallel()
 		// A-07 runs the hook; R-01 also reads A-02's verdict.
 		rep := audit(t, probeFixture(t, sessionStartHooks("startup", "vibe audit --static")), ids("A-02", "A-07", "R-01"), inherit)
 		assertExecution(t, rep, "A-07", fail, "exited 127", "vibe is not available during the R-01 probe")
 		// The fixture has no guard, so R-01's A-02 half fails as well.
-		assertExecution(t, rep, "R-01", fail, `the SessionStart hook ran "vibe audit --static"`)
+		assertExecution(t, rep, "R-01", fail)
+		assertListedOnce(t, rep, "R-01", `the SessionStart hook ran "vibe audit --static"`)
 	})
 	t.Run("with Claude Code and no guard the A-02 deny cases fail R-01", func(t *testing.T) {
 		t.Parallel()

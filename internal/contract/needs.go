@@ -40,12 +40,23 @@ type partKey struct {
 
 func (k partKey) String() string { return k.rule + "/" + string(k.kind) }
 
+// partRun is what the runner stores for a part that ran: its result,
+// and the calls of vibe the shim recorded while it ran.
+type partRun struct {
+	key    partKey
+	result PartResult
+	calls  []shimCall
+}
+
 // Needed is a part's read-only view of the results of the parts it
 // declared it needs. Static parts get the empty view.
 type Needed struct {
-	self    partKey
-	needs   []Need
-	results map[partKey]PartResult
+	self  partKey
+	needs []Need
+	// ran is every part that ran before this one, in run order.
+	ran []partRun
+	// setupCalls are the calls of vibe setup made before any part ran.
+	setupCalls []shimCall
 }
 
 // Result returns a needed part's result and true, or false when the
@@ -57,8 +68,38 @@ func (n Needed) Result(id string, kind PartKind) (PartResult, bool) {
 	if !n.declares(k) {
 		return PartResult{}, false
 	}
-	r, ok := n.results[k]
-	return r, ok
+	for _, r := range n.ran {
+		if r.key == k {
+			return r.result, true
+		}
+	}
+	return PartResult{}, false
+}
+
+// guardDeny returns A-02's verdict on its deny cases, or false when A-02
+// is not a need that ran.
+func (n Needed) guardDeny() (PartResult, bool) {
+	r, ok := n.Result("A-02", Probe)
+	if !ok || r.deny == nil {
+		return PartResult{}, false
+	}
+	return *r.deny, true
+}
+
+// vibeCalls returns the calls of vibe made while the needed parts ran,
+// in run order. A part that needs every other part also gets the calls
+// setup made, first.
+func (n Needed) vibeCalls() []shimCall {
+	var calls []shimCall
+	if slices.ContainsFunc(n.needs, func(need Need) bool { return need.everyOther }) {
+		calls = append(calls, n.setupCalls...)
+	}
+	for _, r := range n.ran {
+		if n.declares(r.key) {
+			calls = append(calls, r.calls...)
+		}
+	}
+	return calls
 }
 
 func (n Needed) declares(k partKey) bool {

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -68,11 +69,9 @@ type probeSession struct {
 	setup *entrypointRun
 	// baselines caches the baseline runs of verify and verify-fast.
 	baselines map[string]*entrypointRun
-	// shimCalls is every call of vibe the shim recorded, in run order.
-	shimCalls []shimCall
-	// guardDeny is A-02's verdict on its deny cases, as R-01's execution
-	// part reads it. A-02 (#103) sets it; nil means A-02 did not run.
-	guardDeny *PartResult
+	// calls are the calls of vibe the shim recorded since the runner's
+	// last mark, in run order (see mark).
+	calls []shimCall
 	// progressMu orders the progress lines of runs that happen
 	// concurrently (A-02 and A-03 feed corpus cases in parallel).
 	progressMu sync.Mutex
@@ -449,15 +448,33 @@ func (s *probeSession) HasBash() (bool, string) {
 	return true, ""
 }
 
+// recordShimCalls stamps the calls of vibe the shim recorded during the
+// run out with the run's label and file, and keeps them until the next
+// mark.
 func (s *probeSession) recordShimCalls(out *runOutcome) {
 	if s.shim == nil {
 		return
 	}
 	for _, c := range s.shim.calls() {
 		c.Run, c.File = out.Label, out.File
-		out.ShimCalls = append(out.ShimCalls, c)
-		s.shimCalls = append(s.shimCalls, c)
+		s.calls = append(s.calls, c)
 	}
+}
+
+// mark returns the calls of vibe recorded since the last mark, in run
+// order, and sets a new mark. The runner marks after setup and after
+// each part, and stores the calls with the part's result (spec 0064).
+func (s *probeSession) mark() []shimCall {
+	calls := s.calls
+	s.calls = nil
+	return calls
+}
+
+// sinceMark returns the calls of vibe recorded since the last mark: the
+// calls of the running part's own runs. A cached baseline run is not
+// one of them; its calls belong to the part that ran it.
+func (s *probeSession) sinceMark() []shimCall {
+	return slices.Clone(s.calls)
 }
 
 // entrypointRun is one entrypoint run: its commands in order, stopping at
