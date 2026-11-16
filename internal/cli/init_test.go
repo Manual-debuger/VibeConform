@@ -212,8 +212,9 @@ func TestInitRaceLostIsAnError(t *testing.T) {
 }
 
 // TestInitNeedsAComponent: with no manifest in the tracked files, vibe
-// init says what it looked for and writes nothing, since the audit could
-// not read a vibe.yaml without components.
+// init says what it looked for, byte for byte as before spec 0066, and
+// writes nothing, since the audit could not read a vibe.yaml without
+// components.
 func TestInitNeedsAComponent(t *testing.T) {
 	t.Parallel()
 	dir := contracttest.Fixture(t, contracttest.Baseline, withoutGo...)
@@ -222,10 +223,11 @@ func TestInitNeedsAComponent(t *testing.T) {
 	if code := ExitCode(err); code != exitError {
 		t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
 	}
-	for _, want := range []string{"go.mod", "pyproject.toml", "tsconfig.json"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output lacks %q:\n%s", want, out)
-		}
+	const want = "init: found no component in the tracked files: no go.mod, pyproject.toml, " +
+		"or package.json beside a tsconfig.json within 3 directories of the root; " +
+		"commit the project's manifest and run vibe init again"
+	if err == nil || err.Error() != want {
+		t.Errorf("error = %v, want %q", err, want)
 	}
 	if after := contracttest.TreeHash(t, dir); !maps.Equal(before, after) {
 		t.Error("the failed init changed the repository")
