@@ -176,3 +176,57 @@ func TestEmptyProbeEnv(t *testing.T) {
 		t.Errorf("PATH %s is not an empty directory: %v, %d entries", paths[0], err, len(entries))
 	}
 }
+
+// StandIn makes every part of the rules it names decide as told, with a
+// finding that names a file and a fix, and leaves the others as they are.
+func TestStandIn(t *testing.T) {
+	t.Parallel()
+	rules := contracttest.StandIn(nil, contract.ResultUndecided, "V-01", "R-03")
+	if len(rules) != len(contract.Rules()) {
+		t.Fatalf("StandIn(nil) has %d rules, want the registry's %d", len(rules), len(contract.Rules()))
+	}
+	rules = contracttest.StandIn(rules, contract.ResultFail, "R-03")
+	want := map[string]contract.Result{"V-01": contract.ResultUndecided, "R-03": contract.ResultFail}
+	for _, r := range rules {
+		w, ok := want[r.ID]
+		if !ok {
+			continue
+		}
+		for _, p := range r.Parts {
+			got := p.Run(nil, contract.Needed{})
+			if got.Result != w || len(got.Findings) != 1 || got.Findings[0].File == "" || got.Findings[0].Fix == "" {
+				t.Errorf("%s %s part = %+v, want %s with a finding naming a file and a fix", r.ID, p.Kind, got, w)
+			}
+		}
+	}
+}
+
+// RuleIDs lists a level's rules in registry order, without those named;
+// MustRules is RuleIDs of the MUST level.
+func TestRuleIDs(t *testing.T) {
+	t.Parallel()
+	all := contracttest.RuleIDs("")
+	if len(all) != len(contract.Rules()) || all[0] != contract.Rules()[0].ID {
+		t.Errorf(`RuleIDs("") = %q, want every rule in registry order`, all)
+	}
+	must := contracttest.MustRules("V-04")
+	if slices.Contains(must, "V-04") || !slices.Contains(must, "V-01") || slices.Contains(must, "R-02") {
+		t.Errorf("MustRules(V-04) = %q, want the MUST rules but V-04", must)
+	}
+	if got := contracttest.RuleIDs(contract.Should, "R-02"); slices.Contains(got, "R-02") || !slices.Contains(got, "R-03") {
+		t.Errorf("RuleIDs(SHOULD, R-02) = %q, want the SHOULD rules but R-02", got)
+	}
+}
+
+// AgentsConfig replaces only the agents field of the baseline vibe.yaml.
+func TestAgentsConfig(t *testing.T) {
+	t.Parallel()
+	dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.AgentsConfig("[codex]"))
+	data, err := os.ReadFile(filepath.Join(dir, "vibe.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := contracttest.ConfigWith(contracttest.Section{Key: "agents", Body: "agents: [codex]\n"}); string(data) != want {
+		t.Errorf("vibe.yaml =\n%s\nwant\n%s", data, want)
+	}
+}

@@ -49,6 +49,48 @@ func Rules(t testing.TB, ids ...string) []contract.Rule {
 	return rules
 }
 
+// StandIn returns rules (nil for the registry) with every part of the
+// rules ids, execution and probe included, deciding result with one
+// finding that names a file and a fix. The execution and probe parts of
+// a fixture find no program, so only stand-ins show the verdicts
+// conformant and not conformant.
+func StandIn(rules []contract.Rule, result contract.Result, ids ...string) []contract.Rule {
+	if rules == nil {
+		rules = contract.Rules()
+	}
+	for i := range rules {
+		if !slices.Contains(ids, rules[i].ID) {
+			continue
+		}
+		parts := slices.Clone(rules[i].Parts)
+		for j := range parts {
+			parts[j].Run = func(*contract.Env, contract.Needed) contract.PartResult {
+				return contract.PartResult{Result: result, Findings: []contract.Finding{
+					{File: "stand-in.txt", Message: "stand-in " + string(result), Fix: "none"},
+				}}
+			}
+		}
+		rules[i].Parts = parts
+	}
+	return rules
+}
+
+// MustRules lists the IDs of every MUST rule except those named, in
+// registry order.
+func MustRules(except ...string) []string { return RuleIDs(contract.Must, except...) }
+
+// RuleIDs lists the IDs of the rules of a level ("" for every level)
+// except those named, in registry order.
+func RuleIDs(level contract.Level, except ...string) []string {
+	var ids []string
+	for _, r := range contract.Rules() {
+		if (level == "" || r.Level == level) && !slices.Contains(except, r.ID) {
+			ids = append(ids, r.ID)
+		}
+	}
+	return ids
+}
+
 // Check is the report check (spec 0052, "Report (#100)": "A failure with
 // no file named is a defect"): it fails the test with one error for each
 // problem Problems finds in rep.
