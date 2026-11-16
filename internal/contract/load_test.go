@@ -9,28 +9,18 @@ import (
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // loadFixture writes files into a new directory and returns it with an
 // opener that lists exactly those files, so the fixture needs no git.
 func loadFixture(t *testing.T, files map[string]string) (string, contract.RepoOpener) {
 	t.Helper()
-	dir := t.TempDir()
-	var names []string
+	var edits []contracttest.Edit
 	for name, content := range files {
-		path := filepath.Join(dir, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		names = append(names, name)
+		edits = append(edits, contracttest.WithFile(name, content))
 	}
-	open := func(_ context.Context, root string) (*contract.Repo, error) {
-		return contract.NewRepo(root, names), nil
-	}
-	return dir, open
+	return contracttest.Fixture(t, t.TempDir(), edits...), contracttest.OpenRepo
 }
 
 const (

@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // section is one top-level field of a fixture vibe.yaml, with its text.
@@ -11,35 +13,14 @@ type section struct {
 	body string
 }
 
-// baseConfig is the baseline fixture's vibe.yaml, field by field.
-var baseConfig = []section{
-	{"contract", "contract: 1.2.0\n"},
-	{"platforms", "platforms: [linux, windows]\n"},
-	{"agents", "agents: [claude]\n"},
-	{"entrypoints", "entrypoints:\n  verify: task verify\n  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n"},
-}
-
 // configWith is the baseline vibe.yaml with fields replaced in place (an
 // empty body removes the field) and new fields appended in order.
 func configWith(changes ...section) string {
-	var b strings.Builder
-	used := map[string]bool{}
-	for _, s := range baseConfig {
-		body := s.body
-		for _, c := range changes {
-			if c.key == s.key {
-				body = c.body
-				used[c.key] = true
-			}
-		}
-		b.WriteString(body)
+	out := make([]contracttest.Section, len(changes))
+	for i, c := range changes {
+		out[i] = contracttest.Section{Key: c.key, Body: c.body}
 	}
-	for _, c := range changes {
-		if !used[c.key] {
-			b.WriteString(c.body)
-		}
-	}
-	return b.String()
+	return contracttest.ConfigWith(out...)
 }
 
 // configCase is one invalid (or valid) configuration and what stderr must

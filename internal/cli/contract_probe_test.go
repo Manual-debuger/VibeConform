@@ -14,13 +14,14 @@ import (
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // The execution and probe parts (spec 0053), through the vibe audit
 // seam with real processes. The Go probe fixture needs only Go: its
 // entrypoints and hooks run go run ./ci <step>.
 
-var probeGoFixture = filepath.Join("testdata", "contract", "probe-go")
+var probeGoFixture = contracttest.ProbeGo
 
 // probeFixture builds a repository from the Go probe fixture with edits.
 func probeFixture(t *testing.T, edits ...fixtureEdit) string {
@@ -71,16 +72,7 @@ func auditProbe(t *testing.T, dir string, ids []string, args ...string) jsonRepo
 // registryRules returns the registry's rules ids, in registry order.
 func registryRules(t *testing.T, ids ...string) []contract.Rule {
 	t.Helper()
-	var rules []contract.Rule
-	for _, r := range contract.Rules() {
-		if slices.Contains(ids, r.ID) {
-			rules = append(rules, r)
-		}
-	}
-	if len(rules) != len(ids) {
-		t.Fatalf("rules %v: some ID is not in the registry", ids)
-	}
-	return rules
+	return contracttest.Rules(t, ids...)
 }
 
 // ids is a short way to write a list of rule IDs.

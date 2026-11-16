@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // Every finding of a failure names a file and a fix (spec 0052, "Report
@@ -26,46 +27,20 @@ import (
 var reportsWatched atomic.Int64
 
 // watchReports returns the seam that checks every contract audit report
-// one runVibeAudit call prints for failures without a file or a fix.
+// one runVibeAudit call prints for failures without a file or a fix,
+// with contracttest's report check.
 func watchReports(t *testing.T) func(*contract.Report) {
 	t.Helper()
 	return func(rep *contract.Report) {
 		t.Helper()
 		reportsWatched.Add(1)
-		for _, p := range failureProblems(rep) {
-			t.Errorf("a failure must name a file and a fix: %s", p)
-		}
+		contracttest.Check(t, rep)
 	}
 }
 
 // failureProblems lists the failed parts in a report that have no
 // finding, and the findings of failed parts that name no file or no fix.
-func failureProblems(rep *contract.Report) []string { //nolint:gocognit // baseline: pre-existing complexity
-	var out []string
-	for _, rr := range rep.Rules {
-		for _, p := range rr.Parts {
-			if p.Result != contract.ResultFail {
-				continue
-			}
-			if len(p.Findings) == 0 {
-				out = append(out, rr.Rule.ID+" "+string(p.Kind)+" fails with no finding")
-			}
-			for _, f := range p.Findings {
-				var missing []string
-				if f.File == "" {
-					missing = append(missing, "file")
-				}
-				if f.Fix == "" {
-					missing = append(missing, "fix")
-				}
-				if len(missing) > 0 {
-					out = append(out, rr.Rule.ID+" finding "+f.Message+" has no "+strings.Join(missing, " and no "))
-				}
-			}
-		}
-	}
-	return out
-}
+func failureProblems(rep *contract.Report) []string { return contracttest.Problems(rep) }
 
 // Every fixture run through runVibeAudit is checked, so a new rule's
 // failing cases are covered without being listed anywhere.
