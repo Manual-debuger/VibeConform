@@ -53,6 +53,12 @@ func Entrypoints(body string) Edit {
 	return WithFile("vibe.yaml", ConfigWith(Section{"entrypoints", "entrypoints:\n" + body}))
 }
 
+// AgentsConfig is the baseline vibe.yaml with its agents set to list, a
+// YAML flow list such as "[codex]" or "[]".
+func AgentsConfig(list string) Edit {
+	return WithFile("vibe.yaml", ConfigWith(Section{"agents", "agents: " + list + "\n"}))
+}
+
 // RuleResult returns one rule's result from a report, or fails the test.
 func RuleResult(t testing.TB, rep *contract.Report, id string) contract.RuleResult {
 	t.Helper()

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -281,5 +282,90 @@ func TestContractTextReportVerdicts(t *testing.T) {
 		if got := renderText(t, rep, "test"); !strings.HasSuffix(got, tc.want) {
 			t.Errorf("%s report ends:\n%s\nwant it to end with %q", tc.verdict, got, tc.want)
 		}
+	}
+}
+
+// The --json report renders the model's schema, version, summary,
+// waivers and required flags (spec 0052, "Report (#100)"; spec 0063;
+// spec 0065, "The JSON report says when a waiver is unused"). The
+// engine's tests in internal/contract read the same facts from the model.
+func TestContractJSONReportFromTheModel(t *testing.T) {
+	t.Parallel()
+	finding := contract.Finding{File: "f", Message: "m", Fix: "x"}
+	rep := reportOf(t, false, map[string]contract.RuleResult{
+		"R-03": withWaiver(outcome(contract.ResultWaived, part(contract.Static, contract.ResultFail, finding)),
+			&contract.WaiverStatus{Reason: "known gap", Until: day(t, "2999-12-31")}),
+		"R-02": withWaiver(outcome(contract.ResultFail, part(contract.Static, contract.ResultFail, finding)),
+			&contract.WaiverStatus{Reason: "known gap", Until: day(t, "2000-01-01"), Expired: true}),
+		"C-05": withWaiver(outcome(contract.ResultNotApplicable, part(contract.Static, contract.ResultNotApplicable)),
+			&contract.WaiverStatus{Reason: "known gap", Until: day(t, "2999-12-31"), Unused: true}),
+	})
+	for i := range rep.Rules {
+		if rep.Rules[i].Rule.ID == "H-01" {
+			rep.Rules[i].Required = true
+		}
+	}
+	rep.Verdict = contract.VerdictNotConformant
+	var b strings.Builder
+	if err := writeContractJSON(&b, rep, "test"); err != nil {
+		t.Fatal(err)
+	}
+	var got jsonReport
+	if err := json.Unmarshal([]byte(b.String()), &got); err != nil {
+		t.Fatalf("no JSON report: %v\n%s", err, b.String())
+	}
+	if got.Schema != 1 || got.Vibe != "test" || got.Verdict != "not_conformant" {
+		t.Errorf("schema %d, vibe %q, verdict %s; want 1, test, not_conformant", got.Schema, got.Vibe, got.Verdict)
+	}
+	if n := got.Summary["SHOULD"]["waived"]; n != 1 {
+		t.Errorf("summary SHOULD waived = %d, want 1", n)
+	}
+	assertJSONWaiver(t, got, "R-03", "2999-12-31", false, false)
+	assertJSONWaiver(t, got, "R-02", "2000-01-01", true, false)
+	assertJSONWaiver(t, got, "C-05", "2999-12-31", false, true)
+	for id, want := range map[string]bool{"H-01": true, "R-03": false, "C-02": false} {
+		if r := got.rule(t, id); r.Required == nil || *r.Required != want {
+			t.Errorf("%s required = %v, want %v", id, r.Required, want)
+		}
+	}
+}
+
+// assertJSONWaiver checks the waiver object of one rule of a JSON report:
+// reason "known gap", until, expired and unused, which must be present.
+func assertJSONWaiver(t *testing.T, rep jsonReport, id, until string, expired, unused bool) {
+	t.Helper()
+	w := rep.rule(t, id).Waiver
+	if w == nil || w.Reason != "known gap" || w.Until != until || w.Expired != expired || w.Unused == nil || *w.Unused != unused {
+		t.Errorf("%s waiver = %+v, want until %s, expired %v, unused %v", id, w, until, expired, unused)
+	}
+}
+
+// Every rule object of the JSON report has a boolean required key, also
+// without require (spec 0063).
+func TestContractJSONRuleHasRequiredKey(t *testing.T) {
+	t.Parallel()
+	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--json", "--static")
+	var rep struct {
+		Rules []map[string]json.RawMessage `json:"rules"`
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
+		t.Fatalf("no JSON report: %v\n%s", err, r.stdout)
+	}
+	for _, rule := range rep.Rules {
+		if got := string(rule["required"]); got != "false" {
+			t.Errorf("rule %s: required = %q, want false", rule["id"], got)
+		}
+	}
+}
+
+func TestContractAuditTextReport(t *testing.T) {
+	t.Parallel()
+	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--static")
+	assertExit(t, r, 1)
+	if !strings.HasPrefix(r.stdout, "vibe audit: contract 1.2.0 (vibe test), static checks only\n") {
+		t.Errorf("header:\n%s", r.stdout)
+	}
+	if !strings.Contains(r.stdout, "\nVerdict: cannot decide. ") {
+		t.Errorf("no verdict line:\n%s", r.stdout)
 	}
 }
