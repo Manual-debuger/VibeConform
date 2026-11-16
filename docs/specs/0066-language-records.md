@@ -1,6 +1,6 @@
 # Spec 0066: Each component language is one record, and the contract detects components
 
-Status: proposed (2026-11-16). Issue #161, from the design review #167.
+Status: accepted (2026-11-16). Issue #161, from the design review #167.
 Builds on spec 0065 (`contract.Load`, and the rule-test seam of ADR
 0028). This is a refactor. The contract stays 1.2.0, and no rule's
 result, finding or fix changes.
