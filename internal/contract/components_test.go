@@ -34,7 +34,7 @@ func TestContractConfigComponents(t *testing.T) {
 		{name: "language missing", config: contracttest.ConfigWith(compSection("  - path: svc\n")),
 			edits: []contracttest.Edit{sub}, want: []string{"vibe.yaml: components[0].language: is required"}},
 		{name: "language unknown", config: contracttest.ConfigWith(compSection("  - path: svc\n    language: rust\n")),
-			edits: []contracttest.Edit{sub}, want: []string{"vibe.yaml: components[0].language: ", "rust", "go, python, typescript"}},
+			edits: []contracttest.Edit{sub}, want: []string{`vibe.yaml: components[0].language: "rust" is not one of go, python, typescript`}},
 		{name: "path not clean", config: contracttest.ConfigWith(compSection("  - path: ./svc\n    language: python\n")),
 			edits: []contracttest.Edit{sub}, want: []string{"vibe.yaml: components[0].path: ", "clean", `"svc"`}},
 		{name: "path trailing slash", config: contracttest.ConfigWith(compSection("  - path: svc/\n    language: python\n")),

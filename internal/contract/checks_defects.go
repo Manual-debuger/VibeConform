@@ -97,8 +97,8 @@ func checkV08Probe(env *Env, _ Needed) PartResult {
 // defectProbe is one rule's planted-defect probe: in which components it
 // plants the rule's defect kinds (ruleDefectKinds), and which entrypoint
 // must exit non-zero with each. A rule with its own defect kinds lists
-// them in ruleDefectKinds; each kind needs a sample in defectSamples, for
-// every language it is planted in, and a catcher in defectCatchers.
+// them in ruleDefectKinds; each kind needs a sample in the language
+// record of every language it is planted in, and a catcher in defectCatchers.
 type defectProbe struct {
 	// rule is the ID of the rule the probe decides; its kinds are
 	// ruleDefectKinds[rule], and the Fix names it.

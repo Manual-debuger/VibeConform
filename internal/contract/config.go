@@ -68,7 +68,6 @@ const (
 var (
 	platforms = []string{PlatformLinux, PlatformWindows, PlatformMacOS}
 	agents    = []string{AgentClaude, AgentCodex}
-	languages = []string{LanguageGo, LanguagePython, LanguageTypeScript}
 )
 
 // Component is one single-language part of the repository.
@@ -303,8 +302,8 @@ func (p *configParser) components(v *yaml.Node) error {
 				c.Path = path
 				return err
 			case "language":
-				if !isString(v) || !slices.Contains(languages, v.Value) {
-					return p.fail(at+".language", "%s is not one of %s", describe(v), strings.Join(languages, ", "))
+				if _, known := lookupLanguage(v.Value); !isString(v) || !known {
+					return p.fail(at+".language", "%s is not one of %s", describe(v), strings.Join(languageIDs(), ", "))
 				}
 				c.Language = v.Value
 				return nil

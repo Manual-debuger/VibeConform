@@ -71,8 +71,8 @@ func DetectComponents(files []string) Detection {
 // and holds a file named like a language's manifest.
 func manifestDirs(files []string) []string {
 	manifests := map[string]bool{}
-	for _, name := range languages {
-		manifests[languageTable[name].manifest] = true
+	for _, lang := range languageRegistry {
+		manifests[lang.manifest] = true
 	}
 	dirs := map[string]bool{}
 	for _, f := range files {
@@ -98,11 +98,10 @@ func componentDir(dir string) bool {
 // dirLanguage returns the first language, in the contract's order, whose
 // manifest and companions are all in dir, or "" for none.
 func dirLanguage(dir string, has map[string]bool) string {
-	for _, name := range languages {
-		lang := languageTable[name]
+	for _, lang := range languageRegistry {
 		wants := append([]string{lang.manifest}, lang.companions...)
 		if !slices.ContainsFunc(wants, func(f string) bool { return !has[joinRel(dir, f)] }) {
-			return name
+			return lang.id
 		}
 	}
 	return ""
@@ -115,12 +114,11 @@ func dirLanguage(dir string, has map[string]bool) string {
 func rootLanguage(has func(file string) bool) (string, error) {
 	var all, found []string
 	language := ""
-	for _, name := range languages {
-		manifest := languageTable[name].manifest
-		all = append(all, manifest)
-		if has(manifest) {
-			found = append(found, manifest)
-			language = name
+	for _, lang := range languageRegistry {
+		all = append(all, lang.manifest)
+		if has(lang.manifest) {
+			found = append(found, lang.manifest)
+			language = lang.id
 		}
 	}
 	switch len(found) {
@@ -138,9 +136,8 @@ func rootLanguage(has func(file string) bool) (string, error) {
 // component: "go.mod, pyproject.toml, or package.json beside a
 // tsconfig.json".
 func ManifestPhrase() string {
-	items := make([]string, 0, len(languages))
-	for _, name := range languages {
-		lang := languageTable[name]
+	items := make([]string, 0, len(languageRegistry))
+	for _, lang := range languageRegistry {
 		item := lang.manifest
 		if len(lang.companions) > 0 {
 			item += " beside a " + strings.Join(lang.companions, " and a ")
