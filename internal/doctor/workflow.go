@@ -9,18 +9,14 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 )
 
-// entrypointOrder is the order the entrypoints are checked in: the
-// required ones as V-04 reports them, then setup.
-var entrypointOrder = append(slices.Clone(contract.RequiredEntrypoints), contract.EntrypointSetup)
-
-// Entrypoints checks the program of each declared entrypoint command, one
+// checkEntrypoints checks the program of each declared entrypoint command, one
 // line per program, naming the entrypoints that run it. A program named by
 // an absolute path (a leading slash on every OS) is looked for there, one
 // named by a relative path under repoRoot, any other on PATH. A command that
 // is not one simple command, as V-04 reads it, has no program to look
 // for: its line is UNVERIFIED, and V-04 reports it. Undeclared entrypoints
 // are V-04's too.
-func Entrypoints(env Env, repoRoot string, eps contract.Entrypoints) []Result { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
+func checkEntrypoints(env Env, repoRoot string, eps contract.Entrypoints) []Result { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	type program struct {
 		name        string
 		entrypoints []string
@@ -30,7 +26,9 @@ func Entrypoints(env Env, repoRoot string, eps contract.Entrypoints) []Result { 
 	unverified := func(entrypoint, detail string) {
 		results = append(results, Result{Status: Unverified, Name: "entrypoints." + entrypoint, Detail: detail})
 	}
-	for _, name := range entrypointOrder {
+	// The contract's order: the required entrypoints as V-04 reports
+	// them, then setup.
+	for _, name := range contract.EntrypointOrder() {
 		for _, src := range eps[name].Commands {
 			cmd, err := contract.ParseSimpleCommand(src)
 			if err != nil {
@@ -88,9 +86,9 @@ func Entrypoints(env Env, repoRoot string, eps contract.Entrypoints) []Result { 
 	return append(out, results...)
 }
 
-// Bash checks the bash Claude Code runs the hook commands with, found as
+// checkBash checks the bash Claude Code runs the hook commands with, found as
 // the audit finds it. With no command hook, nothing needs it.
-func Bash(env Env, hooks contract.ClaudeHooks) Result {
+func checkBash(env Env, hooks contract.ClaudeHooks) Result {
 	res := Result{Name: "bash"}
 	if len(hooks.Commands) == 0 {
 		res.Status, res.Detail = Pass, "not needed: "+contract.ClaudeSettingsFile+" has no command hook"
@@ -105,9 +103,9 @@ func Bash(env Env, hooks contract.ClaudeHooks) Result {
 	return res
 }
 
-// VibeGuard checks vibe-guard on PATH when a PreToolUse hook runs
+// checkVibeGuard checks vibe-guard on PATH when a PreToolUse hook runs
 // `vibe-guard hook`, and returns no result otherwise.
-func VibeGuard(env Env, hooks contract.ClaudeHooks) []Result {
+func checkVibeGuard(env Env, hooks contract.ClaudeHooks) []Result {
 	if !hooks.RunsVibeGuard {
 		return nil
 	}

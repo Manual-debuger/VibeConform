@@ -6,8 +6,9 @@
 // asks whether the repository conforms to the contract.
 //
 // It reads the configuration and the hooks with the contract audit's own
-// readers, and imports no other package of this module. Every check is a
-// function of its inputs and an Env.
+// readers, and imports no other package of this module. Run chooses the
+// checks and their order; every check is a function of its inputs and an
+// Env.
 package doctor
 
 import (
@@ -168,9 +169,9 @@ func why(err error, stderr string) string {
 	return err.Error()
 }
 
-// Git checks that git runs and that repoRoot is inside a repository. Every
+// checkGit checks that git runs and that repoRoot is inside a repository. Every
 // later check that needs git depends on this one passing.
-func Git(ctx context.Context, env Env, repoRoot string) Result {
+func checkGit(ctx context.Context, env Env, repoRoot string) Result {
 	res := Result{Name: "git"}
 	path, err := env.LookPath("git")
 	if err != nil {

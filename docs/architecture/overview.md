@@ -279,7 +279,12 @@ internal/
   with a small function in `internal/cli`, and checks the file it writes
   with `contract.Parse`, so it never writes a configuration `vibe audit`
   cannot read.
-- **`vibe doctor`** reuses the audit's readers (`contract.Parse`, the
+- **`vibe doctor`** loads the configuration with `contract.Load` and
+  hands the outcome, a load error with the CLI's text included, to
+  `doctor.Run`, which chooses the checks and their order (git,
+  `vibe.yaml`, the entrypoints in `contract.EntrypointOrder`, then what
+  the hooks need) and returns the report; the CLI prints it and sets
+  the exit code (spec 0065). Doctor reuses the audit's readers (the
   entrypoint splitter `ParseSimpleCommand`, `ReadClaudeHooks` and
   `ResolveBash`), so it finds programs and bash exactly as the audit
   would run them. Among this repository's packages it imports only
