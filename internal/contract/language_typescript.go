@@ -8,6 +8,7 @@ var typeScriptLanguage = languageFacts{
 	name:            "TypeScript",
 	manifest:        "package.json",
 	hasDependencies: packageJSONHasDependencies,
+	companions:      []string{"tsconfig.json"},
 	lockfiles: []lockfile{
 		{
 			file:  "pnpm-lock.yaml",

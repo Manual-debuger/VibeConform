@@ -70,14 +70,6 @@ var (
 	agents    = []string{AgentClaude, AgentCodex}
 )
 
-// rootManifests maps each manifest that decides the root component's
-// language, in the order errors name them.
-var rootManifests = []struct{ file, language string }{
-	{"go.mod", LanguageGo},
-	{"pyproject.toml", LanguagePython},
-	{"package.json", LanguageTypeScript},
-}
-
 // Component is one single-language part of the repository.
 type Component struct {
 	// Path is a clean, relative, slash-separated directory; "." is the
@@ -377,32 +369,15 @@ func hasDrive(p string) bool {
 }
 
 // detectComponents decides the root component's language from the tracked
-// manifests at the root: exactly one must be there.
+// manifests at the root, with the function DetectComponents uses.
 func (p *configParser) detectComponents() error {
-	var found []string
-	language := ""
-	for _, m := range rootManifests {
-		if p.repo.HasFile(m.file) {
-			found = append(found, m.file)
-			language = m.language
-		}
+	language, err := rootLanguage(p.repo.HasFile)
+	if err != nil {
+		return p.fail("components", "%v", err)
 	}
-	all := make([]string, len(rootManifests))
-	for i, m := range rootManifests {
-		all[i] = m.file
-	}
-	switch len(found) {
-	case 0:
-		return p.fail("components", "the repository root has no tracked %s, so its language is unknown; "+
-			"declare components with path and language", joinWords(all, "or"))
-	case 1:
-		p.cfg.Components = []Component{{Path: ".", Language: language}}
-		p.cfg.ComponentsDetected = true
-		return nil
-	default:
-		return p.fail("components", "the repository root has %s, so its language is ambiguous; "+
-			"declare components with path and language", joinWords(found, "and"))
-	}
+	p.cfg.Components = []Component{{Path: ".", Language: language}}
+	p.cfg.ComponentsDetected = true
+	return nil
 }
 
 func (p *configParser) entrypoints(v *yaml.Node) error {

@@ -21,6 +21,9 @@ type languageFacts struct {
 	// hasDependencies reads the manifest: whether it declares
 	// dependencies (spec 0053, D-01).
 	hasDependencies func(manifest string, data []byte) (bool, error)
+	// companions are the files DetectComponents also wants beside the
+	// manifest before a directory is a component of the language.
+	companions []string
 	// lockfiles are the lockfiles D-01 recognizes for the language, in
 	// the order D-01 checks them (spec 0051, D-01).
 	lockfiles []lockfile
@@ -63,8 +66,8 @@ type lockfile struct {
 
 // languageRegistry holds the language records in the contract's language
 // order. Every list that depends on that order is derived from it: the
-// valid language values, D-01's lockfile order and the order --explain
-// prints the samples in.
+// valid language values, the root manifests and detection's priority,
+// D-01's lockfile order and the order --explain prints the samples in.
 var languageRegistry = []languageFacts{goLanguage, pythonLanguage, typeScriptLanguage}
 
 // lookupLanguage returns the record of the language with this

@@ -63,17 +63,11 @@ func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocycl
 		[]contracttest.Edit{contracttest.WithFile("services/api/go.mod", "module example.com/api\n\ngo 1.24\n")},
 		under("tools/py", pyFiles),
 		under("web/app", tsFiles),
-		// Not components: a package.json without tsconfig.json, manifests
-		// of dependencies, a manifest below the depth init looks at, and a
-		// manifest inside another component.
+		// The manifests that are not components (dependencies, too deep,
+		// nested, a package.json without tsconfig.json) are detection
+		// cases: TestDetectComponentsInitLayouts in internal/contract.
 		[]contracttest.Edit{
 			contracttest.Dependabot("gomod directory /services/api", "pip directory /tools/py", "npm directory /web/app", "github-actions directory /"),
-			contracttest.WithFile("docs/site/package.json", "{}\n"),
-			contracttest.WithFile("node_modules/dep/package.json", "{}\n"),
-			contracttest.WithFile("node_modules/dep/tsconfig.json", "{}\n"),
-			contracttest.WithFile("third/vendor/x/go.mod", "module x\n"),
-			contracttest.WithFile("a/b/c/d/go.mod", "module d\n"),
-			contracttest.WithFile("services/api/tools/go.mod", "module tools\n"),
 		})
 	for _, c := range []struct {
 		name          string
@@ -212,8 +206,9 @@ func TestInitRaceLostIsAnError(t *testing.T) {
 }
 
 // TestInitNeedsAComponent: with no manifest in the tracked files, vibe
-// init says what it looked for and writes nothing, since the audit could
-// not read a vibe.yaml without components.
+// init says what it looked for, byte for byte as before spec 0066, and
+// writes nothing, since the audit could not read a vibe.yaml without
+// components.
 func TestInitNeedsAComponent(t *testing.T) {
 	t.Parallel()
 	dir := contracttest.Fixture(t, contracttest.Baseline, withoutGo...)
@@ -222,13 +217,31 @@ func TestInitNeedsAComponent(t *testing.T) {
 	if code := ExitCode(err); code != exitError {
 		t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
 	}
-	for _, want := range []string{"go.mod", "pyproject.toml", "tsconfig.json"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output lacks %q:\n%s", want, out)
-		}
+	const want = "init: found no component in the tracked files: no go.mod, pyproject.toml, " +
+		"or package.json beside a tsconfig.json within 3 directories of the root; " +
+		"commit the project's manifest and run vibe init again"
+	if err == nil || err.Error() != want {
+		t.Errorf("error = %v, want %q", err, want)
 	}
 	if after := contracttest.TreeHash(t, dir); !maps.Equal(before, after) {
 		t.Error("the failed init changed the repository")
+	}
+}
+
+// TestInitHelpNamesTheManifests: vibe init --help names the manifests
+// with the same phrase as the "found no component" error (spec 0066).
+func TestInitHelpNamesTheManifests(t *testing.T) {
+	t.Parallel()
+	root := newRootCmd("test", contractSeams{openRepo: contracttest.OpenRepo})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetArgs([]string{"init", "--help"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("vibe init --help: %v", err)
+	}
+	if want := "(go.mod, pyproject.toml, or package.json beside a tsconfig.json)"; !strings.Contains(out.String(), want) {
+		t.Errorf("help lacks %q:\n%s", want, out.String())
 	}
 }
 
