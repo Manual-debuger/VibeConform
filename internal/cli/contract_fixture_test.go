@@ -2,7 +2,10 @@ package cli
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,29 +74,17 @@ func fixtureGit(t *testing.T, dir string, args ...string) {
 	contracttest.Git(t, dir, args...)
 }
 
-// The GitLab baseline, for the CLI tests that still build GitLab fixtures
-// (D-02's). The GitLab rule tests moved to internal/contract
-// (rules_gitlab_test.go), which keeps its own copy.
-
-const gitlabFile = ".gitlab-ci.yml"
-
-// glImage is an image pinned by digest, as the baseline uses it.
-const glImage = "golang:1.25@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
-// glBase passes C-01 and C-04: verify on a Linux and a Windows runner, a
-// scan, and the audit in a job of its own, none with rules.
-const glBase = "default:\n  image: " + glImage + "\n\n" +
-	"verify:linux:\n  tags: [linux]\n  script:\n    - task verify\n\n" +
-	"verify:windows:\n  tags: [windows]\n  script:\n    - task verify\n\n" +
-	"scan:\n  script:\n    - go install golang.org/x/vuln/cmd/govulncheck@v1.1.4\n    - govulncheck ./...\n\n" +
-	"conformance:audit:\n  script:\n    - vibe audit --static\n"
-
-// gitlab turns the baseline into a GitLab-only repository whose
-// .gitlab-ci.yml is pipeline, plus any further edits.
-func gitlab(pipeline string, more ...fixtureEdit) []fixtureEdit {
-	return append([]fixtureEdit{
-		withoutFile(".github/workflows/ci.yml"), withoutFile(".github/workflows/audit.yml"), withFile(gitlabFile, pipeline),
-	}, more...)
+// dependabot is a .github/dependabot.yml with the given updates entries,
+// each "ecosystem directory-key directory-value". vibe init's tests use
+// it; the D-02 tests in internal/contract have their own.
+func dependabot(entries ...string) fixtureEdit {
+	var b strings.Builder
+	b.WriteString("version: 2\nupdates:\n")
+	for _, e := range entries {
+		f := strings.SplitN(e, " ", 3)
+		b.WriteString("  - package-ecosystem: " + f[0] + "\n    " + f[1] + ": " + f[2] + "\n    schedule:\n      interval: weekly\n")
+	}
+	return withFile(".github/dependabot.yml", b.String())
 }
 
 // openFixtureRepo is the audit's repository seam in tests: a listed
@@ -117,8 +108,9 @@ func runVibeAudit(t *testing.T, args ...string) auditResult {
 // (nil for the registry). Every report it prints is watched. The runs of
 // the execution and probe parts find no program: PATH is an empty
 // directory and no bash is named, so that a fixture's result does not
-// depend on what this machine has installed. Probe tests use auditProbe,
-// which runs only the rules they read, in this process's environment.
+// depend on what this machine has installed. The probe tests are in
+// internal/contract, which runs contract.Audit in this process's
+// environment.
 func runVibeAuditRules(t *testing.T, rules []contract.Rule, args ...string) auditResult {
 	t.Helper()
 	return runVibeAuditSeams(t, contractSeams{rules: rules, probeEnv: emptyProbeEnv(t)}, args...)
@@ -129,13 +121,6 @@ func runVibeAuditRules(t *testing.T, rules []contract.Rule, args ...string) audi
 func emptyProbeEnv(t *testing.T) []string {
 	t.Helper()
 	return contracttest.EmptyProbeEnv(t)
-}
-
-// probeEnvWithPath is this process's environment with PATH replaced and
-// CLAUDE_CODE_GIT_BASH_PATH removed.
-func probeEnvWithPath(t *testing.T, path string) []string {
-	t.Helper()
-	return contracttest.ProbeEnvWithPath(path)
 }
 
 func runVibeAuditSeams(t *testing.T, seams contractSeams, args ...string) auditResult {
@@ -151,6 +136,33 @@ func runVibeAuditSeams(t *testing.T, seams contractSeams, args ...string) auditR
 	root.SetArgs(append([]string{"audit"}, args...))
 	err := root.Execute()
 	return auditResult{stdout: out.String(), stderr: errOut.String(), code: ExitCode(err)}
+}
+
+// treeHash hashes every file under dir, .git included, by path and
+// content.
+func treeHash(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(data)
+		rel, _ := filepath.Rel(dir, p)
+		out[filepath.ToSlash(rel)] = hex.EncodeToString(sum[:])
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 // watchReports returns the seam that checks every contract audit report
@@ -178,30 +190,6 @@ func configWith(changes ...section) string {
 		out[i] = contracttest.Section{Key: c.key, Body: c.body}
 	}
 	return contracttest.ConfigWith(out...)
-}
-
-func entrypoints(body string) fixtureEdit {
-	return withFile("vibe.yaml", configWith(section{"entrypoints", "entrypoints:\n" + body}))
-}
-
-// ruleCase is one fixture for one rule: the baseline plus one change,
-// and the result and findings that change must give.
-type ruleCase struct {
-	name     string
-	edits    []fixtureEdit
-	want     string
-	findings []string
-}
-
-func runRuleCases(t *testing.T, id string, cases []ruleCase) {
-	t.Helper()
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			rep, _ := auditJSON(t, contractFixture(t, tc.edits...), "--static")
-			assertRule(t, rep, id, tc.want, tc.findings...)
-		})
-	}
 }
 
 // jsonReport is the --json report as a consumer reads it (spec 0052,
