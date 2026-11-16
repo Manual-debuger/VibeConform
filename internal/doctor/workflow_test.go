@@ -1,10 +1,11 @@
-package doctor
+package doctor_test
 
 import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
+	"github.com/Manual-debuger/VibeConform/internal/doctor"
 )
 
 // TestEntrypointsAbsolutePOSIXPath: a program written as an absolute
@@ -12,21 +13,30 @@ import (
 // repository (regression: on Windows filepath.IsAbs("/usr/bin/x") is
 // false, so doctor looked for repo/usr/bin/x).
 func TestEntrypointsAbsolutePOSIXPath(t *testing.T) {
-	repo := filepath.Join("some", "repo")
-	eps := contract.Entrypoints{"verify": {Declared: true, Commands: []string{"/usr/bin/make verify"}}}
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
-		exists map[string]bool
-		want   Result
+		exists func(dir string) map[string]bool
+		want   doctor.Result
 	}{
-		{"present", map[string]bool{"/usr/bin/make": true}, Result{Status: Pass, Name: "/usr/bin/make", Detail: "found; runs verify"}},
-		{"missing, even if the repository has it", map[string]bool{filepath.Join(repo, "usr", "bin", "make"): true},
-			Result{Status: Fail, Name: "/usr/bin/make", Detail: "not found; verify cannot run"}},
+		{"present", func(string) map[string]bool { return map[string]bool{"/usr/bin/make": true} },
+			doctor.Result{Status: doctor.Pass, Name: "/usr/bin/make", Detail: "found; runs verify"}},
+		{"missing, even if the repository has it",
+			func(dir string) map[string]bool {
+				return map[string]bool{filepath.Join(dir, "usr", "bin", "make"): true}
+			},
+			doctor.Result{Status: doctor.Fail, Name: "/usr/bin/make", Detail: "not found; verify cannot run"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			got := Entrypoints((&fake{exists: c.exists}).env(), repo, eps)
-			if len(got) != 1 || got[0] != c.want {
-				t.Errorf("Entrypoints() = %+v, want [%+v]", got, c.want)
+			t.Parallel()
+			dir, loaded := load(t, contracttest.WithFile("vibe.yaml",
+				"contract: 1.2.0\nplatforms: [linux]\nagents: []\nentrypoints:\n  verify: /usr/bin/make verify\n"))
+			if loaded.Err != nil {
+				t.Fatal(loaded.Err)
+			}
+			got := run(dir, machine{exists: c.exists(dir)}, loaded)
+			if len(got) < 3 || got[2] != c.want {
+				t.Errorf("results = %+v, want the entrypoint line %+v", got, c.want)
 			}
 		})
 	}

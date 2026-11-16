@@ -28,17 +28,17 @@ type GuardExceptionUse struct {
 	Case  string
 }
 
-// GuardCorpusCount is the number of deny cases of one guard rule ID.
-type GuardCorpusCount struct {
+// guardCorpusCount is the number of deny cases of one guard rule ID.
+type guardCorpusCount struct {
 	Rule string
 	Deny int
 }
 
-// GuardCorpusCounts returns the deny cases of A-02's corpus by guard rule
+// guardCorpusCounts returns the deny cases of A-02's corpus by guard rule
 // ID, in the order of the IDs and without the IDs it has none of
-// (git-skip-hooks is A-09's), and its deny and allow totals. --explain
-// A-02 and A-03 print them.
-func GuardCorpusCounts() (byRule []GuardCorpusCount, deny, allow int) {
+// (git-skip-hooks is A-09's), and its deny and allow totals.
+// guardCorpusText prints them for --explain A-02 and A-03.
+func guardCorpusCounts() (byRule []guardCorpusCount, deny, allow int) {
 	n := map[string]int{}
 	for _, c := range corpusFor("") {
 		if c.Want == WantDeny {
@@ -50,7 +50,7 @@ func GuardCorpusCounts() (byRule []GuardCorpusCount, deny, allow int) {
 	}
 	for _, id := range guardrule.IDs {
 		if n[id] > 0 {
-			byRule = append(byRule, GuardCorpusCount{Rule: id, Deny: n[id]})
+			byRule = append(byRule, guardCorpusCount{Rule: id, Deny: n[id]})
 		}
 	}
 	return byRule, deny, allow

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 	"github.com/Manual-debuger/VibeConform/internal/setupskill"
 	"gopkg.in/yaml.v3"
 )
@@ -16,8 +17,10 @@ import (
 // The reference implementations pass the static audit (spec 0054, "The
 // drift test (#109)"; spec 0055, Seam 2): for each stack and CI provider,
 // a fixture repository assembled from the skill's reference files around
-// a minimal component with one test has no failing MUST rule under vibe
-// audit --static --json. The static audit runs no tool.
+// a minimal component with one test has no failing MUST rule under the
+// static audit. The static audit runs no tool. The tests run it through
+// contracttest and read the report model (ADR 0028); the CLI's JSON
+// report is tested once, in contract_report_test.go.
 
 // minimalComponents are the source files of a minimal component with one
 // test, by language, relative to the component's directory.
@@ -69,68 +72,42 @@ func referenceRepo(t *testing.T, stack, provider string) map[string]string {
 	return files
 }
 
-// staticReport is the part of a --static --json report these tests read.
-type staticReport struct {
-	CIProvider string `json:"ci_provider"`
-	Rules      []struct {
-		ID     string          `json:"id"`
-		Level  contract.Level  `json:"level"`
-		Result contract.Result `json:"result"`
-		Parts  []struct {
-			Check  contract.PartKind `json:"check"`
-			Result contract.Result   `json:"result"`
-		} `json:"parts"`
-		Findings []struct {
-			File    string `json:"file"`
-			Message string `json:"message"`
-		} `json:"findings"`
-	} `json:"rules"`
-}
-
 // auditReference runs the static audit on the files of a reference
-// repository.
-func auditReference(t *testing.T, files map[string]string) staticReport {
+// repository through contract.Load and contract.Audit (ADR 0028), which
+// also checks that every failure names a file and a fix.
+func auditReference(t *testing.T, files map[string]string) *contract.Report {
 	t.Helper()
-	var edits []fixtureEdit
+	var edits []contracttest.Edit
 	for name, content := range files {
-		edits = append(edits, withFile(name, content))
+		edits = append(edits, contracttest.WithFile(name, content))
 	}
-	dir := fixtureFrom(t, t.TempDir(), edits...)
-	res := runVibeAudit(t, "--static", "--json", "--repo-root", dir)
-	var report staticReport
-	if err := json.Unmarshal([]byte(res.stdout), &report); err != nil {
-		t.Fatalf("the report is not JSON: %v\nstdout: %s\nstderr: %s", err, res.stdout, res.stderr)
-	}
+	dir := contracttest.Fixture(t, t.TempDir(), edits...)
+	report := contracttest.Audit(t, dir, contract.Options{Static: true})
 	if len(report.Rules) == 0 {
-		t.Fatalf("the report has no rules\nstdout: %s", res.stdout)
+		t.Fatal("the report has no rules")
 	}
 	return report
 }
 
-// findings joins the findings of a rule of the report.
-func (r staticReport) findings(id string) (contract.Result, string) {
-	for _, rule := range r.Rules {
-		if rule.ID == id {
-			var msgs []string
-			for _, f := range rule.Findings {
-				msgs = append(msgs, f.File+": "+f.Message)
-			}
-			return rule.Result, strings.Join(msgs, "; ")
-		}
+// referenceFindings is the result of a rule of the report and its
+// findings, joined.
+func referenceFindings(t *testing.T, report *contract.Report, id string) (contract.Result, string) {
+	t.Helper()
+	rule := contracttest.RuleResult(t, report, id)
+	var msgs []string
+	for _, f := range rule.Findings() {
+		msgs = append(msgs, f.File+": "+f.Message)
 	}
-	return "", "(no such rule)"
+	return rule.Result, strings.Join(msgs, "; ")
 }
 
-// staticPart is the result of the static part of a rule of the report.
-func (r staticReport) staticPart(id string) contract.Result {
-	for _, rule := range r.Rules {
-		if rule.ID != id {
-			continue
-		}
-		for _, p := range rule.Parts {
-			if p.Check == contract.Static {
-				return p.Result
-			}
+// referenceStaticPart is the result of the static part of a rule of the
+// report.
+func referenceStaticPart(t *testing.T, report *contract.Report, id string) contract.Result {
+	t.Helper()
+	for _, p := range contracttest.RuleResult(t, report, id).Parts {
+		if p.Kind == contract.Static {
+			return p.Result
 		}
 	}
 	return ""
@@ -184,8 +161,8 @@ func TestStaticAuditReadsACdPrefixedHookCommand(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			report := auditReference(t, withStopCommand(t, base, c.command))
-			if got := report.staticPart(c.rule); got != c.want {
-				_, msgs := report.findings(c.rule)
+			if got := referenceStaticPart(t, report, c.rule); got != c.want {
+				_, msgs := referenceFindings(t, report, c.rule)
 				t.Errorf("%s static part = %q, want %q: %s", c.rule, got, c.want, msgs)
 			}
 		})
@@ -206,23 +183,23 @@ func TestReferenceImplementationsPassTheStaticAudit(t *testing.T) { //nolint:goc
 				t.Parallel()
 				report := auditReference(t, referenceRepo(t, stack, provider))
 				for _, r := range report.Rules {
-					if r.Level == contract.Must && r.Result == contract.ResultFail {
-						_, msgs := report.findings(r.ID)
-						t.Errorf("MUST rule %s fails: %s", r.ID, msgs)
+					if r.Rule.Level == contract.Must && r.Result == contract.ResultFail {
+						_, msgs := referenceFindings(t, report, r.Rule.ID)
+						t.Errorf("MUST rule %s fails: %s", r.Rule.ID, msgs)
 					}
 				}
 				if provider != providerGitLab {
 					return
 				}
-				if report.CIProvider != "gitlab_ci" {
+				if report.CIProvider != contract.CIGitLab {
 					t.Errorf("ci_provider = %q, want gitlab_ci", report.CIProvider)
 				}
 				for _, id := range gitlabDecided {
-					if got, msgs := report.findings(id); got != contract.ResultPass {
+					if got, msgs := referenceFindings(t, report, id); got != contract.ResultPass {
 						t.Errorf("%s = %s, want pass: %s", id, got, msgs)
 					}
 				}
-				if got, msgs := report.findings("C-03"); got != contract.ResultNotApplicable {
+				if got, msgs := referenceFindings(t, report, "C-03"); got != contract.ResultNotApplicable {
 					t.Errorf("C-03 = %s, want not_applicable: %s", got, msgs)
 				}
 			})
@@ -407,7 +384,7 @@ func TestGitLabReferencePlantedProblems(t *testing.T) {
 				}
 				files[".gitlab-ci.yml"] = strings.ReplaceAll(ci, c.old, c.new)
 				report := auditReference(t, files)
-				got, msgs := report.findings(c.rule)
+				got, msgs := referenceFindings(t, report, c.rule)
 				if got != contract.ResultFail || !strings.Contains(msgs, c.finding) {
 					t.Errorf("%s = %s with %q, want fail naming %q", c.rule, got, msgs, c.finding)
 				}

@@ -56,15 +56,27 @@ internal/contract
   report model (plain data)
 ```
 
-- **Configuration.** `vibe audit` reads `vibe.yaml` once.
-  `contract.DetectSchema` tells version 2 (`contract:`) from version 1
-  (`standard:`); a version 1 file, and a missing one, are exit 1 with a
-  pointer (the migration guide, or `vibe init`). `vibe init --skill`
+- **Configuration.** `contract.Load` reads `vibe.yaml` once, opens the
+  repository and parses (spec 0065); `vibe audit` and `vibe doctor` call
+  it. Its read-and-detect step, `contract.ReadConfig`, tells version 2
+  (`contract:`) from version 1 (`standard:`) with `contract.DetectSchema`,
+  and `vibe init` uses it alone. A missing file (`contract.ErrNoConfig`)
+  and a version 1 file (`contract.ErrConfigV1`) are exit 1; the CLI adds
+  the pointer (`vibe init`, or the migration guide). `vibe init --skill`
   writes the setup skill and reads no configuration.
 - **Dependency direction.** The CLI imports `internal/contract`, never
   the reverse, and renders its report model as text or JSON
   (`internal/cli/contract_*.go`). `internal/contract/imports_test.go`
   keeps the removed template-sync package names out of its imports.
+- **Test seam** (ADR 0028, spec 0065). `internal/contract/contracttest`
+  builds fixture repositories from the trees in
+  `internal/contract/testdata`, opens them without git when every file
+  is tracked, and runs `contract.Load` and `contract.Audit` with a check
+  on every report: each failed part has a finding, and each finding
+  names a file and a fix. The tests of `internal/contract` and
+  `internal/cli` import it. Among this module's packages it imports only
+  `internal/contract`, and only test files import it; two `depguard`
+  rules enforce both. The report goldens stay in `internal/cli/testdata`.
 - **Shell parsing.** "Called" means a simple command in the shell parse
   tree, so `internal/contract` depends on `mvdan.cc/sh/v3/syntax` (ADR
   0026). `internal/contract/shell.go` is the only file that imports it;
@@ -255,6 +267,8 @@ cmd/
 internal/
   cli/                      # command tree: init, audit, doctor, unlock; hidden stubs for the removed sync, diff and check
   contract/                 # contract audit: vibe.yaml v2, rule registry, static checks, the CI model with its GitHub Actions and GitLab CI readers, probe copy and probes (spec 0052, 0053, 0055)
+    contracttest/           # the audit's test seam: fixture builder, listed-fixture opener, audit helper with the report check; imported by test files only (ADR 0028)
+    probetest/              # the probe tests that run real tools, in a package of their own for go test's time budget (spec 0053)
   guardrule/                # guard rule IDs, policy.json v2, command parsing shared by the audit and vibe-guard; imports nothing from internal/ (spec 0053)
   guard/                    # vibe-guard: baseline rules, hook/explain/relock, unlock marker, reference commands, version rule; imports only guardrule (spec 0053, 0054)
   setupskill/               # the embedded vibeconform-setup skill, vibe init --skill, and the tests that run its reference hooks; imports only guard (spec 0054)
@@ -265,7 +279,12 @@ internal/
   with a small function in `internal/cli`, and checks the file it writes
   with `contract.Parse`, so it never writes a configuration `vibe audit`
   cannot read.
-- **`vibe doctor`** reuses the audit's readers (`contract.Parse`, the
+- **`vibe doctor`** loads the configuration with `contract.Load` and
+  hands the outcome, a load error with the CLI's text included, to
+  `doctor.Run`, which chooses the checks and their order (git,
+  `vibe.yaml`, the entrypoints in `contract.EntrypointOrder`, then what
+  the hooks need) and returns the report; the CLI prints it and sets
+  the exit code (spec 0065). Doctor reuses the audit's readers (the
   entrypoint splitter `ParseSimpleCommand`, `ReadClaudeHooks` and
   `ResolveBash`), so it finds programs and bash exactly as the audit
   would run them. Among this repository's packages it imports only
@@ -273,7 +292,7 @@ internal/
   that for non-test code (spec 0063).
 - **The removed commands.** `vibe sync`, `vibe diff` and `vibe check` are
   hidden commands that print the migration guide's path and exit 1.
-  `contract.DetectSchema` stays, so that a version 1 `vibe.yaml` gets the
+  `contract.ReadConfig` stays, so that a version 1 `vibe.yaml` gets the
   same pointer from `audit`, `doctor` and `init`.
 
 **The release and the setup action** (spec 0054). One release holds both

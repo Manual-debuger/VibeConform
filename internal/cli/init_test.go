@@ -11,13 +11,14 @@ import (
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // runInit runs vibe init in dir with the audit's repository seam, so that
 // a fixture built without git lists its files the same way for both.
 func runInit(t *testing.T, dir string) (string, error) {
 	t.Helper()
-	root := newRootCmd("test", contractSeams{openRepo: openFixtureRepo})
+	root := newRootCmd("test", contractSeams{openRepo: contracttest.OpenRepo})
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)
@@ -42,18 +43,13 @@ const fixV04First = "fix V-04 first"
 
 // The fixtures below swap the baseline's Go project for another layout.
 var (
-	withoutGo = []fixtureEdit{withoutFile("vibe.yaml"), withoutFile("go.mod"), withoutFile("fixture_test.go")}
-	pyFiles   = []fixtureEdit{withFile("pyproject.toml", "[project]\nname = \"calc\"\nversion = \"0.1.0\"\n"), withFile("calc.py", "def add(a, b):\n    return a + b\n")}
-	tsFiles   = []fixtureEdit{withFile("package.json", "{\"name\": \"calc\", \"private\": true}\n"), withFile("tsconfig.json", "{}\n"), withFile("calc.ts", "export const add = (a: number, b: number) => a + b;\n")}
+	withoutGo = []contracttest.Edit{contracttest.WithoutFile("vibe.yaml"), contracttest.WithoutFile("go.mod"), contracttest.WithoutFile("fixture_test.go")}
+	pyFiles   = []contracttest.Edit{contracttest.WithFile("pyproject.toml", "[project]\nname = \"calc\"\nversion = \"0.1.0\"\n"), contracttest.WithFile("calc.py", "def add(a, b):\n    return a + b\n")}
+	tsFiles   = []contracttest.Edit{contracttest.WithFile("package.json", "{\"name\": \"calc\", \"private\": true}\n"), contracttest.WithFile("tsconfig.json", "{}\n"), contracttest.WithFile("calc.ts", "export const add = (a: number, b: number) => a + b;\n")}
 )
 
-func under(dir string, edits []fixtureEdit) []fixtureEdit {
-	out := make([]fixtureEdit, len(edits))
-	for i, e := range edits {
-		e.path = dir + "/" + e.path
-		out[i] = e
-	}
-	return out
+func under(dir string, edits []contracttest.Edit) []contracttest.Edit {
+	return contracttest.Under(dir, edits...)
 }
 
 // TestInitWritesAConfigTheAuditReads: on each fixture vibe init writes a
@@ -64,30 +60,30 @@ func under(dir string, edits []fixtureEdit) []fixtureEdit {
 func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	t.Parallel()
 	monorepo := slices.Concat(withoutGo,
-		[]fixtureEdit{withFile("services/api/go.mod", "module example.com/api\n\ngo 1.24\n")},
+		[]contracttest.Edit{contracttest.WithFile("services/api/go.mod", "module example.com/api\n\ngo 1.24\n")},
 		under("tools/py", pyFiles),
 		under("web/app", tsFiles),
 		// Not components: a package.json without tsconfig.json, manifests
 		// of dependencies, a manifest below the depth init looks at, and a
 		// manifest inside another component.
-		[]fixtureEdit{
-			dependabot("gomod directory /services/api", "pip directory /tools/py", "npm directory /web/app", "github-actions directory /"),
-			withFile("docs/site/package.json", "{}\n"),
-			withFile("node_modules/dep/package.json", "{}\n"),
-			withFile("node_modules/dep/tsconfig.json", "{}\n"),
-			withFile("third/vendor/x/go.mod", "module x\n"),
-			withFile("a/b/c/d/go.mod", "module d\n"),
-			withFile("services/api/tools/go.mod", "module tools\n"),
+		[]contracttest.Edit{
+			contracttest.Dependabot("gomod directory /services/api", "pip directory /tools/py", "npm directory /web/app", "github-actions directory /"),
+			contracttest.WithFile("docs/site/package.json", "{}\n"),
+			contracttest.WithFile("node_modules/dep/package.json", "{}\n"),
+			contracttest.WithFile("node_modules/dep/tsconfig.json", "{}\n"),
+			contracttest.WithFile("third/vendor/x/go.mod", "module x\n"),
+			contracttest.WithFile("a/b/c/d/go.mod", "module d\n"),
+			contracttest.WithFile("services/api/tools/go.mod", "module tools\n"),
 		})
 	for _, c := range []struct {
 		name          string
-		edits         []fixtureEdit
+		edits         []contracttest.Edit
 		want          []contract.Component
 		componentsKey bool
 	}{
-		{"go at the root", []fixtureEdit{withoutFile("vibe.yaml")}, []contract.Component{{Path: ".", Language: "go"}}, false},
-		{"python", slices.Concat(withoutGo, pyFiles, []fixtureEdit{dependabot("pip directory /", "github-actions directory /")}), []contract.Component{{Path: ".", Language: "python"}}, false},
-		{"typescript", slices.Concat(withoutGo, tsFiles, []fixtureEdit{dependabot("npm directory /", "github-actions directory /")}), []contract.Component{{Path: ".", Language: "typescript"}}, false},
+		{"go at the root", []contracttest.Edit{contracttest.WithoutFile("vibe.yaml")}, []contract.Component{{Path: ".", Language: "go"}}, false},
+		{"python", slices.Concat(withoutGo, pyFiles, []contracttest.Edit{contracttest.Dependabot("pip directory /", "github-actions directory /")}), []contract.Component{{Path: ".", Language: "python"}}, false},
+		{"typescript", slices.Concat(withoutGo, tsFiles, []contracttest.Edit{contracttest.Dependabot("npm directory /", "github-actions directory /")}), []contract.Component{{Path: ".", Language: "typescript"}}, false},
 		{"monorepo", monorepo, []contract.Component{
 			{Path: "services/api", Language: "go"},
 			{Path: "tools/py", Language: "python"},
@@ -96,7 +92,7 @@ func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocycl
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			dir := contractFixture(t, c.edits...)
+			dir := contracttest.Fixture(t, contracttest.Baseline, c.edits...)
 			out, err := runInit(t, dir)
 			if err != nil {
 				t.Fatalf("vibe init: %v\n%s", err, out)
@@ -112,7 +108,7 @@ func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocycl
 				t.Errorf("components key written = %v, want %v:\n%s", got, c.componentsKey, written)
 			}
 
-			repo, err := openFixtureRepo(context.Background(), dir)
+			repo, err := contracttest.OpenRepo(context.Background(), dir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -124,7 +120,7 @@ func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocycl
 				t.Errorf("components = %v, want %v", cfg.Components, c.want)
 			}
 
-			rep, _ := auditJSON(t, dir, "--static")
+			rep := auditJSON(t, dir, "--static")
 			assertRule(t, rep, "V-04", "fail", "entrypoints.verify ", "entrypoints.verify-fast ", "entrypoints.fmt ", "entrypoints.fmt-check ")
 			for _, r := range rep.Rules {
 				if r.ID == "V-04" || r.Result == "pass" || r.Result == "not_applicable" || r.Result == "not_run" {
@@ -157,8 +153,8 @@ func TestInitRefusesAnExistingConfig(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			dir := contractFixture(t, withFile("vibe.yaml", c.content))
-			before := treeHash(t, dir)
+			dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithFile("vibe.yaml", c.content))
+			before := contracttest.TreeHash(t, dir)
 			out, err := runInit(t, dir)
 			if code := ExitCode(err); code != exitError {
 				t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
@@ -168,7 +164,7 @@ func TestInitRefusesAnExistingConfig(t *testing.T) {
 					t.Errorf("output lacks %q:\n%s", want, out)
 				}
 			}
-			if after := treeHash(t, dir); !maps.Equal(before, after) {
+			if after := contracttest.TreeHash(t, dir); !maps.Equal(before, after) {
 				t.Error("the refused init changed the repository")
 			}
 		})
@@ -180,9 +176,9 @@ func TestInitRefusesAnExistingConfig(t *testing.T) {
 // init prints one line per such directory saying so.
 func TestInitSaysWhyANestedManifestIsNoComponent(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t, withoutFile("vibe.yaml"),
-		withFile("tools/go.mod", "module tools\n"),
-		withFile("web/package.json", "{}\n"), withFile("web/tsconfig.json", "{}\n"))
+	dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithoutFile("vibe.yaml"),
+		contracttest.WithFile("tools/go.mod", "module tools\n"),
+		contracttest.WithFile("web/package.json", "{}\n"), contracttest.WithFile("web/tsconfig.json", "{}\n"))
 	out, err := runInit(t, dir)
 	if err != nil {
 		t.Fatalf("vibe init: %v\n%s", err, out)
@@ -206,7 +202,7 @@ func TestInitSaysWhyANestedManifestIsNoComponent(t *testing.T) {
 // returned nil for a missing file).
 func TestInitRaceLostIsAnError(t *testing.T) {
 	t.Parallel()
-	err := createRefused(filepath.Join(t.TempDir(), "vibe.yaml"))
+	err := createRefused(t.TempDir())
 	if code := ExitCode(err); code != exitError {
 		t.Fatalf("exit %d, want %d: %v", code, exitError, err)
 	}
@@ -220,8 +216,8 @@ func TestInitRaceLostIsAnError(t *testing.T) {
 // not read a vibe.yaml without components.
 func TestInitNeedsAComponent(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t, withoutGo...)
-	before := treeHash(t, dir)
+	dir := contracttest.Fixture(t, contracttest.Baseline, withoutGo...)
+	before := contracttest.TreeHash(t, dir)
 	out, err := runInit(t, dir)
 	if code := ExitCode(err); code != exitError {
 		t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
@@ -231,7 +227,7 @@ func TestInitNeedsAComponent(t *testing.T) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}
-	if after := treeHash(t, dir); !maps.Equal(before, after) {
+	if after := contracttest.TreeHash(t, dir); !maps.Equal(before, after) {
 		t.Error("the failed init changed the repository")
 	}
 }
@@ -241,7 +237,7 @@ func TestInitNeedsAComponent(t *testing.T) {
 // the audit detects a root's language only from a single manifest.
 func TestInitDeclaresAnAmbiguousRoot(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t, slices.Concat([]fixtureEdit{withoutFile("vibe.yaml")}, tsFiles)...)
+	dir := contracttest.Fixture(t, contracttest.Baseline, slices.Concat([]contracttest.Edit{contracttest.WithoutFile("vibe.yaml")}, tsFiles)...)
 	if out, err := runInit(t, dir); err != nil {
 		t.Fatalf("vibe init: %v\n%s", err, out)
 	}

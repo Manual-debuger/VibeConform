@@ -58,7 +58,12 @@ linters:
     # module fails. In the default mode, a non-empty allow list fails
     # every import not in it, the standard library too, and a match in
     # both lists fails. The doctor rule covers its tests too, as the
-    # import test it replaces did. The setupskill rule skips tests, as
+    # import test it replaces did; it also allows internal/doctor itself,
+    # which only the external test package doctor_test can import, and
+    # internal/contract/contracttest, the audit's test seam, which builds
+    # the doctor tests' fixtures (spec 0065, ADR 0028). The
+    # contracttest-importers rule below still keeps contracttest out of
+    # doctor's non-test files. The setupskill rule skips tests, as
     # its import test did: the external test package imports
     # internal/setupskill itself.
     depguard:
@@ -83,6 +88,8 @@ linters:
             - "**/internal/doctor/**"
           allow:
             - github.com/Manual-debuger/VibeConform/internal/contract$
+            - github.com/Manual-debuger/VibeConform/internal/doctor$
+            - github.com/Manual-debuger/VibeConform/internal/contract/contracttest$
           deny:
             - pkg: github.com/Manual-debuger/VibeConform
               desc: vibe doctor reuses the audit's readers and imports no package of this module except internal/contract (spec 0059)
@@ -96,6 +103,29 @@ linters:
           deny:
             - pkg: github.com/Manual-debuger/VibeConform
               desc: the setup skill imports no package of this module except internal/guard
+        # internal/contract/contracttest is the contract audit's test seam
+        # (ADR 0028, spec 0065). Test files import it; no other file does,
+        # so it never reaches a binary. It imports no package of this
+        # module except internal/contract, in the same lax mode as the
+        # doctor rule.
+        contracttest-importers:
+          files:
+            - "$all"
+            - "!$test"
+            - "!**/internal/contract/contracttest/**"
+          deny:
+            - pkg: github.com/Manual-debuger/VibeConform/internal/contract/contracttest$
+              desc: contracttest is a test helper; only _test.go files import it (ADR 0028)
+        contracttest:
+          list-mode: lax
+          files:
+            - "**/internal/contract/contracttest/**"
+            - "!$test"
+          allow:
+            - github.com/Manual-debuger/VibeConform/internal/contract$
+          deny:
+            - pkg: github.com/Manual-debuger/VibeConform
+              desc: contracttest imports no package of this module except internal/contract
     revive:
       rules:
         - name: exported

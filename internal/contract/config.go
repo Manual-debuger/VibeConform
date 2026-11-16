@@ -101,6 +101,11 @@ var RequiredEntrypoints = []string{EntrypointVerify, EntrypointVerifyFast, Entry
 
 var entrypointNames = append(slices.Clone(RequiredEntrypoints), EntrypointSetup)
 
+// EntrypointOrder returns every entrypoint name in the order V-04 and
+// vibe doctor check them: the required ones, then setup. It returns a
+// copy.
+func EntrypointOrder() []string { return slices.Clone(entrypointNames) }
+
 // Entrypoint is one declared entrypoint.
 type Entrypoint struct {
 	// Declared is true when the configuration has the key, even with an

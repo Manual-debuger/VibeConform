@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -9,10 +8,6 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/doctor"
 )
-
-// doctorEnv is a test seam: the CLI suite must assert on this code, not on
-// what the machine running it has installed.
-var doctorEnv = doctor.System
 
 func newDoctorCmd(seams contractSeams) *cobra.Command {
 	var repoRoot string
@@ -36,24 +31,22 @@ func newDoctorCmd(seams contractSeams) *cobra.Command {
 	return cmd
 }
 
-// runDoctor runs every check in a fixed order and prints the report. Only
-// a FAIL makes it return an error, which exits 1: the workflow cannot run
-// here. A configuration the audit would not read stops the checks that
-// need it, with the audit's own message.
+// runDoctor loads the configuration, has doctor.Run check the machine,
+// and prints the report. A load error gets the audit's own message. Only
+// a FAIL makes it return an error, which exits 1: the workflow cannot
+// run here.
 func runDoctor(cmd *cobra.Command, repoRoot string, seams contractSeams) error {
 	ctx := commandContext(cmd)
-	env := doctorEnv()
-	var report doctor.Report
-
-	report.Add(doctor.Git(ctx, env, repoRoot))
-	if cfg, repo, err := readDoctorConfig(ctx, repoRoot, seams); err != nil {
-		report.Add(doctor.Result{Status: doctor.Fail, Name: configFileName, Detail: err.Error()})
-	} else {
-		report.Add(doctor.Result{Status: doctor.Pass, Name: configFileName,
-			Detail: "version 2, contract " + cfg.Contract.Declared})
-		report.Add(doctor.Entrypoints(env, repoRoot, cfg.Entrypoints)...)
-		report.Add(hookChecks(env, repo)...)
+	env := doctor.System
+	if seams.doctorEnv != nil {
+		env = seams.doctorEnv
 	}
+	var loaded doctor.Loaded
+	loaded.Config, loaded.Repo, loaded.Err = contract.Load(ctx, repoRoot, "", seams.openRepo)
+	if loaded.Err != nil {
+		loaded.Err = configLoadError(loaded.Err)
+	}
+	report := doctor.Run(ctx, env(), repoRoot, loaded)
 
 	if err := report.Write(cmd.OutOrStdout()); err != nil {
 		return err
@@ -66,41 +59,4 @@ func runDoctor(cmd *cobra.Command, repoRoot string, seams contractSeams) error {
 		return fmt.Errorf("doctor: %d %s failed", n, noun)
 	}
 	return nil
-}
-
-// readDoctorConfig reads and parses vibe.yaml as vibe audit does, with
-// the audit's errors.
-func readDoctorConfig(ctx context.Context, repoRoot string, seams contractSeams) (*contract.Config, *contract.Repo, error) {
-	label, data, err := readV2Config(repoRoot, "")
-	if err != nil {
-		return nil, nil, err
-	}
-	repo, err := seams.open(ctx, repoRoot)
-	if err != nil {
-		return nil, nil, err
-	}
-	cfg, err := contract.Parse(label, data, repo)
-	if err != nil {
-		return nil, nil, err
-	}
-	return cfg, repo, nil
-}
-
-// hookChecks checks what the hooks of the tracked .claude/settings.json
-// need: bash, and vibe-guard when a PreToolUse hook runs it. A file that
-// is not tracked has no hooks; one that does not parse is A-01's to
-// report.
-func hookChecks(env doctor.Env, repo *contract.Repo) []doctor.Result {
-	var hooks contract.ClaudeHooks
-	if repo.HasFile(contract.ClaudeSettingsFile) {
-		data, err := repo.ReadFile(contract.ClaudeSettingsFile)
-		if err == nil {
-			hooks, err = contract.ReadClaudeHooks(data)
-		}
-		if err != nil {
-			return []doctor.Result{{Status: doctor.Unverified, Name: "hooks",
-				Detail: contract.ClaudeSettingsFile + ": " + err.Error() + "; vibe audit reports it"}}
-		}
-	}
-	return append([]doctor.Result{doctor.Bash(env, hooks)}, doctor.VibeGuard(env, hooks)...)
 }
