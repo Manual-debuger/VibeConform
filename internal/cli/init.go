@@ -78,7 +78,7 @@ func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) err
 	if err := refuseExisting(repoRoot); err != nil {
 		return err
 	}
-	repo, err := seams.open(commandContext(cmd), repoRoot)
+	repo, err := seams.openRepo.Open(commandContext(cmd), repoRoot)
 	if err != nil {
 		return fmt.Errorf("init: %w", err)
 	}

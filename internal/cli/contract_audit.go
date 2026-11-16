@@ -54,15 +54,6 @@ type contractSeams struct {
 	doctorEnv func() doctor.Env
 }
 
-// open lists the tracked files of the repository at root, through the
-// openRepo seam when a test set it.
-func (s contractSeams) open(ctx context.Context, root string) (*contract.Repo, error) {
-	if s.openRepo != nil {
-		return s.openRepo(ctx, root)
-	}
-	return contract.OpenRepo(ctx, root)
-}
-
 // commandContext is cmd's context, or the background one when cmd runs
 // without one.
 func commandContext(cmd *cobra.Command) context.Context {
