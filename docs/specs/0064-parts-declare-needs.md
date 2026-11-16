@@ -1,6 +1,6 @@
 # Spec 0064: Execution and probe parts declare what they need
 
-Status: proposed (2026-11-16). Issue #159, from the design review #167.
+Status: accepted (2026-11-16). Issue #159, from the design review #167.
 Amends spec 0053 ("Order"). No contract change: the contract stays
 1.2.0, and no rule's result, finding or fix changes.
 
