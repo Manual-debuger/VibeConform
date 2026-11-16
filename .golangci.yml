@@ -58,7 +58,9 @@ linters:
     # module fails. In the default mode, a non-empty allow list fails
     # every import not in it, the standard library too, and a match in
     # both lists fails. The doctor rule covers its tests too, as the
-    # import test it replaces did. The setupskill rule skips tests, as
+    # import test it replaces did; it also allows internal/doctor itself,
+    # which only the external test package doctor_test can import (spec
+    # 0065). The setupskill rule skips tests, as
     # its import test did: the external test package imports
     # internal/setupskill itself.
     depguard:
@@ -83,6 +85,7 @@ linters:
             - "**/internal/doctor/**"
           allow:
             - github.com/Manual-debuger/VibeConform/internal/contract$
+            - github.com/Manual-debuger/VibeConform/internal/doctor$
           deny:
             - pkg: github.com/Manual-debuger/VibeConform
               desc: vibe doctor reuses the audit's readers and imports no package of this module except internal/contract (spec 0059)
