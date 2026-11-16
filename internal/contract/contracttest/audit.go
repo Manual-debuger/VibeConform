@@ -76,10 +76,6 @@ func StandIn(rules []contract.Rule, result contract.Result, ids ...string) []con
 	return out
 }
 
-// MustRules lists the IDs of every MUST rule except those named, in
-// registry order.
-func MustRules(except ...string) []string { return RuleIDs(contract.Must, except...) }
-
 // RuleIDs lists the IDs of the rules of a level ("" for every level)
 // except those named, in registry order.
 func RuleIDs(level contract.Level, except ...string) []string {

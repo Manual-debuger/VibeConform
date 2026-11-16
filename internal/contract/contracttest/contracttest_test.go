@@ -225,17 +225,16 @@ func TestStandInLeavesItsInputUntouched(t *testing.T) {
 	}
 }
 
-// RuleIDs lists a level's rules in registry order, without those named;
-// MustRules is RuleIDs of the MUST level.
+// RuleIDs lists a level's rules in registry order, without those named.
 func TestRuleIDs(t *testing.T) {
 	t.Parallel()
 	all := contracttest.RuleIDs("")
 	if len(all) != len(contract.Rules()) || all[0] != contract.Rules()[0].ID {
 		t.Errorf(`RuleIDs("") = %q, want every rule in registry order`, all)
 	}
-	must := contracttest.MustRules("V-04")
+	must := contracttest.RuleIDs(contract.Must, "V-04")
 	if slices.Contains(must, "V-04") || !slices.Contains(must, "V-01") || slices.Contains(must, "R-02") {
-		t.Errorf("MustRules(V-04) = %q, want the MUST rules but V-04", must)
+		t.Errorf("RuleIDs(MUST, V-04) = %q, want the MUST rules but V-04", must)
 	}
 	if got := contracttest.RuleIDs(contract.Should, "R-02"); slices.Contains(got, "R-02") || !slices.Contains(got, "R-03") {
 		t.Errorf("RuleIDs(SHOULD, R-02) = %q, want the SHOULD rules but R-02", got)
