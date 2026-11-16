@@ -1,13 +1,14 @@
 package contract
 
 import (
+	"fmt"
 	"path"
 	"slices"
 	"strings"
 )
 
-// languageFacts is the record of one component language: everything vibe
-// knows about it (spec 0066, "One record per language"). Each language's
+// languageFacts is the language record of one component language:
+// everything vibe knows about it (spec 0066, "One record per language"). Each language's
 // record is in a source file of its own, with its samples and its
 // dependency reader, and languageRegistry lists the records.
 type languageFacts struct {
@@ -46,10 +47,10 @@ type languageFacts struct {
 }
 
 // sample is the language's planted sample of a defect kind, and whether
-// it has one.
+// it has one. A record without a complexity layout has no V-06 sample.
 func (l languageFacts) sample(kind defectKind) (defectSample, bool) {
 	if kind == defectComplexity {
-		return complexitySample(l.complexity), true
+		return complexitySample(l.complexity), l.complexity != complexityLayout{}
 	}
 	s, ok := l.samples[kind]
 	return s, ok
@@ -80,6 +81,18 @@ func lookupLanguage(id string) (languageFacts, bool) {
 	return languageRegistry[i], true
 }
 
+// language returns the record of the component's language. Parse admits
+// only the identifiers of languageRegistry, and DetectComponents writes
+// only those, so a component without a record is a bug in vibe: language
+// panics rather than hand back an empty record.
+func (c Component) language() languageFacts {
+	l, ok := lookupLanguage(c.Language)
+	if !ok {
+		panic(fmt.Sprintf("contract: component %s has the language %q, which has no record", c.Path, c.Language))
+	}
+	return l
+}
+
 // languageIDs are the valid language values, in language order.
 func languageIDs() []string {
 	ids := make([]string, len(languageRegistry))
@@ -100,15 +113,14 @@ func allLockfiles() []lockfile {
 	return all
 }
 
-// lockfileNames names a language's lockfiles for a finding, such as
+// lockfileNames names the language's lockfiles for a finding, such as
 // "uv.lock or poetry.lock".
-func lockfileNames(language string) string {
-	l, _ := lookupLanguage(language)
+func (l languageFacts) lockfileNames() string {
 	var names []string
 	for _, lf := range l.lockfiles {
 		names = append(names, lf.file)
 	}
-	return orList(names)
+	return joinWords(names, " or ")
 }
 
 // lockfileCheckText is D-01's sentence for every lockfile's check, in
@@ -131,9 +143,8 @@ func lockfileCheckText() string {
 }
 
 // isTestFile reports whether a file name marks its directory as holding
-// tests of a language.
-func isTestFile(language, name string) bool {
-	l, _ := lookupLanguage(language)
+// tests of the language.
+func (l languageFacts) isTestFile(name string) bool {
 	for _, pattern := range l.testFiles {
 		if ok, _ := path.Match(pattern, name); ok {
 			return true
@@ -142,17 +153,8 @@ func isTestFile(language, name string) bool {
 	return false
 }
 
-// testFilePattern names a language's test files for a fix, such as "a
+// testFilePattern names the language's test files for a fix, such as "a
 // test_*.py or *_test.py file".
-func testFilePattern(language string) string {
-	l, _ := lookupLanguage(language)
-	return "a " + orList(l.testFiles) + " file"
-}
-
-// orList joins items as "a", "a or b" or "a, b or c".
-func orList(items []string) string {
-	if len(items) < 2 {
-		return strings.Join(items, "")
-	}
-	return strings.Join(items[:len(items)-1], ", ") + " or " + items[len(items)-1]
+func (l languageFacts) testFilePattern() string {
+	return "a " + joinWords(l.testFiles, " or ") + " file"
 }

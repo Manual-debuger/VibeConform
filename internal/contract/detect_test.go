@@ -67,14 +67,14 @@ func TestDetectComponentsInitLayouts(t *testing.T) {
 			"services/api/tools/go.mod",
 		}, want: contract.Detection{
 			Components: detectedComponents(detected("services/api", contract.LanguageGo), detected("tools/py", contract.LanguagePython), detected("web/app", contract.LanguageTypeScript)),
-			Nested:     []contract.NestedManifest{{Dir: "services/api/tools", In: detected("services/api", contract.LanguageGo)}},
+			Nested:     []contract.NestedManifest{{Dir: "services/api/tools", Component: detected("services/api", contract.LanguageGo)}},
 		}},
 		{name: "nested manifests", files: []string{"go.mod", "tools/go.mod", "web/package.json", "web/tsconfig.json"},
 			want: contract.Detection{
 				Components: detectedComponents(detected(".", contract.LanguageGo)),
 				Nested: []contract.NestedManifest{
-					{Dir: "tools", In: detected(".", contract.LanguageGo)},
-					{Dir: "web", In: detected(".", contract.LanguageGo)},
+					{Dir: "tools", Component: detected(".", contract.LanguageGo)},
+					{Dir: "web", Component: detected(".", contract.LanguageGo)},
 				},
 				AuditDetectsSame: true,
 			}},
@@ -112,7 +112,7 @@ func TestDetectComponentsDoNotNest(t *testing.T) {
 		{name: "two levels inside", files: []string{"svc/go.mod", "svc/a/b/pyproject.toml"},
 			want: contract.Detection{
 				Components: detectedComponents(detected("svc", contract.LanguageGo)),
-				Nested:     []contract.NestedManifest{{Dir: "svc/a/b", In: detected("svc", contract.LanguageGo)}},
+				Nested:     []contract.NestedManifest{{Dir: "svc/a/b", Component: detected("svc", contract.LanguageGo)}},
 			}},
 		{name: "siblings with a shared prefix", files: []string{"svc/go.mod", "svc-web/package.json", "svc-web/tsconfig.json"},
 			want: contract.Detection{Components: detectedComponents(detected("svc", contract.LanguageGo), detected("svc-web", contract.LanguageTypeScript))}},
@@ -151,7 +151,7 @@ func TestDetectComponentsAuditDetectsSame(t *testing.T) {
 		{name: "manifests below the root do not count", files: []string{"pyproject.toml", "tools/go.mod"},
 			want: contract.Detection{
 				Components:       detectedComponents(detected(".", contract.LanguagePython)),
-				Nested:           []contract.NestedManifest{{Dir: "tools", In: detected(".", contract.LanguagePython)}},
+				Nested:           []contract.NestedManifest{{Dir: "tools", Component: detected(".", contract.LanguagePython)}},
 				AuditDetectsSame: true,
 			}},
 	})

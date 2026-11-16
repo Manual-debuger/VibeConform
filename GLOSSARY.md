@@ -102,6 +102,12 @@ path and language. A single-language repository is one component at its
 root.
 _Avoid_: package, workspace, sub-project
 
+**Language record**:
+Everything `vibe` knows about one component language, in one place: its
+identifier, manifest, lockfiles, test files, planted defects and
+update-bot names. Each language the contract supports has exactly one.
+_Avoid_: language table, language config, language plugin
+
 **Setup skill**:
 The agent skill that gives an adopting repository the properties the
 contract requires, and runs the audit until it passes. It is

@@ -400,10 +400,12 @@ phrase, which is the one allowed wording change.
   has the layouts of the CLI's `vibe init` cases before this spec,
   with the components `vibe init` wrote for each. The manifests that
   are not components (`node_modules`, `vendor`, below the depth,
-  nested, and a `package.json` without `tsconfig.json`) moved out of
-  the CLI's monorepo case into these contract cases. The CLI's monorepo
-  case keeps its three components and still checks the file and the
-  output end to end.
+  nested, and a `package.json` without `tsconfig.json`) are contract
+  cases there. The CLI's monorepo case keeps them too (the code review
+  put back the six files that 0066-4 had taken out), so the end-to-end
+  run still has them. That case checks the file `vibe init` writes and
+  that the audit reads it. It did not check the output lines until the
+  code review added `TestInitPrintsWhatItWrote` (see "Code review").
 - **Explain goldens.** The goldens of 0066-1 are in
   `internal/contract/testdata/explain/`, one per rule. They hold the
   contract's text without wrapping, not the CLI's wrapped `--explain`
@@ -437,7 +439,9 @@ phrase, which is the one allowed wording change.
   ```
 
   0066-5 repeated the run on the integration branch and got the same
-  failure line. The record was restored after each run.
+  failure line. The record was restored after each run. After the
+  code review folded the uniqueness test into this one, the same run
+  fails on the same message, now at `languages_test.go:80`.
 - **Complexity suppressions.** The `gocognit` and `gocyclo`
   suppressions of `runInitConfig` and the `gocognit` suppression of the
   CLI's `detectComponents` are gone with that code. `detect.go` and the
@@ -485,3 +489,40 @@ phrase, which is the one allowed wording change.
   that detection is the contract's, and when the root's component gets
   no `components:` key. The glossary's "Component" entry does not
   describe detection, so it did not change.
+- **Code review.** The review of the integration branch found these,
+  and all are fixed:
+  - The CLI's monorepo case has the six manifests that are not
+    components again (see "Init cases for detection").
+  - `TestInitPrintsWhatItWrote` pins `vibe init`'s output byte for
+    byte, for a Go root and the monorepo: `wrote vibe.yaml`, each
+    `component X (lang)` line, the `skipped` line and the `next:` line.
+  - `vibe init` had written its output in one write and prefixed every
+    write error with `init: `. It writes one line at a time again, as
+    on `main`: the error of the last line, `next:`, is returned without
+    the prefix. `TestInitOutputErrors` is the regression test.
+  - Both tests above, and the full unknown-language error of
+    `TestContractConfigComponents` ("language unknown",
+    `vibe.yaml: components[0].language: "rust" is not one of go,
+    python, typescript`), were run on `main`'s code in a temporary
+    worktree, and passed there.
+  - The uniqueness test is part of `TestLanguageRecordsAreComplete`,
+    so there is one internal test. It also checks that a record that
+    fills no fact has no sample.
+  - `languageFacts.sample` gave a V-06 sample for an empty record. It
+    now gives one only with a complexity layout, and `defectFor` gives
+    "this vibe has no ... sample" for an identifier without a record,
+    as on `main`.
+  - Every other lookup of a component's language goes through
+    `Component.language`, which panics for an identifier without a
+    record instead of returning an empty one. `Parse` admits only the
+    registry's identifiers, so this does not change what a valid
+    configuration does. `lockfileNames`, `isTestFile` and
+    `testFilePattern` are methods of the record.
+  - One helper, `joinWords`, takes the separator before the last word
+    (`" and "`, `" or "` or `", or "`), instead of `orList`, the old
+    `joinWords` and the join in `ManifestPhrase`. Every text keeps its
+    bytes.
+  - `d01Check` is `d01CheckText`, and `NestedManifest.In` is
+    `NestedManifest.Component`.
+  - `GLOSSARY.md` has a "Language record" entry, and the doc comment of
+    `languageFacts` calls it the language record.

@@ -553,10 +553,12 @@ func describe(n *yaml.Node) string {
 	}
 }
 
-// joinWords joins words as "a, b and c" (or "or").
-func joinWords(words []string, conj string) string {
+// joinWords joins words with ", " and puts last before the final word:
+// " and " gives "a, b and c", " or " gives "a or b", and ", or " gives
+// "a, b, or c". One word is itself, and none is "".
+func joinWords(words []string, last string) string {
 	if len(words) <= 1 {
 		return strings.Join(words, "")
 	}
-	return strings.Join(words[:len(words)-1], ", ") + " " + conj + " " + words[len(words)-1]
+	return strings.Join(words[:len(words)-1], ", ") + last + words[len(words)-1]
 }

@@ -174,12 +174,11 @@ func dependabot(env *Env) *updateBot {
 		return b
 	}
 	for i, c := range env.Config.Components {
-		lang, _ := lookupLanguage(c.Language)
-		ecosystems := lang.dependabotEcosystems
+		ecosystems := c.language().dependabotEcosystems
 		if !slices.ContainsFunc(updates, func(u dependabotUpdate) bool { return u.covers(ecosystems, c.Path) }) {
 			b.Uncovered[i] = Finding{
 				File:    file,
-				Message: fmt.Sprintf("no updates entry for %s covers component %s", joinWords(ecosystems, "or"), c.Path),
+				Message: fmt.Sprintf("no updates entry for %s covers component %s", joinWords(ecosystems, " or "), c.Path),
 				Fix: fmt.Sprintf("add an updates entry with package-ecosystem: %s and directory: %s",
 					ecosystems[0], dependabotDir(c.Path)),
 			}
@@ -411,12 +410,11 @@ func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) { //nolint:gocogn
 			}
 		}
 		for i, c := range env.Config.Components {
-			lang, _ := lookupLanguage(c.Language)
-			managers := lang.renovateManagers
+			managers := c.language().renovateManagers
 			if !slices.ContainsFunc(managers, func(m string) bool { return slices.Contains(enabled, m) }) {
 				b.Uncovered[i] = Finding{
 					File:    b.File,
-					Message: fmt.Sprintf("enabledManagers leaves out %s, which component %s needs", joinWords(managers, "or"), c.Path),
+					Message: fmt.Sprintf("enabledManagers leaves out %s, which component %s needs", joinWords(managers, " or "), c.Path),
 					Fix:     fmt.Sprintf("add %s to enabledManagers", managers[0]),
 				}
 			}

@@ -184,5 +184,5 @@ func quoteCommands(cmds []string) string {
 	for i, c := range cmds {
 		quoted[i] = "`" + strings.TrimSpace(c) + "`"
 	}
-	return joinWords(quoted, "and")
+	return joinWords(quoted, " and ")
 }

@@ -64,8 +64,8 @@ func checkC03(env *Env, _ Needed) PartResult {
 			}
 			if len(writes) > 0 {
 				findings = append(findings, Finding{File: wf.File,
-					Message: fmt.Sprintf("line %d: top-level permissions grant %s", p.Line, joinWords(writes, "and")),
-					Fix:     "move " + joinWords(writes, "and") + " into the permissions of the job that needs it; keep top-level scopes read or none"})
+					Message: fmt.Sprintf("line %d: top-level permissions grant %s", p.Line, joinWords(writes, " and ")),
+					Fix:     "move " + joinWords(writes, " and ") + " into the permissions of the job that needs it; keep top-level scopes read or none"})
 			}
 		default:
 			findings = append(findings, Finding{File: wf.File,
@@ -139,7 +139,7 @@ func quoteCommandList(cmds []Command) string {
 	for i, c := range cmds {
 		q[i] = "`" + c.String() + "`"
 	}
-	return joinWords(q, "and")
+	return joinWords(q, " and ")
 }
 
 // pinnedRef is a uses: reference pinned to a full commit SHA.
@@ -316,13 +316,13 @@ func checkC05(env *Env, _ Needed) PartResult { //nolint:gocognit,gocyclo // base
 			continue
 		}
 		msg := fmt.Sprintf("the verify command `%s` runs on no %s runner (called in %s)",
-			c, joinWords(lacking, "or"), strings.Join(where, ", "))
+			c, joinWords(lacking, " or "), strings.Join(where, ", "))
 		if len(unknown) > 0 {
 			msg += "; runners of unknown platform: " + strings.Join(unknown, "; ")
 		}
 		findings = append(findings, Finding{File: file, Message: msg,
 			Fix: fmt.Sprintf("run `%s` on %s too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}",
-				c, joinWords(lacking, "and"))})
+				c, joinWords(lacking, " and "))})
 	}
 	return Merge(res, failIf(findings))
 }

@@ -15,7 +15,7 @@ var errNoManifest = errors.New("no manifest")
 // dependencies, and names the manifest. The language record's reader
 // decides what counts as a dependency.
 func hasDependencies(env *Env, comp Component) (manifest string, deps bool, err error) {
-	lang, _ := lookupLanguage(comp.Language)
+	lang := comp.language()
 	manifest = joinRel(comp.Path, lang.manifest)
 	data, err := env.ReadFile(manifest)
 	if errors.Is(err, fs.ErrNotExist) {
