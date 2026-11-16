@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
@@ -67,6 +68,19 @@ func fixtureFrom(t *testing.T, src string, edits ...fixtureEdit) string {
 func fixtureGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	contracttest.Git(t, dir, args...)
+}
+
+// dependabot is a .github/dependabot.yml with the given updates entries,
+// each "ecosystem directory-key directory-value". vibe init's tests use
+// it; the D-02 tests in internal/contract have their own.
+func dependabot(entries ...string) fixtureEdit {
+	var b strings.Builder
+	b.WriteString("version: 2\nupdates:\n")
+	for _, e := range entries {
+		f := strings.SplitN(e, " ", 3)
+		b.WriteString("  - package-ecosystem: " + f[0] + "\n    " + f[1] + ": " + f[2] + "\n    schedule:\n      interval: weekly\n")
+	}
+	return withFile(".github/dependabot.yml", b.String())
 }
 
 // openFixtureRepo is the audit's repository seam in tests: a listed
