@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -48,7 +46,7 @@ type contractSeams struct {
 	// openRepo lists the audited repository's tracked files; nil means
 	// contract.OpenRepo. Tests hand in the file list of a fixture they
 	// built, so that a fixture needs no git.
-	openRepo func(ctx context.Context, root string) (*contract.Repo, error)
+	openRepo contract.RepoOpener
 }
 
 // open lists the tracked files of the repository at root, through the
@@ -71,67 +69,49 @@ func commandContext(cmd *cobra.Command) context.Context {
 
 // configFileName is the configuration vibe audit reads at the repository
 // root unless --config names another file.
-const configFileName = "vibe.yaml"
+const configFileName = contract.ConfigFile
 
-// dispatchAudit reads the configuration and runs the contract audit.
+// dispatchAudit loads the configuration and runs the contract audit.
 func dispatchAudit(cmd *cobra.Command, f auditFlags) error {
 	if cmd.Flags().Changed("explain") {
 		return runExplain(cmd, f)
 	}
-	label, data, err := readV2Config(f.repoRoot, f.config)
-	if err != nil {
-		return err
-	}
-	return runContractAudit(cmd, f, label, data)
+	return runContractAudit(cmd, f)
 }
 
-// readV2Config reads the configuration at config, or vibe.yaml at the
-// repository root when config is empty, and returns its label and
-// content when it is version 2. A version 1 file (a top-level standard
-// key) belongs to the template-sync system, which vibe no longer has: its
-// error is the migration pointer. A missing vibe.yaml says to run vibe
-// init.
-func readV2Config(repoRoot, config string) (label string, data []byte, err error) {
-	path, label := config, config
-	if path == "" {
-		path, label = filepath.Join(repoRoot, configFileName), configFileName
+// configLoadError adds what the user should do to contract.Load's two
+// sentinel errors: write a vibe.yaml, or leave the template-sync system.
+// vibe audit and vibe doctor share it, so they say the same.
+func configLoadError(err error) error {
+	switch {
+	case errors.Is(err, contract.ErrNoConfig):
+		return fmt.Errorf("%w: run `vibe init` to write one", err)
+	case errors.Is(err, contract.ErrConfigV1):
+		return fmt.Errorf("%w; %s", err, migrationPointer())
 	}
-	data, err = os.ReadFile(path) // #nosec G304 -- operator-supplied CLI flag
-	if err != nil {
-		if config == "" && errors.Is(err, fs.ErrNotExist) {
-			return "", nil, fmt.Errorf("no %s in %s: run `vibe init` to write one", configFileName, repoRoot)
-		}
-		return "", nil, fmt.Errorf("cannot read the configuration: %w", err)
-	}
-	schema, err := contract.DetectSchema(label, data)
-	if err != nil {
-		return "", nil, err
-	}
-	if schema == contract.SchemaV1 {
-		return "", nil, fmt.Errorf("%s is version 1 (a top-level standard key), which this vibe no longer reads; %s",
-			label, migrationPointer())
-	}
-	return label, data, nil
+	return err
 }
 
-// runContractAudit runs the contract audit on a version 2 configuration,
-// prints the report and returns the error that sets the exit code. An
-// invalid configuration prints no report.
-func runContractAudit(cmd *cobra.Command, f auditFlags, label string, data []byte) error {
+// runContractAudit loads the configuration, runs the contract audit,
+// prints the report and returns the error that sets the exit code. A
+// configuration it cannot load prints no report.
+func runContractAudit(cmd *cobra.Command, f auditFlags) error {
 	if f.probeTimeout <= 0 {
+		// A configuration that is missing or not version 2 is reported
+		// before the flag, and one that does not parse after it, as
+		// before contract.Load existed.
+		if _, _, err := contract.ReadConfig(f.repoRoot, f.config); err != nil {
+			return configLoadError(err)
+		}
 		return fmt.Errorf("--probe-timeout must be a positive duration, such as 30m; got %s", f.probeTimeout)
 	}
 	// An interrupt ends the runs in the probe copy, and the copy is still
 	// deleted.
 	ctx, stop := signal.NotifyContext(commandContext(cmd), os.Interrupt)
 	defer stop()
-	repo, err := f.seams.open(ctx, f.repoRoot)
+	cfg, repo, err := contract.Load(ctx, f.repoRoot, f.config, f.seams.openRepo)
 	if err != nil {
-		return err
-	}
-	cfg, err := contract.Parse(label, data, repo)
-	if err != nil {
-		return err
+		return configLoadError(err)
 	}
 
 	probe := contract.ProbeOptions{

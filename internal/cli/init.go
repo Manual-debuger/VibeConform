@@ -75,7 +75,7 @@ func runInitSkill(cmd *cobra.Command, repoRoot string) error {
 // it never writes a file vibe audit cannot read.
 func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) error { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	file := filepath.Join(repoRoot, configFileName)
-	if err := refuseExisting(file); err != nil {
+	if err := refuseExisting(repoRoot); err != nil {
 		return err
 	}
 	repo, err := seams.open(commandContext(cmd), repoRoot)
@@ -108,7 +108,7 @@ func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) err
 	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) // #nosec G302 G304 -- vibe.yaml at the operator's repository root
 	if err != nil {
 		if errors.Is(err, fs.ErrExist) {
-			return createRefused(file)
+			return createRefused(repoRoot)
 		}
 		return fmt.Errorf("init: %w", err)
 	}
@@ -139,28 +139,29 @@ func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) err
 	return err
 }
 
-// refuseExisting returns an error when file exists: init never replaces a
-// configuration, and says which kind it found.
-func refuseExisting(file string) error {
-	data, err := os.ReadFile(file) // #nosec G304 -- vibe.yaml at the operator's repository root
+// refuseExisting returns an error when repoRoot has a vibe.yaml: init
+// never replaces a configuration, and says which kind it found. It reads
+// the file with the audit's own read-and-detect step.
+func refuseExisting(repoRoot string) error {
+	_, _, err := contract.ReadConfig(repoRoot, "")
+	var readErr *fs.PathError
 	switch {
-	case errors.Is(err, fs.ErrNotExist):
+	case errors.Is(err, contract.ErrNoConfig):
 		return nil
-	case err != nil:
-		return fmt.Errorf("init: %s exists and cannot be read (%w); vibe init does not overwrite it", configFileName, err)
-	}
-	if schema, err := contract.DetectSchema(configFileName, data); err == nil && schema == contract.SchemaV1 {
+	case errors.Is(err, contract.ErrConfigV1):
 		return fmt.Errorf("init: %s exists and is version 1 (a top-level standard key); vibe init does not overwrite it. %s",
 			configFileName, migrationPointer())
+	case errors.As(err, &readErr):
+		return fmt.Errorf("init: %s exists and cannot be read (%w); vibe init does not overwrite it", configFileName, readErr)
 	}
 	return fmt.Errorf("init: %s exists; vibe init does not overwrite it. Edit it, or remove it and run vibe init again", configFileName)
 }
 
-// createRefused is the error when the exclusive create of file found one.
-// It is never nil: a file that is gone again by the time init reads it
-// still means init wrote nothing.
-func createRefused(file string) error {
-	if err := refuseExisting(file); err != nil {
+// createRefused is the error when the exclusive create of repoRoot's
+// vibe.yaml found one. It is never nil: a file that is gone again by the
+// time init reads it still means init wrote nothing.
+func createRefused(repoRoot string) error {
+	if err := refuseExisting(repoRoot); err != nil {
 		return err
 	}
 	return fmt.Errorf("init: %s appeared while vibe init ran and is gone again; nothing was written. Run vibe init again", configFileName)

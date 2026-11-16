@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -46,8 +45,8 @@ func runDoctor(cmd *cobra.Command, repoRoot string, seams contractSeams) error {
 	var report doctor.Report
 
 	report.Add(doctor.Git(ctx, env, repoRoot))
-	if cfg, repo, err := readDoctorConfig(ctx, repoRoot, seams); err != nil {
-		report.Add(doctor.Result{Status: doctor.Fail, Name: configFileName, Detail: err.Error()})
+	if cfg, repo, err := contract.Load(ctx, repoRoot, "", seams.openRepo); err != nil {
+		report.Add(doctor.Result{Status: doctor.Fail, Name: configFileName, Detail: configLoadError(err).Error()})
 	} else {
 		report.Add(doctor.Result{Status: doctor.Pass, Name: configFileName,
 			Detail: "version 2, contract " + cfg.Contract.Declared})
@@ -66,24 +65,6 @@ func runDoctor(cmd *cobra.Command, repoRoot string, seams contractSeams) error {
 		return fmt.Errorf("doctor: %d %s failed", n, noun)
 	}
 	return nil
-}
-
-// readDoctorConfig reads and parses vibe.yaml as vibe audit does, with
-// the audit's errors.
-func readDoctorConfig(ctx context.Context, repoRoot string, seams contractSeams) (*contract.Config, *contract.Repo, error) {
-	label, data, err := readV2Config(repoRoot, "")
-	if err != nil {
-		return nil, nil, err
-	}
-	repo, err := seams.open(ctx, repoRoot)
-	if err != nil {
-		return nil, nil, err
-	}
-	cfg, err := contract.Parse(label, data, repo)
-	if err != nil {
-		return nil, nil, err
-	}
-	return cfg, repo, nil
 }
 
 // hookChecks checks what the hooks of the tracked .claude/settings.json
