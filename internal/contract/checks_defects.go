@@ -166,7 +166,7 @@ func noTests(env *Env, comp Component, fail bool) PartResult {
 	msg := errNoTests{comp.Path}.Error()
 	if fail {
 		return Fail(Finding{File: env.Config.File, Message: msg,
-			Fix: "add a test file to component " + comp.Path + " (" + testFilePattern(comp.Language) + "), so that verify can be shown to run its tests"})
+			Fix: "add a test file to component " + comp.Path + " (" + comp.language().testFilePattern() + "), so that verify can be shown to run its tests"})
 	}
 	return Undecided(Finding{Message: "cannot decide: " + msg + ", so there is nowhere to plant a defect"})
 }

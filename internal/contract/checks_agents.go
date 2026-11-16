@@ -122,13 +122,13 @@ func checkA01(env *Env, _ Needed) PartResult {
 	if len(unguarded) == 0 {
 		return Pass()
 	}
-	fix := "add " + joinWords(unguarded, "and") + " to the matcher of the hook that runs the guard"
+	fix := "add " + joinWords(unguarded, " and ") + " to the matcher of the hook that runs the guard"
 	if len(s.commandEntries(eventPreToolUse)) == 0 {
 		fix = "add a PreToolUse hook with matcher " + strings.Join(guardedTools, "|") + " that runs the guard"
 	}
 	return Fail(Finding{
 		File:    claudeSettingsFile,
-		Message: "no PreToolUse command hook matches " + joinWords(unguarded, "and"),
+		Message: "no PreToolUse command hook matches " + joinWords(unguarded, " and "),
 		Fix:     fix,
 	})
 }

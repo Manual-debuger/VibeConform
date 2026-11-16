@@ -50,26 +50,22 @@ var languageFactsRequired = []languageFact{
 	{"Renovate manager", func(l languageFacts) bool { return len(l.renovateManagers) == 0 }},
 }
 
-// Every language record fills every fact (spec 0066, "One internal
-// test"), so that a half-added language cannot ship.
+// Every language record fills every fact, and identifiers, manifests and
+// lockfile names are unique across the records, so that a lookup or a
+// file names one language (spec 0066, "One internal test"). A
+// half-added language cannot ship.
 func TestLanguageRecordsAreComplete(t *testing.T) {
 	t.Parallel()
 	if len(languageRegistry) == 0 {
 		t.Fatal("the language registry is empty")
 	}
-	for _, l := range languageRegistry {
-		for _, fact := range languageFactsRequired {
-			if fact.missing(l) {
-				t.Errorf("language %q has no %s", l.id, fact.name)
-			}
+	// A record that fills no fact has no sample, so the audit plants
+	// nothing from it.
+	for _, kind := range languageDependentKinds {
+		if _, ok := (languageFacts{}).sample(kind); ok {
+			t.Errorf("the empty record has a %s sample", kind)
 		}
 	}
-}
-
-// Identifiers, manifests and lockfile names are unique across languages,
-// so that a lookup or a file names one language.
-func TestLanguageNamesAreUnique(t *testing.T) {
-	t.Parallel()
 	owner := map[string]string{}
 	claim := func(kind, name, id string) {
 		key := kind + " " + name
@@ -79,6 +75,11 @@ func TestLanguageNamesAreUnique(t *testing.T) {
 		owner[key] = id
 	}
 	for _, l := range languageRegistry {
+		for _, fact := range languageFactsRequired {
+			if fact.missing(l) {
+				t.Errorf("language %q has no %s", l.id, fact.name)
+			}
+		}
 		claim("identifier", l.id, l.id)
 		claim("file", l.manifest, l.id)
 		for _, lf := range l.lockfiles {

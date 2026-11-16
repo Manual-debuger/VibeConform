@@ -512,10 +512,10 @@ var rules = []Rule{
 	{
 		ID: "D-01", Level: Must, Category: CategoryDependencies,
 		Title:  "Lockfiles are committed and match the declared dependencies",
-		Check:  "Execution, " + d01Check,
+		Check:  "Execution, " + d01CheckText,
 		Source: "specs 0010, 0020",
 		Parts: []Part{
-			executionRun(d01Check, checkD01),
+			executionRun(d01CheckText, checkD01),
 		},
 	},
 	{

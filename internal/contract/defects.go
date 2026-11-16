@@ -117,6 +117,7 @@ func plantDir(env *Env, comp Component) (dir, testFile string, ok bool) {
 	} else {
 		files = env.Repo.FilesUnder(comp.Path)
 	}
+	lang := comp.language()
 	best := ""
 	for _, f := range files {
 		d, name := path.Split(f)
@@ -124,7 +125,7 @@ func plantDir(env *Env, comp Component) (dir, testFile string, ok bool) {
 		if d == "" {
 			d = "."
 		}
-		if !isTestFile(comp.Language, name) || underVendor(d) {
+		if !lang.isTestFile(name) || underVendor(d) {
 			continue
 		}
 		if !ok || d < dir || (d == dir && f < best) {
@@ -153,11 +154,12 @@ func (e errNoTests) Error() string { return "component " + e.component + " has n
 
 // defectFor places a defect kind's sample for the component's language
 // in the component. It returns errNoTests when no directory qualifies,
-// and an error when the sample cannot be built.
+// and an error when the language has no record or no such sample, or
+// the sample cannot be built.
 func defectFor(env *Env, comp Component, kind defectKind) (plantedDefect, error) {
-	lang, _ := lookupLanguage(comp.Language)
+	lang, known := lookupLanguage(comp.Language)
 	sample, ok := lang.sample(kind)
-	if !ok {
+	if !known || !ok {
 		return plantedDefect{}, fmt.Errorf("this vibe has no %s sample for %s", kind, comp.Language)
 	}
 	return plantSample(env, comp, sample)

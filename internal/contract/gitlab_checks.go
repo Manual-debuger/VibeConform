@@ -297,13 +297,13 @@ func gitlabC05(ci *CI, verify []Command) PartResult { //nolint:gocognit // basel
 			continue
 		}
 		msg := fmt.Sprintf("the verify command `%s` runs on no %s runner (called in %s)",
-			c, joinWords(lacking, "or"), strings.Join(where, ", "))
+			c, joinWords(lacking, " or "), strings.Join(where, ", "))
 		if len(unknown) > 0 {
 			msg += "; runners of unknown platform: " + strings.Join(unknown, "; ")
 		}
 		findings = append(findings, Finding{File: file, Message: msg,
 			Fix: fmt.Sprintf("run `%s` on %s too: in a job whose tags name a runner of that platform, such as tags: [windows] "+
-				"(saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags", c, joinWords(lacking, "and"))})
+				"(saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags", c, joinWords(lacking, " and "))})
 	}
 	return failIf(findings)
 }

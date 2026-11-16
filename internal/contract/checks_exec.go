@@ -195,9 +195,9 @@ func r01GuardHalf(env *Env, needed Needed) PartResult {
 	return Undecided(Finding{Message: "cannot decide whether the A-02 deny cases are refused without vibe: A-02's probe did not run"})
 }
 
-// d01Check is D-01's check text, for the rule and its part. Its
+// d01CheckText is D-01's check text, for the rule and its part. Its
 // commands come from the lockfile records, so it names what runs.
-var d01Check = "per component, by the lockfile found. " + lockfileCheckText() +
+var d01CheckText = "per component, by the lockfile found. " + lockfileCheckText() +
 	" A component with dependencies and no recognized lockfile fails."
 
 // checkD01: each component's lockfiles match its manifest, and a
@@ -236,9 +236,10 @@ func d01Component(env *Env, comp Component) PartResult {
 	case err != nil:
 		return Fail(ParseFailure(manifest, err))
 	case deps:
+		names := comp.language().lockfileNames()
 		return Fail(Finding{File: manifest,
-			Message: fmt.Sprintf("component %s has dependencies and no recognized lockfile (%s)", comp.Path, lockfileNames(comp.Language)),
-			Fix:     "commit the lockfile your package manager writes, such as " + lockfileNames(comp.Language)})
+			Message: fmt.Sprintf("component %s has dependencies and no recognized lockfile (%s)", comp.Path, names),
+			Fix:     "commit the lockfile your package manager writes, such as " + names})
 	}
 	return Pass()
 }

@@ -126,12 +126,12 @@ func rootLanguage(has func(file string) bool) (string, error) {
 	switch len(found) {
 	case 0:
 		return "", fmt.Errorf("the repository root has no tracked %s, so its language is unknown; "+
-			"declare components with path and language", joinWords(all, "or"))
+			"declare components with path and language", joinWords(all, " or "))
 	case 1:
 		return language, nil
 	}
 	return "", fmt.Errorf("the repository root has %s, so its language is ambiguous; "+
-		"declare components with path and language", joinWords(found, "and"))
+		"declare components with path and language", joinWords(found, " and "))
 }
 
 // ManifestPhrase names, for messages, the files that make a directory a
@@ -146,9 +146,5 @@ func ManifestPhrase() string {
 		}
 		items = append(items, item)
 	}
-	last := len(items) - 1
-	if last == 0 {
-		return items[0]
-	}
-	return strings.Join(items[:last], ", ") + ", or " + items[last]
+	return joinWords(items, ", or ")
 }
