@@ -60,14 +60,6 @@ func contractGitFixture(t *testing.T, edits ...fixtureEdit) string {
 	return contracttest.GitFixture(t, baselineFixture, edits...)
 }
 
-// fixtureFrom builds a fixture from the tree src with edits applied and
-// returns its root: a listed fixture, unless it needs git
-// (contracttest.Fixture).
-func fixtureFrom(t *testing.T, src string, edits ...fixtureEdit) string {
-	t.Helper()
-	return contracttest.Fixture(t, src, edits...)
-}
-
 // fixtureGit runs git with args in dir.
 func fixtureGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
@@ -98,38 +90,15 @@ type auditResult struct {
 	code   int
 }
 
-// runVibeAudit runs vibe audit in-process with args after "audit".
+// runVibeAudit runs vibe audit in-process with args after "audit",
+// against the registry's rules. The runs of the execution and probe parts
+// find no program: PATH is an empty directory and no bash is named, so
+// that a fixture's result does not depend on what this machine has
+// installed. The probe tests are in internal/contract, which runs
+// contract.Audit in this process's environment.
 func runVibeAudit(t *testing.T, args ...string) auditResult {
 	t.Helper()
-	return runVibeAuditRules(t, nil, args...)
-}
-
-// runVibeAuditRules runs vibe audit with rules in place of the registry
-// (nil for the registry). Every report it prints is watched. The runs of
-// the execution and probe parts find no program: PATH is an empty
-// directory and no bash is named, so that a fixture's result does not
-// depend on what this machine has installed. The probe tests are in
-// internal/contract, which runs contract.Audit in this process's
-// environment.
-func runVibeAuditRules(t *testing.T, rules []contract.Rule, args ...string) auditResult {
-	t.Helper()
-	return runVibeAuditSeams(t, contractSeams{rules: rules, probeEnv: emptyProbeEnv(t)}, args...)
-}
-
-// emptyProbeEnv is this process's environment with PATH set to an empty
-// directory and CLAUDE_CODE_GIT_BASH_PATH removed.
-func emptyProbeEnv(t *testing.T) []string {
-	t.Helper()
-	return contracttest.EmptyProbeEnv(t)
-}
-
-func runVibeAuditSeams(t *testing.T, seams contractSeams, args ...string) auditResult {
-	t.Helper()
-	seams.seen = watchReports(t)
-	if seams.openRepo == nil {
-		seams.openRepo = openFixtureRepo
-	}
-	root := newRootCmd("test", seams)
+	root := newRootCmd("test", contractSeams{probeEnv: contracttest.EmptyProbeEnv(t), openRepo: openFixtureRepo})
 	var out, errOut bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&errOut)
@@ -165,17 +134,6 @@ func treeHash(t *testing.T, dir string) map[string]string {
 	return out
 }
 
-// watchReports returns the seam that checks every contract audit report
-// one runVibeAudit call prints for failures without a file or a fix,
-// with contracttest's report check.
-func watchReports(t *testing.T) func(*contract.Report) {
-	t.Helper()
-	return func(rep *contract.Report) {
-		t.Helper()
-		contracttest.Check(t, rep)
-	}
-}
-
 // section is one top-level field of a fixture vibe.yaml, with its text.
 type section struct {
 	key  string
@@ -207,6 +165,24 @@ type jsonReport struct {
 	Summary    map[string]map[string]int `json:"summary"`
 	Rules      []jsonRule                `json:"rules"`
 	CIProvider string                    `json:"ci_provider"`
+	// GuardExceptionUses is a pointer so that a missing key shows.
+	GuardExceptionUses *[]struct {
+		Rule  string `json:"rule"`
+		Match string `json:"match"`
+		Case  string `json:"case"`
+	} `json:"guard_exception_uses"`
+}
+
+// decodeJSONReport decodes a --json report. It is the one mirror of the
+// JSON report in test code (spec 0065): the rule tests read the report
+// model in internal/contract.
+func decodeJSONReport(t *testing.T, out string) jsonReport {
+	t.Helper()
+	var rep jsonReport
+	if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		t.Fatalf("no JSON report: %v\n%s", err, out)
+	}
+	return rep
 }
 
 type jsonRule struct {
@@ -236,20 +212,14 @@ type jsonRule struct {
 }
 
 // auditJSON runs vibe audit --json on a fixture and decodes the report.
-func auditJSON(t *testing.T, dir string, args ...string) (jsonReport, auditResult) {
+func auditJSON(t *testing.T, dir string, args ...string) jsonReport {
 	t.Helper()
-	return auditJSONRules(t, nil, dir, args...)
-}
-
-// auditJSONRules is auditJSON with rules in place of the registry.
-func auditJSONRules(t *testing.T, rules []contract.Rule, dir string, args ...string) (jsonReport, auditResult) {
-	t.Helper()
-	r := runVibeAuditRules(t, rules, append([]string{"--repo-root", dir, "--json"}, args...)...)
+	r := runVibeAudit(t, append([]string{"--repo-root", dir, "--json"}, args...)...)
 	var rep jsonReport
 	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
 		t.Fatalf("--json printed no JSON report: %v\nstdout:\n%s\nstderr:\n%s", err, r.stdout, r.stderr)
 	}
-	return rep, r
+	return rep
 }
 
 // rule returns the result of one rule from a report.
@@ -296,7 +266,7 @@ func TestListedFixtureIsAuditedWithoutGit(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".git")); !os.IsNotExist(err) {
 		t.Fatalf("the fixture has a .git (%v), want a plain directory", err)
 	}
-	rep, _ := auditJSON(t, dir, "--static")
+	rep := auditJSON(t, dir, "--static")
 	assertRule(t, rep, "R-02", "pass")
 }
 

@@ -1,9 +1,10 @@
 # Spec 0065: The contract loads its own configuration, and rule tests go through it
 
-Status: accepted (2026-11-16). Issues #162 and #165, from the design review
-#167. ADR 0028 records the test-seam decision and amends spec 0052's
-"Testing Decisions". No contract change: the contract stays 1.2.0, and
-no rule's result, finding or fix changes.
+Status: accepted and implemented (2026-11-16, PR #191). Issues #162
+and #165, from the design review #167. ADR 0028 records the test-seam
+decision and amends spec 0052's "Testing Decisions". No contract
+change: the contract stays 1.2.0, and no rule's result, finding or fix
+changes.
 
 ## Problem
 
@@ -367,43 +368,43 @@ Each of these is checked during implementation:
 
 ## Acceptance Criteria
 
-- [ ] `contract.Load` exists, and `vibe audit` and `vibe doctor` use
+- [x] `contract.Load` exists, and `vibe audit` and `vibe doctor` use
       it. The CLI has no read, detect, open and parse sequence of its
       own.
-- [ ] `ErrNoConfig` and `ErrConfigV1` are found with `errors.Is`, and
+- [x] `ErrNoConfig` and `ErrConfigV1` are found with `errors.Is`, and
       `contract_test` has a case for each `Load` outcome in "Testing
       Decisions".
-- [ ] `vibe init`'s version detection uses the contract's
+- [x] `vibe init`'s version detection uses the contract's
       read-and-detect step, and its messages are unchanged.
-- [ ] Every message from `audit`, `doctor` and `init` for a missing,
+- [x] Every message from `audit`, `doctor` and `init` for a missing,
       version 1 or invalid `vibe.yaml` is byte for byte the same as
       before. The CLI suite asserts this.
-- [ ] `doctor.Run` exists. The CLI's doctor command only loads, calls
+- [x] `doctor.Run` exists. The CLI's doctor command only loads, calls
       it, prints and sets the exit code. The doctor environment package
       variable is gone.
-- [ ] `internal/doctor` holds no copy of the entrypoint order.
-- [ ] The CLI's explain renderer names no rule ID, and
+- [x] `internal/doctor` holds no copy of the entrypoint order.
+- [x] The CLI's explain renderer names no rule ID, and
       `--explain A-02` and `--explain A-03` output is unchanged.
-- [ ] `--explain` refuses a flag that is not in any list, proven by a
+- [x] `--explain` refuses a flag that is not in any list, proven by a
       test.
-- [ ] `--json` has `waiver.unused`, and `schema` is still 1.
-- [ ] Rule, engine, config-validation, findings, component and probe
+- [x] `--json` has `waiver.unused`, and `schema` is still 1.
+- [x] Rule, engine, config-validation, findings, component and probe
       tests run in package `contract_test` against `*contract.Report`.
-- [ ] The report check (a file and a fix for every failure) runs on
+- [x] The report check (a file and a fix for every failure) runs on
       every report that a rule test produces, and a test proves it
       runs.
-- [ ] The CLI's seams struct holds only the repository opener and
+- [x] The CLI's seams struct holds only the repository opener and
       doctor's environment, or the implementation notes say why another
       seam stayed.
-- [ ] The JSON report is mirrored once in test code.
-- [ ] Each CLI contract and doctor test case before the move is found
+- [x] The JSON report is mirrored once in test code.
+- [x] Each CLI contract and doctor test case before the move is found
       after it, or is listed in the implementation notes with a reason.
-- [ ] Doctor tests run in package `doctor_test` with `t.Parallel`.
-- [ ] ADR 0028 is committed, and spec 0052's "Testing Decisions" points
+- [x] Doctor tests run in package `doctor_test` with `t.Parallel`.
+- [x] ADR 0028 is committed, and spec 0052's "Testing Decisions" points
       to it.
-- [ ] `docs/architecture/overview.md` and `docs/usage.md` are updated.
-- [ ] `task verify` passes.
-- [ ] `task audit` says `Verdict: conformant`.
+- [x] `docs/architecture/overview.md` and `docs/usage.md` are updated.
+- [x] `task verify` passes.
+- [x] `task audit` says `Verdict: conformant`.
 
 ## Further Notes
 
@@ -440,3 +441,111 @@ Each of these is checked during implementation:
   (baseline: `contract_fixture_test.go`) is now in
   `internal/contract/contracttest/fixture_test.go`, beside the function
   it tests. Its assertions are unchanged.
+- **`contract.Load`** (#181). `contract.ReadConfig` is the
+  read-and-detect step, and `contract.Load` is `ReadConfig`, the opener
+  (`contract.RepoOpener`; nil means `contract.OpenRepo`) and
+  `contract.Parse`. The CLI's `configLoadError` adds the "run
+  `vibe init`" text and the migration pointer for `audit` and `doctor`.
+  One ordering is kept from before: with a `--probe-timeout` that is not
+  positive, `vibe audit` first runs `contract.ReadConfig` and reports a
+  missing, version 1, both-key or neither-key `vibe.yaml`, and only then
+  the flag; a file that does not open or parse is reported after the
+  flag, as before. `TestAuditBadProbeTimeoutAndConfigErrorKeepTheirOrder`
+  (`internal/cli/config_messages_test.go`) holds that order.
+- **`--explain` and the JSON waiver** (#182). The guard corpus counts
+  are in `contract.RuleDetails("A-02")` and `("A-03")`, and the
+  functions that count them are unexported. `--explain` visits the set
+  flags with `pflag`, so `go.mod` lists `github.com/spf13/pflag` as a
+  direct requirement. It is the same version that cobra already
+  required, so no dependency is new. The repository has no JSON golden
+  file, so only the text goldens exist.
+- **`doctor.Run`** (#183). The `depguard` rule `doctor` covers
+  `internal/doctor`'s test files too, and its allow list gained
+  `internal/doctor` itself, so that the external `doctor_test` package
+  can import the package under test. Non-test code still imports only
+  `internal/contract`. Doctor test cases that were merged or split, all
+  25 of them recorded before the move and found after it:
+  - `TestDoctorConfigurationLikeAudit` (`no_file`, `version_1`) is in
+    `doctor_test`: a load error is the `vibe.yaml` FAIL line with the
+    given text, and the checks that need the configuration are skipped.
+    It no longer runs `vibe audit` beside doctor. The CLI's
+    `TestDoctorConfigMessagesAreUnchanged` and
+    `TestAuditConfigMessagesAreUnchanged` assert the exact text of both.
+  - `TestDoctorChecksTheWorkflow` is in both places: `doctor_test`
+    asserts the full result list, and the CLI keeps it as the one case
+    for printing and the exit code (exact stdout and exit 0; exit 1 with
+    `doctor: 1 check failed`).
+  - `TestDoctorReportsWhatIsMissing` (`task`, `bash`, `vibe-guard`) is
+    in `doctor_test`; each case asserts the exact FAIL result and that
+    it is the only failure. The exit 1 of each case is the CLI's "a
+    check fails" case.
+  - `TestDoctorAfterInit` is in `doctor_test` with the `vibe.yaml` that
+    `vibe init` writes as literal text, because `internal/doctor`
+    cannot import the CLI.
+  - `TestDoctorEntrypointPrograms` gained a `setup` entrypoint, so that
+    it checks the contract's order. `TestGit` and
+    `TestEntrypointsAbsolutePOSIXPath` keep their cases and run through
+    `doctor.Run`.
+- **Case names after the move** (#185 to #189). All 955 baseline names
+  are found by `go test -v ./internal/contract/... ./internal/cli/
+  ./internal/doctor/` on the integration branch, none skipped, and so
+  are the 25 doctor cases. No case was dropped. These kept their name
+  but changed place or assertions:
+  - Stayed in the CLI because they test rendering or flags:
+    `TestContractJSONRuleHasRequiredKey` and `TestContractAuditTextReport`
+    (now in `contract_report_test.go`),
+    `TestContractAuditProbeTimeoutMustBePositive` and
+    `TestContractAuditProbeFlagsOnV1PointAtTheGuide`.
+  - The engine subtests "... exits 0/2/1" assert `rep.Verdict`,
+    `rep.FailingReason()` and `rep.Reason`; the exit codes are the CLI's
+    `TestVerdictErrorExitCode`. The schema, `vibe` version, JSON
+    `unused` and "waiver unused" text asserts of
+    `TestContractAuditReportsEveryRule` and the unused-waiver subtest
+    are the CLI's `TestContractJSONReportFromTheModel`.
+  - `TestFailingFixturesAreWatched` audits a listed static fixture and
+    a Git full fixture through `contracttest.Audit`, each with a
+    stand-in whose finding names no file, and asserts that the report
+    check flags that stand-in once per report. `TestFailureProblems`
+    calls `contracttest.Problems`.
+  - The CLI's invalid-configuration case is
+    `TestAuditConfigErrorsNameTheConfigFile` (exit 1, the file and
+    `platforms[0]` on stderr).
+  - `TestRuleA02Reporting`'s subtests "an exception's cases are listed
+    in JSON and text" and "without exceptions guard_exception_uses is
+    an empty list" assert the report model; the rendering is the CLI's
+    `TestContractReportGuardExceptionUses`, with the same subtest
+    names. `TestContractAuditKeepProbeCopy` and
+    `TestContractAuditProgress` check `ProbeOptions`; the CLI wiring is
+    `TestContractAuditProbeFlagsReachTheAudit`.
+  - New CLI renderer test from the GitLab move:
+    `TestContractTextReportCIProvider`.
+  - contracttest gained `StandIn` (it clones `Parts`; the CLI's version
+    wrote into the registry's slice), `MustRules`, `RuleIDs` and
+    `AgentsConfig` for the families that share them.
+- **The CLI's seams** (#190, Assumption 1). `contractSeams` holds the
+  repository opener, doctor's environment and the probe environment.
+  The rule list and the report hook are gone: no CLI case needed a
+  stand-in rule, and the CLI's reports are no longer watched, because
+  the rule tests that the hook checked run `contracttest.Audit`. The
+  probe environment stays, so Assumption 1 holds only for the rule
+  list. The CLI's full audits (the `baseline`, `mixed` and `required`
+  goldens, `TestContractAuditValidConfigReachesEngine` and
+  `TestContractAuditProbeFlagsReachTheAudit`) print what the probe runs
+  did not find, such as "`task` is not installed on this machine" and
+  "no bash found". With this process's environment that output would
+  depend on the machine. `t.Setenv` cannot narrow `PATH` instead: the
+  CLI cases run in parallel, and the audit's own git calls need git on
+  `PATH`.
+- **One JSON mirror** (#190). `jsonReport` and `jsonRule` in
+  `internal/cli/contract_fixture_test.go`, read through
+  `decodeJSONReport` and `auditJSON`, are the only mirror of the JSON
+  report in test code. The partial mirrors of `guard_exception_uses`
+  (`contract_probe_test.go`) and of the `required` key
+  (`contract_report_test.go`) were folded into it. #186 removed the
+  listings mirror, and the setup skill's static audit test lost its
+  own (next item).
+- **The setup skill's static audit** (#190). It stays in
+  `internal/cli`, builds the reference repository with
+  `contracttest.Fixture`, runs `contracttest.Audit` with
+  `contract.Options{Static: true}` and reads the report model, so its
+  reports pass the report check as they did through the CLI's hook.

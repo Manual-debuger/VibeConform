@@ -120,7 +120,7 @@ func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocycl
 				t.Errorf("components = %v, want %v", cfg.Components, c.want)
 			}
 
-			rep, _ := auditJSON(t, dir, "--static")
+			rep := auditJSON(t, dir, "--static")
 			assertRule(t, rep, "V-04", "fail", "entrypoints.verify ", "entrypoints.verify-fast ", "entrypoints.fmt ", "entrypoints.fmt-check ")
 			for _, r := range rep.Rules {
 				if r.ID == "V-04" || r.Result == "pass" || r.Result == "not_applicable" || r.Result == "not_run" {

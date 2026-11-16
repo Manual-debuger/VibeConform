@@ -32,17 +32,16 @@ type auditFlags struct {
 	seams contractSeams
 }
 
-// contractSeams are the contract audit's test seams. The zero value is
-// the real audit: the registry's rules, and no one watching the reports.
+// contractSeams are the CLI suite's test seams (ADR 0028). The zero value
+// is the real command: contract.OpenRepo, this process's environment for
+// the probe runs, and doctor.System. The rule tests run contract.Audit in
+// internal/contract, so the CLI holds no rule list and no report hook.
 type contractSeams struct {
-	// rules is the rule list the contract audit runs. Nil means the
-	// registry; tests stand in for parts this vibe does not implement yet.
-	rules []contract.Rule
-	// seen, when set, sees every report the contract audit prints; tests
-	// check every report with it.
-	seen func(*contract.Report)
 	// probeEnv is the environment the probe runs inherit; nil means this
-	// process's. Tests narrow PATH with it.
+	// process's. The CLI suite's full audits (the golden reports among
+	// them) narrow PATH with it, so that what they print does not depend
+	// on the tools this machine has installed. The audit's own git calls
+	// keep this process's PATH.
 	probeEnv []string
 	// openRepo lists the audited repository's tracked files; nil means
 	// contract.OpenRepo. Tests hand in the file list of a fixture they
@@ -129,10 +128,7 @@ func runContractAudit(cmd *cobra.Command, f auditFlags) error {
 	if !f.json {
 		probe.Progress = cmd.ErrOrStderr()
 	}
-	rep := contract.Audit(ctx, cfg, repo, contract.Options{Static: f.static, Rules: f.seams.rules, Probe: probe})
-	if f.seams.seen != nil {
-		f.seams.seen(rep)
-	}
+	rep := contract.Audit(ctx, cfg, repo, contract.Options{Static: f.static, Probe: probe})
 	write := writeContractText
 	if f.json {
 		write = writeContractJSON

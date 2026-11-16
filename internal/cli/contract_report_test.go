@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -310,10 +309,7 @@ func TestContractJSONReportFromTheModel(t *testing.T) {
 	if err := writeContractJSON(&b, rep, "test"); err != nil {
 		t.Fatal(err)
 	}
-	var got jsonReport
-	if err := json.Unmarshal([]byte(b.String()), &got); err != nil {
-		t.Fatalf("no JSON report: %v\n%s", err, b.String())
-	}
+	got := decodeJSONReport(t, b.String())
 	if got.Schema != 1 || got.Vibe != "test" || got.Verdict != "not_conformant" {
 		t.Errorf("schema %d, vibe %q, verdict %s; want 1, test, not_conformant", got.Schema, got.Vibe, got.Verdict)
 	}
@@ -345,15 +341,13 @@ func assertJSONWaiver(t *testing.T, rep jsonReport, id, until string, expired, u
 func TestContractJSONRuleHasRequiredKey(t *testing.T) {
 	t.Parallel()
 	r := runVibeAudit(t, "--repo-root", contractFixture(t), "--json", "--static")
-	var rep struct {
-		Rules []map[string]json.RawMessage `json:"rules"`
-	}
-	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil {
-		t.Fatalf("no JSON report: %v\n%s", err, r.stdout)
+	rep := decodeJSONReport(t, r.stdout)
+	if len(rep.Rules) == 0 {
+		t.Fatalf("the report has no rules\n%s", r.stdout)
 	}
 	for _, rule := range rep.Rules {
-		if got := string(rule["required"]); got != "false" {
-			t.Errorf("rule %s: required = %q, want false", rule["id"], got)
+		if rule.Required == nil || *rule.Required {
+			t.Errorf("rule %s: required = %v, want false", rule.ID, rule.Required)
 		}
 	}
 }

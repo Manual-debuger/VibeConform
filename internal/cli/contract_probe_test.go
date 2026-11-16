@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -103,18 +102,12 @@ func TestContractReportGuardExceptionUses(t *testing.T) {
 	t.Run("an exception's cases are listed in JSON and text", func(t *testing.T) {
 		t.Parallel()
 		rep, rmBuildCases := rmBuildUses(t)
-		var out struct {
-			Uses []struct {
-				Rule  string `json:"rule"`
-				Match string `json:"match"`
-				Case  string `json:"case"`
-			} `json:"guard_exception_uses"`
-		}
-		if err := json.Unmarshal([]byte(renderJSON(t, rep)), &out); err != nil {
-			t.Fatalf("no JSON: %v", err)
+		out := decodeJSONReport(t, renderJSON(t, rep))
+		if out.GuardExceptionUses == nil {
+			t.Fatal("the JSON report has no guard_exception_uses")
 		}
 		var cases []string
-		for _, u := range out.Uses {
+		for _, u := range *out.GuardExceptionUses {
 			if u.Rule != "rm-rf" || u.Match != "rm -r -f build" {
 				t.Errorf("a use names exception %s %q", u.Rule, u.Match)
 			}
