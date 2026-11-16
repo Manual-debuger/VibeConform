@@ -242,6 +242,31 @@ func withWaiver(rr contract.RuleResult, w *contract.WaiverStatus) contract.RuleR
 	return rr
 }
 
+// The text report names the CI provider the audit read, and says nothing
+// of one when it read none (spec 0055, Q1). The GitLab rule tests in
+// internal/contract assert the report's CIProvider.
+func TestContractTextReportCIProvider(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		provider contract.CIProvider
+		want     string
+	}{
+		{contract.CIGitHub, "\nCI provider read: GitHub Actions\n"},
+		{contract.CIGitLab, "\nCI provider read: GitLab CI\n"},
+		{"", ""},
+	} {
+		rep := reportOf(t, true, nil)
+		rep.CIProvider = tc.provider
+		got := renderText(t, rep, "test")
+		if tc.want != "" && !strings.Contains(got, tc.want) {
+			t.Errorf("provider %q: text report does not say %q:\n%s", tc.provider, tc.want, got)
+		}
+		if tc.want == "" && strings.Contains(got, "CI provider read:") {
+			t.Errorf("text report names a provider although none was read:\n%s", got)
+		}
+	}
+}
+
 func TestContractTextReportVerdicts(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
