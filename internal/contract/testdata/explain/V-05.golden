@@ -1,0 +1,22 @@
+Check:
+Probe: with the type-error defect planted in each Python component, `verify` exits non-zero. Components in other languages are skipped: there a type error is a compile error, which V-01 shows.
+
+Part check (probe):
+with the type-error defect planted in each Python component, `verify` exits non-zero. Components in other languages are skipped: there a type error is a compile error, which V-01 shows.
+
+Details:
+Planted defects:
+  One at a time, each into the first directory, in sorted path order,
+  inside a component that holds a test file of its language; the copy is
+  reset between defects. In Go samples, {{package}} is the package clause
+  of the test file beside it, without a _test suffix in a file that is not
+  a _test.go file.
+
+  Python, type error: vibe_probe_type_error.py
+    # Planted by vibe audit: a function annotated -> int that returns a string (the type-error defect).
+    def vibe_probe_type_error() -> int:
+        return "vibe audit"
+
+  Planted in Python components only, and run with verify only. Any type
+  checker that verify runs satisfies the rule, such as Pyright in its
+  standard mode or mypy.

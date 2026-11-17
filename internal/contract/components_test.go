@@ -34,7 +34,7 @@ func TestContractConfigComponents(t *testing.T) {
 		{name: "language missing", config: contracttest.ConfigWith(compSection("  - path: svc\n")),
 			edits: []contracttest.Edit{sub}, want: []string{"vibe.yaml: components[0].language: is required"}},
 		{name: "language unknown", config: contracttest.ConfigWith(compSection("  - path: svc\n    language: rust\n")),
-			edits: []contracttest.Edit{sub}, want: []string{"vibe.yaml: components[0].language: ", "rust", "go, python, typescript"}},
+			edits: []contracttest.Edit{sub}, want: []string{`vibe.yaml: components[0].language: "rust" is not one of go, python, typescript`}},
 		{name: "path not clean", config: contracttest.ConfigWith(compSection("  - path: ./svc\n    language: python\n")),
 			edits: []contracttest.Edit{sub}, want: []string{"vibe.yaml: components[0].path: ", "clean", `"svc"`}},
 		{name: "path trailing slash", config: contracttest.ConfigWith(compSection("  - path: svc/\n    language: python\n")),
@@ -78,12 +78,15 @@ func TestContractConfigComponentDetection(t *testing.T) {
 		{name: "package.json", config: noComponents,
 			edits: []contracttest.Edit{contracttest.WithoutFile("go.mod"), contracttest.WithFile("package.json", "{}\n")}},
 		{name: "no manifest", config: noComponents, edits: []contracttest.Edit{contracttest.WithoutFile("go.mod")},
-			want: []string{"vibe.yaml: components: ", "go.mod, pyproject.toml or package.json", "declare components"}},
+			want: []string{"vibe.yaml: components: the repository root has no tracked go.mod, pyproject.toml or package.json, " +
+				"so its language is unknown; declare components with path and language"}},
 		{name: "two manifests", config: noComponents, edits: []contracttest.Edit{contracttest.WithFile("package.json", "{}\n")},
-			want: []string{"vibe.yaml: components: ", "go.mod and package.json", "declare components"}},
+			want: []string{"vibe.yaml: components: the repository root has go.mod and package.json, " +
+				"so its language is ambiguous; declare components with path and language"}},
 		{name: "three manifests", config: noComponents,
 			edits: []contracttest.Edit{contracttest.WithFile("package.json", "{}\n"), contracttest.WithFile("pyproject.toml", "[project]\n")},
-			want:  []string{"vibe.yaml: components: ", "go.mod, pyproject.toml and package.json"}},
+			want: []string{"vibe.yaml: components: the repository root has go.mod, pyproject.toml and package.json, " +
+				"so its language is ambiguous; declare components with path and language"}},
 		// Only tracked files count (spec 0052, "Tracked files only").
 		{name: "untracked manifest does not count", config: noComponents,
 			edits: []contracttest.Edit{contracttest.WithUntracked("package.json", "{}\n")}},
