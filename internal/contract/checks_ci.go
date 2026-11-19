@@ -109,7 +109,7 @@ func checkC01(env *Env, _ Needed) PartResult {
 	w := ci.wording
 	var findings []Finding
 	for _, kind := range []PipelineKind{KindMergeRequest, KindDefaultPush} {
-		what := w.kind(kind, env.defaultBranch)
+		what := w.kind(kind, ci.DefaultBranch)
 		run := ci.Run(kind)
 		explained := map[*CIJob]bool{}
 		explain := func(c Command) {

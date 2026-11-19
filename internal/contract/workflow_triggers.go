@@ -188,22 +188,15 @@ func globMatch(pattern, s string) bool {
 	return err == nil && re.MatchString(s)
 }
 
-// defaultBranch is the branch C-01, C-04 and R-01 read the triggers for:
-// the target of refs/remotes/origin/HEAD (read once, by OpenRepo), or
-// else main or master: the one more of the workflows' pull_request and
-// push triggers count for, main on a tie. In that case the report says
-// which it assumed. The GitHub reader asks once per audit, with the
-// workflows that parsed (CI.Workflows).
-func defaultBranch(env *Env, parsed []*Workflow) string {
-	if env.defaultBranch == "" {
-		env.defaultBranch = decideDefaultBranch(env, parsed)
-	}
-	return env.defaultBranch
-}
-
-func decideDefaultBranch(env *Env, parsed []*Workflow) string {
+// githubDefaultBranch is the branch the GitHub reader decides the runs
+// for (CI.DefaultBranch), from the workflows that parsed: the target of
+// refs/remotes/origin/HEAD (read once, by OpenRepo), or else main or
+// master: the one more of the workflows' pull_request and push triggers
+// count for, main on a tie. assumed is true in that case, and the reader
+// has the report say which it assumed.
+func githubDefaultBranch(env *Env, parsed []*Workflow) (branch string, assumed bool) {
 	if b := env.Repo.originHead; b != "" {
-		return b
+		return b, false
 	}
 	branch, best := fallbackBranches[0], -1
 	for _, b := range fallbackBranches {
@@ -211,8 +204,7 @@ func decideDefaultBranch(env *Env, parsed []*Workflow) string {
 			branch, best = b, n
 		}
 	}
-	noteAssumedBranch(env, branch)
-	return branch
+	return branch, true
 }
 
 // noteAssumedBranch tells the report which default branch the CI rules

@@ -1,6 +1,7 @@
 package contract_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -230,6 +231,39 @@ func TestRuleC01DefaultBranch(t *testing.T) {
 			t.Errorf("report does not say master was assumed:\n%s", notes)
 		}
 	})
+}
+
+// When the report notes the assumed default branch (contract 1.0.1): on
+// GitHub Actions only when C-01, C-04 or R-01 reads the runs, so an
+// audit that runs none of them has no note; on GitLab CI whenever the
+// configuration is read. Regression: spec 0067 first noted it whenever
+// the GitHub workflows were read, which every audit does.
+func TestRuleCIDefaultBranchNote(t *testing.T) {
+	t.Parallel()
+	assumed := func(rep *contract.Report) bool {
+		return slices.ContainsFunc(rep.Notes, func(n string) bool { return strings.Contains(n, "assume the default branch") })
+	}
+	for _, tc := range []struct {
+		name  string
+		edits []contracttest.Edit
+		rules []string
+		want  bool
+	}{
+		{name: "GitHub, C-02 and C-03 only", rules: []string{"C-02", "C-03"}},
+		{name: "GitHub, C-01", rules: []string{"C-01"}, want: true},
+		{name: "GitHub, C-04", rules: []string{"C-04"}, want: true},
+		{name: "GitHub, R-01", rules: []string{"A-02", "R-01"}, want: true},
+		{name: "GitLab, C-02 only", edits: gitlab(glOnly(glVerify("verify", ""))), rules: []string{"C-02"}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rep := contracttest.Audit(t, contracttest.GitFixture(t, contracttest.Baseline, tc.edits...),
+				contract.Options{Static: true, Rules: contracttest.Rules(t, tc.rules...)})
+			if got := assumed(rep); got != tc.want {
+				t.Errorf("the report notes an assumed default branch: %t, want %t; notes %q", got, tc.want, rep.Notes)
+			}
+		})
+	}
 }
 
 // C-02: every uses: but a local path is pinned to a 40-character commit

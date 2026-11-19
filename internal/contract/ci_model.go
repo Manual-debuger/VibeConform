@@ -14,8 +14,8 @@ import (
 // at all fails.
 //
 // Each reader fills the whole model when the CI is read: every job with
-// its commands, scripts and runner platforms, and the run of each
-// pipeline kind. The GitHub reader adds each job's uses: references and
+// its commands, scripts and runner platforms, the default branch, and the
+// run of each pipeline kind. The GitHub reader adds each job's uses: references and
 // the parsed workflows; the GitLab reader each job's images and the
 // includes it does not follow. Each reader also sets its provider's
 // wording (ci_wording.go): the words of findings that differ by provider.
@@ -82,10 +82,18 @@ type CI struct {
 	Includes []CIInclude
 	// Workflows are the GitHub workflows that parsed.
 	Workflows []*Workflow
+	// DefaultBranch is the branch the reader decided the runs for: the
+	// target of refs/remotes/origin/HEAD, or else main or master, as the
+	// provider's configuration suggests.
+	DefaultBranch string
 
 	// runs are the jobs that run for each pipeline kind, as the reader
 	// decided them.
 	runs map[PipelineKind]*CIRun
+	// noteOnRun, when set, has the report note the default branch the
+	// reader assumed, at the first Run. The GitHub reader sets it; the
+	// GitLab reader notes the branch when it reads the configuration.
+	noteOnRun func()
 	// wording is the provider's words for findings (ci_wording.go).
 	wording *ciWording
 }
@@ -242,8 +250,13 @@ type CISkip struct {
 // caller's triggers; GitLab evaluates workflow:rules, rules: and
 // only/except, and follows child pipelines the parent waits for, with the
 // trigger job's rules as their outer condition. Both readers decide every
-// pipeline kind.
+// pipeline kind, for CI.DefaultBranch. The first call makes the note the
+// reader left for it, if any (noteOnRun).
 func (ci *CI) Run(kind PipelineKind) *CIRun {
+	if ci.noteOnRun != nil {
+		ci.noteOnRun()
+		ci.noteOnRun = nil
+	}
 	r := ci.runs[kind]
 	if r == nil {
 		panic(fmt.Sprintf("contract: no %s run for pipeline kind %d", ci.Provider.Name(), kind))
@@ -321,7 +334,13 @@ func githubCI(env *Env, ws *Workflows) *CI {
 	for _, j := range ci.Jobs {
 		byKey[j.Key()] = j
 	}
-	branch := defaultBranch(env, ci.Workflows)
+	// GitHub notes an assumed branch when a rule first reads the runs
+	// (C-01, C-04 or R-01), as contract 1.0.1 did.
+	branch, assumed := githubDefaultBranch(env, ci.Workflows)
+	if assumed {
+		ci.noteOnRun = func() { noteAssumedBranch(env, branch) }
+	}
+	ci.DefaultBranch = branch
 	ci.runs = map[PipelineKind]*CIRun{}
 	for _, k := range []struct {
 		kind  PipelineKind

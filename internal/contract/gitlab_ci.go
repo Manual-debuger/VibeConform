@@ -111,7 +111,13 @@ func readGitLabCI(env *Env) *CI {
 	})
 	ci.Includes = r.includes
 
-	branch := gitlabDefaultBranch(env, r)
+	// GitLab notes an assumed branch when it reads the configuration, as
+	// contract 1.0.1 did.
+	branch, assumed := gitlabDefaultBranch(env, r)
+	if assumed {
+		noteAssumedBranch(env, branch)
+	}
+	ci.DefaultBranch = branch
 	ci.runs = map[PipelineKind]*CIRun{
 		KindMergeRequest: r.run(KindMergeRequest, branch, ci.Jobs),
 		KindDefaultPush:  r.run(KindDefaultPush, branch, ci.Jobs),
@@ -889,15 +895,11 @@ func (r *glReader) run(kind PipelineKind, branch string, every []*CIJob) *CIRun 
 // gitlabDefaultBranch decides the default branch for GitLab CI: the
 // target of refs/remotes/origin/HEAD, or else main or master, the one the
 // configuration's conditions name more often (rules: if: literals,
-// only/except refs), main on a tie. In that case the report says which it
-// assumed.
-func gitlabDefaultBranch(env *Env, r *glReader) string {
-	if env.defaultBranch != "" {
-		return env.defaultBranch
-	}
+// only/except refs), main on a tie. assumed is true in that case, and the
+// reader has the report say which it assumed.
+func gitlabDefaultBranch(env *Env, r *glReader) (branch string, assumed bool) {
 	if b := env.Repo.originHead; b != "" {
-		env.defaultBranch = b
-		return b
+		return b, false
 	}
 	named := map[string]int{}
 	for _, f := range slices.Sorted(maps.Keys(r.docs)) {
@@ -909,9 +911,7 @@ func gitlabDefaultBranch(env *Env, r *glReader) string {
 			branch, best = b, named[b]
 		}
 	}
-	noteAssumedBranch(env, branch)
-	env.defaultBranch = branch
-	return branch
+	return branch, true
 }
 
 // countBranchNames counts the literals named in if: conditions and the
