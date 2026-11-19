@@ -172,7 +172,7 @@ func checkC02(env *Env, _ Needed) PartResult {
 	findings := unpinnedUses(ci.Jobs)
 	findings = append(findings, unpinnedImages(ci.Jobs)...)
 	for _, inc := range ci.Includes {
-		if f, ok := includeFinding(inc); !ok {
+		if f, ok := unpinnedInclude(inc); ok {
 			findings = append(findings, f)
 		}
 	}
@@ -458,7 +458,7 @@ var dependencyScanningTemplate = regexp.MustCompile(`^(Jobs|Security)/Dependency
 // component.
 func includesDependencyScanning(ci *CI) bool {
 	for _, inc := range ci.Includes {
-		v := scalarOr(mapValue(inc.Node, string(inc.Kind)), "")
+		v := inc.Target()
 		switch inc.Kind {
 		case IncludeTemplate:
 			if dependencyScanningTemplate.MatchString(v) {

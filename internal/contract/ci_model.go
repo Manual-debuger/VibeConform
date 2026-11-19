@@ -213,6 +213,13 @@ type CIInclude struct {
 	Node *yaml.Node
 }
 
+// Target is the value under the include's kind key: the project,
+// component, remote URL or template. It is "" when the entry is not a map
+// or that value is not a string.
+func (inc CIInclude) Target() string {
+	return scalarOr(mapValue(inc.Node, string(inc.Kind)), "")
+}
+
 // CIIncludeKind is the kind of a GitLab include: the key that names
 // what it includes.
 type CIIncludeKind string
