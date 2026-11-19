@@ -8,40 +8,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// The C rules and D-03 on GitLab CI (spec 0055, "The rules on GitLab
-// CI"). C-01 and C-04 read the jobs that run for a pipeline kind, and the
-// jobs skipped with the condition that left them out; C-02, C-05 and D-03
-// read every job and the includes the audit does not follow. C-03 is not
-// applicable (rules.go); R-01's CI part is in vibe_calls.go.
-
-// ciAuditJobs returns the jobs of a run that satisfy C-04: they run vibe
-// audit (a simple command that counts as calling, starting with the words
-// vibe audit) and call no verify command.
-func ciAuditJobs(run *CIRun, verify []Command) []*CIJob {
-	var out []*CIJob
-	for _, j := range run.Jobs {
-		if !runsAuditCommand(j.Commands) {
-			continue
-		}
-		calls := false
-		for _, c := range verify {
-			calls = calls || CallsAny(j.Commands, c)
-		}
-		if !calls {
-			out = append(out, j)
-		}
-	}
-	return out
-}
-
-func runsAuditCommand(cmds []Command) bool {
-	for _, c := range cmds {
-		if c.HasPrefix("vibe", "audit") {
-			return true
-		}
-	}
-	return false
-}
+// C-02's decision for the GitLab includes the audit does not follow
+// (spec 0055, "The rules on GitLab CI"). checkC02 (checks_ci.go) reads
+// every provider's references through the CI model; only the GitLab
+// reader fills CI.Includes.
 
 // fullSHA is a full 40-character commit SHA.
 var fullSHA = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)

@@ -10,10 +10,13 @@ import (
 )
 
 // Triggers, branch filters, the default branch and local reusable
-// workflows, as the C rules read them (spec 0052, "Recognition rules",
-// GitHub workflows).
+// workflows (spec 0052, "Recognition rules", GitHub workflows). The
+// GitHub reader (githubCI) walks them once, when it reads the CI, to
+// decide the run of each pipeline kind (spec 0067); the rules read the
+// runs.
 
-// The two events C-01 and C-04 read.
+// The two events the GitHub reader decides runs for: pull_request
+// (KindMergeRequest) and push (KindDefaultPush).
 const (
 	eventPullRequest = "pull_request"
 	eventPush        = "push"
@@ -189,8 +192,8 @@ func globMatch(pattern, s string) bool {
 // the target of refs/remotes/origin/HEAD (read once, by OpenRepo), or
 // else main or master: the one more of the workflows' pull_request and
 // push triggers count for, main on a tie. In that case the report says
-// which it assumed. parsed is ciRead's list, the same for every rule, so
-// the answer is decided once per audit.
+// which it assumed. The GitHub reader asks once per audit, with the
+// workflows that parsed (CI.Workflows).
 func defaultBranch(env *Env, parsed []*Workflow) string {
 	if env.defaultBranch == "" {
 		env.defaultBranch = decideDefaultBranch(env, parsed)

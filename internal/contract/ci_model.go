@@ -13,11 +13,19 @@ import (
 // .gitlab-ci.yml is tracked. Other providers cannot be decided, and no CI
 // at all fails.
 //
-// Each reader fills the model when the CI is read: every job with its
-// commands, scripts and runner platforms, and the run of each pipeline
-// kind. The GitHub reader adds each job's uses: references and the
-// parsed workflows; the GitLab reader each job's images and the includes
-// it does not follow.
+// Each reader fills the whole model when the CI is read: every job with
+// its commands, scripts and runner platforms, and the run of each
+// pipeline kind. The GitHub reader adds each job's uses: references and
+// the parsed workflows; the GitLab reader each job's images and the
+// includes it does not follow. Each reader also sets its provider's
+// wording (ci_wording.go): the words of findings that differ by provider.
+//
+// C-01, C-02, C-04, C-05 and D-03 each have one implementation
+// (checks_ci.go) that reads only the model and the wording, and none
+// compares the provider (spec 0067). C-03 reads the GitHub workflows
+// (CI.Workflows), which no other provider has; the registry makes it not
+// applicable on GitLab CI. R-01's CI part (vibe_calls.go) reads the model
+// too.
 
 // CIProvider is the CI provider the C rules read. The values are the
 // --json tokens.

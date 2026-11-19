@@ -69,6 +69,8 @@ var githubWording = &ciWording{
 	notCalledFix: func(what string, c Command) string {
 		return fmt.Sprintf("add a step that runs `%s` as its own command to a job that runs on %s", c, what)
 	},
+	// A GitHub run has no skipped jobs (spec 0067), so no finding uses
+	// this fix yet. It keeps every func of the wording set.
 	skipFix: func(what string) string { return "make the job run on " + what },
 
 	noAuditJob:    "no job of a workflow that runs on pull requests runs vibe audit",

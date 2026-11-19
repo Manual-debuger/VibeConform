@@ -260,26 +260,26 @@ They are the regression net.
 
 ## Acceptance Criteria
 
-- [ ] Goldens record the full findings of every C-01 to C-05, D-03 and
+- [x] Goldens record the full findings of every C-01 to C-05, D-03 and
       R-01 case of both providers. They are recorded from `main` before
       the refactor, together with the two new C-02 cases.
-- [ ] The GitHub reader fills the runs, the runner platforms and the
+- [x] The GitHub reader fills the runs, the runner platforms and the
       `uses:` references when it reads the CI. `CI.Run` is a lookup,
       and the job-to-model map is gone.
-- [ ] C-01, C-02, C-04, C-05 and D-03 each have one implementation that
+- [x] C-01, C-02, C-04, C-05 and D-03 each have one implementation that
       reads only the model and the provider wording.
-- [ ] No C check compares `ci.Provider`. C-03 has no provider branch.
-- [ ] Every golden is unchanged, except the two C-02 GitHub cases, which
+- [x] No C check compares `ci.Provider`. C-03 has no provider branch.
+- [x] Every golden is unchanged, except the two C-02 GitHub cases, which
       change as stated in "C-02". The implementation notes show their
       diff.
-- [ ] Every existing rule test, the explain goldens and the contract
+- [x] Every existing rule test, the explain goldens and the contract
       report goldens pass unchanged.
-- [ ] The removed helpers are gone, and no new complexity suppression is
+- [x] The removed helpers are gone, and no new complexity suppression is
       added. Suppressions that are no longer needed are removed.
-- [ ] `docs/architecture/overview.md` and the CI model's package comment
+- [x] `docs/architecture/overview.md` and the CI model's package comment
       are updated.
-- [ ] `task verify` passes.
-- [ ] `task audit` says `Verdict: conformant`.
+- [x] `task verify` passes.
+- [x] `task audit` says `Verdict: conformant`.
 
 ## Further Notes
 
@@ -297,3 +297,135 @@ They are the regression net.
   5. C-03's branch, removal of the dead code, and documentation.
   Tickets 3 and 4 both need ticket 2, and they can run in parallel.
   Ticket 5 needs 3 and 4.
+
+## Implementation Notes
+
+- **Tickets.** The work was cut into the five tickets of "Further
+  Notes": 0067-1 the characterization goldens (#202), 0067-2 the GitHub
+  reader fills the whole model (#203), 0067-3 the provider wording and
+  one C-01, C-04, C-05 and D-03 (#204), 0067-4 one C-02 (#205), and
+  0067-5 C-03's branch, dead code and documentation (#206). #204 and
+  #205 ran in parallel. Their one merge conflict was in the GitLab
+  checks file: #204 removed `gitlabC04` and #205 moved `pinnedDigest`.
+  The merge kept both changes.
+- **The goldens** (0067-1). There is one file for each case table:
+  `internal/contract/testdata/ci/<provider>/<rule>.golden`, with
+  `<provider>` `github` or `gitlab`. These are 14 files with 382 cases.
+  Each case is a section headed `== <case name>`, in table order. A
+  section holds each finding as `file:`, `message:` and `fix:` lines,
+  or `no findings`. `ciRuleCases` and `ciPartCases`
+  (`internal/contract/ci_golden_test.go`) run the existing tables
+  through `contracttest.RunRuleCases` and `RunPartCases`, with a new
+  optional `contracttest.CaseCheck`. The package's one `-update` flag
+  rewrites them (its variable is `updateGoldens`, in
+  `explain_golden_test.go`). Without `-update`, a section that has no
+  case fails the table. The substring checks stay. As a
+  demonstration, one changed character in the unpinned `uses:` message
+  made five C-02 cases fail. Two of them ("a short SHA" and "no ref")
+  have no substring check, so only the golden found them. The change
+  was reverted.
+- **The model** (0067-2). `CI.Run(kind)` is a lookup of the runs that
+  the reader decided, and it takes no `Env`. The GitHub reader
+  (`githubCI` in `ci_model.go`) decides the runs with `jobsTriggered`
+  and the default branch when it reads the CI. So `env.defaultBranch`
+  is set, and the "assume the default branch" note is written, when
+  the CI is read, as on GitLab. The `gh` map field of `CI` is gone.
+  `githubCI` has a local map from a job's key to its model job, because
+  the trigger walk returns workflow jobs. That map exists only while
+  the reader runs. `CIJob` has three new fields: `Platforms`,
+  `UnknownRunners` (with the present text of each provider) and `Uses`
+  (GitHub only: the job's own reference first, then each step's). The
+  GitLab platform logic moved unchanged to `gitlab_runners.go`.
+- **The wording** (0067-3). `internal/contract/ci_wording.go` holds the
+  type `ciWording` and its two values, `githubWording` and
+  `gitlabWording`, next to each other. The reader sets `CI.wording`.
+  `githubWording.skipFix` ("make the job run on <what>") is text that
+  no finding uses yet, because a GitHub run has no skipped jobs. 0067-5
+  kept it, with a comment, so that every function of the wording is
+  set and a rule never calls a nil function. As a mutation check,
+  "X" appended to `gitlabWording.hint` made 13 sections of the GitLab
+  C-01 and C-04 goldens differ. The change was reverted.
+- **C-02's golden diff** (0067-4). This is the only golden that changed
+  in this spec. It is `testdata/ci/github/C-02.golden`:
+
+  ```diff
+   == an @latest run: step before an unpinned uses: step
+  -file: .github/workflows/extra.yml
+  -message: line 8: job x, step 1 runs prettier@latest, which is not pinned
+  -fix: pin prettier to a version (@v1.2.3) instead of @latest
+  -
+   file: .github/workflows/extra.yml
+   message: line 9: job x, step 2 uses actions/setup-go@v5, which is not pinned to a commit SHA
+   fix: pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)
+
+  -== a run: step that repeats one @latest word
+   file: .github/workflows/extra.yml
+  -message: line 9: job x, step 2 runs prettier@latest, which is not pinned
+  +message: line 8: job x, step 1 runs prettier@latest, which is not pinned
+   fix: pin prettier to a version (@v1.2.3) instead of @latest
+
+  +== a run: step that repeats one @latest word
+   file: .github/workflows/extra.yml
+   message: line 9: job x, step 2 runs prettier@latest, which is not pinned
+   fix: pin prettier to a version (@v1.2.3) instead of @latest
+  ```
+
+  Read as sections: the first case now has the `setup-go` finding and
+  then the `prettier@latest` finding. The second case has one
+  `prettier@latest` finding instead of two. The golden was written by
+  hand first, and exactly these two sections failed. After the change,
+  `-update` left the tree unchanged. C-02 needs no wording: its
+  messages and fixes depend only on the kind of the finding.
+- **Other goldens.** On the integration branch,
+  `git diff --stat 617a0eb HEAD -- internal/contract/testdata internal/cli/testdata`
+  lists only `github/C-02.golden` (617a0eb is 0067-1's commit). The
+  explain goldens and the CLI's report goldens did not change.
+- **The search** (Acceptance Criteria). On the integration branch:
+
+  ```sh
+  git grep -nE 'Provider|CIGitLab|CIGitHub|gitLabCI' -- \
+    internal/contract/checks_ci.go internal/contract/ci_wording.go \
+    internal/contract/gitlab_includes.go internal/contract/vibe_calls.go
+  ```
+
+  It finds nothing. These files hold the C checks, the wording, C-02's
+  include decision and R-01's CI part. The same search over all
+  non-test code of `internal/contract`
+  (`git grep -nE 'ci\.Provider|CIGitLab|CIGitHub|gitLabCI\(' -- 'internal/contract/*.go' ':!*_test.go'`)
+  finds only these:
+  - the declarations of `CIProvider` and its `Name` in `ci_model.go`,
+    and the panic message of `CI.Run`;
+  - the two readers, which set `Provider` (`githubCI` and
+    `readGitLabCI`);
+  - `gitLabCI`, which makes the comparison for the rules outside C;
+  - `audit.go`, which copies the provider into the report;
+  - C-03's applicability `notOnGitLab` in `rules.go`, and D-02's two
+    calls in `updatebots.go`. "The rules" keeps these.
+- **Removed code.** 0067-2 removed `auditJobs`, `runsAudit`,
+  `commandsOf` and `ciJob.where`, and changed `CI.Run`. 0067-3 removed
+  `triggerHint`, `gitlabHint`, `gitlabKinds` and the GitLab C-01, C-04,
+  C-05 and D-03. 0067-4 removed `gitlabC02`. 0067-5 removed C-03's
+  provider comparison and moved `ciAuditJobs` and `runsAuditCommand`
+  (C-04 and R-01) to `checks_ci.go`. It renamed `gitlab_checks.go` to
+  `gitlab_includes.go`, which now holds only `includeFinding` and
+  `fullSHA`, with a new header comment. The trigger walk
+  (`jobsTriggered`, `jobsRun`, `ciJob`, `defaultBranch`) stays,
+  because the GitHub reader uses it. Its comments now say so.
+- **Complexity suppressions.** These baselines are gone: `gocognit` on
+  the GitHub `checkC02`; `gocognit` and `gocyclo` on `checkC05`
+  (0067-2 removed `gocyclo`, 0067-3 removed `gocognit`); and
+  `gocognit` on `gitlabC02`, `gitlabC05` and `gitlabD03`. No C check
+  has a suppression. `gitlabPlatforms` kept its baseline when it moved
+  to `gitlab_runners.go`. No suppression is new.
+- **Known item: C-02's description.** The contract text of C-02 in
+  `rules.go` still words the rule in GitHub terms (`uses:` and `run:`
+  steps). It is contract text, and the contract stays 1.2.0, so this
+  spec does not change it. The check also reads GitLab images,
+  includes and scripts (spec 0055). A later contract version can word
+  the description for both providers.
+- **Documentation.** `docs/architecture/overview.md` ("One CI model,
+  two readers") and the package comment of `ci_model.go` now say that
+  each reader fills the whole model, that C-01, C-02, C-04, C-05 and
+  D-03 each have one implementation that reads only the model, that the
+  wording is per provider, and that C-03 reads the GitHub workflows.
+  The glossary did not change.

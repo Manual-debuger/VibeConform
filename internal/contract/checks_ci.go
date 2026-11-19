@@ -32,17 +32,18 @@ func ciRead(env *Env) (ci *CI, res PartResult, ok bool) {
 }
 
 // checkC03: every workflow has top-level permissions of read-all, {} or a
-// map whose every value is read or none. On GitLab CI the rule is not
-// applicable, which the registry decides before it runs.
+// map whose every value is read or none. It reads the GitHub workflows
+// (CI.Workflows), which only the GitHub reader fills: on GitLab CI the
+// rule is not applicable, which the registry decides before it runs
+// (notOnGitLab).
 func checkC03(env *Env, _ Needed) PartResult {
 	ci, res, ok := ciRead(env)
-	if !ok || ci.Provider == CIGitLab {
+	if !ok {
 		return res
 	}
-	parsed := ci.Workflows
 	const fix = "set top-level `permissions: contents: read` (or `read-all`, or `{}`) and grant write scopes in the job that needs them"
 	var findings []Finding
-	for _, wf := range parsed {
+	for _, wf := range ci.Workflows {
 		p := wf.Permissions
 		switch {
 		case p == nil:
@@ -299,6 +300,35 @@ func checkC04(env *Env, _ Needed) PartResult {
 			Fix:     w.noAuditJobFix})
 	}
 	return Merge(res, Fail(findings...))
+}
+
+// ciAuditJobs returns the jobs of a run that satisfy C-04: they run vibe
+// audit (a simple command that counts as calling, starting with the words
+// vibe audit) and call no verify command. R-01's CI part exempts them.
+func ciAuditJobs(run *CIRun, verify []Command) []*CIJob {
+	var out []*CIJob
+	for _, j := range run.Jobs {
+		if !runsAuditCommand(j.Commands) {
+			continue
+		}
+		calls := false
+		for _, c := range verify {
+			calls = calls || CallsAny(j.Commands, c)
+		}
+		if !calls {
+			out = append(out, j)
+		}
+	}
+	return out
+}
+
+func runsAuditCommand(cmds []Command) bool {
+	for _, c := range cmds {
+		if c.HasPrefix("vibe", "audit") {
+			return true
+		}
+	}
+	return false
 }
 
 // checkC05: each verify command is called by a job that runs on a Linux

@@ -9,7 +9,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Runners as C-05 reads them (spec 0052, "Recognition rules", Runners):
+// Runners as the GitHub reader reads them into each job's platforms for
+// C-05 (spec 0052, "Recognition rules", Runners):
 // runs-on as a string, a list of labels or a group with labels; a
 // ${{ matrix.<key> }} value expands to the values that key takes after
 // include and exclude. A label ubuntu-* or linux is Linux, windows-* or
