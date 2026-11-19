@@ -2,10 +2,12 @@ package contracttest_test
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
@@ -132,6 +134,41 @@ func TestRunRuleCases(t *testing.T) {
 			Edits:    []contracttest.Edit{contracttest.WithoutFile("AGENTS.md")},
 			Findings: []string{"AGENTS.md: ", "create"}},
 	})
+}
+
+// RunRuleCases and RunPartCases run each check once in each case's
+// subtest, on that case's report.
+func TestRunCasesChecks(t *testing.T) {
+	t.Parallel()
+	cases := []contracttest.RuleCase{
+		{Name: "baseline", Want: contract.ResultPass},
+		{Name: "AGENTS.md missing", Want: contract.ResultFail, Edits: []contracttest.Edit{contracttest.WithoutFile("AGENTS.md")}},
+	}
+	runners := map[string]func(*testing.T, contracttest.CaseCheck){
+		"RunRuleCases": func(t *testing.T, c contracttest.CaseCheck) { contracttest.RunRuleCases(t, "R-02", cases, c) },
+		"RunPartCases": func(t *testing.T, c contracttest.CaseCheck) {
+			contracttest.RunPartCases(t, "R-02", contract.Static, cases, c)
+		},
+	}
+	for name, run := range runners {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var mu sync.Mutex
+			seen := map[string][]contract.Result{}
+			// t.Run returns once the parallel case subtests have finished.
+			t.Run("cases", func(t *testing.T) {
+				run(t, func(t *testing.T, tc contracttest.RuleCase, rep *contract.Report) {
+					mu.Lock()
+					defer mu.Unlock()
+					seen[tc.Name] = append(seen[tc.Name], contracttest.RuleResult(t, rep, "R-02").Result)
+				})
+			})
+			want := map[string][]contract.Result{"baseline": {contract.ResultPass}, "AGENTS.md missing": {contract.ResultFail}}
+			if !maps.EqualFunc(seen, want, slices.Equal[[]contract.Result]) {
+				t.Errorf("the check saw %v, want %v", seen, want)
+			}
+		})
+	}
 }
 
 // Rules keeps registry order, whatever order the IDs are given in.

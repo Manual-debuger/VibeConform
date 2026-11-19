@@ -1,0 +1,12 @@
+== GitLab only
+file: vibe.yaml
+message: not applicable: the C rules read GitLab CI: GitLab job tokens have no per-file permissions, and job-token push access is a project setting the audit does not read
+fix: 
+
+== even when .gitlab-ci.yml does not parse
+file: vibe.yaml
+message: not applicable: the C rules read GitLab CI: GitLab job tokens have no per-file permissions, and job-token push access is a project setting the audit does not read
+fix: 
+
+== both providers: GitHub is read
+no findings

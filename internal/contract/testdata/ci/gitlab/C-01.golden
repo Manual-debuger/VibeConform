@@ -1,0 +1,826 @@
+== baseline
+no findings
+
+== a job with no rules runs in both kinds
+no findings
+
+== verify inside a condition
+no findings
+
+== a script as one string
+no findings
+
+== a multi-line script
+no findings
+
+== verify with an extra argument is not called
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== a script line that does not parse calls nothing
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== no verify anywhere
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== list verify, commands in different jobs
+no findings
+
+== list verify, one command not called
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task test`
+fix: add `task test` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task test`
+fix: add `task test` as its own command to the script of a job that runs in pushes to main
+
+== before_script counts
+no findings
+
+== after_script does not count
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== allow_failure is ignored
+no findings
+
+== merge requests and the default branch
+no findings
+
+== merge requests only
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for pushes to main: rules: no rule admits it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== the default branch only
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for merge request pipelines: rules: no rule admits it
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== $CI_MERGE_REQUEST_IID and a literal default branch
+no findings
+
+== $CI_COMMIT_REF_NAME against the default branch
+no findings
+
+== the default branch written first
+no findings
+
+== another literal branch
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for pushes to main: rules: no rule admits it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== push pipelines (branch pipelines show on the merge request)
+no findings
+
+== every branch
+no findings
+
+== tags only
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for merge request pipelines: rules: no rule admits it
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for pushes to main: rules: no rule admits it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== schedules only
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for merge request pipelines: rules: no rule admits it
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for pushes to main: rules: no rule admits it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== not on schedules
+no findings
+
+== &&, || and parentheses
+no findings
+
+== an unread condition that the rest decides
+no findings
+
+== when: never excludes tags
+no findings
+
+== when: never excludes the default branch
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 4: job verify does not count for pushes to main: rules: when: never excludes it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== a condition the audit does not read is quoted with its line
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for merge request pipelines: rules: if: `$CI_COMMIT_MESSAGE =~ /verify/` is a condition the audit does not read
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for pushes to main: rules: if: `$CI_COMMIT_MESSAGE =~ /verify/` is a condition the audit does not read
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== a variable the audit does not read
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for merge request pipelines: rules: if: `$RUN_VERIFY == "true"` is a condition the audit does not read
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for pushes to main: rules: if: `$RUN_VERIFY == "true"` is a condition the audit does not read
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== changes: does not count
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 4: job verify does not count for merge request pipelines: rules: a rule with changes: does not count (the audit does not read which files change or exist)
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== exists: does not count
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for merge request pipelines: rules: a rule with exists: does not count (the audit does not read which files change or exist)
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for pushes to main: rules: a rule with exists: does not count (the audit does not read which files change or exist)
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== changes: in a rule that does not match is not read
+no findings
+
+== an unread rule before admitting rules is passed over
+no findings
+
+== an unread rule with when: never does not admit the job
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for merge request pipelines: rules: if: `$FOO` is a condition the audit does not read
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for pushes to main: rules: if: `$FOO` is a condition the audit does not read
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== changes: followed by an admitting rule counts
+no findings
+
+== workflow rules: an unread rule before an admitting one is passed over
+no findings
+
+== workflow rules: an unread rule with when: never
+file: .gitlab-ci.yml
+message: no job runs in merge request pipelines (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines and calls `task verify`
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for merge request pipelines: workflow:rules: if: `$FOO` is a condition the audit does not read
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job runs in pushes to main (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in pushes to main and calls `task verify`
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for pushes to main: workflow:rules: if: `$FOO` is a condition the audit does not read
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== rules from a !reference
+no findings
+
+== workflow rules for both kinds
+no findings
+
+== workflow rules for both kinds, a job without rules is not in merge request pipelines
+file: .gitlab-ci.yml
+message: no job runs in merge request pipelines (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines and calls `task verify`
+
+file: .gitlab-ci.yml
+message: line 6: job verify does not count for merge request pipelines: with no rules and no only:, it runs in branch and tag pipelines only
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== workflow rules for merge requests only
+file: .gitlab-ci.yml
+message: no job runs in merge request pipelines (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines and calls `task verify`
+
+file: .gitlab-ci.yml
+message: line 5: job verify does not count for merge request pipelines: with no rules and no only:, it runs in branch and tag pipelines only
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job runs in pushes to main (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in pushes to main and calls `task verify`
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for pushes to main: workflow:rules: no rule admits it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== workflow rules with a condition the audit does not read
+file: .gitlab-ci.yml
+message: no job runs in merge request pipelines (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines and calls `task verify`
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for merge request pipelines: workflow:rules: if: `$CI_OPEN_MERGE_REQUESTS` is a condition the audit does not read
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job runs in pushes to main (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in pushes to main and calls `task verify`
+
+file: .gitlab-ci.yml
+message: line 3: job verify does not count for pushes to main: workflow:rules: if: `$CI_OPEN_MERGE_REQUESTS` is a condition the audit does not read
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== only merge_requests
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 2: job verify does not count for pushes to main: only: does not admit it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== only merge_requests and the default branch
+no findings
+
+== only branches
+no findings
+
+== only pushes
+no findings
+
+== only tags
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 2: job verify does not count for merge request pipelines: only: does not admit it
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 2: job verify does not count for pushes to main: only: does not admit it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== only schedules
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 2: job verify does not count for merge request pipelines: only: does not admit it
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 2: job verify does not count for pushes to main: only: does not admit it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== except the default branch
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 2: job verify does not count for pushes to main: except: excludes it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== except tags
+no findings
+
+== except merge_requests still runs in branch pipelines
+no findings
+
+== only a regular expression
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 2: job verify does not count for merge request pipelines: only: `/^release/` is a condition the audit does not read
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 2: job verify does not count for pushes to main: only: `/^release/` is a condition the audit does not read
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== only refs with changes
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 4: job verify does not count for merge request pipelines: only: changes: does not count (the audit does not read which files change)
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 4: job verify does not count for pushes to main: only: changes: does not count (the audit does not read which files change)
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== only refs as a map
+no findings
+
+== a job that never runs
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 2: job verify does not count for merge request pipelines: when: never
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 2: job verify does not count for pushes to main: when: never
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== a hidden job is a template, not a job
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== extends a template
+no findings
+
+== extends several templates, later ones win
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== extends deep-merges maps
+no findings
+
+== extends in a chain
+no findings
+
+== extends a job that is not defined
+file: .gitlab-ci.yml
+message: does not parse: line 2: job verify extends .missing, which is not defined
+fix: fix the syntax so that the file parses
+
+== an extends cycle
+file: .gitlab-ci.yml
+message: does not parse: line 2: extends cycle: verify extends .a extends .b extends .a
+fix: fix the syntax so that the file parses
+
+== extends nested within the limit
+no findings
+
+== extends nested beyond the limit
+file: .gitlab-ci.yml
+message: does not parse: line 5: extends nests more than 11 levels
+fix: fix the syntax so that the file parses
+
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== default before_script
+no findings
+
+== a job's own before_script replaces the default
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== inherit default false
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== inherit a list of default keys
+no findings
+
+== a top-level before_script is a default
+no findings
+
+== an anchor
+no findings
+
+== a merge key
+no findings
+
+== a merge key the job overrides
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== merge keys from a list
+no findings
+
+== !reference to a script
+no findings
+
+== !reference nested in a referenced key
+no findings
+
+== !reference that points at nothing
+file: .gitlab-ci.yml
+message: does not parse: line 3: !reference [.tpl, script] points at nothing
+fix: fix the syntax so that the file parses
+
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== !reference that refers to itself
+file: .gitlab-ci.yml
+message: does not parse: line 3: !reference [.a, script] refers to itself
+fix: fix the syntax so that the file parses
+
+== a local include
+no findings
+
+== a local include as a string
+no findings
+
+== a nested local include
+no findings
+
+== a wildcard include
+no findings
+
+== a single star does not cross directories
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== a double star crosses directories
+no findings
+
+== the including file wins over the included one
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== an included job extends a template of the including file
+no findings
+
+== a local include that names no file
+file: .gitlab-ci.yml
+message: does not parse: line 1: include local: ci/missing.yml names no tracked file
+fix: fix the syntax so that the file parses
+
+== an untracked include
+file: .gitlab-ci.yml
+message: does not parse: line 1: include local: ci/verify.yml names no tracked file
+fix: fix the syntax so that the file parses
+
+== an include cycle
+file: .gitlab-ci.yml
+message: does not parse: include cycle: .gitlab-ci.yml includes ci/a.yml includes ci/b.yml includes ci/a.yml
+fix: fix the syntax so that the file parses
+
+== an included file that does not parse
+file: ci/a.yml
+message: does not parse: yaml: line 1: did not find expected node content
+fix: fix the syntax so that the file parses
+
+== an include whose rules admit only merge requests
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: ci/verify.yml
+message: line 2: job verify does not count for merge request pipelines: with no rules and no only:, it runs in branch and tag pipelines only
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 4: job verify does not count for pushes to main: include rules: no rule admits it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== an include whose rules admit both kinds
+no findings
+
+== an include rule the audit does not read is quoted with its line
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 4: job verify does not count for merge request pipelines: include rules: if: `$FOO` is a condition the audit does not read
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 4: job verify does not count for pushes to main: include rules: if: `$FOO` is a condition the audit does not read
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== an include rule with changes: is quoted with its line
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 4: job verify does not count for merge request pipelines: include rules: a rule with changes: does not count (the audit does not read which files change or exist)
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 4: job verify does not count for pushes to main: include rules: a rule with changes: does not count (the audit does not read which files change or exist)
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== an unread include rule before an admitting one is passed over
+no findings
+
+== a project include is not followed
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== a remote include is not followed
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== a child pipeline the parent waits for
+no findings
+
+== a child pipeline with strategy mirror
+no findings
+
+== a child pipeline the parent does not wait for
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== the trigger job's rules are the outer condition
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: ci/child.yml
+message: line 2: job verify (child pipeline ci/child.yml) does not count for merge request pipelines: with no rules and no only:, it runs in branch and tag pipelines only
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: .gitlab-ci.yml
+message: line 3: job verify (child pipeline ci/child.yml) does not count for pushes to main: its trigger job child does not run: rules: no rule admits it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== a child's workflow rules for parent pipelines
+no findings
+
+== a child's jobs gated to merge request events
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: line 2: job verify (child pipeline ci/child.yml) does not count for merge request pipelines: its trigger job child does not run: with no rules and no only:, it runs in branch and tag pipelines only
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+file: ci/child.yml
+message: line 3: job verify (child pipeline ci/child.yml) does not count for pushes to main: rules: no rule admits it
+fix: make the job run in pushes to main with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== a child pipeline file that names no file
+file: .gitlab-ci.yml
+message: does not parse: line 24: job child: trigger include ci/missing.yml names no tracked file
+fix: fix the syntax so that the file parses
+
+== a child pipeline from another project is not followed
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== a dynamic child pipeline is not followed
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in merge request pipelines
+
+file: .gitlab-ci.yml
+message: no job that runs in pushes to main calls the verify command `task verify`
+fix: add `task verify` as its own command to the script of a job that runs in pushes to main
+
+== a .gitlab-ci.yml that does not parse
+file: .gitlab-ci.yml
+message: does not parse: yaml: line 1: did not find expected node content
+fix: fix the syntax so that the file parses
+
+file: .gitlab-ci.yml
+message: no job runs in merge request pipelines (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines and calls `task verify`
+
+file: .gitlab-ci.yml
+message: no job runs in pushes to main (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in pushes to main and calls `task verify`
+
+== a .gitlab-ci.yml that is not a map
+file: .gitlab-ci.yml
+message: does not parse: a GitLab CI configuration must be a map
+fix: fix the syntax so that the file parses
+
+file: .gitlab-ci.yml
+message: no job runs in merge request pipelines (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines and calls `task verify`
+
+file: .gitlab-ci.yml
+message: no job runs in pushes to main (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in pushes to main and calls `task verify`
+
+== an empty .gitlab-ci.yml
+file: .gitlab-ci.yml
+message: does not parse: the file is empty
+fix: fix the syntax so that the file parses
+
+file: .gitlab-ci.yml
+message: no job runs in merge request pipelines (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines and calls `task verify`
+
+file: .gitlab-ci.yml
+message: no job runs in pushes to main (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in pushes to main and calls `task verify`
+
+== a job that is not a map
+file: .gitlab-ci.yml
+message: does not parse: line 22: job broken must be a map
+fix: fix the syntax so that the file parses
+
+== a script that is not a string or a list
+file: .gitlab-ci.yml
+message: does not parse: line 23: job broken: script must be a string or a list of strings
+fix: fix the syntax so that the file parses
+
+== verify missing points at V-04
+file: vibe.yaml
+message: this rule needs the verify entrypoint, and V-04 finds it unusable: entrypoints.verify is not declared
+fix: fix V-04 first: declare entrypoints.verify as the command that runs it, such as task verify

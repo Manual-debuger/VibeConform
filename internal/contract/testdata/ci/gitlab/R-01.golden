@@ -1,0 +1,80 @@
+== baseline
+no findings
+
+== vibe in a script
+file: .gitlab-ci.yml
+message: line 25: job sync, script: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe in before_script
+file: .gitlab-ci.yml
+message: line 24: job sync, before_script: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe in after_script
+file: .gitlab-ci.yml
+message: line 25: job sync, after_script: `vibe doctor` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe in a default before_script
+file: .gitlab-ci.yml
+message: line 2: job verify:linux, before_script: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+file: .gitlab-ci.yml
+message: line 2: job verify:windows, before_script: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+file: .gitlab-ci.yml
+message: line 2: job scan, before_script: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== other vibe commands in the audit job
+no findings
+
+== vibe in the audit job's after_script
+no findings
+
+== vibe audit in a job that also calls verify
+file: .gitlab-ci.yml
+message: line 21: job conformance:audit, script: `vibe audit --static` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe audit in a job that does not run in merge requests
+file: .gitlab-ci.yml
+message: line 23: job conformance:audit, script: `vibe audit --static` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== the audit job in a child pipeline
+no findings
+
+== vibe in a child pipeline
+file: ci/child.yml
+message: line 2: job sync, script: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe by path is not a call of vibe
+no findings
+
+== vibe --version in a job that calls no entrypoint
+no findings
+
+== vibe --version in a job that calls verify
+file: .gitlab-ci.yml
+message: line 24: job v, before_script: `vibe --version` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe --version in a job that calls verify in after_script
+file: .gitlab-ci.yml
+message: line 24: job v, script: `vibe --version` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe --version with more words is a call
+file: .gitlab-ci.yml
+message: line 24: job install, script: `vibe --version --json` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a .gitlab-ci.yml that does not parse
+file: .gitlab-ci.yml
+message: does not parse: yaml: line 1: did not find expected node content
+fix: fix the syntax so that the file parses

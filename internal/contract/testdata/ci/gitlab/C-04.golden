@@ -1,0 +1,94 @@
+== baseline
+no findings
+
+== merge requests only
+no findings
+
+== after building vibe, in one line
+no findings
+
+== with leading assignments
+no findings
+
+== the audit job also calls verify
+file: .gitlab-ci.yml
+message: job conformance:audit runs vibe audit and also calls the verify command `task verify`
+fix: run vibe audit in a job of its own that does not call verify
+
+== verify in the audit job's before_script
+file: .gitlab-ci.yml
+message: job conformance:audit runs vibe audit and also calls the verify command `task verify`
+fix: run vibe audit in a job of its own that does not call verify
+
+== verify in the audit job's after_script does not count
+no findings
+
+== vibe audit in after_script does not count
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines runs vibe audit (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines, whose script runs vibe audit (any arguments) and that calls no verify command
+
+== no audit job
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines runs vibe audit (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines, whose script runs vibe audit (any arguments) and that calls no verify command
+
+== the default branch only
+file: .gitlab-ci.yml
+message: line 9: job conformance:audit does not count for merge request pipelines: rules: no rule admits it
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== tags only
+file: .gitlab-ci.yml
+message: line 8: job conformance:audit does not count for merge request pipelines: only: does not admit it
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== a condition the audit does not read
+file: .gitlab-ci.yml
+message: line 9: job conformance:audit does not count for merge request pipelines: rules: if: `$CI_MERGE_REQUEST_LABELS =~ /audit/` is a condition the audit does not read
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== changes: does not count
+file: .gitlab-ci.yml
+message: line 9: job conformance:audit does not count for merge request pipelines: rules: a rule with changes: does not count (the audit does not read which files change or exist)
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== in an include whose rule the audit does not read
+file: .gitlab-ci.yml
+message: line 4: job conformance:audit does not count for merge request pipelines: include rules: if: `$FOO` is a condition the audit does not read
+fix: make the job run in merge request pipelines with conditions the audit reads ($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), without changes: or exists:
+
+== in a child pipeline the parent waits for
+no findings
+
+== in a child pipeline the parent does not wait for
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines runs vibe audit (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines, whose script runs vibe audit (any arguments) and that calls no verify command
+
+== from a template
+no findings
+
+== vibe without audit
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines runs vibe audit (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines, whose script runs vibe audit (any arguments) and that calls no verify command
+
+== vibe audit by path is not vibe audit
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines runs vibe audit (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines, whose script runs vibe audit (any arguments) and that calls no verify command
+
+== verify missing points at V-04
+file: vibe.yaml
+message: this rule needs the verify entrypoint, and V-04 finds it unusable: entrypoints.verify is not declared
+fix: fix V-04 first: declare entrypoints.verify as the command that runs it, such as task verify
+
+== a .gitlab-ci.yml that does not parse
+file: .gitlab-ci.yml
+message: does not parse: yaml: line 1: did not find expected node content
+fix: fix the syntax so that the file parses
+
+file: .gitlab-ci.yml
+message: no job that runs in merge request pipelines runs vibe audit (workflow:rules, rules: or only/except that leave the pipeline out, changes: or exists:, and conditions the audit does not read make a job not count)
+fix: add a job that runs in merge request pipelines, whose script runs vibe audit (any arguments) and that calls no verify command

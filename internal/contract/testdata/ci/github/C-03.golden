@@ -1,0 +1,34 @@
+== baseline
+no findings
+
+== read-all
+no findings
+
+== empty map
+no findings
+
+== read and none
+no findings
+
+== a job widens them
+no findings
+
+== missing
+file: .github/workflows/extra.yml
+message: has no top-level permissions, so it gets the repository's default, which may be write
+fix: set top-level `permissions: contents: read` (or `read-all`, or `{}`) and grant write scopes in the job that needs them
+
+== a write scope
+file: .github/workflows/extra.yml
+message: line 3: top-level permissions grant security-events: write
+fix: move security-events: write into the permissions of the job that needs it; keep top-level scopes read or none
+
+== write-all
+file: .github/workflows/extra.yml
+message: line 2: top-level permissions are write-all, not read-all
+fix: set top-level `permissions: contents: read` (or `read-all`, or `{}`) and grant write scopes in the job that needs them
+
+== a workflow that does not parse
+file: .github/workflows/broken.yml
+message: does not parse: yaml: line 1: did not find expected ',' or ']'
+fix: fix the syntax so that the file parses
