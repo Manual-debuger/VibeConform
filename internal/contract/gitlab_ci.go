@@ -103,7 +103,7 @@ func readGitLabCI(env *Env) *CI {
 	r := &glReader{env: env, origin: map[*yaml.Node]string{}, docs: map[string]*yaml.Node{},
 		loaded: map[string]bool{}, seen: map[string]bool{}, seenIncludes: map[*yaml.Node]bool{},
 		pipelines: map[string]*glPipeline{}, dropped: map[string]map[string]*glWhy{}}
-	ci := &CI{Provider: CIGitLab, Dir: gitlabCIFile}
+	ci := &CI{Provider: CIGitLab, Dir: gitlabCIFile, wording: gitlabWording}
 
 	all := &glContext{all: true}
 	r.walk(r.pipeline([]string{gitlabCIFile}, "", all, nil), all, nil, 0, nil, func(j *CIJob, _ bool, _ *glWhy) {

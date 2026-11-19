@@ -78,6 +78,8 @@ type CI struct {
 	// runs are the jobs that run for each pipeline kind, as the reader
 	// decided them.
 	runs map[PipelineKind]*CIRun
+	// wording is the provider's words for findings (ci_wording.go).
+	wording *ciWording
 }
 
 // CIJob is one job.
@@ -296,7 +298,7 @@ func (e *Env) readCI() *ciState {
 // trigger walk finds for its event on the default branch; a GitHub run
 // has no skipped jobs.
 func githubCI(env *Env, ws *Workflows) *CI {
-	ci := &CI{Provider: CIGitHub, Dir: workflowDir + "/"}
+	ci := &CI{Provider: CIGitHub, Dir: workflowDir + "/", wording: githubWording}
 	for _, wf := range ws.Files {
 		if wf.Err != nil {
 			ci.Broken = append(ci.Broken, ParseFailure(wf.File, wf.Err))
