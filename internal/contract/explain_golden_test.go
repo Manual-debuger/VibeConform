@@ -11,11 +11,13 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 )
 
-// updateExplainGoldens rewrites the explain goldens from the current
-// registry: go test ./internal/contract -run TestExplainGolden -update.
-// Review the diff before committing it: spec 0066 moves the language
-// knowledge into records and must leave every golden unchanged.
-var updateExplainGoldens = flag.Bool("update", false, "rewrite the explain goldens; review the diff, then commit it")
+// updateGoldens rewrites the package's goldens from the current code:
+// the explain goldens (go test ./internal/contract -run TestExplainGolden
+// -update) and the CI findings goldens (ci_golden_test.go). It is the
+// package's one -update flag; a second flag of that name would panic.
+// Review the diff before committing it: a refactor such as spec 0066's
+// or spec 0067's must leave every golden unchanged.
+var updateGoldens = flag.Bool("update", false, "rewrite the goldens (explain and CI findings); review the diff, then commit it")
 
 // explainText is what vibe audit --explain prints from the contract for
 // one rule, beyond the facts every rule has: the rule's check, each
@@ -65,7 +67,7 @@ func TestExplainGolden(t *testing.T) {
 // rewriting the file with -update.
 func assertGolden(t *testing.T, golden, got string) {
 	t.Helper()
-	if *updateExplainGoldens {
+	if *updateGoldens {
 		if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
 			t.Fatal(err)
 		}

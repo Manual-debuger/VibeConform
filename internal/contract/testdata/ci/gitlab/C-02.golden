@@ -1,0 +1,144 @@
+== baseline
+no findings
+
+== a job image by tag
+file: .gitlab-ci.yml
+message: line 24: image golang:1.25 is not pinned by digest (used by job x)
+fix: pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)
+
+== a job image pinned
+no findings
+
+== a job image in name: form by tag
+file: .gitlab-ci.yml
+message: line 25: image golang:1.25 is not pinned by digest (used by job x)
+fix: pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)
+
+== a job image in name: form pinned
+no findings
+
+== a default image by tag
+file: .gitlab-ci.yml
+message: line 2: image golang:1.25 is not pinned by digest (used by job verify:linux, job verify:windows, job scan, job conformance:audit)
+fix: pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)
+
+== a short digest
+file: .gitlab-ci.yml
+message: line 24: image golang:1.25@sha256:0123abcd is not pinned by digest (used by job x)
+fix: pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)
+
+== a job service by tag
+file: .gitlab-ci.yml
+message: line 25: services postgres:16 is not pinned by digest (used by job x)
+fix: pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)
+
+== a job service in name: form by tag
+file: .gitlab-ci.yml
+message: line 25: services postgres:16 is not pinned by digest (used by job x)
+fix: pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)
+
+== a job service pinned
+no findings
+
+== a default service by tag
+file: .gitlab-ci.yml
+message: line 2: services redis:7 is not pinned by digest (used by job verify:linux, job verify:windows, job scan, job conformance:audit)
+fix: pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)
+
+== an image from a template
+file: .gitlab-ci.yml
+message: line 24: image golang:1.25 is not pinned by digest (used by job x)
+fix: pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)
+
+== an unpinned image in a template no job uses
+no findings
+
+== an image in a local include
+file: ci/x.yml
+message: line 2: image golang:1.25 is not pinned by digest (used by job x)
+fix: pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)
+
+== an image in a child pipeline
+file: ci/child.yml
+message: line 2: image golang:1.25 is not pinned by digest (used by job x (child pipeline ci/child.yml))
+fix: pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)
+
+== a project include pinned
+no findings
+
+== a project include by tag
+file: .gitlab-ci.yml
+message: line 2: include project group/ci is not pinned to a commit SHA: ref is v1.2.3
+fix: set ref: to a full 40-character commit SHA, with the version in a comment (ref: <sha> # v1.2.3)
+
+== a project include without ref
+file: .gitlab-ci.yml
+message: line 2: include project group/ci is not pinned to a commit SHA: ref is (no ref: the default branch)
+fix: set ref: to a full 40-character commit SHA, with the version in a comment (ref: <sha> # v1.2.3)
+
+== a component pinned
+no findings
+
+== a component by version
+file: .gitlab-ci.yml
+message: line 2: include component $CI_SERVER_FQDN/group/lint/golangci@1.2.0 is not pinned to a commit SHA
+fix: pin the component to a full 40-character commit SHA, with the version in a comment (component: <path>@<sha> # 1.2.0)
+
+== a component at ~latest
+file: .gitlab-ci.yml
+message: line 2: include component gitlab.com/group/lint/golangci@~latest is not pinned to a commit SHA
+fix: pin the component to a full 40-character commit SHA, with the version in a comment (component: <path>@<sha> # 1.2.0)
+
+== a remote include with integrity
+no findings
+
+== a remote include without integrity
+file: .gitlab-ci.yml
+message: line 2: include remote https://example.com/ci.yml has no integrity:
+fix: add integrity: sha256-<base64 of the file's SHA-256 digest>, or copy the file into the repository and include it with local:
+
+== a remote include as a string
+file: .gitlab-ci.yml
+message: line 2: include remote https://example.com/ci.yml has no integrity:
+fix: add integrity: sha256-<base64 of the file's SHA-256 digest>, or copy the file into the repository and include it with local:
+
+== a template include cannot be pinned
+file: .gitlab-ci.yml
+message: line 2: include template Jobs/SAST.gitlab-ci.yml cannot be pinned: GitLab serves the version of the instance
+fix: copy the template into the repository and include it with local:, or include the matching CI/CD component pinned to a commit SHA
+
+== an unpinned include in a local include
+file: ci/x.yml
+message: line 2: include project group/ci is not pinned to a commit SHA: ref is (no ref: the default branch)
+fix: set ref: to a full 40-character commit SHA, with the version in a comment (ref: <sha> # v1.2.3)
+
+== an unpinned include in a trigger
+file: .gitlab-ci.yml
+message: line 26: include project group/ci is not pinned to a commit SHA: ref is (no ref: the default branch)
+fix: set ref: to a full 40-character commit SHA, with the version in a comment (ref: <sha> # v1.2.3)
+
+== @latest in script
+file: .gitlab-ci.yml
+message: line 25: job x, script runs golang.org/x/tools/cmd/goimports@latest, which is not pinned
+fix: pin golang.org/x/tools/cmd/goimports to a version (@v1.2.3) instead of @latest
+
+== @latest in before_script
+file: .gitlab-ci.yml
+message: line 25: job x, before_script runs prettier@latest, which is not pinned
+fix: pin prettier to a version (@v1.2.3) instead of @latest
+
+== @latest in after_script
+file: .gitlab-ci.yml
+message: line 25: job x, after_script runs prettier@latest, which is not pinned
+fix: pin prettier to a version (@v1.2.3) instead of @latest
+
+== a pinned version
+no findings
+
+== @latest inside a word is not a version
+no findings
+
+== a .gitlab-ci.yml that does not parse
+file: .gitlab-ci.yml
+message: does not parse: yaml: line 1: did not find expected node content
+fix: fix the syntax so that the file parses

@@ -140,16 +140,24 @@ type RuleCase struct {
 	Findings []string
 }
 
+// CaseCheck is a further check of one case's report. RunRuleCases and
+// RunPartCases run it in the case's subtest, after the case's result and
+// findings are asserted: a golden comparison of the findings, say.
+type CaseCheck func(t *testing.T, tc RuleCase, rep *contract.Report)
+
 // RunRuleCases runs each case as a parallel subtest: a static audit of
 // the baseline with the case's edits, through Audit, so the report check
-// runs too.
-func RunRuleCases(t *testing.T, id string, cases []RuleCase) {
+// runs too. Each of checks then runs on the case's report.
+func RunRuleCases(t *testing.T, id string, cases []RuleCase, checks ...CaseCheck) {
 	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 			rep := Audit(t, Fixture(t, Baseline, tc.Edits...), contract.Options{Static: true})
 			AssertRule(t, rep, id, tc.Want, tc.Findings...)
+			for _, check := range checks {
+				check(t, tc, rep)
+			}
 		})
 	}
 }
@@ -158,8 +166,9 @@ func RunRuleCases(t *testing.T, id string, cases []RuleCase) {
 // parts: a static audit runs only the static parts, so each case's Want
 // is the result of the part of kind, and the findings are the rule's. A
 // case whose part fails must fail the rule too; a passing static part
-// leaves the rule not run, since its other parts did not run.
-func RunPartCases(t *testing.T, id string, kind contract.PartKind, cases []RuleCase) {
+// leaves the rule not run, since its other parts did not run. Each of
+// checks then runs on the case's report.
+func RunPartCases(t *testing.T, id string, kind contract.PartKind, cases []RuleCase, checks ...CaseCheck) {
 	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
@@ -168,6 +177,9 @@ func RunPartCases(t *testing.T, id string, kind contract.PartKind, cases []RuleC
 			AssertPart(t, rep, id, kind, tc.Want, tc.Findings...)
 			if r := RuleResult(t, rep, id); tc.Want == contract.ResultFail && r.Result != contract.ResultFail {
 				t.Errorf("%s = %s, want fail", id, r.Result)
+			}
+			for _, check := range checks {
+				check(t, tc, rep)
 			}
 		})
 	}

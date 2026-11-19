@@ -1,0 +1,55 @@
+== baseline govulncheck
+no findings
+
+== pip-audit in before_script
+no findings
+
+== trivy in after_script
+no findings
+
+== a scanner in a child pipeline
+no findings
+
+== a scanner in a job with rules
+no findings
+
+== the Dependency-Scanning template
+no findings
+
+== the Security Dependency-Scanning template
+no findings
+
+== another template
+file: .gitlab-ci.yml
+message: no job runs a recognized vulnerability scanner (govulncheck, pip-audit, pnpm audit, npm audit, osv-scanner or trivy), and the pipeline includes neither GitLab's Dependency-Scanning template nor its dependency-scanning component
+fix: add a job whose script runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python or pnpm audit for TypeScript, or include the dependency-scanning CI/CD component pinned to a commit SHA
+
+== the dependency-scanning component
+no findings
+
+== the dependency-scanning component unpinned is still recognized
+no findings
+
+== another component
+file: .gitlab-ci.yml
+message: no job runs a recognized vulnerability scanner (govulncheck, pip-audit, pnpm audit, npm audit, osv-scanner or trivy), and the pipeline includes neither GitLab's Dependency-Scanning template nor its dependency-scanning component
+fix: add a job whose script runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python or pnpm audit for TypeScript, or include the dependency-scanning CI/CD component pinned to a commit SHA
+
+== installing a scanner is not running it
+file: .gitlab-ci.yml
+message: no job runs a recognized vulnerability scanner (govulncheck, pip-audit, pnpm audit, npm audit, osv-scanner or trivy), and the pipeline includes neither GitLab's Dependency-Scanning template nor its dependency-scanning component
+fix: add a job whose script runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python or pnpm audit for TypeScript, or include the dependency-scanning CI/CD component pinned to a commit SHA
+
+== no scanner
+file: .gitlab-ci.yml
+message: no job runs a recognized vulnerability scanner (govulncheck, pip-audit, pnpm audit, npm audit, osv-scanner or trivy), and the pipeline includes neither GitLab's Dependency-Scanning template nor its dependency-scanning component
+fix: add a job whose script runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python or pnpm audit for TypeScript, or include the dependency-scanning CI/CD component pinned to a commit SHA
+
+== a .gitlab-ci.yml that does not parse
+file: .gitlab-ci.yml
+message: does not parse: yaml: line 1: did not find expected node content
+fix: fix the syntax so that the file parses
+
+file: .gitlab-ci.yml
+message: no job runs a recognized vulnerability scanner (govulncheck, pip-audit, pnpm audit, npm audit, osv-scanner or trivy), and the pipeline includes neither GitLab's Dependency-Scanning template nor its dependency-scanning component
+fix: add a job whose script runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python or pnpm audit for TypeScript, or include the dependency-scanning CI/CD component pinned to a commit SHA
