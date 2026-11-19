@@ -238,9 +238,6 @@ type ciJob struct {
 	job *Job
 }
 
-// where names a job for a finding.
-func (j ciJob) where() string { return "job " + j.job.ID }
-
 // jobsRun returns the jobs a workflow runs: its own, with each job that
 // uses a local reusable workflow (./.github/workflows/…) replaced by the
 // jobs of that workflow, followed recursively. A remote reusable workflow
@@ -299,15 +296,6 @@ func jobsTriggered(parsed []*Workflow, event, branch string) []ciJob {
 				out = append(out, j)
 			}
 		}
-	}
-	return out
-}
-
-// commandsOf returns every simple command of the jobs' run: steps.
-func commandsOf(jobs []ciJob) []Command {
-	var out []Command
-	for _, j := range jobs {
-		out = append(out, j.job.Commands()...)
 	}
 	return out
 }

@@ -14,9 +14,10 @@ import (
 // part (spec 0052, "Recognition rules"; spec 0055 for GitLab CI). Each
 // starts from ciRead, which applies env.CI() and turns every CI file that
 // does not parse or resolve into a failure of the rule; the rule then
-// reads the rest. GitHub triggers and the default branch are in
-// workflow_triggers.go, runners and matrices in workflow_runners.go; the
-// GitLab pipeline model is in gitlab_ci.go and gitlab_rules.go.
+// reads the rest. The readers fill the model (ci_model.go): GitHub
+// triggers and the default branch are in workflow_triggers.go, runners
+// and matrices in workflow_runners.go; the GitLab pipeline model is in
+// gitlab_ci.go and gitlab_rules.go, its runners in gitlab_runners.go.
 
 // ciRead returns the CI for a rule that reads it. When ok is false the
 // rule's result is res: no CI the audit reads. When ok is true, res holds
@@ -106,21 +107,22 @@ func checkC01(env *Env, _ Needed) PartResult {
 	if ci.Provider == CIGitLab {
 		return Merge(res, gitlabC01(env, ci, verify))
 	}
-	parsed := ci.Workflows
-	branch := defaultBranch(env, parsed)
 	var findings []Finding
-	for _, ev := range []struct{ event, what string }{
-		{eventPullRequest, "pull requests"},
-		{eventPush, "pushes to " + branch},
+	for _, ev := range []struct {
+		kind PipelineKind
+		what string
+	}{
+		{KindMergeRequest, "pull requests"},
+		{KindDefaultPush, "pushes to " + env.defaultBranch},
 	} {
-		jobs := jobsTriggered(parsed, ev.event, branch)
+		jobs := ci.Run(ev.kind).Jobs
 		if len(jobs) == 0 {
 			findings = append(findings, Finding{File: workflowDir + "/",
 				Message: "no workflow runs on " + ev.what + triggerHint,
 				Fix:     fmt.Sprintf("trigger a workflow that calls %s on %s", quoteCommandList(verify), ev.what)})
 			continue
 		}
-		for _, c := range Uncalled(verify, commandsOf(jobs)) {
+		for _, c := range Uncalled(verify, commandsOfJobs(jobs)) {
 			findings = append(findings, Finding{File: workflowDir + "/",
 				Message: fmt.Sprintf("no workflow that runs on %s calls the verify command `%s`", ev.what, c),
 				Fix:     fmt.Sprintf("add a step that runs `%s` as its own command to a job that runs on %s", c, ev.what)})
@@ -202,21 +204,20 @@ func checkC04(env *Env, _ Needed) PartResult {
 		return res
 	}
 	if ci.Provider == CIGitLab {
-		return Merge(res, gitlabC04(env, ci, verify))
+		return Merge(res, gitlabC04(ci, verify))
 	}
-	parsed := ci.Workflows
-	branch := defaultBranch(env, parsed)
-	if len(auditJobs(parsed, branch, verify)) > 0 {
+	run := ci.Run(KindMergeRequest)
+	if len(ciAuditJobs(run, verify)) > 0 {
 		return res
 	}
 	var findings []Finding
-	for _, j := range jobsTriggered(parsed, eventPullRequest, branch) {
-		if !runsAudit(j.job) {
+	for _, j := range run.Jobs {
+		if !runsAuditCommand(j.Commands) {
 			continue
 		}
 		for _, c := range verify {
-			if CallsAny(j.job.Commands(), c) {
-				findings = append(findings, Finding{File: j.wf.File,
+			if CallsAny(j.Commands, c) {
+				findings = append(findings, Finding{File: j.File,
 					Message: fmt.Sprintf("%s runs vibe audit and also calls the verify command `%s`", j.where(), c),
 					Fix:     "run vibe audit in a job of its own that does not call verify"})
 			}
@@ -230,42 +231,11 @@ func checkC04(env *Env, _ Needed) PartResult {
 	return Merge(res, Fail(findings...))
 }
 
-// auditJobs returns the jobs that satisfy C-04: run by a workflow that
-// counts for pull requests, with a step that runs vibe audit and no step
-// that calls a verify command.
-func auditJobs(parsed []*Workflow, branch string, verify []Command) []ciJob {
-	var out []ciJob
-	for _, j := range jobsTriggered(parsed, eventPullRequest, branch) {
-		if !runsAudit(j.job) {
-			continue
-		}
-		calls := false
-		for _, c := range verify {
-			calls = calls || CallsAny(j.job.Commands(), c)
-		}
-		if !calls {
-			out = append(out, j)
-		}
-	}
-	return out
-}
-
-// runsAudit reports whether a job has a simple command that starts with
-// the words vibe audit.
-func runsAudit(j *Job) bool {
-	for _, c := range j.Commands() {
-		if c.HasPrefix("vibe", "audit") {
-			return true
-		}
-	}
-	return false
-}
-
 // checkC05: each verify command is called by a job that runs on a Linux
 // runner and by one that runs on a Windows runner, after matrix
 // expansion, in any workflow. The rule is not applicable without windows
 // in platforms; the registry decides that before it runs.
-func checkC05(env *Env, _ Needed) PartResult { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
+func checkC05(env *Env, _ Needed) PartResult { //nolint:gocognit // baseline: pre-existing complexity
 	verify, missing := env.Entrypoint(EntrypointVerify)
 	if missing != nil {
 		return Fail(*missing)
@@ -277,28 +247,24 @@ func checkC05(env *Env, _ Needed) PartResult { //nolint:gocognit,gocyclo // base
 	if ci.Provider == CIGitLab {
 		return Merge(res, gitlabC05(ci, verify))
 	}
-	parsed := ci.Workflows
 	var findings []Finding
 	for _, c := range verify {
 		var platforms, unknown, where []string
 		file := workflowDir + "/"
-		for _, wf := range parsed {
-			for _, j := range wf.Jobs {
-				if !CallsAny(j.Commands(), c) {
-					continue
-				}
-				if len(where) == 0 {
-					file = wf.File
-				}
-				where = append(where, wf.File+" job "+j.ID)
-				ps, us := runnerPlatforms(j)
-				for _, p := range ps {
-					if !slices.Contains(platforms, p) {
-						platforms = append(platforms, p)
-					}
-				}
-				unknown = append(unknown, us...)
+		for _, j := range ci.Jobs {
+			if !CallsAny(j.Commands, c) {
+				continue
 			}
+			if len(where) == 0 {
+				file = j.File
+			}
+			where = append(where, j.File+" "+j.where())
+			for _, p := range j.Platforms {
+				if !slices.Contains(platforms, p) {
+					platforms = append(platforms, p)
+				}
+			}
+			unknown = append(unknown, j.UnknownRunners...)
 		}
 		if len(where) == 0 {
 			findings = append(findings, Finding{File: file,
@@ -352,14 +318,11 @@ func checkD03(env *Env, _ Needed) PartResult {
 	if ci.Provider == CIGitLab {
 		return Merge(res, gitlabD03(ci))
 	}
-	parsed := ci.Workflows
-	for _, wf := range parsed {
-		for _, j := range wf.Jobs {
-			for _, c := range j.Commands() {
-				for _, s := range scanners {
-					if c.HasPrefix(s...) {
-						return res
-					}
+	for _, j := range ci.Jobs {
+		for _, c := range j.Commands {
+			for _, s := range scanners {
+				if c.HasPrefix(s...) {
+					return res
 				}
 			}
 		}
@@ -384,7 +347,7 @@ func checkR01(env *Env, _ Needed) PartResult {
 		// With verify missing (V-04 fails), any vibe audit job that runs
 		// for pull (merge) requests is the audit job.
 		verify, _ := env.Entrypoint(EntrypointVerify)
-		calls = append(calls, ciVibeCalls(env, ci, ciAuditJobs(ci.Run(env, KindMergeRequest), verify))...)
+		calls = append(calls, ciVibeCalls(env, ci, ciAuditJobs(ci.Run(KindMergeRequest), verify))...)
 	}
 	var findings []Finding
 	for _, c := range calls {

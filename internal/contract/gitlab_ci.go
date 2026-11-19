@@ -714,6 +714,7 @@ func (r *glReader) readJob(k *yaml.Node, name, child string, node *yaml.Node, ct
 		}
 	}
 	cj.Images = r.images(node)
+	cj.Platforms, cj.UnknownRunners = gitlabPlatforms(cj)
 	return &glJob{ci: cj, node: node, child: r.childFiles(cj.File, name, node, ctx)}
 }
 
