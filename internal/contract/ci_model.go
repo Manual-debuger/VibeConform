@@ -14,10 +14,10 @@ import (
 // at all fails.
 //
 // Each reader fills the whole model when the CI is read: every job with
-// its commands, scripts and runner platforms, the default branch, and the
-// run of each pipeline kind. The GitHub reader adds each job's uses: references and
-// the parsed workflows; the GitLab reader each job's images and the
-// includes it does not follow. Each reader also sets its provider's
+// its commands, scripts and runner platforms, the default branch, and
+// the run of each pipeline kind. The GitHub reader adds each job's uses:
+// references and the parsed workflows; the GitLab reader each job's
+// images and the includes it does not follow. Each reader also sets its provider's
 // wording (ci_wording.go): the words of findings that differ by provider.
 //
 // C-01, C-02, C-04, C-05 and D-03 each have one implementation
