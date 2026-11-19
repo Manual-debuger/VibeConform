@@ -1,6 +1,6 @@
 # Spec 0067: Each C rule has one implementation over the CI model
 
-Status: proposed (2026-11-19). Issue #160, from the design review #167.
+Status: approved (2026-11-19). Issue #160, from the design review #167.
 Builds on spec 0055 (the CI model and its GitLab CI reader) and on the
 rule-test seam of ADR 0028. This is a refactor. The contract stays
 1.2.0. No rule's result changes. Every finding stays byte for byte the
