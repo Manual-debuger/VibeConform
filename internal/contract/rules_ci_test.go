@@ -274,8 +274,9 @@ func TestRuleC02(t *testing.T) {
 		{Name: "@latest inside a word is not a version", Want: "pass", Edits: []contracttest.Edit{run("echo user@latest.example")}},
 		{Name: "a GitHub expression version is not @latest", Want: "pass",
 			Edits: []contracttest.Edit{run("go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}")}},
-		// Spec 0067, "C-02": these two goldens record the order and the
-		// repetition before the one C-02; 0067-4 changes exactly these two.
+		// Spec 0067, "C-02": the unpinned uses: findings come before the
+		// @latest findings, and a word repeated in one run: step gives one
+		// finding, as on GitLab CI.
 		{Name: "an @latest run: step before an unpinned uses: step", Want: "fail", Edits: []contracttest.Edit{extra(
 			"  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npx prettier@latest --check .\n      - uses: actions/setup-go@v5\n")},
 			Findings: []string{"prettier@latest", "actions/setup-go@v5"}},
