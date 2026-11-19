@@ -264,8 +264,10 @@ They are the regression net.
       R-01 case of both providers. They are recorded from `main` before
       the refactor, together with the two new C-02 cases.
 - [x] The GitHub reader fills the runs, the runner platforms and the
-      `uses:` references when it reads the CI. `CI.Run` is a lookup,
-      and the job-to-model map is gone.
+      `uses:` references when it reads the CI. `CI.Run` is a lookup of
+      the runs the reader decided. The model stores no map from
+      workflow jobs to model jobs: a local map exists only while the
+      GitHub reader runs.
 - [x] C-01, C-02, C-04, C-05 and D-03 each have one implementation that
       reads only the model and the provider wording.
 - [x] No C check compares `ci.Provider`. C-03 has no provider branch.
@@ -327,9 +329,9 @@ They are the regression net.
 - **The model** (0067-2). `CI.Run(kind)` is a lookup of the runs that
   the reader decided, and it takes no `Env`. The GitHub reader
   (`githubCI` in `ci_model.go`) decides the runs with `jobsTriggered`
-  and the default branch when it reads the CI. So `env.defaultBranch`
-  is set, and the "assume the default branch" note is written, when
-  the CI is read, as on GitLab. The `gh` map field of `CI` is gone.
+  and the default branch when it reads the CI. Both readers put the
+  default branch in `CI.DefaultBranch` (see "Code review"). The `gh`
+  map field of `CI` is gone.
   `githubCI` has a local map from a job's key to its model job, because
   the trigger walk returns workflow jobs. That map exists only while
   the reader runs. `CIJob` has three new fields: `Platforms`,
@@ -339,10 +341,9 @@ They are the regression net.
 - **The wording** (0067-3). `internal/contract/ci_wording.go` holds the
   type `ciWording` and its two values, `githubWording` and
   `gitlabWording`, next to each other. The reader sets `CI.wording`.
-  `githubWording.skipFix` ("make the job run on <what>") is text that
-  no finding uses yet, because a GitHub run has no skipped jobs. 0067-5
-  kept it, with a comment, so that every function of the wording is
-  set and a rule never calls a nil function. As a mutation check,
+  The fix of a skip finding is not in the wording: the GitLab reader,
+  the only one that skips jobs, puts it in each `CISkip.Fix` (see
+  "Code review"). As a mutation check,
   "X" appended to `gitlabWording.hint` made 13 sections of the GitLab
   C-01 and C-04 goldens differ. The change was reverted.
 - **C-02's golden diff** (0067-4). This is the only golden that changed
@@ -407,9 +408,10 @@ They are the regression net.
   C-05 and D-03. 0067-4 removed `gitlabC02`. 0067-5 removed C-03's
   provider comparison and moved `ciAuditJobs` and `runsAuditCommand`
   (C-04 and R-01) to `checks_ci.go`. It renamed `gitlab_checks.go` to
-  `gitlab_includes.go`, which now holds only `includeFinding` and
-  `fullSHA`, with a new header comment. The trigger walk
-  (`jobsTriggered`, `jobsRun`, `ciJob`, `defaultBranch`) stays,
+  `gitlab_includes.go`, which now holds only `unpinnedInclude` (named
+  `includeFinding` until the code review) and `fullSHA`, with a new
+  header comment. The trigger walk (`jobsTriggered`, `jobsRun`,
+  `ciJob`, `githubDefaultBranch`) stays,
   because the GitHub reader uses it. Its comments now say so.
 - **Complexity suppressions.** These baselines are gone: `gocognit` on
   the GitHub `checkC02`; `gocognit` and `gocyclo` on `checkC05`
@@ -429,3 +431,35 @@ They are the regression net.
   D-03 each have one implementation that reads only the model, that the
   wording is per provider, and that C-03 reads the GitHub workflows.
   The glossary did not change.
+- **Code review.** The review of the integration branch led to six
+  fixes:
+  1. The default branch is in the model. Both readers set
+     `CI.DefaultBranch`, and C-01 reads the branch there. Before, each
+     reader set `env.defaultBranch` while it read the CI, and C-01 read
+     that field. The field is gone.
+  2. The "assume the default branch" note is written as on `main`
+     again (a bug fix). On GitHub Actions, the reader leaves the note
+     for the first `CI.Run`, so only C-01, C-04 or R-01 writes it. On
+     GitLab CI, the reader writes it when it reads the configuration.
+     Before the fix, the GitHub reader wrote it whenever it read the
+     CI, and `audit.go` reads the CI at the end of every audit. So a
+     GitHub audit without C-01, C-04 and R-01 had a note that `main`
+     did not write. `TestRuleCIDefaultBranchNote` is the regression
+     test.
+  3. `githubWording.skipFix` is gone. It was text that no finding used.
+     The GitLab reader puts the fix of a skip finding in `CISkip.Fix`,
+     worded by `gitlabSkipFix` in `ci_wording.go`. The wording has no
+     function that a provider leaves unset.
+  4. `includeFinding` is now `unpinnedInclude`, and it returns true
+     when there is a finding. The call site reads `if f, ok := ...; ok`.
+  5. `CIInclude.Target` reads the value under an include's kind key.
+     C-02 and D-03 both use it.
+  6. This spec: the acceptance criterion about the job-to-model map
+     says exactly what holds.
+
+  The review also found three things that stay as they are: the
+  variadic `CaseCheck` parameter, because it is idiomatic for an
+  optional argument; the display strings in `Platforms`,
+  `UnknownRunners` and `CIUses.Where`, because this spec puts the
+  runner descriptions in the readers; and the message and fix pairs in
+  the wording, because they read clearly as they are.
