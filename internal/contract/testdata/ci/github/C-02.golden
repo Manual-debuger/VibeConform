@@ -67,18 +67,14 @@ no findings
 
 == an @latest run: step before an unpinned uses: step
 file: .github/workflows/extra.yml
-message: line 8: job x, step 1 runs prettier@latest, which is not pinned
-fix: pin prettier to a version (@v1.2.3) instead of @latest
-
-file: .github/workflows/extra.yml
 message: line 9: job x, step 2 uses actions/setup-go@v5, which is not pinned to a commit SHA
 fix: pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)
 
-== a run: step that repeats one @latest word
 file: .github/workflows/extra.yml
-message: line 9: job x, step 2 runs prettier@latest, which is not pinned
+message: line 8: job x, step 1 runs prettier@latest, which is not pinned
 fix: pin prettier to a version (@v1.2.3) instead of @latest
 
+== a run: step that repeats one @latest word
 file: .github/workflows/extra.yml
 message: line 9: job x, step 2 runs prettier@latest, which is not pinned
 fix: pin prettier to a version (@v1.2.3) instead of @latest

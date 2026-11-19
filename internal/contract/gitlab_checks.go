@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 	"gopkg.in/yaml.v3"
 )
 
@@ -44,70 +43,8 @@ func runsAuditCommand(cmds []Command) bool {
 	return false
 }
 
-// pinnedDigest is an image reference pinned by digest.
-var pinnedDigest = regexp.MustCompile(`@sha256:[0-9a-fA-F]{64}$`)
-
 // fullSHA is a full 40-character commit SHA.
 var fullSHA = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
-
-// gitlabC02: every image: and services: entry of every job is pinned by
-// digest, every include the audit does not follow is pinned (a template:
-// include cannot be), and no script word ends in @latest. Every job
-// counts, whatever its rules.
-func gitlabC02(ci *CI) PartResult { //nolint:gocognit // baseline: pre-existing complexity
-	var findings []Finding
-	type image struct {
-		img  CIImage
-		jobs []string
-	}
-	var images []*image
-	byKey := map[string]*image{}
-	for _, j := range ci.Jobs {
-		for _, img := range j.Images {
-			if pinnedDigest.MatchString(img.Name) {
-				continue
-			}
-			k := fmt.Sprintf("%s\x00%d\x00%s\x00%s", img.File, img.Line, img.Key, img.Name)
-			if byKey[k] == nil {
-				byKey[k] = &image{img: img}
-				images = append(images, byKey[k])
-			}
-			byKey[k].jobs = append(byKey[k].jobs, j.where())
-		}
-	}
-	for _, im := range images {
-		name := im.img.Name
-		if name == "" {
-			name = "(no image name)"
-		}
-		findings = append(findings, Finding{File: im.img.File,
-			Message: fmt.Sprintf("line %d: %s %s is not pinned by digest (used by %s)", im.img.Line, im.img.Key, name, strings.Join(im.jobs, ", ")),
-			Fix:     "pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)"})
-	}
-	for _, inc := range ci.Includes {
-		if f, ok := includeFinding(inc); !ok {
-			findings = append(findings, f)
-		}
-	}
-	seen := map[string]bool{}
-	for _, j := range ci.Jobs {
-		for _, s := range j.Scripts {
-			for _, w := range s.Words() {
-				if !strings.HasSuffix(w, "@latest") {
-					continue
-				}
-				if k := fmt.Sprintf("%s\x00%d\x00%s", s.File, s.Line, w); !seen[k] {
-					seen[k] = true
-					w = guardrule.ShowExpansions(w)
-					findings = append(findings, Finding{File: s.File,
-						Message: fmt.Sprintf("line %d: %s runs %s, which is not pinned", s.Line, s.Where, w),
-						Fix:     "pin " + strings.TrimSuffix(w, "@latest") + " to a version (@v1.2.3) instead of @latest"})
-				}
-			}
-		}
-	}
-	return failIf(findings)
-}
 
 // includeFinding decides whether an include the audit does not follow is
 // pinned, and the finding when it is not.
