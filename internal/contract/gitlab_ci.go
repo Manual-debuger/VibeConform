@@ -873,20 +873,21 @@ func (r *glReader) run(kind PipelineKind, branch string, every []*CIJob) *CIRun 
 		})
 	}
 	out := &CIRun{}
+	fix := gitlabSkipFix(gitlabWording.kind(kind, branch))
 	for _, k := range order {
 		e := got[k]
 		if e.runs {
 			out.Jobs = append(out.Jobs, e.job)
 			continue
 		}
-		out.Skipped = append(out.Skipped, CISkip{Job: e.job, File: e.why.file, Line: e.why.line, Why: e.why.text})
+		out.Skipped = append(out.Skipped, CISkip{Job: e.job, File: e.why.file, Line: e.why.line, Why: e.why.text, Fix: fix})
 	}
 	for _, j := range every {
 		if got[j.Key()] != nil {
 			continue
 		}
 		if why := r.droppedWhy(j, contexts); why != nil {
-			out.Skipped = append(out.Skipped, CISkip{Job: j, File: why.file, Line: why.line, Why: why.text})
+			out.Skipped = append(out.Skipped, CISkip{Job: j, File: why.file, Line: why.line, Why: why.text, Fix: fix})
 		}
 	}
 	return out

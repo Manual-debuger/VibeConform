@@ -116,7 +116,7 @@ func checkC01(env *Env, _ Needed) PartResult {
 			for _, s := range run.Skipped {
 				if !explained[s.Job] && CallsAny(s.Job.Commands, c) {
 					explained[s.Job] = true
-					findings = append(findings, skipFinding(w, s, what))
+					findings = append(findings, skipFinding(s, what))
 				}
 			}
 		}
@@ -140,10 +140,10 @@ func checkC01(env *Env, _ Needed) PartResult {
 }
 
 // skipFinding explains why a job that would count for what did not.
-func skipFinding(w *ciWording, s CISkip, what string) Finding {
+func skipFinding(s CISkip, what string) Finding {
 	return Finding{File: s.File,
 		Message: fmt.Sprintf("line %d: %s does not count for %s: %s", s.Line, s.Job.where(), what, s.Why),
-		Fix:     w.skipFix(what)}
+		Fix:     s.Fix}
 }
 
 // quoteCommandList quotes an entrypoint's commands for a message.
@@ -291,7 +291,7 @@ func checkC04(env *Env, _ Needed) PartResult {
 	}
 	for _, s := range run.Skipped {
 		if runsAuditCommand(s.Job.Commands) {
-			findings = append(findings, skipFinding(w, s, w.mergeRequests))
+			findings = append(findings, skipFinding(s, w.mergeRequests))
 		}
 	}
 	if len(findings) == 0 {

@@ -243,6 +243,9 @@ type CISkip struct {
 	File string
 	Line int
 	Why  string
+	// Fix is the fix of a finding about the job: what makes it run for
+	// the kind. Only the GitLab reader skips jobs; it words the fix.
+	Fix string
 }
 
 // Run returns the jobs that run for kind, as the reader decided them when

@@ -7,7 +7,9 @@ import "fmt"
 // wording in CI.wording; the rules take every provider-specific phrase,
 // message and fix from it, so a rule is written once and keeps each
 // provider's text. The two wordings are next to each other here for
-// comparison. A finding about the CI as a whole names CI.Dir.
+// comparison. A finding about the CI as a whole names CI.Dir. The fix of
+// a finding about a skipped job is in the run (CISkip.Fix): only the
+// GitLab reader skips jobs, and it words the fix with gitlabSkipFix.
 
 // ciWording is one provider's words for the CI rules' findings.
 type ciWording struct {
@@ -24,10 +26,6 @@ type ciWording struct {
 	noJobRunsFix func(what, verify string) string
 	notCalled    func(what string, c Command) string
 	notCalledFix func(what string, c Command) string
-	// skipFix is the fix of a finding about a skipped job: a job that
-	// would count for what, but that a condition left out. Only GitLab runs
-	// have skipped jobs.
-	skipFix func(what string) string
 
 	// C-04: no job that runs for merge requests runs vibe audit. The
 	// message is followed by hint.
@@ -69,10 +67,6 @@ var githubWording = &ciWording{
 	notCalledFix: func(what string, c Command) string {
 		return fmt.Sprintf("add a step that runs `%s` as its own command to a job that runs on %s", c, what)
 	},
-	// A GitHub run has no skipped jobs (spec 0067), so no finding uses
-	// this fix yet. It keeps every func of the wording set.
-	skipFix: func(what string) string { return "make the job run on " + what },
-
 	noAuditJob:    "no job of a workflow that runs on pull requests runs vibe audit",
 	noAuditJobFix: "add a job, triggered on pull_request, whose step runs vibe audit (any arguments) and that does not call verify",
 
@@ -108,12 +102,6 @@ var gitlabWording = &ciWording{
 	notCalledFix: func(what string, c Command) string {
 		return fmt.Sprintf("add `%s` as its own command to the script of a job that runs in %s", c, what)
 	},
-	skipFix: func(what string) string {
-		return "make the job run in " + what + " with conditions the audit reads " +
-			"($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), " +
-			"without changes: or exists:"
-	},
-
 	noAuditJob: "no job that runs in merge request pipelines runs vibe audit",
 	noAuditJobFix: "add a job that runs in merge request pipelines, whose script runs vibe audit (any arguments) " +
 		"and that calls no verify command",
@@ -133,4 +121,13 @@ var gitlabWording = &ciWording{
 		"and the pipeline includes neither GitLab's Dependency-Scanning template nor its dependency-scanning component",
 	noScannerFix: "add a job whose script runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python " +
 		"or pnpm audit for TypeScript, or include the dependency-scanning CI/CD component pinned to a commit SHA",
+}
+
+// gitlabSkipFix is the fix of a finding about a job that would count for
+// what (the pipeline kind, worded by gitlabWording.kind) but that a
+// condition left out. The GitLab reader puts it in each CISkip.
+func gitlabSkipFix(what string) string {
+	return "make the job run in " + what + " with conditions the audit reads " +
+		"($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), " +
+		"without changes: or exists:"
 }
