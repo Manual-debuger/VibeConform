@@ -7,12 +7,17 @@ import (
 )
 
 // Repo is the repository a tool call acts in (spec 0053, "Repository
-// root"). It is found by reading files, never by running git, so the
-// guard works with only the operating system's PATH (A-03).
+// root"; spec 0068). It is found by reading files, never by running
+// git, so the guard works with only the operating system's PATH (A-03).
 type Repo struct {
-	// Root is the directory holding .git, or the start directory when no
-	// .git was found above it.
+	// Root is the project root, the directory the agent session runs in.
+	// The policy, exception globs, relative paths and the guardrail
+	// settings are read against it.
 	Root string
+	// GitTop is the directory that holds .git, found by walking up from
+	// Root. It is Root unless the project is below the Git top, and ""
+	// when no .git was found.
+	GitTop string
 	// GitDir is the repository's Git directory: Root/.git, or where a
 	// .git file's "gitdir:" line points. It is "" when none was found or
 	// the .git file cannot be read.
@@ -24,7 +29,9 @@ type Repo struct {
 	CommonDir string
 }
 
-// FindRepo walks up from start to the directory that holds .git.
+// FindRepo walks up from start to the directory that holds .git, which
+// is then both the project root and the Git top. Without .git above it,
+// the project root is start and there is no Git top.
 func FindRepo(start string) Repo {
 	if abs, err := filepath.Abs(start); err == nil {
 		start = abs
@@ -32,7 +39,7 @@ func FindRepo(start string) Repo {
 	for dir := start; ; {
 		dotGit := filepath.Join(dir, ".git")
 		if fi, err := os.Stat(dotGit); err == nil {
-			r := Repo{Root: dir}
+			r := Repo{Root: dir, GitTop: dir}
 			if fi.IsDir() {
 				r.GitDir = dotGit
 			} else {

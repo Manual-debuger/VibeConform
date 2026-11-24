@@ -73,16 +73,26 @@ func Main(args []string, env Env, version string) int {
 	return exitUsage
 }
 
-// startDir is where the repository root is looked for: CLAUDE_PROJECT_DIR,
-// then the payload's cwd, then the process's working directory.
-func startDir(env Env, cwd string) string {
+// findRepo finds the repository a call acts in, for hook, explain and
+// relock (spec 0068). CLAUDE_PROJECT_DIR, when set, is the project root
+// as given, made absolute and not walked up: Claude Code sets it to the
+// directory the session runs in, which may be below the Git top. The Git
+// directories are found by walking up from it. Without it, the payload's
+// cwd, else the process's working directory, is walked up to the
+// directory that holds .git, which is then both roots.
+func findRepo(env Env, cwd string) Repo {
 	if d := env.Getenv("CLAUDE_PROJECT_DIR"); d != "" {
-		return d
+		if abs, err := filepath.Abs(d); err == nil {
+			d = abs
+		}
+		r := FindRepo(d)
+		r.Root = d
+		return r
 	}
 	if cwd != "" {
-		return cwd
+		return FindRepo(cwd)
 	}
-	return env.Dir
+	return FindRepo(env.Dir)
 }
 
 type payload struct {
@@ -118,7 +128,7 @@ func readPayload(r io.Reader) (payload, error) {
 
 func hook(env Env) int {
 	p, perr := readPayload(env.Stdin)
-	g := New(FindRepo(startDir(env, p.Cwd)), env.Now())
+	g := New(findRepo(env, p.Cwd), env.Now())
 	g.Dir = p.Cwd
 	var d Decision
 	var t gr.Target
@@ -212,7 +222,7 @@ func appendLine(file, line string) error {
 }
 
 func relock(env Env) int {
-	repo := FindRepo(startDir(env, ""))
+	repo := findRepo(env, "")
 	if repo.CommonDir == "" {
 		say(env.Stderr, "vibe-guard: relock: no Git directory found from "+repo.Root)
 		return 1
@@ -264,7 +274,7 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 	if gr.IsEditTool(tool) {
 		t = gr.Target{Tool: tool, Path: arg}
 	}
-	g := New(FindRepo(startDir(env, "")), env.Now())
+	g := New(findRepo(env, ""), env.Now())
 	d := g.Decide(t)
 	w := env.Stdout
 	sayf(w, "tool: %s\n", tool)
