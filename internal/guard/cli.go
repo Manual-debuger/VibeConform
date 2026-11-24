@@ -2,6 +2,7 @@ package guard
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -73,16 +74,21 @@ func Main(args []string, env Env, version string) int {
 	return exitUsage
 }
 
-// startDir is where the repository root is looked for: CLAUDE_PROJECT_DIR,
-// then the payload's cwd, then the process's working directory.
-func startDir(env Env, cwd string) string {
+// sessionRepo finds the repository a call acts in, for hook, explain
+// and relock (spec 0068). CLAUDE_PROJECT_DIR, when set, is the project
+// root as given, made absolute and not walked up: Claude Code sets it to
+// the directory the session runs in, which may be below the Git top. The
+// Git top is found by walking up from it. Without it, the payload's cwd,
+// else the process's working directory, is walked up to the Git top,
+// which is then also the project root.
+func sessionRepo(env Env, cwd string) Repo {
 	if d := env.Getenv("CLAUDE_PROJECT_DIR"); d != "" {
-		return d
+		if abs, err := filepath.Abs(d); err == nil {
+			d = abs
+		}
+		return walkToGitTop(d, d)
 	}
-	if cwd != "" {
-		return cwd
-	}
-	return env.Dir
+	return walkToGitTop(cmp.Or(cwd, env.Dir), "")
 }
 
 type payload struct {
@@ -118,7 +124,7 @@ func readPayload(r io.Reader) (payload, error) {
 
 func hook(env Env) int {
 	p, perr := readPayload(env.Stdin)
-	g := New(FindRepo(startDir(env, p.Cwd)), env.Now())
+	g := New(sessionRepo(env, p.Cwd), env.Now())
 	g.Dir = p.Cwd
 	var d Decision
 	var t gr.Target
@@ -212,7 +218,7 @@ func appendLine(file, line string) error {
 }
 
 func relock(env Env) int {
-	repo := FindRepo(startDir(env, ""))
+	repo := sessionRepo(env, "")
 	if repo.CommonDir == "" {
 		say(env.Stderr, "vibe-guard: relock: no Git directory found from "+repo.Root)
 		return 1
@@ -264,7 +270,7 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 	if gr.IsEditTool(tool) {
 		t = gr.Target{Tool: tool, Path: arg}
 	}
-	g := New(FindRepo(startDir(env, "")), env.Now())
+	g := New(sessionRepo(env, ""), env.Now())
 	d := g.Decide(t)
 	w := env.Stdout
 	sayf(w, "tool: %s\n", tool)

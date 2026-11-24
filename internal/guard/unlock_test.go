@@ -12,8 +12,26 @@ import (
 // "guardrail-settings"): exceptions, marker contents, linked worktrees
 // and a Git directory the guard cannot read.
 
-func writePayload(path string) string {
-	data, _ := json.Marshal(map[string]any{"tool_name": "Write", "tool_input": map[string]string{"file_path": path, "content": "{}"}})
+// writePayload is a Write of path, with no cwd.
+func writePayload(path string) string { return editPayload("Write", path, "") }
+
+// editPayload is a Write, Edit or MultiEdit of path, from cwd ("" for
+// none).
+func editPayload(tool, path, cwd string) string {
+	input := map[string]any{"file_path": path}
+	switch tool {
+	case "Write":
+		input["content"] = "{}"
+	case "Edit":
+		input["old_string"], input["new_string"] = "a", "b"
+	case "MultiEdit":
+		input["edits"] = []map[string]string{{"old_string": "a", "new_string": "b"}}
+	}
+	call := map[string]any{"tool_name": tool, "tool_input": input}
+	if cwd != "" {
+		call["cwd"] = cwd
+	}
+	data, _ := json.Marshal(call)
 	return string(data)
 }
 
