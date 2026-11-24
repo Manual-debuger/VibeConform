@@ -1,0 +1,90 @@
+== baseline
+no findings
+
+== local action
+no findings
+
+== action in a subdirectory, pinned
+no findings
+
+== upper-case SHA
+no findings
+
+== local reusable workflow
+no findings
+
+== a version tag
+file: .github/workflows/extra.yml
+message: line 8: job x, step 1 uses actions/setup-go@v5, which is not pinned to a commit SHA
+fix: pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)
+
+== a short SHA
+file: .github/workflows/extra.yml
+message: line 8: job x, step 1 uses actions/setup-go@08eba0b, which is not pinned to a commit SHA
+fix: pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)
+
+== no ref
+file: .github/workflows/extra.yml
+message: line 8: job x, step 1 uses actions/setup-go, which is not pinned to a commit SHA
+fix: pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)
+
+== a docker reference
+file: .github/workflows/extra.yml
+message: line 8: job x, step 1 uses docker://alpine:3.20, which is not pinned to a commit SHA
+fix: pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)
+
+== a remote reusable workflow by tag
+file: .github/workflows/extra.yml
+message: line 6: job call uses octo/ci/.github/workflows/verify.yml@v1, which is not pinned to a commit SHA
+fix: pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)
+
+== a remote reusable workflow pinned
+no findings
+
+== a pinned go install
+no findings
+
+== go install @latest
+file: .github/workflows/extra.yml
+message: line 9: job x, step 2 runs golang.org/x/tools/cmd/goimports@latest, which is not pinned
+fix: pin golang.org/x/tools/cmd/goimports to a version (@v1.2.3) instead of @latest
+
+== @latest quoted, in a list
+file: .github/workflows/extra.yml
+message: line 9: job x, step 2 runs prettier@latest, which is not pinned
+fix: pin prettier to a version (@v1.2.3) instead of @latest
+
+== @latest in a step that does not parse
+file: .github/workflows/extra.yml
+message: line 9: job x, step 2 runs prettier@latest, which is not pinned
+fix: pin prettier to a version (@v1.2.3) instead of @latest
+
+== @latest inside a word is not a version
+no findings
+
+== a GitHub expression version is not @latest
+no findings
+
+== an @latest run: step before an unpinned uses: step
+file: .github/workflows/extra.yml
+message: line 9: job x, step 2 uses actions/setup-go@v5, which is not pinned to a commit SHA
+fix: pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)
+
+file: .github/workflows/extra.yml
+message: line 8: job x, step 1 runs prettier@latest, which is not pinned
+fix: pin prettier to a version (@v1.2.3) instead of @latest
+
+== a run: step that repeats one @latest word
+file: .github/workflows/extra.yml
+message: line 9: job x, step 2 runs prettier@latest, which is not pinned
+fix: pin prettier to a version (@v1.2.3) instead of @latest
+
+== a workflow that does not parse
+file: .github/workflows/broken.yml
+message: does not parse: line 4: job x: steps must be a list
+fix: fix the syntax so that the file parses
+
+== no CI
+file: .github/workflows/
+message: the repository has no CI configuration
+fix: add a GitHub Actions workflow under .github/workflows/ or a GitLab CI configuration (.gitlab-ci.yml)

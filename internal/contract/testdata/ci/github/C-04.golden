@@ -1,0 +1,62 @@
+== baseline
+no findings
+
+== vibe audit after building vibe, in one step
+no findings
+
+== vibe audit with leading assignments
+no findings
+
+== only pull requests
+no findings
+
+== in a local reusable workflow
+no findings
+
+== beside a verify step in other jobs
+no findings
+
+== the audit job also calls verify
+file: .github/workflows/audit.yml
+message: job audit runs vibe audit and also calls the verify command `task verify`
+fix: run vibe audit in a job of its own that does not call verify
+
+== the audit job calls one command of a list verify
+file: .github/workflows/audit.yml
+message: job audit runs vibe audit and also calls the verify command `task test`
+fix: run vibe audit in a job of its own that does not call verify
+
+== no audit job
+file: .github/workflows/
+message: no job of a workflow that runs on pull requests runs vibe audit (a paths filter, a tags filter without branches, a types filter without opened, synchronize and reopened, or branch filters that leave the branch out make a workflow not count)
+fix: add a job, triggered on pull_request, whose step runs vibe audit (any arguments) and that does not call verify
+
+== the audit job runs only on push
+file: .github/workflows/
+message: no job of a workflow that runs on pull requests runs vibe audit (a paths filter, a tags filter without branches, a types filter without opened, synchronize and reopened, or branch filters that leave the branch out make a workflow not count)
+fix: add a job, triggered on pull_request, whose step runs vibe audit (any arguments) and that does not call verify
+
+== a paths filter makes it not count
+file: .github/workflows/
+message: no job of a workflow that runs on pull requests runs vibe audit (a paths filter, a tags filter without branches, a types filter without opened, synchronize and reopened, or branch filters that leave the branch out make a workflow not count)
+fix: add a job, triggered on pull_request, whose step runs vibe audit (any arguments) and that does not call verify
+
+== vibe without audit
+file: .github/workflows/
+message: no job of a workflow that runs on pull requests runs vibe audit (a paths filter, a tags filter without branches, a types filter without opened, synchronize and reopened, or branch filters that leave the branch out make a workflow not count)
+fix: add a job, triggered on pull_request, whose step runs vibe audit (any arguments) and that does not call verify
+
+== vibe audit by path is not vibe audit
+file: .github/workflows/
+message: no job of a workflow that runs on pull requests runs vibe audit (a paths filter, a tags filter without branches, a types filter without opened, synchronize and reopened, or branch filters that leave the branch out make a workflow not count)
+fix: add a job, triggered on pull_request, whose step runs vibe audit (any arguments) and that does not call verify
+
+== verify missing points at V-04
+file: vibe.yaml
+message: this rule needs the verify entrypoint, and V-04 finds it unusable: entrypoints.verify is not declared
+fix: fix V-04 first: declare entrypoints.verify as the command that runs it, such as task verify
+
+== another CI provider
+file: Jenkinsfile
+message: contract 1.2.0 reads GitHub Actions and GitLab CI only, and this repository's CI is Jenkinsfile
+fix: run CI in GitHub Actions under .github/workflows/ or in GitLab CI (.gitlab-ci.yml), or wait for a vibe that reads this provider

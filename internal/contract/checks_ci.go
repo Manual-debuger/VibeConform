@@ -14,9 +14,10 @@ import (
 // part (spec 0052, "Recognition rules"; spec 0055 for GitLab CI). Each
 // starts from ciRead, which applies env.CI() and turns every CI file that
 // does not parse or resolve into a failure of the rule; the rule then
-// reads the rest. GitHub triggers and the default branch are in
-// workflow_triggers.go, runners and matrices in workflow_runners.go; the
-// GitLab pipeline model is in gitlab_ci.go and gitlab_rules.go.
+// reads the rest. The readers fill the model (ci_model.go): GitHub
+// triggers and the default branch are in workflow_triggers.go, runners
+// and matrices in workflow_runners.go; the GitLab pipeline model is in
+// gitlab_ci.go and gitlab_rules.go, its runners in gitlab_runners.go.
 
 // ciRead returns the CI for a rule that reads it. When ok is false the
 // rule's result is res: no CI the audit reads. When ok is true, res holds
@@ -31,17 +32,18 @@ func ciRead(env *Env) (ci *CI, res PartResult, ok bool) {
 }
 
 // checkC03: every workflow has top-level permissions of read-all, {} or a
-// map whose every value is read or none. On GitLab CI the rule is not
-// applicable, which the registry decides before it runs.
+// map whose every value is read or none. It reads the GitHub workflows
+// (CI.Workflows), which only the GitHub reader fills: on GitLab CI the
+// rule is not applicable, which the registry decides before it runs
+// (notOnGitLab).
 func checkC03(env *Env, _ Needed) PartResult {
 	ci, res, ok := ciRead(env)
-	if !ok || ci.Provider == CIGitLab {
+	if !ok {
 		return res
 	}
-	parsed := ci.Workflows
 	const fix = "set top-level `permissions: contents: read` (or `read-all`, or `{}`) and grant write scopes in the job that needs them"
 	var findings []Finding
-	for _, wf := range parsed {
+	for _, wf := range ci.Workflows {
 		p := wf.Permissions
 		switch {
 		case p == nil:
@@ -92,8 +94,9 @@ func scalarOr(n *yaml.Node, alt string) string {
 	return alt
 }
 
-// checkC01: the workflows that count for pull requests, and those that
-// count for pushes to the default branch, each call every verify command.
+// checkC01: the jobs that run for merge (pull) requests, and the jobs
+// that run on pushes to the default branch, each call every verify
+// command. A skipped job that calls an uncalled command is explained.
 func checkC01(env *Env, _ Needed) PartResult {
 	verify, missing := env.Entrypoint(EntrypointVerify)
 	if missing != nil {
@@ -103,35 +106,45 @@ func checkC01(env *Env, _ Needed) PartResult {
 	if !ok {
 		return res
 	}
-	if ci.Provider == CIGitLab {
-		return Merge(res, gitlabC01(env, ci, verify))
-	}
-	parsed := ci.Workflows
-	branch := defaultBranch(env, parsed)
+	w := ci.wording
 	var findings []Finding
-	for _, ev := range []struct{ event, what string }{
-		{eventPullRequest, "pull requests"},
-		{eventPush, "pushes to " + branch},
-	} {
-		jobs := jobsTriggered(parsed, ev.event, branch)
-		if len(jobs) == 0 {
-			findings = append(findings, Finding{File: workflowDir + "/",
-				Message: "no workflow runs on " + ev.what + triggerHint,
-				Fix:     fmt.Sprintf("trigger a workflow that calls %s on %s", quoteCommandList(verify), ev.what)})
+	for _, kind := range []PipelineKind{KindMergeRequest, KindDefaultPush} {
+		what := w.kind(kind, ci.DefaultBranch)
+		run := ci.Run(kind)
+		explained := map[*CIJob]bool{}
+		explain := func(c Command) {
+			for _, s := range run.Skipped {
+				if !explained[s.Job] && CallsAny(s.Job.Commands, c) {
+					explained[s.Job] = true
+					findings = append(findings, skipFinding(s, what))
+				}
+			}
+		}
+		if len(run.Jobs) == 0 {
+			findings = append(findings, Finding{File: ci.Dir,
+				Message: w.noJobRuns(what) + w.hint,
+				Fix:     w.noJobRunsFix(what, quoteCommandList(verify))})
+			for _, c := range verify {
+				explain(c)
+			}
 			continue
 		}
-		for _, c := range Uncalled(verify, commandsOf(jobs)) {
-			findings = append(findings, Finding{File: workflowDir + "/",
-				Message: fmt.Sprintf("no workflow that runs on %s calls the verify command `%s`", ev.what, c),
-				Fix:     fmt.Sprintf("add a step that runs `%s` as its own command to a job that runs on %s", c, ev.what)})
+		for _, c := range Uncalled(verify, commandsOfJobs(run.Jobs)) {
+			findings = append(findings, Finding{File: ci.Dir,
+				Message: w.notCalled(what, c),
+				Fix:     w.notCalledFix(what, c)})
+			explain(c)
 		}
 	}
 	return Merge(res, failIf(findings))
 }
 
-// triggerHint says what makes a workflow not count, for findings.
-const triggerHint = " (a paths filter, a tags filter without branches, a types filter without opened, " +
-	"synchronize and reopened, or branch filters that leave the branch out make a workflow not count)"
+// skipFinding explains why a job that would count for what did not.
+func skipFinding(s CISkip, what string) Finding {
+	return Finding{File: s.File,
+		Message: fmt.Sprintf("line %d: %s does not count for %s: %s", s.Line, s.Job.where(), what, s.Why),
+		Fix:     s.Fix}
+}
 
 // quoteCommandList quotes an entrypoint's commands for a message.
 func quoteCommandList(cmds []Command) string {
@@ -145,53 +158,110 @@ func quoteCommandList(cmds []Command) string {
 // pinnedRef is a uses: reference pinned to a full commit SHA.
 var pinnedRef = regexp.MustCompile(`@[0-9a-fA-F]{40}$`)
 
-// checkC02: every job-level and step-level uses: that is not a local ./
-// path ends in @ and 40 hexadecimal characters, and no word of a run:
-// step ends in @latest, in every workflow.
-func checkC02(env *Env, _ Needed) PartResult { //nolint:gocognit // baseline: pre-existing complexity
+// checkC02: every reference the CI pins is pinned, and no script runs a
+// word ending in @latest. It reads, in this order: the uses: references
+// (a full 40-character commit SHA, except a local ./ path), the images
+// (pinned by digest), the includes the audit does not follow (a
+// template: include cannot be pinned) and the @latest words of every
+// script. Every job counts, whatever its triggers or rules.
+func checkC02(env *Env, _ Needed) PartResult {
 	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
 	}
-	if ci.Provider == CIGitLab {
-		return Merge(res, gitlabC02(ci))
-	}
-	parsed := ci.Workflows
-	const pinFix = "pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)"
-	var findings []Finding
-	for _, wf := range parsed {
-		for _, j := range wf.Jobs {
-			if j.Uses != "" && !strings.HasPrefix(j.Uses, "./") && !pinnedRef.MatchString(j.Uses) {
-				findings = append(findings, Finding{File: wf.File,
-					Message: fmt.Sprintf("line %d: job %s uses %s, which is not pinned to a commit SHA", j.UsesLine, j.ID, j.Uses),
-					Fix:     pinFix})
-			}
-			for _, s := range j.Steps {
-				if s.Uses != "" && !strings.HasPrefix(s.Uses, "./") && !pinnedRef.MatchString(s.Uses) {
-					findings = append(findings, Finding{File: wf.File,
-						Message: fmt.Sprintf("line %d: job %s, step %d uses %s, which is not pinned to a commit SHA", s.Line, j.ID, s.Index+1, s.Uses),
-						Fix:     pinFix})
-				}
-				if !s.HasRun {
-					continue
-				}
-				for _, w := range s.Run.Words() {
-					if strings.HasSuffix(w, "@latest") {
-						w = guardrule.ShowExpansions(w)
-						findings = append(findings, Finding{File: wf.File,
-							Message: fmt.Sprintf("line %d: job %s, step %d runs %s, which is not pinned", s.Line, j.ID, s.Index+1, w),
-							Fix:     "pin " + strings.TrimSuffix(w, "@latest") + " to a version (@v1.2.3) instead of @latest"})
-					}
-				}
-			}
+	findings := unpinnedUses(ci.Jobs)
+	findings = append(findings, unpinnedImages(ci.Jobs)...)
+	for _, inc := range ci.Includes {
+		if f, ok := unpinnedInclude(inc); ok {
+			findings = append(findings, f)
 		}
 	}
+	findings = append(findings, latestWords(ci.Jobs)...)
 	return Merge(res, failIf(findings))
 }
 
-// checkC04: a job of a workflow that counts for pull requests (reusable
-// workflows followed) has a step whose simple command starts with the
-// words vibe audit, and none of its steps calls a verify command.
+// unpinnedUses are C-02's findings for the uses: references that are
+// neither a local ./ path nor pinned to a full commit SHA.
+func unpinnedUses(jobs []*CIJob) []Finding {
+	const fix = "pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)"
+	var findings []Finding
+	for _, j := range jobs {
+		for _, u := range j.Uses {
+			if strings.HasPrefix(u.Ref, "./") || pinnedRef.MatchString(u.Ref) {
+				continue
+			}
+			findings = append(findings, Finding{File: u.File,
+				Message: fmt.Sprintf("line %d: %s uses %s, which is not pinned to a commit SHA", u.Line, u.Where, u.Ref),
+				Fix:     fix})
+		}
+	}
+	return findings
+}
+
+// pinnedDigest is an image reference pinned by digest.
+var pinnedDigest = regexp.MustCompile(`@sha256:[0-9a-fA-F]{64}$`)
+
+// unpinnedImages are C-02's findings for the images not pinned by digest:
+// one for each image entry, which names every job that uses it.
+func unpinnedImages(jobs []*CIJob) []Finding {
+	type image struct {
+		img  CIImage
+		jobs []string
+	}
+	var images []*image
+	byKey := map[string]*image{}
+	for _, j := range jobs {
+		for _, img := range j.Images {
+			if pinnedDigest.MatchString(img.Name) {
+				continue
+			}
+			k := fmt.Sprintf("%s\x00%d\x00%s\x00%s", img.File, img.Line, img.Key, img.Name)
+			if byKey[k] == nil {
+				byKey[k] = &image{img: img}
+				images = append(images, byKey[k])
+			}
+			byKey[k].jobs = append(byKey[k].jobs, j.where())
+		}
+	}
+	findings := make([]Finding, 0, len(images))
+	for _, im := range images {
+		name := im.img.Name
+		if name == "" {
+			name = "(no image name)"
+		}
+		findings = append(findings, Finding{File: im.img.File,
+			Message: fmt.Sprintf("line %d: %s %s is not pinned by digest (used by %s)", im.img.Line, im.img.Key, name, strings.Join(im.jobs, ", ")),
+			Fix:     "pin it by digest, keeping the tag for readers (name:tag@sha256:<64 hexadecimal characters>)"})
+	}
+	return findings
+}
+
+// latestWords are C-02's findings for the script words that end in
+// @latest: one for each file, line and word.
+func latestWords(jobs []*CIJob) []Finding {
+	var findings []Finding
+	seen := map[string]bool{}
+	for _, j := range jobs {
+		for _, s := range j.Scripts {
+			for _, w := range s.Words() {
+				k := fmt.Sprintf("%s\x00%d\x00%s", s.File, s.Line, w)
+				if !strings.HasSuffix(w, "@latest") || seen[k] {
+					continue
+				}
+				seen[k] = true
+				w = guardrule.ShowExpansions(w)
+				findings = append(findings, Finding{File: s.File,
+					Message: fmt.Sprintf("line %d: %s runs %s, which is not pinned", s.Line, s.Where, w),
+					Fix:     "pin " + strings.TrimSuffix(w, "@latest") + " to a version (@v1.2.3) instead of @latest"})
+			}
+		}
+	}
+	return findings
+}
+
+// checkC04: a job that runs for merge (pull) requests (reusable
+// workflows and child pipelines followed) has a simple command that
+// starts with the words vibe audit, and calls no verify command.
 func checkC04(env *Env, _ Needed) PartResult {
 	verify, missing := env.Entrypoint(EntrypointVerify)
 	if missing != nil {
@@ -201,47 +271,49 @@ func checkC04(env *Env, _ Needed) PartResult {
 	if !ok {
 		return res
 	}
-	if ci.Provider == CIGitLab {
-		return Merge(res, gitlabC04(env, ci, verify))
-	}
-	parsed := ci.Workflows
-	branch := defaultBranch(env, parsed)
-	if len(auditJobs(parsed, branch, verify)) > 0 {
+	run := ci.Run(KindMergeRequest)
+	if len(ciAuditJobs(run, verify)) > 0 {
 		return res
 	}
+	w := ci.wording
 	var findings []Finding
-	for _, j := range jobsTriggered(parsed, eventPullRequest, branch) {
-		if !runsAudit(j.job) {
+	for _, j := range run.Jobs {
+		if !runsAuditCommand(j.Commands) {
 			continue
 		}
 		for _, c := range verify {
-			if CallsAny(j.job.Commands(), c) {
-				findings = append(findings, Finding{File: j.wf.File,
+			if CallsAny(j.Commands, c) {
+				findings = append(findings, Finding{File: j.File,
 					Message: fmt.Sprintf("%s runs vibe audit and also calls the verify command `%s`", j.where(), c),
 					Fix:     "run vibe audit in a job of its own that does not call verify"})
 			}
 		}
 	}
+	for _, s := range run.Skipped {
+		if runsAuditCommand(s.Job.Commands) {
+			findings = append(findings, skipFinding(s, w.mergeRequests))
+		}
+	}
 	if len(findings) == 0 {
-		findings = append(findings, Finding{File: workflowDir + "/",
-			Message: "no job of a workflow that runs on pull requests runs vibe audit" + triggerHint,
-			Fix:     "add a job, triggered on pull_request, whose step runs vibe audit (any arguments) and that does not call verify"})
+		findings = append(findings, Finding{File: ci.Dir,
+			Message: w.noAuditJob + w.hint,
+			Fix:     w.noAuditJobFix})
 	}
 	return Merge(res, Fail(findings...))
 }
 
-// auditJobs returns the jobs that satisfy C-04: run by a workflow that
-// counts for pull requests, with a step that runs vibe audit and no step
-// that calls a verify command.
-func auditJobs(parsed []*Workflow, branch string, verify []Command) []ciJob {
-	var out []ciJob
-	for _, j := range jobsTriggered(parsed, eventPullRequest, branch) {
-		if !runsAudit(j.job) {
+// ciAuditJobs returns the jobs of a run that satisfy C-04: they run vibe
+// audit (a simple command that counts as calling, starting with the words
+// vibe audit) and call no verify command. R-01's CI part exempts them.
+func ciAuditJobs(run *CIRun, verify []Command) []*CIJob {
+	var out []*CIJob
+	for _, j := range run.Jobs {
+		if !runsAuditCommand(j.Commands) {
 			continue
 		}
 		calls := false
 		for _, c := range verify {
-			calls = calls || CallsAny(j.job.Commands(), c)
+			calls = calls || CallsAny(j.Commands, c)
 		}
 		if !calls {
 			out = append(out, j)
@@ -250,10 +322,8 @@ func auditJobs(parsed []*Workflow, branch string, verify []Command) []ciJob {
 	return out
 }
 
-// runsAudit reports whether a job has a simple command that starts with
-// the words vibe audit.
-func runsAudit(j *Job) bool {
-	for _, c := range j.Commands() {
+func runsAuditCommand(cmds []Command) bool {
+	for _, c := range cmds {
 		if c.HasPrefix("vibe", "audit") {
 			return true
 		}
@@ -263,9 +333,9 @@ func runsAudit(j *Job) bool {
 
 // checkC05: each verify command is called by a job that runs on a Linux
 // runner and by one that runs on a Windows runner, after matrix
-// expansion, in any workflow. The rule is not applicable without windows
+// expansion, among every job. The rule is not applicable without windows
 // in platforms; the registry decides that before it runs.
-func checkC05(env *Env, _ Needed) PartResult { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
+func checkC05(env *Env, _ Needed) PartResult {
 	verify, missing := env.Entrypoint(EntrypointVerify)
 	if missing != nil {
 		return Fail(*missing)
@@ -274,41 +344,19 @@ func checkC05(env *Env, _ Needed) PartResult { //nolint:gocognit,gocyclo // base
 	if !ok {
 		return res
 	}
-	if ci.Provider == CIGitLab {
-		return Merge(res, gitlabC05(ci, verify))
-	}
-	parsed := ci.Workflows
+	w := ci.wording
 	var findings []Finding
 	for _, c := range verify {
-		var platforms, unknown, where []string
-		file := workflowDir + "/"
-		for _, wf := range parsed {
-			for _, j := range wf.Jobs {
-				if !CallsAny(j.Commands(), c) {
-					continue
-				}
-				if len(where) == 0 {
-					file = wf.File
-				}
-				where = append(where, wf.File+" job "+j.ID)
-				ps, us := runnerPlatforms(j)
-				for _, p := range ps {
-					if !slices.Contains(platforms, p) {
-						platforms = append(platforms, p)
-					}
-				}
-				unknown = append(unknown, us...)
-			}
-		}
-		if len(where) == 0 {
-			findings = append(findings, Finding{File: file,
-				Message: fmt.Sprintf("no workflow step calls the verify command `%s`, so it runs on no runner", c),
-				Fix:     fmt.Sprintf("call `%s` in a job that runs on ubuntu-latest and windows-latest (a matrix over os)", c)})
+		r := runnersOf(ci, c)
+		if len(r.where) == 0 {
+			findings = append(findings, Finding{File: ci.Dir,
+				Message: w.uncalledOnRunner(c),
+				Fix:     w.uncalledOnRunnerFix(c)})
 			continue
 		}
 		var lacking []string
 		for _, p := range []string{PlatformLinux, PlatformWindows} {
-			if !slices.Contains(platforms, p) {
+			if !slices.Contains(r.platforms, p) {
 				lacking = append(lacking, platformName(p))
 			}
 		}
@@ -316,15 +364,46 @@ func checkC05(env *Env, _ Needed) PartResult { //nolint:gocognit,gocyclo // base
 			continue
 		}
 		msg := fmt.Sprintf("the verify command `%s` runs on no %s runner (called in %s)",
-			c, joinWords(lacking, " or "), strings.Join(where, ", "))
-		if len(unknown) > 0 {
-			msg += "; runners of unknown platform: " + strings.Join(unknown, "; ")
+			c, joinWords(lacking, " or "), strings.Join(r.where, ", "))
+		if len(r.unknown) > 0 {
+			msg += "; runners of unknown platform: " + strings.Join(r.unknown, "; ")
 		}
-		findings = append(findings, Finding{File: file, Message: msg,
-			Fix: fmt.Sprintf("run `%s` on %s too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}",
-				c, joinWords(lacking, " and "))})
+		findings = append(findings, Finding{File: r.file, Message: msg,
+			Fix: w.lackingPlatformFix(c, joinWords(lacking, " and "))})
 	}
 	return Merge(res, failIf(findings))
+}
+
+// commandRunners are the runners of the jobs that call one command.
+type commandRunners struct {
+	// file defines the first job that calls it.
+	file string
+	// where names each job that calls it, with its file.
+	where []string
+	// platforms are the distinct platforms of those jobs; unknown are
+	// their runners of unknown platform, as C-05 quotes them.
+	platforms, unknown []string
+}
+
+// runnersOf returns the runners of every job that calls c.
+func runnersOf(ci *CI, c Command) commandRunners {
+	var r commandRunners
+	for _, j := range ci.Jobs {
+		if !CallsAny(j.Commands, c) {
+			continue
+		}
+		if len(r.where) == 0 {
+			r.file = j.File
+		}
+		r.where = append(r.where, j.File+" "+j.where())
+		for _, p := range j.Platforms {
+			if !slices.Contains(r.platforms, p) {
+				r.platforms = append(r.platforms, p)
+			}
+		}
+		r.unknown = append(r.unknown, j.UnknownRunners...)
+	}
+	return r
 }
 
 func platformName(p string) string {
@@ -343,30 +422,56 @@ var scanners = [][]string{
 	{"govulncheck"}, {"pip-audit"}, {"osv-scanner"}, {"trivy"}, {"pnpm", "audit"}, {"npm", "audit"},
 }
 
-// checkD03: some workflow step runs a recognized scanner.
+// checkD03: some job's script (GitLab after_script included) runs a
+// recognized scanner, or the pipeline includes GitLab's
+// Dependency-Scanning template or dependency-scanning component.
 func checkD03(env *Env, _ Needed) PartResult {
 	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
 	}
-	if ci.Provider == CIGitLab {
-		return Merge(res, gitlabD03(ci))
+	if runsScanner(ci) || includesDependencyScanning(ci) {
+		return res
 	}
-	parsed := ci.Workflows
-	for _, wf := range parsed {
-		for _, j := range wf.Jobs {
-			for _, c := range j.Commands() {
-				for _, s := range scanners {
-					if c.HasPrefix(s...) {
-						return res
-					}
+	return Merge(res, Fail(Finding{File: ci.Dir, Message: ci.wording.noScanner, Fix: ci.wording.noScannerFix}))
+}
+
+// runsScanner reports whether a script of a job runs a recognized scanner.
+func runsScanner(ci *CI) bool {
+	for _, j := range ci.Jobs {
+		for _, s := range j.Scripts {
+			for _, c := range s.Commands {
+				if slices.ContainsFunc(scanners, func(sc []string) bool { return c.HasPrefix(sc...) }) {
+					return true
 				}
 			}
 		}
 	}
-	return Merge(res, Fail(Finding{File: workflowDir + "/",
-		Message: "no workflow step runs a recognized vulnerability scanner (govulncheck, pip-audit, pnpm audit, npm audit, osv-scanner or trivy)",
-		Fix:     "add a CI step that runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python or pnpm audit for TypeScript"}))
+	return false
+}
+
+// dependencyScanningTemplate is GitLab's Dependency-Scanning template.
+var dependencyScanningTemplate = regexp.MustCompile(`^(Jobs|Security)/Dependency-Scanning[^/]*\.gitlab-ci\.yml$`)
+
+// includesDependencyScanning reports whether the pipeline includes
+// GitLab's Dependency-Scanning template or its dependency-scanning
+// component.
+func includesDependencyScanning(ci *CI) bool {
+	for _, inc := range ci.Includes {
+		v := inc.Target()
+		switch inc.Kind {
+		case IncludeTemplate:
+			if dependencyScanningTemplate.MatchString(v) {
+				return true
+			}
+		case IncludeComponent:
+			path, _, _ := strings.Cut(v, "@")
+			if slices.Contains(strings.Split(path, "/"), "dependency-scanning") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // checkR01 is R-01's static part: no entrypoint, hook command or CI step
@@ -384,7 +489,7 @@ func checkR01(env *Env, _ Needed) PartResult {
 		// With verify missing (V-04 fails), any vibe audit job that runs
 		// for pull (merge) requests is the audit job.
 		verify, _ := env.Entrypoint(EntrypointVerify)
-		calls = append(calls, ciVibeCalls(env, ci, ciAuditJobs(ci.Run(env, KindMergeRequest), verify))...)
+		calls = append(calls, ciVibeCalls(env, ci, ciAuditJobs(ci.Run(KindMergeRequest), verify))...)
 	}
 	var findings []Finding
 	for _, c := range calls {

@@ -1,0 +1,197 @@
+== baseline
+no findings
+
+== on as a list
+no findings
+
+== on as one event per workflow
+no findings
+
+== list verify, commands in different jobs
+no findings
+
+== list verify, one command not called
+file: .github/workflows/
+message: no workflow that runs on pull requests calls the verify command `task test`
+fix: add a step that runs `task test` as its own command to a job that runs on pull requests
+
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task test`
+fix: add a step that runs `task test` as its own command to a job that runs on pushes to main
+
+== verify inside a condition
+no findings
+
+== verify with an extra argument is not called
+file: .github/workflows/
+message: no workflow that runs on pull requests calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pull requests
+
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== a step that does not parse calls nothing
+file: .github/workflows/
+message: no workflow that runs on pull requests calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pull requests
+
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== a GitHub expression is not a word
+file: .github/workflows/
+message: no workflow that runs on pull requests calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pull requests
+
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== no push
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== no pull request
+file: .github/workflows/
+message: no workflow that runs on pull requests calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pull requests
+
+== push to another branch
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== push branches double star
+no findings
+
+== push branches single star
+no findings
+
+== push branches negated
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== push branches negated then included again
+no findings
+
+== push branches as one string
+no findings
+
+== push branches-ignore others
+no findings
+
+== push branches-ignore main
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== push tags without branches
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== push tags with branches
+no findings
+
+== push paths filter
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== pull request paths-ignore filter
+file: .github/workflows/
+message: no workflow that runs on pull requests calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pull requests
+
+== pull request branches admit main
+no findings
+
+== pull request branches exclude main
+file: .github/workflows/
+message: no workflow that runs on pull requests calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pull requests
+
+== pull request types keep the defaults
+no findings
+
+== pull request types drop synchronize
+file: .github/workflows/
+message: no workflow that runs on pull requests calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pull requests
+
+== pull_request_target does not count
+file: .github/workflows/
+message: no workflow that runs on pull requests calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pull requests
+
+== job if: conditions are ignored
+no findings
+
+== local reusable workflow
+no findings
+
+== local reusable workflow, nested
+no findings
+
+== a reusable workflow's own triggers do not count
+file: .github/workflows/
+message: no workflow that runs on pull requests calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pull requests
+
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== remote reusable workflow is not followed
+file: .github/workflows/
+message: no workflow that runs on pull requests calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pull requests
+
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== master is assumed when the filters favor it
+no findings
+
+== main is assumed on a tie
+file: .github/workflows/
+message: no workflow that runs on pushes to main calls the verify command `task verify`
+fix: add a step that runs `task verify` as its own command to a job that runs on pushes to main
+
+== verify missing points at V-04
+file: vibe.yaml
+message: this rule needs the verify entrypoint, and V-04 finds it unusable: entrypoints.verify is not declared
+fix: fix V-04 first: declare entrypoints.verify as the command that runs it, such as task verify
+
+== a workflow that does not parse
+file: .github/workflows/broken.yml
+message: does not parse: yaml: line 1: did not find expected node content
+fix: fix the syntax so that the file parses
+
+== a workflow whose jobs are not a map
+file: .github/workflows/broken.yml
+message: does not parse: line 2: jobs must be a map
+fix: fix the syntax so that the file parses
+
+== no CI
+file: .github/workflows/
+message: the repository has no CI configuration
+fix: add a GitHub Actions workflow under .github/workflows/ or a GitLab CI configuration (.gitlab-ci.yml)
+
+== an untracked workflow does not count
+file: .github/workflows/
+message: the repository has no CI configuration
+fix: add a GitHub Actions workflow under .github/workflows/ or a GitLab CI configuration (.gitlab-ci.yml)
+
+== another CI provider
+file: azure-pipelines.yml
+message: contract 1.2.0 reads GitHub Actions and GitLab CI only, and this repository's CI is azure-pipelines.yml
+fix: run CI in GitHub Actions under .github/workflows/ or in GitLab CI (.gitlab-ci.yml), or wait for a vibe that reads this provider
+
+== another CI provider beside GitHub workflows
+no findings

@@ -26,7 +26,6 @@ type Env struct {
 	entrypoints    map[string]*entrypointState
 	workflows      *Workflows
 	ci             *ciState
-	defaultBranch  string
 	hookMgrs       *[]*hookManager
 	claudeSettings *parsedClaudeSettings
 	// guardLoad is vibeGuardLoadError's answer once worked out.
