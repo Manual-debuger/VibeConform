@@ -1,6 +1,6 @@
 # Spec 0068: The guard protects the project it runs in, also below the Git top
 
-Status: draft (2026-11-24). Issue #180, found while reproducing #163
+Status: approved (2026-11-24). Issue #180, found while reproducing #163
 item 3. Part of the design review #167 (guard track). A bug fix with
 regression tests. Amends spec 0053 ("Repository root") and the
 `vibe unlock` section of `docs/usage.md`. No contract change: the
