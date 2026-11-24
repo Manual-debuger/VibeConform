@@ -238,7 +238,7 @@ func (r Rule) MatchesPath(p, root string) bool {
 func RelPath(root, p string) string {
 	p = strings.ReplaceAll(p, `\`, "/")
 	root = strings.TrimRight(strings.ReplaceAll(root, `\`, "/"), "/")
-	if root != "" && isAbs(p) {
+	if root != "" && IsAbs(p) {
 		if rel, ok := cutPrefixFold(p, root+"/", hasDrive(root)); ok {
 			return path.Clean(rel)
 		}
@@ -246,7 +246,12 @@ func RelPath(root, p string) string {
 	return path.Clean(p)
 }
 
-func isAbs(p string) bool { return strings.HasPrefix(p, "/") || hasDrive(p) }
+// IsAbs reports whether p is absolute, with backslashes counted as
+// separators: it starts with a slash or a backslash, or with a drive
+// letter and a colon. This is how RelPath reads p on every platform.
+func IsAbs(p string) bool {
+	return strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`) || hasDrive(p)
+}
 
 func hasDrive(p string) bool {
 	return len(p) >= 2 && p[1] == ':' && ((p[0] >= 'a' && p[0] <= 'z') || (p[0] >= 'A' && p[0] <= 'Z'))

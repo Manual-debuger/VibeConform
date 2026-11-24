@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"cmp"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,7 @@ type Repo struct {
 	// Root. It is Root unless the project is below the Git top, and ""
 	// when no .git was found.
 	GitTop string
-	// GitDir is the repository's Git directory: Root/.git, or where a
+	// GitDir is the repository's Git directory: GitTop/.git, or where a
 	// .git file's "gitdir:" line points. It is "" when none was found or
 	// the .git file cannot be read.
 	GitDir string
@@ -29,17 +30,18 @@ type Repo struct {
 	CommonDir string
 }
 
-// FindRepo walks up from start to the directory that holds .git, which
-// is then both the project root and the Git top. Without .git above it,
-// the project root is start and there is no Git top.
-func FindRepo(start string) Repo {
+// walkToGitTop walks up from start to the Git top, the directory that
+// holds .git, and finds the Git directories from it. The project root
+// is root, or, when root is "", the Git top. Without .git above start,
+// the project root is root, else start, and there is no Git top.
+func walkToGitTop(start, root string) Repo {
 	if abs, err := filepath.Abs(start); err == nil {
 		start = abs
 	}
 	for dir := start; ; {
 		dotGit := filepath.Join(dir, ".git")
 		if fi, err := os.Stat(dotGit); err == nil {
-			r := Repo{Root: dir, GitTop: dir}
+			r := Repo{Root: cmp.Or(root, dir), GitTop: dir}
 			if fi.IsDir() {
 				r.GitDir = dotGit
 			} else {
@@ -52,7 +54,7 @@ func FindRepo(start string) Repo {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return Repo{Root: start}
+			return Repo{Root: cmp.Or(root, start)}
 		}
 		dir = parent
 	}

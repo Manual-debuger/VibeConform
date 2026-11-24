@@ -47,9 +47,8 @@ func (g *Guard) matchGuardrailSettings(p string) bool {
 	if top == "" || filepath.Clean(top) == filepath.Clean(g.Repo.Root) {
 		return false
 	}
-	p = strings.ReplaceAll(p, `\`, "/")
-	if !strings.HasPrefix(p, "/") && (len(p) < 2 || p[1] != ':') {
-		p = filepath.ToSlash(g.Repo.Root) + "/" + p
+	if !gr.IsAbs(p) {
+		p = g.Repo.Root + "/" + p
 	}
 	return guardrailSettingsRe.MatchString(gr.RelPath(top, p))
 }
