@@ -1,7 +1,6 @@
 package guard_test
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,10 +15,10 @@ import (
 // top's, reads the project's policy.json only, and finds the unlock
 // marker in the Git top's common Git directory.
 
-// subProject makes a fixture repository top with a project top/proj and
+// nestedProject makes a fixture repository top with a project top/proj and
 // a sibling project top/other. topPolicy and projPolicy are the two
 // policy.json texts, or "" for none. proj's CommonDir is top's.
-func subProject(t *testing.T, topPolicy, projPolicy string) (top, proj repo) {
+func nestedProject(t *testing.T, topPolicy, projPolicy string) (top, proj repo) {
 	t.Helper()
 	top = newRepo(t, topPolicy)
 	proj = repo{Root: filepath.Join(top.Root, "proj"), CommonDir: top.CommonDir}
@@ -32,26 +31,11 @@ func subProject(t *testing.T, topPolicy, projPolicy string) (top, proj repo) {
 	return top, proj
 }
 
-// editPayload is a Write, Edit or MultiEdit of path, from cwd.
-func editPayload(tool, path, cwd string) string {
-	input := map[string]any{"file_path": path}
-	switch tool {
-	case "Write":
-		input["content"] = "{}"
-	case "Edit":
-		input["old_string"], input["new_string"] = "a", "b"
-	case "MultiEdit":
-		input["edits"] = []map[string]string{{"old_string": "a", "new_string": "b"}}
-	}
-	data, _ := json.Marshal(map[string]any{"tool_name": tool, "tool_input": input, "cwd": cwd})
-	return string(data)
-}
-
 // TestProjectBelowGitTopGuardrailSettings: the project's and the Git
 // top's .claude/settings.json and .claude/hooks/ are refused while
 // locked; a sibling project's are ordinary files.
 func TestProjectBelowGitTopGuardrailSettings(t *testing.T) {
-	top, proj := subProject(t, "", enforcePolicy)
+	top, proj := nestedProject(t, "", enforcePolicy)
 	refused := []string{
 		filepath.Join(proj.Root, ".claude", "settings.json"),
 		filepath.Join(proj.Root, ".claude", "hooks", "pre.sh"),
@@ -86,7 +70,7 @@ func TestProjectBelowGitTopGuardrailSettings(t *testing.T) {
 // TestProjectBelowGitTopShellWrite: a shell write of the project's
 // settings is checked like an edit.
 func TestProjectBelowGitTopShellWrite(t *testing.T) {
-	_, proj := subProject(t, "", "")
+	_, proj := nestedProject(t, "", "")
 	assertRefused(t, proj.hook(t, commandPayload("Bash", "echo {} | tee .claude/settings.json", proj.Root)), "guardrail-settings")
 	assertRefused(t, proj.hook(t, commandPayload("Bash", "echo x > .claude/hooks/pre.sh", proj.Root)), "guardrail-settings")
 	assertRefused(t, proj.hook(t, commandPayload("Bash", "echo {} > ../.claude/settings.json", proj.Root)), "guardrail-settings")
@@ -96,7 +80,7 @@ func TestProjectBelowGitTopShellWrite(t *testing.T) {
 // directory unlocks the project's and the top's settings; an expired one
 // does not; the agent cannot write it.
 func TestProjectBelowGitTopUnlock(t *testing.T) {
-	top, proj := subProject(t, "", "")
+	top, proj := nestedProject(t, "", "")
 	settings := []string{".claude/settings.json", filepath.Join(proj.Root, ".claude", "settings.json"), filepath.Join(top.Root, ".claude", "hooks", "pre.sh")}
 	markerFile := filepath.Join(top.CommonDir, "vibe-unlock")
 
@@ -122,16 +106,16 @@ func TestProjectBelowGitTopPolicy(t *testing.T) {
 	const projPolicy = `{"version": 2,
 		"rules": [{"id": "no-x", "level": "deny", "command": "echo hi", "reason": "the project's rule"}],
 		"exceptions": [{"rule": "rm-rf", "match": "rm -rf dist", "reason": "the project's exception"}]}`
-	_, proj := subProject(t, topPolicy, projPolicy)
+	_, proj := nestedProject(t, topPolicy, projPolicy)
 	assertRefused(t, proj.hook(t, commandPayload("Bash", "echo hi", proj.Root)), "no-x")
 	assertAllowed(t, proj.hook(t, commandPayload("Bash", "echo top", proj.Root)))
 	assertRefused(t, proj.hook(t, commandPayload("Bash", "rm -rf build", proj.Root)), "rm-rf")
 	assertAllowed(t, proj.hook(t, commandPayload("Bash", "rm -rf dist", proj.Root)))
 
-	_, broken := subProject(t, enforcePolicy, `{"version": 2, "rules": [{"id": "x"}]}`)
+	_, broken := nestedProject(t, enforcePolicy, `{"version": 2, "rules": [{"id": "x"}]}`)
 	assertRefused(t, broken.hook(t, commandPayload("Bash", "ls", broken.Root)), "policy-error")
 
-	_, observe := subProject(t, "", `{"version": 2, "mode": "observe"}`)
+	_, observe := nestedProject(t, "", `{"version": 2, "mode": "observe"}`)
 	if got := observe.hook(t, commandPayload("Bash", "rm -rf build", observe.Root)); got.Code != 0 ||
 		!strings.HasPrefix(got.Stderr, "vibe-guard (observe): would refuse by rule rm-rf") {
 		t.Errorf("observe mode in the project: exit %d, stderr %q", got.Code, got.Stderr)
@@ -140,17 +124,40 @@ func TestProjectBelowGitTopPolicy(t *testing.T) {
 
 // TestProjectBelowGitTopExplain: explain decides as the hook does.
 func TestProjectBelowGitTopExplain(t *testing.T) {
-	_, proj := subProject(t, "", "")
-	got := proj.explain(t, "--tool", "Write", filepath.Join(proj.Root, ".claude", "settings.json"))
-	if got.Code != 2 || !hasLine(got.Stdout, "rule: guardrail-settings") {
-		t.Errorf("exit %d, output\n%s", got.Code, got.Stdout)
+	_, proj := nestedProject(t, "", "")
+	for _, args := range [][]string{
+		{"--tool", "Write", filepath.Join(proj.Root, ".claude", "settings.json")},
+		{"--tool", "Write", ".claude/settings.json"},
+		{"echo {} | tee .claude/settings.json"},
+		{"echo {} > ../.claude/settings.json"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			got := proj.explain(t, args...)
+			if got.Code != 2 || !hasLine(got.Stdout, "rule: guardrail-settings") {
+				t.Errorf("exit %d, output\n%s", got.Code, got.Stdout)
+			}
+		})
+	}
+}
+
+// TestProjectBelowGitTopObserveLog: in observe mode, the log goes to the
+// Git top's common Git directory (story 15).
+func TestProjectBelowGitTopObserveLog(t *testing.T) {
+	_, proj := nestedProject(t, "", `{"version": 2, "mode": "observe"}`)
+	got := proj.hook(t, commandPayload("Bash", "git reset --hard", proj.Root))
+	if got.Code != 0 || !strings.Contains(got.Stderr, "rule git-reset-hard") {
+		t.Fatalf("exit %d, stderr %q", got.Code, got.Stderr)
+	}
+	log, err := os.ReadFile(filepath.Join(proj.CommonDir, "vibe-guard.log"))
+	if err != nil || string(log) != got.Stderr {
+		t.Errorf("log %q (%v); want %q", log, err, got.Stderr)
 	}
 }
 
 // TestProjectBelowGitTopRelock: relock with CLAUDE_PROJECT_DIR set to
 // the project deletes the marker in the Git top's .git.
 func TestProjectBelowGitTopRelock(t *testing.T) {
-	top, proj := subProject(t, "", "")
+	top, proj := nestedProject(t, "", "")
 	markerFile := filepath.Join(top.CommonDir, "vibe-unlock")
 	writeFile(t, markerFile, marker(time.Now().Add(10*time.Minute)))
 	got := runGuard(t, proj.Root, "", []string{"CLAUDE_PROJECT_DIR=" + proj.Root}, "relock")
