@@ -241,21 +241,29 @@ root at `outer`.
   - Write, Edit and MultiEdit of the project's `.claude/settings.json`
     and a file under its `.claude/hooks/`, absolute and relative, with a
     payload `cwd` in the project: refused under `guardrail-settings`.
+    The relative `.claude/settings.json` is unchanged (see "Code-review
+    notes").
   - The same for the Git top's settings: refused (unchanged).
   - A sibling project's `.claude/settings.json`: allowed (unchanged).
   - `tee .claude/settings.json` from the project: refused.
   - With a valid marker in the top's common Git directory, the project's
     and the top's settings edits are allowed; with an expired marker,
     refused.
-  - A Write of `vibe-unlock` in the top's `.git`: refused.
+  - A Write of `vibe-unlock` in the top's `.git`: refused (unchanged:
+    any path with a `.git` part was already refused).
   - A deny rule in the project's policy refuses its command; a deny rule
     only in the top's policy does not; an exception only in the top's
     policy does not lift a rule; an invalid project policy refuses under
     `policy-error`.
   - `vibe-guard relock` with `CLAUDE_PROJECT_DIR` set to the project
-    deletes the marker in the top's `.git`.
+    deletes the marker in the top's `.git` (unchanged: the old walk
+    already reached the top's `.git`).
   - `vibe-guard explain --tool Write <project settings>` with the same
-    environment exits as the hook does and names `guardrail-settings`.
+    environment exits as the hook does and names `guardrail-settings`,
+    for the absolute path, the relative `.claude/settings.json` and a
+    shell write (`tee .claude/settings.json`).
+  - Observe mode in the project writes `vibe-guard.log` in the top's
+    common Git directory (story 15).
   - **Agreement with `vibe unlock`**: with a real `git init` of the top
     (skipped when `git` is not on `PATH`), the marker is written where
     `git rev-parse --git-common-dir`, run in the project, points; the
@@ -269,6 +277,20 @@ root at `outer`.
   and out of the root), `TestUnlockInLinkedWorktree` (marker in the
   common directory), `TestRelock` (relock from a subdirectory without
   `CLAUDE_PROJECT_DIR`), `TestObserveModeLogsInTheCommonGitDir`.
+- **Code-review notes.** The review of the integration branch found
+  three cases above that also pass on `main`; they are marked
+  "unchanged" and kept as regression tests:
+  - relock with `CLAUDE_PROJECT_DIR` set: the old walk already reached
+    the top's `.git`;
+  - a Write of `vibe-unlock` in the top's `.git`: any path with a `.git`
+    part was already refused;
+  - a relative `.claude/settings.json`: it was already refused,
+    resolved against the top.
+
+  The review also added the `explain` cases for a relative path and a
+  shell write, and the observe-mode log case, which hold the acceptance
+  criterion "by `vibe-guard hook` and by `vibe-guard explain`" and story
+  15.
 
 ## Out of Scope
 

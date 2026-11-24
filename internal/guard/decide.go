@@ -248,7 +248,7 @@ func (g *Guard) resolve(p string) string {
 	if len(g.Repo.Root) >= 2 && g.Repo.Root[1] == ':' && isGitBashDrive(p) {
 		p = strings.ToUpper(p[1:2]) + ":" + p[2:]
 	}
-	if strings.HasPrefix(p, "/") || len(p) >= 2 && p[1] == ':' {
+	if gr.IsAbs(p) {
 		return p
 	}
 	dir := g.Dir
