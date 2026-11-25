@@ -34,7 +34,7 @@ type auditFlags struct {
 
 // contractSeams are the CLI suite's test seams (ADR 0028). The zero value
 // is the real command: contract.OpenRepo, this process's environment for
-// the probe runs, and doctor.System. The rule tests run contract.Audit in
+// the probe runs, doctor.System and the wall clock. The rule tests run contract.Audit in
 // internal/contract, so the CLI holds no rule list and no report hook.
 type contractSeams struct {
 	// probeEnv is the environment the probe runs inherit; nil means this
@@ -52,6 +52,18 @@ type contractSeams struct {
 	// asserts on this code, not on what the machine running it has
 	// installed.
 	doctorEnv func() doctor.Env
+	// now is the clock vibe unlock reads; nil means the wall clock (spec
+	// 0070, "vibe unlock's clock"). Tests fix it, so that they check the
+	// exact expiry in the unlock marker.
+	now func() time.Time
+}
+
+// clock is the seams' clock: now, or time.Now when it is nil.
+func (s contractSeams) clock() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now()
 }
 
 // commandContext is cmd's context, or the background one when cmd runs
