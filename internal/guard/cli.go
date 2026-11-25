@@ -112,7 +112,14 @@ func readPayload(r io.Reader) (payload, error) {
 	}
 	var p payload
 	if raw, ok := m["cwd"]; ok {
-		_ = json.Unmarshal(raw, &p.Cwd)
+		// A cwd that is not a JSON string (null included) is a payload
+		// error, like a missing tool_name (spec 0069). A missing or empty
+		// cwd falls back to the project root.
+		var cwd *string
+		if json.Unmarshal(raw, &cwd) != nil || cwd == nil {
+			return p, errors.New("the payload's cwd is not a string")
+		}
+		p.Cwd = *cwd
 	}
 	raw, ok := m["tool_name"]
 	if !ok || json.Unmarshal(raw, &p.ToolName) != nil || p.ToolName == "" {

@@ -7,6 +7,7 @@
 package guard
 
 import (
+	"cmp"
 	"errors"
 	"os"
 	"path/filepath"
@@ -78,8 +79,9 @@ type Guard struct {
 	PolicyErr error
 	// Now is the time an unlock marker is compared with.
 	Now time.Time
-	// Dir is the directory a relative path that a command writes is
-	// resolved against: the payload's cwd. When it is "", the root is.
+	// Dir is the directory a relative path, edited or written by a
+	// command, is resolved against: the payload's cwd. When it is "", the
+	// root is.
 	Dir string
 }
 
@@ -168,7 +170,7 @@ func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit,gocyclo 
 			if !w.Literal {
 				continue
 			}
-			p := g.resolve(w.Text)
+			p := g.normalize(w.Text)
 			if f := g.checkPath(shellWriteRules, p, gr.RelPath(g.Repo.Root, p), c, &d); f != nil {
 				d.Outcome, d.Finding = Deny, f
 				return d
@@ -196,13 +198,14 @@ func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit,gocyclo 
 
 func (g *Guard) decidePath(t gr.Target) Decision {
 	var d Decision
-	if f := g.checkPath(pathRules, t.Path, t.Path, nil, &d); f != nil {
+	p := g.normalize(t.Path)
+	if f := g.checkPath(pathRules, p, t.Path, nil, &d); f != nil {
 		d.Outcome, d.Finding = Deny, f
 		return d
 	}
 	var ask *Finding
 	for _, r := range g.Policy.Rules {
-		if r.Path == "" || !r.AppliesTo(t.Tool) || !r.MatchesPath(t.Path, g.Repo.Root) {
+		if r.Path == "" || !r.AppliesTo(t.Tool) || !r.MatchesPath(p, g.Repo.Root) {
 			continue
 		}
 		f := Finding{Rule: r.ID, Why: r.Reason, Path: t.Path}
@@ -240,23 +243,25 @@ func (g *Guard) checkPath(rules []pathRule, p, shown string, c *gr.Command, d *D
 	return nil
 }
 
-// resolve makes a path a command writes absolute: against Dir, or the
-// root (spec 0058, "Path resolution"). On Windows, Git Bash's /d/… is
-// D:/….
-func (g *Guard) resolve(p string) string {
+// normalizePath is the one reading of a path the guard checks, from an
+// edit tool or a command that writes it (spec 0058, "Path resolution";
+// spec 0069): backslashes become slashes; on a root with a drive letter,
+// Git Bash's /d/… is D:/…; a relative path is joined to dir, the
+// payload's cwd, else to root; and the result is cleaned. The rules then
+// see only absolute, clean, slash-separated paths.
+func normalizePath(root, dir, p string) string {
 	p = strings.ReplaceAll(p, `\`, "/")
-	if len(g.Repo.Root) >= 2 && g.Repo.Root[1] == ':' && isGitBashDrive(p) {
+	if len(root) >= 2 && root[1] == ':' && isGitBashDrive(p) {
 		p = strings.ToUpper(p[1:2]) + ":" + p[2:]
 	}
-	if gr.IsAbs(p) {
-		return p
+	if !gr.IsAbs(p) {
+		p = filepath.Join(cmp.Or(dir, root), filepath.FromSlash(p))
 	}
-	dir := g.Dir
-	if dir == "" {
-		dir = g.Repo.Root
-	}
-	return filepath.Join(dir, filepath.FromSlash(p))
+	return filepath.ToSlash(filepath.Clean(filepath.FromSlash(p)))
 }
+
+// normalize reads p as normalizePath does, in g's repository.
+func (g *Guard) normalize(p string) string { return normalizePath(g.Repo.Root, g.Dir, p) }
 
 // isGitBashDrive reports whether p starts with a Git Bash drive, such as
 // /d or /d/….

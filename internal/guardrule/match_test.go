@@ -54,6 +54,31 @@ func TestRelPath(t *testing.T) {
 	}
 }
 
+// TestRelPathDotDot is a regression test (spec 0069, bug 1): a path that
+// leaves the root with ".." and comes back is the root's path. It was
+// cleaned only after it was compared with the root, so
+// "../repo/.claude/settings.json" stayed outside it.
+func TestRelPathDotDot(t *testing.T) {
+	cases := []struct{ root, p, want string }{
+		{"/repo", "/repo/../repo/.claude/settings.json", ".claude/settings.json"},
+		{"/repo", "../repo/.env", ".env"},
+		{"/repo/", "a/../../repo/x", "x"},
+		{"/repo/sub/..", "/repo/.env", ".env"},
+		{"/repo", "../other/.env", "../other/.env"},
+		{"/repo", "/repo/../other/.env", "/other/.env"},
+		{"/repo", "..", ".."},
+		{`D:\repo`, `..\REPO\.env`, ".env"},
+		{`d:\repo`, `D:\Repo\..\repo\.claude\hooks\x.sh`, ".claude/hooks/x.sh"},
+		{`D:\repo`, `..\sib\x`, "../sib/x"},
+		{`D:\repo`, `D:\repo\..\sib\x`, "D:/sib/x"},
+	}
+	for _, c := range cases {
+		if got := guardrule.RelPath(c.root, c.p); got != c.want {
+			t.Errorf("RelPath(%q, %q) = %q, want %q", c.root, c.p, got, c.want)
+		}
+	}
+}
+
 func TestMatchGlob(t *testing.T) {
 	cases := []struct {
 		pattern, p string

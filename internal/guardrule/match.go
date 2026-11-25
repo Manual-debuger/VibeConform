@@ -233,17 +233,27 @@ func (r Rule) MatchesPath(p, root string) bool {
 // relative to root and slash separated when it is inside root, and p as
 // given otherwise. Backslashes count as separators; a root with a drive
 // letter is compared without case. A relative p is taken as relative to
-// root. The result is cleaned (no "." or ".." elements where they can
-// be removed).
+// root. The path is cleaned before it is compared (spec 0069), so a ".."
+// that leaves root and comes back is inside root. The result is cleaned
+// (no "." or ".." elements where they can be removed).
 func RelPath(root, p string) string {
-	p = strings.ReplaceAll(p, `\`, "/")
+	p = path.Clean(strings.ReplaceAll(p, `\`, "/"))
 	root = strings.TrimRight(strings.ReplaceAll(root, `\`, "/"), "/")
-	if root != "" && IsAbs(p) {
-		if rel, ok := cutPrefixFold(p, root+"/", hasDrive(root)); ok {
-			return path.Clean(rel)
-		}
+	if root == "" {
+		return p
 	}
-	return path.Clean(p)
+	root = strings.TrimRight(path.Clean(root), "/")
+	full := p
+	if !IsAbs(p) {
+		full = path.Clean(root + "/" + p)
+	}
+	if rel, ok := cutPrefixFold(full, root+"/", hasDrive(root)); ok {
+		return rel
+	}
+	if _, ok := cutPrefixFold(full+"/", root+"/", hasDrive(root)); ok && !IsAbs(p) {
+		return "." // a relative p that names root itself, as path.Clean gives it
+	}
+	return p
 }
 
 // IsAbs reports whether p is absolute, with backslashes counted as

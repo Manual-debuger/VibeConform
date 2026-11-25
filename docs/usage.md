@@ -1605,7 +1605,11 @@ a path when the path is:
   `xargs`, `find -exec`, `bash -c`, `pwsh -c`, …).
 
 A relative path is resolved against the payload's `cwd` (for `explain`,
-against the root), and Git Bash's `/d/…` is read as `D:/…`. A read
+against the root), and Git Bash's `/d/…` is read as `D:/…`. An edit
+tool's path is read the same way, and the result is cleaned before any
+rule sees it, so `../proj/.claude/settings.json` from inside `proj` is
+the project's settings file. A payload `cwd` that is not a string is
+refused under `payload-error`. A read
 (`cat`, `jq . <`, `Get-Content`) is allowed, and so is a write to any
 other file: `secret-file` stays an edit rule, so `cp .env.example .env`
 runs. `explain` shows the rule, the matched path and the simple command
