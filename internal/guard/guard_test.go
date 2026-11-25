@@ -173,6 +173,27 @@ func TestObserveMode(t *testing.T) {
 	}
 }
 
+// TestPolicyErrorRefusesInObserveMode: a policy.json that asks for
+// observe mode but cannot be used is a policy error, and a policy error
+// is refused, not softened: for a call, for a payload error and in
+// explain. Nothing goes to the log.
+func TestPolicyErrorRefusesInObserveMode(t *testing.T) {
+	r := newRepo(t, `{"version": 2, "mode": "observe", "rules": 5}`)
+	for name, stdin := range map[string]string{"call": bashPayload("rm -rf build"), "payload error": "not json"} {
+		got := r.hook(t, stdin)
+		if got.Code != 2 || !strings.HasPrefix(got.Stderr, "vibe-guard: refused by rule policy-error: ") {
+			t.Errorf("%s: exit %d, stderr %q; want exit 2 and policy-error", name, got.Code, got.Stderr)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(r.CommonDir, "vibe-guard.log")); !os.IsNotExist(err) {
+		t.Errorf("vibe-guard.log exists (err %v); a policy error is not logged", err)
+	}
+	ex := r.explain(t, "ls")
+	if ex.Code != 2 || !hasLine(ex.Stdout, "decision: deny") || !hasLine(ex.Stdout, "rule: policy-error") {
+		t.Errorf("explain: exit %d, output\n%s\nwant exit 2 and a plain deny under policy-error", ex.Code, ex.Stdout)
+	}
+}
+
 // TestObserveModeLogsInTheCommonGitDir: from a linked worktree (a .git
 // file and a commondir file), the log goes to the common directory.
 func TestObserveModeLogsInTheCommonGitDir(t *testing.T) {
