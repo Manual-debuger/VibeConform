@@ -154,7 +154,7 @@ func hook(env Env) int {
 		say(env.Stderr, "vibe-guard: refused by rule "+d.Finding.Rule+": "+reasonTail(d, t))
 		return exitDeny
 	case d.Outcome == Deny && !d.Refuses():
-		line :="vibe-guard (observe): would refuse by rule " + d.Finding.Rule + ": " + reasonTail(d, t)
+		line := "vibe-guard (observe): would refuse by rule " + d.Finding.Rule + ": " + reasonTail(d, t)
 		say(env.Stderr, line)
 		if repo.CommonDir != "" {
 			if err := appendLine(filepath.Join(repo.CommonDir, LogFile), line); err != nil {
