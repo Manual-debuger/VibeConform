@@ -54,6 +54,31 @@ func TestRelPath(t *testing.T) {
 	}
 }
 
+// TestRelPathDotDot is a regression test (spec 0069, bug 1): a path that
+// leaves the root with ".." and comes back is the root's path. It was
+// cleaned only after it was compared with the root, so
+// "../repo/.claude/settings.json" stayed outside it.
+func TestRelPathDotDot(t *testing.T) {
+	cases := []struct{ root, p, want string }{
+		{"/repo", "/repo/../repo/.claude/settings.json", ".claude/settings.json"},
+		{"/repo", "../repo/.env", ".env"},
+		{"/repo/", "a/../../repo/x", "x"},
+		{"/repo/sub/..", "/repo/.env", ".env"},
+		{"/repo", "../other/.env", "../other/.env"},
+		{"/repo", "/repo/../other/.env", "/other/.env"},
+		{"/repo", "..", ".."},
+		{`D:\repo`, `..\REPO\.env`, ".env"},
+		{`d:\repo`, `D:\Repo\..\repo\.claude\hooks\x.sh`, ".claude/hooks/x.sh"},
+		{`D:\repo`, `..\sib\x`, "../sib/x"},
+		{`D:\repo`, `D:\repo\..\sib\x`, "D:/sib/x"},
+	}
+	for _, c := range cases {
+		if got := guardrule.RelPath(c.root, c.p); got != c.want {
+			t.Errorf("RelPath(%q, %q) = %q, want %q", c.root, c.p, got, c.want)
+		}
+	}
+}
+
 func TestMatchGlob(t *testing.T) {
 	cases := []struct {
 		pattern, p string
@@ -185,5 +210,26 @@ func TestRuleMatches(t *testing.T) {
 	}
 	if !lock.AppliesTo("Write") || lock.AppliesTo("Edit") || !tf.AppliesTo("PowerShell") || tf.AppliesTo("Write") {
 		t.Error("AppliesTo")
+	}
+}
+
+// A rule built outside ParsePolicy can carry an args that does not
+// compile. It fails closed: a command with the rule's prefix matches, so
+// a deny rule refuses and an ask rule asks (spec 0069, bug 4).
+func TestRuleWithUncompilableArgsFailsClosed(t *testing.T) {
+	r := guardrule.Rule{ID: "kubectl-bad", Level: "deny", Command: "kubectl", Args: "(["}
+	cmds, err := guardrule.Commands(guardrule.ShellBash, "kubectl get pods")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.MatchesCommand(cmds[0]) {
+		t.Error("a command with the prefix: MatchesCommand = false, want true")
+	}
+	other, err := guardrule.Commands(guardrule.ShellBash, "helm list")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.MatchesCommand(other[0]) {
+		t.Error("a command without the prefix: MatchesCommand = true, want false")
 	}
 }

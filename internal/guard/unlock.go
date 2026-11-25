@@ -35,9 +35,9 @@ var guardrailSettingsRe = regexp.MustCompile(`(?i)^\.claude/+(settings\.json$|ho
 // .claude/settings.json or a path under its .claude/hooks/ (spec 0051
 // names the repository's files) or, when the project is below the Git
 // top, the Git top's: a session opened at the top runs those (spec
-// 0068). p is taken relative to the project root, as an exception glob
-// is: a relative path, or an absolute one inside the root. The same
-// names elsewhere, such as the person's own ~/.claude/settings.json or a
+// 0068). p is absolute and clean (normalize), and is taken relative
+// to the project root, as an exception glob is. The same names
+// elsewhere, such as the person's own ~/.claude/settings.json or a
 // sibling project's, are not this session's guardrails.
 func (g *Guard) matchGuardrailSettings(p string) bool {
 	if guardrailSettingsRe.MatchString(gr.RelPath(g.Repo.Root, p)) {
@@ -47,18 +47,15 @@ func (g *Guard) matchGuardrailSettings(p string) bool {
 	if top == "" || filepath.Clean(top) == filepath.Clean(g.Repo.Root) {
 		return false
 	}
-	if !gr.IsAbs(p) {
-		p = g.Repo.Root + "/" + p
-	}
 	return guardrailSettingsRe.MatchString(gr.RelPath(top, p))
 }
 
 // isMarker reports whether p is the unlock marker: a file named
 // vibe-unlock inside a .git directory, or in the repository's Git or
-// common Git directory. Names are compared without case, since Windows
-// and macOS file systems do.
+// common Git directory. p is absolute and clean (normalize). Names
+// are compared without case, since Windows and macOS file systems do.
 func (g *Guard) isMarker(p string) bool {
-	parts := strings.Split(strings.ReplaceAll(p, `\`, "/"), "/")
+	parts := strings.Split(p, "/")
 	if !strings.EqualFold(parts[len(parts)-1], gr.UnlockMarkerFile) {
 		return false
 	}
@@ -67,11 +64,7 @@ func (g *Guard) isMarker(p string) bool {
 			return true
 		}
 	}
-	file := filepath.FromSlash(strings.Join(parts, "/"))
-	if !filepath.IsAbs(file) {
-		file = filepath.Join(g.Repo.Root, file)
-	}
-	dir := filepath.Dir(filepath.Clean(file))
+	dir := filepath.Dir(filepath.FromSlash(p))
 	for _, d := range []string{g.Repo.GitDir, g.Repo.CommonDir} {
 		if d != "" && strings.EqualFold(filepath.Clean(d), dir) {
 			return true

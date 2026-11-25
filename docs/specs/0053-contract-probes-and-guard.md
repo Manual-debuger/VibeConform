@@ -741,6 +741,11 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     unlocks both. The Git top's `policy.json` is not read then.
     `hook`, `explain` and `relock` get both directories from one
     function in `internal/guard`.
+  - **Amended by spec 0069 (#163).** The walk to the Git top and the
+    reading of `.git`, `commondir` and the common Git directory live in
+    `internal/guardrule` (`FindRepo`). `vibe-guard` and `vibe unlock`
+    both call it, so the marker is written where the guard reads it.
+    Neither reads `GIT_DIR` or `GIT_COMMON_DIR`.
 - **Parsing.**
   - `Bash` commands are parsed with `syntax.LangBash`, because the Bash
     tool runs bash. The audit's parsing stays POSIX (ADR 0026).
@@ -923,6 +928,21 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   lock early, run `vibe-guard relock`. An N out of range, or a
   `--repo-root` where `git rev-parse` fails, is an error and writes
   nothing. The expiry is written to the second.
+  - **Amended by spec 0069 (#163).** `vibe unlock` runs no `git`. It
+    makes `--repo-root` absolute and finds the common Git directory as
+    the guard does ("Repository root"): it reads `.git` in
+    `--repo-root` or the nearest directory above it, and the `gitdir:`
+    and `commondir` files it points to. It does not read `GIT_DIR` or
+    `GIT_COMMON_DIR`, so a variable that names another repository
+    cannot move the marker there. When no common Git directory is found
+    (no `.git` above, an unreadable `.git` file, an empty `commondir`),
+    for example in a work tree used with a bare Git directory through
+    `GIT_DIR`, it is an error that names the directory and says that
+    `GIT_DIR` and `GIT_COMMON_DIR` are not read, and nothing is written.
+    When a `.git` was found but leads to no common Git directory (a
+    `.git` file without a `gitdir:` line, an empty `commondir`), the
+    message also names that `.git`, in the Git top, and says it could
+    not be read.
 - The marker lives in the common Git directory, so every linked
   worktree of the repository shares one unlock.
 - `vibe unlock` is meant for a person's own terminal. A `Bash` or

@@ -1,12 +1,9 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -21,7 +18,7 @@ const (
 )
 
 func newUnlockCmd() *cobra.Command {
-	var repoRoot string
+	var projectRoot string
 	var minutes int
 	cmd := &cobra.Command{
 		Use:   "unlock",
@@ -35,7 +32,7 @@ func newUnlockCmd() *cobra.Command {
 			if minutes < 1 || minutes > unlockMaxMinutes {
 				return fmt.Errorf("unlock: --minutes must be from 1 to %d, not %d", unlockMaxMinutes, minutes)
 			}
-			dir, err := gitCommonDir(repoRoot)
+			dir, err := unlockDir(projectRoot)
 			if err != nil {
 				return fmt.Errorf("unlock: %w", err)
 			}
@@ -53,25 +50,30 @@ func newUnlockCmd() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&repoRoot, "repo-root", ".", "repository whose agent guardrails to unlock")
+	cmd.Flags().StringVar(&projectRoot, "repo-root", ".", "project root whose agent guardrails to unlock")
 	cmd.Flags().IntVar(&minutes, "minutes", unlockDefaultMinutes, fmt.Sprintf("how long the unlock lasts, 1 to %d", unlockMaxMinutes))
 	return cmd
 }
 
-// gitCommonDir is git rev-parse --git-common-dir of repoRoot, as an
-// absolute path.
-func gitCommonDir(repoRoot string) (string, error) {
-	c := exec.Command("git", "rev-parse", "--git-common-dir")
-	c.Dir = repoRoot
-	var stderr bytes.Buffer
-	c.Stderr = &stderr
-	out, err := c.Output()
+// unlockDir is the common Git directory of the project root projectRoot,
+// where the unlock marker goes. It is found as vibe-guard finds it (spec
+// 0069): by reading .git in projectRoot or the nearest directory above
+// it, the Git top, never by running git, so GIT_DIR and GIT_COMMON_DIR
+// are not read.
+func unlockDir(projectRoot string) (string, error) {
+	root, err := filepath.Abs(projectRoot)
 	if err != nil {
-		return "", fmt.Errorf("git rev-parse --git-common-dir in %s: %w: %s", repoRoot, err, strings.TrimSpace(stderr.String()))
+		return "", err
 	}
-	dir := strings.TrimSpace(string(out))
-	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(repoRoot, dir)
+	repo := guardrule.FindRepo(root, root)
+	switch {
+	case repo.CommonDir != "":
+		return repo.CommonDir, nil
+	case repo.GitTop != "":
+		return "", fmt.Errorf("no Git directory found for %s: %s could not be read as vibe-guard reads it "+
+			"(a .git file needs a \"gitdir: <path>\" line, and a commondir file a path); "+
+			"GIT_DIR and GIT_COMMON_DIR are not read", root, filepath.Join(repo.GitTop, ".git"))
 	}
-	return filepath.Abs(dir)
+	return "", fmt.Errorf("no Git directory found for %s by reading .git there and in the directories above, as vibe-guard does; "+
+		"GIT_DIR and GIT_COMMON_DIR are not read, so a work tree without .git cannot be unlocked", root)
 }

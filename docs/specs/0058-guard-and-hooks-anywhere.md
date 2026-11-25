@@ -220,7 +220,16 @@ how the agent spells a call or where it runs it:
   payload's `cwd` (the guard already reads it), else the root. It is
   then made repository-relative with the existing helper. A path
   outside the repository never matches `guardrail-settings`.
-  `guard-policy-file` keeps its suffix match.
+  `guard-policy-file` keeps its suffix match. Amended by spec 0069: an
+  edit tool's path is read in the same way as a written path, by one
+  function. Backslashes become slashes, Git Bash's `/d/…` is `D:/…` on
+  a root with a drive letter, a relative path is joined to the
+  payload's `cwd` (else the root), and the result is cleaned before any
+  rule, exception glob or repository path rule sees it. The
+  repository-relative helper also cleans before it compares, so a `..`
+  that leaves the repository and comes back names the repository's
+  file. A payload `cwd` that is not a JSON string is refused under
+  `payload-error`.
 - **A word with an expansion is not a written path.** The command rules
   treat an unknown word as matching, but write targets do not, for
   example `> "$tmp"`. Refusing every such write would refuse common

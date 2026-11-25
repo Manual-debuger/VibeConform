@@ -193,7 +193,9 @@ func checkMatch(s string) error {
 // its words are a prefix of c's, and, with args, some later word
 // matches the regular expression. A word of c that holds an expansion
 // counts as matching, unless a known word already rules the match out
-// (spec 0053, "Unknown words").
+// (spec 0053, "Unknown words"). An args that does not compile, which
+// only a rule built outside ParsePolicy can carry, fails closed: the
+// prefix alone matches (spec 0069).
 func (r Rule) MatchesCommand(c Command) bool {
 	if r.Command == "" {
 		return false
@@ -208,7 +210,7 @@ func (r Rule) MatchesCommand(c Command) bool {
 	re := r.args
 	if re == nil {
 		if re, err = regexp.Compile(r.Args); err != nil {
-			return false
+			return true // fail closed: a deny rule refuses, an ask rule asks
 		}
 	}
 	for i, w := range c.Words {
@@ -233,17 +235,30 @@ func (r Rule) MatchesPath(p, root string) bool {
 // relative to root and slash separated when it is inside root, and p as
 // given otherwise. Backslashes count as separators; a root with a drive
 // letter is compared without case. A relative p is taken as relative to
-// root. The result is cleaned (no "." or ".." elements where they can
-// be removed).
+// root. The path is cleaned before it is compared (spec 0069), so a ".."
+// that leaves root and comes back is inside root. The result is cleaned
+// (no "." or ".." elements where they can be removed).
 func RelPath(root, p string) string {
-	p = strings.ReplaceAll(p, `\`, "/")
-	root = strings.TrimRight(strings.ReplaceAll(root, `\`, "/"), "/")
-	if root != "" && IsAbs(p) {
-		if rel, ok := cutPrefixFold(p, root+"/", hasDrive(root)); ok {
-			return path.Clean(rel)
-		}
+	p = path.Clean(strings.ReplaceAll(p, `\`, "/"))
+	root = strings.ReplaceAll(root, `\`, "/")
+	if strings.TrimRight(root, "/") == "" {
+		return p
 	}
-	return path.Clean(p)
+	// path.Clean leaves a trailing slash only on "/", which becomes "" so
+	// that root+"/" is the prefix of every absolute path.
+	root = strings.TrimSuffix(path.Clean(root), "/")
+	fold := hasDrive(root)
+	full := p
+	if !IsAbs(p) {
+		full = path.Clean(root + "/" + p)
+	}
+	if rel, ok := cutPrefixFold(full, root+"/", fold); ok {
+		return rel
+	}
+	if !IsAbs(p) && (full == root || fold && strings.EqualFold(full, root)) {
+		return "." // a relative p that names root itself, as path.Clean gives it
+	}
+	return p
 }
 
 // IsAbs reports whether p is absolute, with backslashes counted as

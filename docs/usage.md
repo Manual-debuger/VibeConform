@@ -1605,7 +1605,11 @@ a path when the path is:
   `xargs`, `find -exec`, `bash -c`, `pwsh -c`, …).
 
 A relative path is resolved against the payload's `cwd` (for `explain`,
-against the root), and Git Bash's `/d/…` is read as `D:/…`. A read
+against the root), and Git Bash's `/d/…` is read as `D:/…`. An edit
+tool's path is read the same way, and the result is cleaned before any
+rule sees it, so `../proj/.claude/settings.json` from inside `proj` is
+the project's settings file. A payload `cwd` that is not a string is
+refused under `payload-error`. A read
 (`cat`, `jq . <`, `Get-Content`) is allowed, and so is a write to any
 other file: `secret-file` stays an edit rule, so `cp .env.example .env`
 runs. `explain` shows the rule, the matched path and the simple command
@@ -1633,6 +1637,20 @@ unlocked until 2026-10-17T14:05:00Z (/path/to/repo/.git/vibe-unlock)
 - The marker is per Git repository, not per project. One unlock covers
   every project in the Git repository, and you can run it from any
   folder in it.
+- `vibe unlock` finds the common Git directory as `vibe-guard` does: it
+  reads `.git` in `--repo-root` or the nearest folder above it (a
+  directory, or a `gitdir:` file and its `commondir`). It runs no `git`
+  and does not read `GIT_DIR` or `GIT_COMMON_DIR`, so a variable left
+  exported in your terminal cannot unlock another repository. A work
+  tree without `.git`, such as one used with a bare Git directory
+  through `GIT_DIR`, cannot be unlocked: `vibe unlock` writes nothing
+  and says
+  `no Git directory found for <dir> by reading .git there and in the
+  directories above, as vibe-guard does; GIT_DIR and GIT_COMMON_DIR are
+  not read, …`. When a `.git` is found but cannot be read (a `.git` file
+  without a `gitdir:` line, or an empty `commondir`), the message names
+  that `.git` instead: `no Git directory found for <dir>: <top>/.git
+  could not be read as vibe-guard reads it …`.
 - When the project root is a folder below the Git top (the directory
   that holds `.git`), the guard protects the guardrail settings of both:
   the project's `.claude/settings.json` and `.claude/hooks/`, and the Git
