@@ -1093,7 +1093,7 @@ VibeConform computes:
   tests that run the contract probes (`internal/contract/probetest`,
   the guard probes in `internal/contract`, the probe tests of
   `internal/cli`), the tests that run `vibe-guard` as a subprocess
-  (`internal/guard`: the reference-hook tests and a small smoke set;
+  (`internal/guard`: the reference-hook tests and a small binary set;
   the guard corpus runs in-process and is not skipped, spec 0070), and
   the tests that run the reference
   hooks (`internal/setupskill`: the Stop-hook matrix and the hooks run

@@ -405,3 +405,6 @@ and its tests are slow enough that the quick runs skip the corpus.
 - **Assumption, not verified:** the in-process corpus with `t.Parallel`
   has no shared state in `guard.Main`. The package's globals are
   compiled regular expressions and rule tables, which are read-only.
+- This spec's "smoke set" is called the binary set in code and docs
+  (`binary_test.go`, `TestBinary`), because `GLOSSARY.md` lists "smoke
+  test" under Avoid.

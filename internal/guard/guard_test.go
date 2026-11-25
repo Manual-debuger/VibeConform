@@ -284,15 +284,9 @@ func TestExplain(t *testing.T) {
 func TestExplainDefaultTool(t *testing.T) {
 	r := newRepo(t, enforcePolicy)
 	writeFile(t, filepath.Join(r.Root, ".env"), "X=1\n")
-	got := r.explain(t, ".env")
-	if got.Code != 2 || !hasLine(got.Stdout, "tool: Write") || !hasLine(got.Stdout, "rule: secret-file") {
-		t.Errorf("existing path: exit %d, output\n%s", got.Code, got.Stdout)
-	}
-	got = r.explain(t, "rm -rf .env")
-	if got.Code != 2 || !hasLine(got.Stdout, "tool: Bash") || !hasLine(got.Stdout, "rule: rm-rf") {
-		t.Errorf("command: exit %d, output\n%s", got.Code, got.Stdout)
-	}
-	got = r.explain(t, "missing.env")
+	assertDefaultToolRefused(t, r.explain(t, ".env"), "Write", "secret-file")
+	assertDefaultToolRefused(t, r.explain(t, "rm -rf .env"), "Bash", "rm-rf")
+	got := r.explain(t, "missing.env")
 	if got.Code != 0 || !hasLine(got.Stdout, "tool: Bash") {
 		t.Errorf("a path that does not exist is a command: exit %d, output\n%s", got.Code, got.Stdout)
 	}

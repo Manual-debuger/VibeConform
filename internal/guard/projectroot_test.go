@@ -160,7 +160,7 @@ func TestProjectBelowGitTopRelock(t *testing.T) {
 	top, proj := nestedProject(t, "", "")
 	markerFile := filepath.Join(top.CommonDir, "vibe-unlock")
 	writeFile(t, markerFile, marker(testNow.Add(10*time.Minute)))
-	got := runGuard(t, proj.Root, "", []string{"CLAUDE_PROJECT_DIR=" + proj.Root}, "relock")
+	got := runGuard(t, proj.Root, "", proj.projectEnv(), "relock")
 	if got.Code != 0 || got.Stderr != "" {
 		t.Fatalf("exit %d, stderr %q", got.Code, got.Stderr)
 	}

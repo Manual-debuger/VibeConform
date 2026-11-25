@@ -6,7 +6,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 )
 
-func newAuditCmd(seams contractSeams) *cobra.Command {
+func newAuditCmd(seams cliSeams) *cobra.Command {
 	f := auditFlags{seams: seams}
 
 	cmd := &cobra.Command{

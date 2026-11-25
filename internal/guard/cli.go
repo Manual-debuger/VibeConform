@@ -77,30 +77,17 @@ func Main(args []string, env Env, version string) int {
 // sessionRepo finds the repository a call acts in, for hook, explain
 // and relock (spec 0068). CLAUDE_PROJECT_DIR, when set, is the project
 // root as given, made absolute and not walked up: Claude Code sets it to
-// the directory the session runs in, which may be below the Git top. A
-// relative one is joined to Env's working directory. The Git top is found
-// by walking up from it. Without it, the payload's cwd, else Env's
-// working directory, is walked up to the Git top, which is then also the
-// project root.
+// the directory the session runs in, which may be below the Git top. It
+// is read as the guard reads a path, against Env's working directory
+// (readPath). The Git top is found by walking up from it. Without it, the
+// payload's cwd, else Env's working directory, is walked up to the Git
+// top, which is then also the project root.
 func sessionRepo(env Env, cwd string) Repo {
 	if d := env.Getenv("CLAUDE_PROJECT_DIR"); d != "" {
-		d = inDir(env.Dir, d)
+		d = filepath.FromSlash(readPath(d, env.Dir, env.Dir))
 		return gr.FindRepo(d, d)
 	}
 	return gr.FindRepo(cmp.Or(cwd, env.Dir), "")
-}
-
-// inDir is p joined to dir when p is relative, and cleaned. On Windows a
-// path rooted without a volume (\x) takes dir's volume.
-func inDir(dir, p string) string {
-	switch {
-	case filepath.IsAbs(p):
-	case filepath.VolumeName(p) == "" && p != "" && os.IsPathSeparator(p[0]):
-		p = filepath.VolumeName(dir) + p
-	default:
-		p = filepath.Join(dir, p)
-	}
-	return filepath.Clean(p)
 }
 
 type payload struct {
@@ -166,7 +153,7 @@ func hook(env Env) int {
 	case d.Refuses():
 		say(env.Stderr, "vibe-guard: refused by rule "+d.Finding.Rule+": "+reasonTail(d, t))
 		return exitDeny
-	case d.Outcome == Deny:
+	case d.Outcome == Deny && !d.Refuses():
 		line := "vibe-guard (observe): would refuse by rule " + d.Finding.Rule + ": " + reasonTail(d, t)
 		say(env.Stderr, line)
 		if repo.CommonDir != "" {
@@ -271,10 +258,12 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 		return exitUsage
 	}
 	arg := rest[0]
+	g := New(sessionRepo(env, ""), Options{Now: env.Now(), Dir: env.Dir})
 	if tool == "" {
+		// The path is the one the guard decides for Write.
 		tool = gr.Bash
 		if !strings.ContainsAny(arg, " \t\n") {
-			if _, err := os.Stat(inDir(env.Dir, arg)); err == nil {
+			if _, err := os.Stat(filepath.FromSlash(g.normalize(arg))); err == nil {
 				tool = gr.Write
 			}
 		}
@@ -288,7 +277,6 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 	if gr.IsEditTool(tool) {
 		t = gr.Target{Tool: tool, Path: arg}
 	}
-	g := New(sessionRepo(env, ""), Options{Now: env.Now(), Dir: env.Dir})
 	d := g.Decide(Call{Target: t})
 	w := env.Stdout
 	sayf(w, "tool: %s\n", tool)

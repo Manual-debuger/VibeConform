@@ -148,7 +148,7 @@ func TestUnlockFixedClockWritesExactExpiry(t *testing.T) {
 	t.Parallel()
 	dir := gitInit(t)
 	now := time.Date(2026, 3, 4, 13, 20, 5, 900_000_000, time.FixedZone("UTC+2", 2*60*60))
-	root := newRootCmd("test", contractSeams{now: func() time.Time { return now }})
+	root := newRootCmd("test", cliSeams{now: func() time.Time { return now }})
 	var out, errOut bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&errOut)
