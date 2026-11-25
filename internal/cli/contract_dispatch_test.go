@@ -252,7 +252,7 @@ func TestAuditExplain(t *testing.T) {
 	t.Run("a flag that no list holds", func(t *testing.T) {
 		// The flag exists only in this command tree, so a refusal proves
 		// that --explain visits the set flags and keeps no list of them.
-		root := newRootCmd("test", contractSeams{openRepo: contracttest.OpenRepo})
+		root := newRootCmd("test", cliSeams{openRepo: contracttest.OpenRepo})
 		audit, _, err := root.Find([]string{"audit"})
 		if err != nil {
 			t.Fatal(err)

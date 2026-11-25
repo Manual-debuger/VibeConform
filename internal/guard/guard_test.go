@@ -173,6 +173,27 @@ func TestObserveMode(t *testing.T) {
 	}
 }
 
+// TestPolicyErrorRefusesInObserveMode: a policy.json that asks for
+// observe mode but cannot be used is a policy error, and a policy error
+// is refused, not softened: for a call, for a payload error and in
+// explain. Nothing goes to the log.
+func TestPolicyErrorRefusesInObserveMode(t *testing.T) {
+	r := newRepo(t, `{"version": 2, "mode": "observe", "rules": 5}`)
+	for name, stdin := range map[string]string{"call": bashPayload("rm -rf build"), "payload error": "not json"} {
+		got := r.hook(t, stdin)
+		if got.Code != 2 || !strings.HasPrefix(got.Stderr, "vibe-guard: refused by rule policy-error: ") {
+			t.Errorf("%s: exit %d, stderr %q; want exit 2 and policy-error", name, got.Code, got.Stderr)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(r.CommonDir, "vibe-guard.log")); !os.IsNotExist(err) {
+		t.Errorf("vibe-guard.log exists (err %v); a policy error is not logged", err)
+	}
+	ex := r.explain(t, "ls")
+	if ex.Code != 2 || !hasLine(ex.Stdout, "decision: deny") || !hasLine(ex.Stdout, "rule: policy-error") {
+		t.Errorf("explain: exit %d, output\n%s\nwant exit 2 and a plain deny under policy-error", ex.Code, ex.Stdout)
+	}
+}
+
 // TestObserveModeLogsInTheCommonGitDir: from a linked worktree (a .git
 // file and a commondir file), the log goes to the common directory.
 func TestObserveModeLogsInTheCommonGitDir(t *testing.T) {
@@ -229,13 +250,6 @@ func TestRelock(t *testing.T) {
 	}
 }
 
-func TestVersion(t *testing.T) {
-	got := runGuard(t, t.TempDir(), "", nil, "version")
-	if got.Code != 0 || !strings.HasPrefix(got.Stdout, "vibe-guard ") {
-		t.Errorf("exit %d, stdout %q", got.Code, got.Stdout)
-	}
-}
-
 func TestUsage(t *testing.T) {
 	for _, args := range [][]string{nil, {"nonsense"}, {"hook", "extra"}, {"explain"}, {"explain", "a", "b"}, {"explain", "--tool", "Read", "x"}} {
 		if got := runGuard(t, t.TempDir(), "", nil, args...); got.Code != 64 || got.Stderr == "" {
@@ -270,15 +284,9 @@ func TestExplain(t *testing.T) {
 func TestExplainDefaultTool(t *testing.T) {
 	r := newRepo(t, enforcePolicy)
 	writeFile(t, filepath.Join(r.Root, ".env"), "X=1\n")
-	got := r.explain(t, ".env")
-	if got.Code != 2 || !hasLine(got.Stdout, "tool: Write") || !hasLine(got.Stdout, "rule: secret-file") {
-		t.Errorf("existing path: exit %d, output\n%s", got.Code, got.Stdout)
-	}
-	got = r.explain(t, "rm -rf .env")
-	if got.Code != 2 || !hasLine(got.Stdout, "tool: Bash") || !hasLine(got.Stdout, "rule: rm-rf") {
-		t.Errorf("command: exit %d, output\n%s", got.Code, got.Stdout)
-	}
-	got = r.explain(t, "missing.env")
+	assertDefaultToolRefused(t, r.explain(t, ".env"), "Write", "secret-file")
+	assertDefaultToolRefused(t, r.explain(t, "rm -rf .env"), "Bash", "rm-rf")
+	got := r.explain(t, "missing.env")
 	if got.Code != 0 || !hasLine(got.Stdout, "tool: Bash") {
 		t.Errorf("a path that does not exist is a command: exit %d, output\n%s", got.Code, got.Stdout)
 	}

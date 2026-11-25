@@ -77,15 +77,14 @@ func Main(args []string, env Env, version string) int {
 // sessionRepo finds the repository a call acts in, for hook, explain
 // and relock (spec 0068). CLAUDE_PROJECT_DIR, when set, is the project
 // root as given, made absolute and not walked up: Claude Code sets it to
-// the directory the session runs in, which may be below the Git top. The
-// Git top is found by walking up from it. Without it, the payload's cwd,
-// else the process's working directory, is walked up to the Git top,
-// which is then also the project root.
+// the directory the session runs in, which may be below the Git top. It
+// is read as the guard reads a path, against Env's working directory
+// (readPath). The Git top is found by walking up from it. Without it, the
+// payload's cwd, else Env's working directory, is walked up to the Git
+// top, which is then also the project root.
 func sessionRepo(env Env, cwd string) Repo {
 	if d := env.Getenv("CLAUDE_PROJECT_DIR"); d != "" {
-		if abs, err := filepath.Abs(d); err == nil {
-			d = abs
-		}
+		d = filepath.FromSlash(readPath(d, env.Dir, env.Dir))
 		return gr.FindRepo(d, d)
 	}
 	return gr.FindRepo(cmp.Or(cwd, env.Dir), "")
@@ -131,18 +130,17 @@ func readPayload(r io.Reader) (payload, error) {
 
 func hook(env Env) int {
 	p, perr := readPayload(env.Stdin)
-	g := New(sessionRepo(env, p.Cwd), env.Now())
-	g.Dir = p.Cwd
-	var d Decision
-	var t gr.Target
+	repo := sessionRepo(env, p.Cwd)
+	g := New(repo, Options{Now: env.Now(), Dir: p.Cwd})
+	var c Call
 	if perr == nil {
-		t, perr = gr.ParseTarget(p.ToolName, p.ToolInput)
+		c.Target, perr = gr.ParseTarget(p.ToolName, p.ToolInput)
 	}
 	if perr != nil {
-		d = g.DecideError(gr.IDPayloadError, perr.Error())
-	} else {
-		d = g.Decide(t)
+		c = Call{Err: &CallError{Rule: gr.IDPayloadError, Why: perr.Error()}}
 	}
+	d := g.Decide(c)
+	t := c.Target
 	switch {
 	case d.Outcome == Ask:
 		out, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]string{
@@ -152,18 +150,18 @@ func hook(env Env) int {
 		}})
 		say(env.Stdout, string(out))
 		return exitAllow
-	case d.Outcome == Deny && d.Observe:
+	case d.Refuses():
+		say(env.Stderr, "vibe-guard: refused by rule "+d.Finding.Rule+": "+reasonTail(d, t))
+		return exitDeny
+	case d.Outcome == Deny && !d.Refuses():
 		line := "vibe-guard (observe): would refuse by rule " + d.Finding.Rule + ": " + reasonTail(d, t)
 		say(env.Stderr, line)
-		if g.Repo.CommonDir != "" {
-			if err := appendLine(filepath.Join(g.Repo.CommonDir, LogFile), line); err != nil {
+		if repo.CommonDir != "" {
+			if err := appendLine(filepath.Join(repo.CommonDir, LogFile), line); err != nil {
 				say(env.Stderr, "vibe-guard (observe): the log cannot be written: "+err.Error())
 			}
 		}
 		return exitAllow
-	case d.Outcome == Deny:
-		say(env.Stderr, "vibe-guard: refused by rule "+d.Finding.Rule+": "+reasonTail(d, t))
-		return exitDeny
 	}
 	return exitAllow
 }
@@ -260,10 +258,12 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 		return exitUsage
 	}
 	arg := rest[0]
+	g := New(sessionRepo(env, ""), Options{Now: env.Now(), Dir: env.Dir})
 	if tool == "" {
+		// The path is the one the guard decides for Write.
 		tool = gr.Bash
 		if !strings.ContainsAny(arg, " \t\n") {
-			if _, err := os.Stat(arg); err == nil {
+			if _, err := os.Stat(filepath.FromSlash(g.normalize(arg))); err == nil {
 				tool = gr.Write
 			}
 		}
@@ -277,8 +277,7 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 	if gr.IsEditTool(tool) {
 		t = gr.Target{Tool: tool, Path: arg}
 	}
-	g := New(sessionRepo(env, ""), env.Now())
-	d := g.Decide(t)
+	d := g.Decide(Call{Target: t})
 	w := env.Stdout
 	sayf(w, "tool: %s\n", tool)
 	if gr.IsEditTool(tool) {
@@ -287,7 +286,7 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 		sayf(w, "command: %s\n", arg)
 	}
 	observe := ""
-	if d.Outcome == Deny && d.Observe {
+	if d.Outcome == Deny && !d.Refuses() {
 		observe = " (observe mode: the hook allows the call and logs it)"
 	}
 	sayf(w, "decision: %s%s\n", d.Outcome, observe)
@@ -304,7 +303,7 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 	if d.Finding == nil && len(d.Lifted) == 0 {
 		say(w, "rule: none")
 	}
-	if d.Outcome == Deny && !d.Observe {
+	if d.Refuses() {
 		return exitDeny
 	}
 	return exitAllow

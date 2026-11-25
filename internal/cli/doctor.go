@@ -9,7 +9,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/doctor"
 )
 
-func newDoctorCmd(seams contractSeams) *cobra.Command {
+func newDoctorCmd(seams cliSeams) *cobra.Command {
 	var repoRoot string
 	cmd := &cobra.Command{
 		Use:   "doctor",
@@ -35,7 +35,7 @@ func newDoctorCmd(seams contractSeams) *cobra.Command {
 // and prints the report. A load error gets the audit's own message. Only
 // a FAIL makes it return an error, which exits 1: the workflow cannot
 // run here.
-func runDoctor(cmd *cobra.Command, repoRoot string, seams contractSeams) error {
+func runDoctor(cmd *cobra.Command, repoRoot string, seams cliSeams) error {
 	ctx := commandContext(cmd)
 	env := doctor.System
 	if seams.doctorEnv != nil {

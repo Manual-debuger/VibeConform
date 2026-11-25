@@ -194,8 +194,13 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   package.
 - **`internal/guard`** is `vibe-guard`'s logic: the baseline rules, the
   decision, observe mode, the unlock marker, `hook`, `explain`, `relock`,
-  and the reference hook commands. It imports `internal/guardrule` and
-  nothing from `internal/contract`. `cmd/vibe-guard`
+  and the reference hook commands. Its `Guard` keeps its state
+  unexported: `New(repo, Options{Now, Dir})` loads the policy, and one
+  `Decide(Call)` decides a target or a payload error, applies a policy
+  error and observe mode in one place, and returns a `Decision` whose
+  `Refuses` gives `hook` and `explain` their exit code (spec 0070).
+  It imports `internal/guardrule` and nothing from `internal/contract`.
+  `cmd/vibe-guard`
   is a thin `main` over it, a separate binary that opens no network
   connection.
 - **`internal/contract`** imports `internal/guardrule`, never
@@ -203,6 +208,12 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   hooks in `.claude/settings.json`. Its guard corpus is embedded in
   `vibe`; `internal/guard`'s tests run the same corpus through
   `vibe-guard`.
+- **`internal/guard`'s tests run `guard.Main` in-process** with an
+  `Env` (stdin, captured output, the variables the test sets, the
+  fixture's directory, a fixed clock), the corpus included, under
+  `go test -short` too. Only the reference-hook tests and the binary set
+  (one deny, allow and `ask` payload, one `explain`, `version`) run the
+  built `vibe-guard` as a subprocess (spec 0070).
 - The dependency is one way: `internal/contract` → `internal/guardrule`
   ← `internal/guard`. `task lint` enforces it for non-test code with
   `depguard` (`.golangci.yml`, spec 0061), and tests in each package

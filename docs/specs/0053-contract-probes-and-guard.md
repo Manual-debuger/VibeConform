@@ -696,6 +696,27 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   in PowerShell without case; a word of the command that holds an
   expansion never matches. For the audit, an exception matches a corpus
   case when it matches some simple command of the case's command.
+- **The audit's reading of an exception is at least as wide as
+  `vibe-guard`'s, on purpose** (spec 0070, "The two readings of an
+  exception"). `vibe-guard` lifts a rule for the simple command or the
+  path that rule refused, a path exception lifts a shell write too (spec
+  0058), and it never lifts a fixed rule (the unlock marker, the
+  self-unlock command). The audit checks a guard as a black box and
+  cannot know which simple command a rule refused, so `Exception.Matches`
+  accepts an exception that matches *some* simple command of the case.
+  If the audit's reading were narrower, it would fail a repository whose
+  `vibe-guard` lets a case through by a valid exception.
+  `TestTwoReadingsOfAnException` in `internal/guard` keeps it so: for
+  each deny case of the corpus it builds exceptions (each word prefix of
+  each expansion-free simple command for a command rule; the edited
+  path, each literal shell-write path and `**` for a path rule), runs the
+  case through `guard.Main` with each one alone, and asserts that
+  `Exception.Matches` accepts every exception the guard lets the case
+  through by. A failure is fixed in `Exception.Matches`, a contract
+  PATCH under spec 0051. The audit is still wider in the other direction:
+  an exception that matches another simple command of a compound case,
+  or names a fixed rule, counts for A-02. Narrowing that is MAJOR:
+  #227, with #50 and #120.
 
 ### `vibe-guard` (#105)
 
@@ -1068,8 +1089,9 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
 
 ## Testing Decisions
 
-Good tests here check behaviour through the two seams below, with real
-tools and real processes. No test calls a check function, the probe
+Good tests here check behaviour through the seams below, with real
+tools and, except for the guard's in-process seam, real processes. No
+test calls a check function, the probe
 runner or the guard's matcher directly.
 
 - **Seam 1: the `vibe audit` command, in-process** (as Phase 1). Tests
@@ -1079,11 +1101,30 @@ runner or the guard's matcher directly.
   `vibe unlock` uses the same seam. Prior art: Phase 1's fixture helper
   (testdata tree, `git init`, per-test edits) and the CLI's `TestMain`,
   which clears `GIT_DIR` and its relatives.
-- **Seam 2: the `vibe-guard` command, as a subprocess.** Tests build the
-  binary once, feed payloads on stdin, and assert the exit code, the
-  rule ID on stderr, `ask` JSON on stdout, `explain` output, observe
-  mode and its log, and `relock`. Prior art: the old corpus test, which
-  runs each guard as a subprocess per case.
+- **Seam 2: the `vibe-guard` command, `guard.Main` with an `Env`,
+  in-process** (changed by spec 0070, "The guard's tests"). Tests feed
+  payloads as the `Env`'s stdin, capture its stdout and stderr, and
+  assert the exit code (`Main`'s return value), the rule ID on stderr,
+  `ask` JSON on stdout, `explain` output, observe mode and its log, and
+  `relock`. The `Env`'s `Getenv` reads only the variables the test sets,
+  so a `GIT_DIR` or `CLAUDE_PROJECT_DIR` from a hook cannot leak in; its
+  working directory is the fixture's, and its clock is fixed, so an
+  unlock marker is valid or expired against a known time. The corpus
+  and every guard behaviour test run here, under `go test -short` too,
+  so `task verify:fast` and the `Stop` hook run the corpus. Prior art:
+  `doctor.Env`, which injects the process the same way.
+- **The subprocess seam: the built `vibe-guard` binary**, which this
+  spec first used for every guard test. Since spec 0070 it covers only
+  what the in-process seam cannot: the reference-hook tests (`bash` runs
+  the reference PreToolUse command, with and without `vibe-guard` on
+  `PATH`, for every corpus case), and a binary set that runs one deny,
+  one allow and one `ask` payload on the binary's real stdin, one
+  `explain` and `version`. Each call of the binary set must give
+  exactly what `guard.Main` gives in-process. The binary is built once,
+  on first use, or `VIBE_GUARD_BIN` names a prebuilt one, so that CI's
+  network-disabled job needs no toolchain. Short mode skips these tests.
+  The contract's guard-probe tests keep running the real binary; they
+  check the audit, not the guard.
 - **Fixture projects that need only Go.** The Go probe fixture is a tiny
   module whose entrypoints are `go run ./ci <step>`. The `ci` program
   is part of the fixture: `fmt-check` fails when `gofmt -l` lists a
@@ -1161,7 +1202,8 @@ runner or the guard's matcher directly.
   and `.git` before and after a full audit, and asserts that nothing
   changed and that the probe copy is gone.
 - **`vibe-guard` corpus.** The whole contract corpus runs through seam
-  2, on Linux and Windows. Every case's refusal names the case's rule
+  2, on Linux and Windows, and through the reference hook on the
+  subprocess seam. Every case's refusal names the case's rule
   ID, and `explain` gives that rule for every deny case (#105's
   done-when). Guard-only cases are in the guard's own testdata: parse
   errors, payload and policy errors, each `policy.json` v2 field and

@@ -140,6 +140,35 @@ func TestUnlockLinkedWorktreeSharesCommonDir(t *testing.T) {
 	assertExpiryIn(t, readMarker(t, filepath.Join(dir, ".git")), before, 15*time.Minute)
 }
 
+// TestUnlockFixedClockWritesExactExpiry: vibe unlock reads the current
+// time from the CLI's seams (spec 0070, "vibe unlock's clock"), so with a
+// fixed clock the marker holds the exact expiry: now plus --minutes, in
+// UTC, to the second.
+func TestUnlockFixedClockWritesExactExpiry(t *testing.T) {
+	t.Parallel()
+	dir := gitInit(t)
+	now := time.Date(2026, 3, 4, 13, 20, 5, 900_000_000, time.FixedZone("UTC+2", 2*60*60))
+	root := newRootCmd("test", cliSeams{now: func() time.Time { return now }})
+	var out, errOut bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+	root.SetArgs([]string{"unlock", "--repo-root", dir, "--minutes", "45"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("vibe unlock: %v\n%s", err, errOut.String())
+	}
+	marker := filepath.Join(dir, ".git", "vibe-unlock")
+	data, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("the marker was not written: %v", err)
+	}
+	if got, want := string(data), "2026-03-04T12:05:05Z\n"; got != want {
+		t.Errorf("marker = %q, want %q", got, want)
+	}
+	if want := "unlocked until 2026-03-04T12:05:05Z (" + marker + ")\n"; !strings.HasPrefix(out.String(), want) {
+		t.Errorf("the output does not start with %q:\n%s", want, out.String())
+	}
+}
+
 // TestUnlockOutsideGit: a directory that is not a Git repository is an
 // error, and nothing is written.
 func TestUnlockOutsideGit(t *testing.T) {

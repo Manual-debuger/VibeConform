@@ -13,7 +13,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
-	"github.com/Manual-debuger/VibeConform/internal/doctor"
 )
 
 // auditFlags are vibe audit's flags (spec 0052, "Package and command").
@@ -29,29 +28,7 @@ type auditFlags struct {
 	keepProbeCopy bool
 
 	// seams are not flags: tests set them through newRootCmd.
-	seams contractSeams
-}
-
-// contractSeams are the CLI suite's test seams (ADR 0028). The zero value
-// is the real command: contract.OpenRepo, this process's environment for
-// the probe runs, and doctor.System. The rule tests run contract.Audit in
-// internal/contract, so the CLI holds no rule list and no report hook.
-type contractSeams struct {
-	// probeEnv is the environment the probe runs inherit; nil means this
-	// process's. The CLI suite's full audits (the golden reports among
-	// them) narrow PATH with it, so that what they print does not depend
-	// on the tools this machine has installed. The audit's own git calls
-	// keep this process's PATH.
-	probeEnv []string
-	// openRepo lists the audited repository's tracked files; nil means
-	// contract.OpenRepo. Tests hand in the file list of a fixture they
-	// built, so that a fixture needs no git.
-	openRepo contract.RepoOpener
-	// doctorEnv is the machine vibe doctor checks; nil means
-	// doctor.System. Tests stand in a machine, so that the CLI suite
-	// asserts on this code, not on what the machine running it has
-	// installed.
-	doctorEnv func() doctor.Env
+	seams cliSeams
 }
 
 // commandContext is cmd's context, or the background one when cmd runs

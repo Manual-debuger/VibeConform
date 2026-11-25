@@ -29,15 +29,17 @@ func payloadFor(t *testing.T, c contract.GuardCase, cwd string) string {
 	return string(data)
 }
 
-// corpusRepo makes a fixture repository in the case's unlock state.
-func corpusRepo(t *testing.T, c contract.GuardCase) repo {
+// corpusRepo makes a fixture repository in the case's unlock state, an
+// unlock marker being valid or expired at now: testNow for an in-process
+// run, the wall clock for a subprocess.
+func corpusRepo(t *testing.T, c contract.GuardCase, now time.Time) repo {
 	t.Helper()
 	r := newRepo(t, enforcePolicy)
 	switch c.Unlock {
 	case contract.UnlockValid:
-		writeFile(t, filepath.Join(r.CommonDir, "vibe-unlock"), time.Now().Add(10*time.Minute).UTC().Format(time.RFC3339)+"\n")
+		writeFile(t, filepath.Join(r.CommonDir, "vibe-unlock"), marker(now.Add(10*time.Minute)))
 	case contract.UnlockExpired:
-		writeFile(t, filepath.Join(r.CommonDir, "vibe-unlock"), time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)+"\n")
+		writeFile(t, filepath.Join(r.CommonDir, "vibe-unlock"), marker(now.Add(-time.Minute)))
 	}
 	return r
 }
@@ -53,17 +55,15 @@ func explainArgs(c contract.GuardCase) []string {
 }
 
 // TestCorpus runs the whole contract guard corpus through "vibe-guard
-// hook": every deny case is refused (exit 2) by a line that names the
-// case's rule ID, every allow case is allowed silently, and "vibe-guard
-// explain" gives the same decision and rule (#105's done-when).
+// hook", in-process and under -short too: every deny case is refused
+// (exit 2) by a line that names the case's rule ID, every allow case is
+// allowed silently, and "vibe-guard explain" gives the same decision and
+// rule (#105's done-when).
 func TestCorpus(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
-	if testing.Short() {
-		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
-	}
 	for _, c := range contract.GuardCorpus() {
 		t.Run(c.Name, func(t *testing.T) {
 			t.Parallel()
-			r := corpusRepo(t, c)
+			r := corpusRepo(t, c, testNow)
 			got := r.hook(t, payloadFor(t, c, r.Root))
 			ex := r.explain(t, explainArgs(c)...)
 			switch c.Want {

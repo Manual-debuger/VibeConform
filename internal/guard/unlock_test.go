@@ -108,10 +108,10 @@ func TestUnlockMarkerContents(t *testing.T) {
 		name, content string
 		valid         bool
 	}{
-		{"valid", marker(time.Now().Add(10 * time.Minute)), true},
-		{"valid without newline", strings.TrimSpace(marker(time.Now().Add(10 * time.Minute))), true},
-		{"valid in another zone", time.Now().Add(10 * time.Minute).In(time.FixedZone("x", 3600)).Format(time.RFC3339), true},
-		{"expired", marker(time.Now().Add(-time.Minute)), false},
+		{"valid", marker(testNow.Add(10 * time.Minute)), true},
+		{"valid without newline", strings.TrimSpace(marker(testNow.Add(10 * time.Minute))), true},
+		{"valid in another zone", testNow.Add(10 * time.Minute).In(time.FixedZone("x", 3600)).Format(time.RFC3339), true},
+		{"expired", marker(testNow.Add(-time.Minute)), false},
 		{"empty", "", false},
 		{"not a time", "forever\n", false},
 		{"a date only", "2099-01-01\n", false},
@@ -155,7 +155,7 @@ func TestUnlockInLinkedWorktree(t *testing.T) {
 	assertRefused(t, wt.hook(t, writePayload(filepath.Join(common, "worktrees", "wt", "vibe-unlock"))), "guardrail-settings")
 	assertAllowed(t, wt.hook(t, writePayload(filepath.Join(wt.Root, "vibe-unlock"))))
 
-	writeFile(t, filepath.Join(common, "vibe-unlock"), marker(time.Now().Add(10*time.Minute)))
+	writeFile(t, filepath.Join(common, "vibe-unlock"), marker(testNow.Add(10*time.Minute)))
 	assertAllowed(t, wt.hook(t, writePayload(".claude/settings.json")))
 	assertRefused(t, wt.hook(t, writePayload(filepath.Join(common, "vibe-unlock"))), "guardrail-settings")
 }

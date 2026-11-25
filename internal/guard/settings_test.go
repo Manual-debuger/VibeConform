@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/guard"
@@ -81,7 +82,7 @@ func TestRepositorySettingsHookCorpus(t *testing.T) { //nolint:gocognit // basel
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	data, err := os.ReadFile(guardBin)
+	data, err := os.ReadFile(guardBin(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +92,7 @@ func TestRepositorySettingsHookCorpus(t *testing.T) { //nolint:gocognit // basel
 	for _, c := range contract.GuardCorpus() {
 		t.Run(c.Name, func(t *testing.T) {
 			t.Parallel()
-			r := corpusRepo(t, c)
+			r := corpusRepo(t, c, time.Now())
 			writeFile(t, filepath.Join(r.Root, ".claude", "hooks", "policy.json"), string(policy))
 			cmd := exec.Command(bash, "-c", command)
 			cmd.Dir = r.Root

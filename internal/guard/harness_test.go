@@ -9,51 +9,78 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/Manual-debuger/VibeConform/internal/guard"
 )
 
-// Seam 2 (spec 0053, "Testing Decisions"): vibe-guard runs as a
-// subprocess. The binary is built once. VIBE_GUARD_BIN names a prebuilt
-// binary instead, so that a prebuilt test binary (go test -c) runs with
-// no Go toolchain and no network, as CI's network-disabled job does.
+// The guard's tests have two seams (spec 0053, "Testing Decisions"; spec
+// 0070, "The guard's tests"):
+//
+//  1. guard.Main in-process, through runGuard and the repo helpers. The
+//     Env holds the test's stdin, captured stdout and stderr, a Getenv
+//     that reads only the variables the test sets, the directory the test
+//     names and the fixed clock testNow. The corpus and every behaviour
+//     test run here, under -short too.
+//  2. vibe-guard as a subprocess, through runBinary: the reference-hook
+//     tests and the binary set (binary_test.go). The binary is built once,
+//     on first use. VIBE_GUARD_BIN names a prebuilt binary instead, so
+//     that a prebuilt test binary (go test -c) runs with no Go toolchain
+//     and no network, as CI's network-disabled job does.
 
-var guardBin string
+// testNow is the clock of every in-process run. An unlock marker that an
+// in-process test writes is read against it, not against the wall clock.
+var testNow = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
 func TestMain(m *testing.M) {
-	// No test here runs git, but a GIT_DIR leaked from a hook would
-	// still mislead a reader of the environment.
+	// In-process runs read no process environment. A GIT_DIR or
+	// CLAUDE_PROJECT_DIR leaked from a hook would still reach the
+	// subprocess tests, which inherit it.
 	for _, k := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "CLAUDE_PROJECT_DIR"} {
 		os.Unsetenv(k)
 	}
-	code, err := run(m)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	code := m.Run()
+	if binDir != "" {
+		os.RemoveAll(binDir)
 	}
 	os.Exit(code)
 }
 
-func run(m *testing.M) (int, error) {
-	if bin := os.Getenv("VIBE_GUARD_BIN"); bin != "" {
-		abs, err := filepath.Abs(bin)
-		if err != nil {
-			return 0, err
+var (
+	binOnce sync.Once
+	binDir  string // the directory a built binary is in, removed by TestMain
+	binPath string
+	binErr  error
+)
+
+// guardBin returns the vibe-guard binary for the subprocess tests:
+// VIBE_GUARD_BIN, or one built from this checkout the first time it is
+// asked for.
+func guardBin(t *testing.T) string {
+	t.Helper()
+	binOnce.Do(func() {
+		if bin := os.Getenv("VIBE_GUARD_BIN"); bin != "" {
+			binPath, binErr = filepath.Abs(bin)
+			return
 		}
-		guardBin = abs
-		return m.Run(), nil
+		binDir, binErr = os.MkdirTemp("", "vibe-guard-bin-")
+		if binErr != nil {
+			return
+		}
+		binPath = filepath.Join(binDir, "vibe-guard"+exeSuffix())
+		cmd := exec.Command("go", "build", "-o", binPath, "github.com/Manual-debuger/VibeConform/cmd/vibe-guard")
+		var errOut bytes.Buffer
+		cmd.Stderr = &errOut
+		if err := cmd.Run(); err != nil {
+			binErr = fmt.Errorf("building vibe-guard: %w\n%s", err, errOut.String())
+		}
+	})
+	if binErr != nil {
+		t.Fatal(binErr)
 	}
-	dir, err := os.MkdirTemp("", "vibe-guard-bin-")
-	if err != nil {
-		return 0, err
-	}
-	defer os.RemoveAll(dir)
-	guardBin = filepath.Join(dir, "vibe-guard"+exeSuffix())
-	cmd := exec.Command("go", "build", "-o", guardBin, "github.com/Manual-debuger/VibeConform/cmd/vibe-guard")
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return 0, fmt.Errorf("building vibe-guard: %w", err)
-	}
-	return m.Run(), nil
+	return binPath
 }
 
 func exeSuffix() string {
@@ -103,10 +130,37 @@ type result struct {
 	Stderr string
 }
 
-// runGuard runs vibe-guard with args and stdin, in dir, with env added.
+// runGuard runs guard.Main in-process with args and stdin, its Env's
+// working directory dir and Getenv reading only env ("KEY=value"
+// entries). The test process's own directory, environment and clock are
+// never read; the clock is testNow.
 func runGuard(t *testing.T, dir, stdin string, env []string, args ...string) result {
 	t.Helper()
-	cmd := exec.Command(guardBin, args...)
+	vars := make(map[string]string, len(env))
+	for _, kv := range env {
+		k, v, ok := strings.Cut(kv, "=")
+		if !ok {
+			t.Fatalf("env entry %q is not KEY=value", kv)
+		}
+		vars[k] = v
+	}
+	var out, errOut bytes.Buffer
+	code := guard.Main(args, guard.Env{
+		Stdin:  strings.NewReader(stdin),
+		Stdout: &out,
+		Stderr: &errOut,
+		Getenv: func(k string) string { return vars[k] },
+		Dir:    dir,
+		Now:    func() time.Time { return testNow },
+	}, "test")
+	return result{code, out.String(), errOut.String()}
+}
+
+// runBinary runs the vibe-guard binary with args, stdin on its real
+// stdin, in dir, with env added to the test process's environment.
+func runBinary(t *testing.T, dir, stdin string, env []string, args ...string) result {
+	t.Helper()
+	cmd := exec.Command(guardBin(t), args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), env...)
 	cmd.Stdin = strings.NewReader(stdin)
@@ -124,14 +178,19 @@ func runGuard(t *testing.T, dir, stdin string, env []string, args ...string) res
 	return result{code, out.String(), errOut.String()}
 }
 
-// hook runs "vibe-guard hook" in r, with CLAUDE_PROJECT_DIR set to it.
+// projectEnv is the environment Claude Code gives a hook in r.
+func (r repo) projectEnv() []string { return []string{"CLAUDE_PROJECT_DIR=" + r.Root} }
+
+// hook runs "vibe-guard hook" in-process in r, with CLAUDE_PROJECT_DIR
+// set to it.
 func (r repo) hook(t *testing.T, stdin string) result {
 	t.Helper()
-	return runGuard(t, r.Root, stdin, []string{"CLAUDE_PROJECT_DIR=" + r.Root}, "hook")
+	return runGuard(t, r.Root, stdin, r.projectEnv(), "hook")
 }
 
-// explain runs "vibe-guard explain" in r.
+// explain runs "vibe-guard explain" in-process in r, with
+// CLAUDE_PROJECT_DIR set to it.
 func (r repo) explain(t *testing.T, args ...string) result {
 	t.Helper()
-	return runGuard(t, r.Root, "", []string{"CLAUDE_PROJECT_DIR=" + r.Root}, append([]string{"explain"}, args...)...)
+	return runGuard(t, r.Root, "", r.projectEnv(), append([]string{"explain"}, args...)...)
 }
