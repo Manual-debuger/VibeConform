@@ -39,7 +39,7 @@ type auditResult struct {
 // contract.Audit in this process's environment.
 func runVibeAudit(t *testing.T, args ...string) auditResult {
 	t.Helper()
-	root := newRootCmd("test", contractSeams{probeEnv: contracttest.EmptyProbeEnv(t), openRepo: contracttest.OpenRepo})
+	root := newRootCmd("test", cliSeams{probeEnv: contracttest.EmptyProbeEnv(t), openRepo: contracttest.OpenRepo})
 	var out, errOut bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&errOut)

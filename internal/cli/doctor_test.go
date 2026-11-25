@@ -52,7 +52,7 @@ func stubDoctorEnv(missing ...string) func() doctor.Env {
 // programs named missing are not found.
 func runDoctorIn(t *testing.T, dir string, missing ...string) (string, error) {
 	t.Helper()
-	root := newRootCmd("test", contractSeams{openRepo: contracttest.OpenRepo, doctorEnv: stubDoctorEnv(missing...)})
+	root := newRootCmd("test", cliSeams{openRepo: contracttest.OpenRepo, doctorEnv: stubDoctorEnv(missing...)})
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&bytes.Buffer{})

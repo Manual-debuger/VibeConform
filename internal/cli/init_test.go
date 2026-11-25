@@ -20,7 +20,7 @@ import (
 // a fixture built without git lists its files the same way for both.
 func runInit(t *testing.T, dir string) (string, error) {
 	t.Helper()
-	root := newRootCmd("test", contractSeams{openRepo: contracttest.OpenRepo})
+	root := newRootCmd("test", cliSeams{openRepo: contracttest.OpenRepo})
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)
@@ -205,7 +205,7 @@ func TestInitOutputErrors(t *testing.T) {
 		t.Run(c.prefix, func(t *testing.T) {
 			t.Parallel()
 			dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithoutFile("vibe.yaml"))
-			root := newRootCmd("test", contractSeams{openRepo: contracttest.OpenRepo})
+			root := newRootCmd("test", cliSeams{openRepo: contracttest.OpenRepo})
 			root.SetOut(failingWriter{c.prefix})
 			root.SetErr(io.Discard)
 			root.SetArgs([]string{"init", "--repo-root", dir})
@@ -316,7 +316,7 @@ func TestInitNeedsAComponent(t *testing.T) {
 // with the same phrase as the "found no component" error (spec 0066).
 func TestInitHelpNamesTheManifests(t *testing.T) {
 	t.Parallel()
-	root := newRootCmd("test", contractSeams{openRepo: contracttest.OpenRepo})
+	root := newRootCmd("test", cliSeams{openRepo: contracttest.OpenRepo})
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)

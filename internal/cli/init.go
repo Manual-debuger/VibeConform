@@ -15,7 +15,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/setupskill"
 )
 
-func newInitCmd(seams contractSeams) *cobra.Command {
+func newInitCmd(seams cliSeams) *cobra.Command {
 	var (
 		repoRoot string
 		skill    bool
@@ -73,7 +73,7 @@ func runInitSkill(cmd *cobra.Command, repoRoot string) error {
 // Behavior 10). It checks what it writes with the audit's own parser, so
 // it never writes a file vibe audit cannot read. The contract detects the
 // components (spec 0066); init only renders them.
-func runInitConfig(cmd *cobra.Command, repoRoot string, seams contractSeams) error {
+func runInitConfig(cmd *cobra.Command, repoRoot string, seams cliSeams) error {
 	if err := refuseExisting(repoRoot); err != nil {
 		return err
 	}

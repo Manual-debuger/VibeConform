@@ -17,7 +17,7 @@ const (
 	unlockMaxMinutes     = 240
 )
 
-func newUnlockCmd(seams contractSeams) *cobra.Command {
+func newUnlockCmd(seams cliSeams) *cobra.Command {
 	var projectRoot string
 	var minutes int
 	cmd := &cobra.Command{
