@@ -18,15 +18,15 @@ import (
 // unlock marker"). A missing, unreadable or expired marker is not, and
 // neither is one in a common directory that is not known.
 func (g *Guard) unlocked() bool {
-	if g.Repo.CommonDir == "" {
+	if g.repo.CommonDir == "" {
 		return false
 	}
-	data, err := os.ReadFile(filepath.Join(g.Repo.CommonDir, gr.UnlockMarkerFile)) // #nosec G304 -- the unlock marker in the repository's own common Git directory
+	data, err := os.ReadFile(filepath.Join(g.repo.CommonDir, gr.UnlockMarkerFile)) // #nosec G304 -- the unlock marker in the repository's own common Git directory
 	if err != nil {
 		return false
 	}
 	expiry, err := gr.ParseUnlockMarker(data)
-	return err == nil && g.Now.Before(expiry)
+	return err == nil && g.now.Before(expiry)
 }
 
 var guardrailSettingsRe = regexp.MustCompile(`(?i)^\.claude/+(settings\.json$|hooks/+[^/])`)
@@ -40,11 +40,11 @@ var guardrailSettingsRe = regexp.MustCompile(`(?i)^\.claude/+(settings\.json$|ho
 // elsewhere, such as the person's own ~/.claude/settings.json or a
 // sibling project's, are not this session's guardrails.
 func (g *Guard) matchGuardrailSettings(p string) bool {
-	if guardrailSettingsRe.MatchString(gr.RelPath(g.Repo.Root, p)) {
+	if guardrailSettingsRe.MatchString(gr.RelPath(g.repo.Root, p)) {
 		return true
 	}
-	top := g.Repo.GitTop
-	if top == "" || filepath.Clean(top) == filepath.Clean(g.Repo.Root) {
+	top := g.repo.GitTop
+	if top == "" || filepath.Clean(top) == filepath.Clean(g.repo.Root) {
 		return false
 	}
 	return guardrailSettingsRe.MatchString(gr.RelPath(top, p))
@@ -65,7 +65,7 @@ func (g *Guard) isMarker(p string) bool {
 		}
 	}
 	dir := filepath.Dir(filepath.FromSlash(p))
-	for _, d := range []string{g.Repo.GitDir, g.Repo.CommonDir} {
+	for _, d := range []string{g.repo.GitDir, g.repo.CommonDir} {
 		if d != "" && strings.EqualFold(filepath.Clean(d), dir) {
 			return true
 		}
