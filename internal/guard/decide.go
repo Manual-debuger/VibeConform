@@ -68,64 +68,94 @@ type Decision struct {
 	Observe bool
 }
 
-// Guard decides tool calls in one repository.
+// Refuses reports whether the call is refused: a Deny that observe mode
+// does not soften. An Ask is not a refusal.
+func (d Decision) Refuses() bool { return d.Outcome == Deny && !d.Observe }
+
+// Guard decides tool calls in one repository. It is complete when New
+// returns, and Decide is the only way to use it.
 type Guard struct {
-	Repo Repo
-	// Policy is the repository's policy.json, or the default (enforce,
-	// no rules, no exceptions) when it has none.
-	Policy *gr.Policy
-	// PolicyErr is set when policy.json cannot be read or is invalid.
+	repo Repo
+	// policy is the repository's policy.json, or the default (enforce,
+	// no rules, no exceptions) when it has none or cannot be used.
+	policy *gr.Policy
+	// policyErr is set when policy.json cannot be read or is invalid.
 	// Every call is then refused under policy-error.
-	PolicyErr error
+	policyErr error
+	// now is the time an unlock marker is compared with.
+	now time.Time
+	// dir is the directory a relative path, edited or written by a
+	// command, is resolved against. When it is "", the root is.
+	dir string
+}
+
+// Options are what New needs besides the repository.
+type Options struct {
 	// Now is the time an unlock marker is compared with.
 	Now time.Time
-	// Dir is the directory a relative path, edited or written by a
-	// command, is resolved against: the payload's cwd. When it is "", the
-	// root is.
+	// Dir is the directory a relative path is read against, such as the
+	// payload's cwd. When it is "", the project root is.
 	Dir string
 }
 
-// New loads the guard of the repository at repo.
-func New(repo Repo, now time.Time) *Guard {
-	g := &Guard{Repo: repo, Now: now, Policy: &gr.Policy{Version: 2, Mode: gr.Enforce}}
+// New loads the guard of the repository at repo. No policy.json is the
+// default policy (enforce, no rules, no exceptions); one that cannot be
+// read or parsed is a policy error, which refuses every call.
+func New(repo Repo, opts Options) *Guard {
+	g := &Guard{repo: repo, now: opts.Now, dir: opts.Dir, policy: &gr.Policy{Version: 2, Mode: gr.Enforce}}
 	data, err := os.ReadFile(filepath.Join(repo.Root, filepath.FromSlash(gr.PolicyFile)))
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 	case err != nil:
-		g.PolicyErr = err
+		g.policyErr = err
 	default:
-		g.Policy, g.PolicyErr = gr.ParsePolicy(data)
+		if p, err := gr.ParsePolicy(data); err != nil {
+			g.policyErr = err
+		} else {
+			g.policy = p
+		}
 	}
 	return g
+}
+
+// Call is one tool call to decide: its target, or why its payload could
+// not be read.
+type Call struct {
+	Target gr.Target
+	// Err is set when the payload could not be read; Target is then
+	// unset.
+	Err *CallError
+}
+
+// CallError is why a call's payload could not be read, and the rule
+// that refuses the call.
+type CallError struct {
+	Rule string
+	Why  string
 }
 
 func deny(rule, why string) Decision {
 	return Decision{Outcome: Deny, Finding: &Finding{Rule: rule, Why: why}}
 }
 
-// Decide decides a tool call whose target was read without error.
-func (g *Guard) Decide(t gr.Target) Decision {
-	if g.PolicyErr != nil {
-		return deny(gr.IDPolicyError, gr.PolicyFile+" cannot be used: "+g.PolicyErr.Error())
+// Decide decides a call, in this order: a policy error refuses it under
+// policy-error, in observe mode too; a call error refuses it under its
+// rule; a target is decided by the command or path rules. Observe is
+// set from the policy's mode on every decision but a policy error.
+func (g *Guard) Decide(c Call) Decision {
+	if g.policyErr != nil {
+		return deny(gr.IDPolicyError, gr.PolicyFile+" cannot be used: "+g.policyErr.Error())
 	}
 	var d Decision
-	switch {
+	switch t := c.Target; {
+	case c.Err != nil:
+		d = deny(c.Err.Rule, c.Err.Why)
 	case gr.IsCommandTool(t.Tool):
 		d = g.decideCommand(t)
 	case gr.IsEditTool(t.Tool):
 		d = g.decidePath(t)
 	}
-	d.Observe = g.Policy.Mode == gr.Observe
-	return d
-}
-
-// DecideError decides a call whose payload could not be read.
-func (g *Guard) DecideError(rule, why string) Decision {
-	if g.PolicyErr != nil {
-		return deny(gr.IDPolicyError, gr.PolicyFile+" cannot be used: "+g.PolicyErr.Error())
-	}
-	d := deny(rule, why)
-	d.Observe = g.Policy.Mode == gr.Observe
+	d.Observe = g.policy.Mode == gr.Observe
 	return d
 }
 
@@ -171,12 +201,12 @@ func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit,gocyclo 
 				continue
 			}
 			p := g.normalize(w.Text)
-			if f := g.checkPath(shellWriteRules, p, gr.RelPath(g.Repo.Root, p), c, &d); f != nil {
+			if f := g.checkPath(shellWriteRules, p, gr.RelPath(g.repo.Root, p), c, &d); f != nil {
 				d.Outcome, d.Finding = Deny, f
 				return d
 			}
 		}
-		for _, r := range g.Policy.Rules {
+		for _, r := range g.policy.Rules {
 			if r.Command == "" || !r.AppliesTo(t.Tool) || !r.MatchesCommand(*c) {
 				continue
 			}
@@ -204,8 +234,8 @@ func (g *Guard) decidePath(t gr.Target) Decision {
 		return d
 	}
 	var ask *Finding
-	for _, r := range g.Policy.Rules {
-		if r.Path == "" || !r.AppliesTo(t.Tool) || !r.MatchesPath(p, g.Repo.Root) {
+	for _, r := range g.policy.Rules {
+		if r.Path == "" || !r.AppliesTo(t.Tool) || !r.MatchesPath(p, g.repo.Root) {
 			continue
 		}
 		f := Finding{Rule: r.ID, Why: r.Reason, Path: t.Path}
@@ -233,7 +263,7 @@ func (g *Guard) checkPath(rules []pathRule, p, shown string, c *gr.Command, d *D
 			continue
 		}
 		f := Finding{Rule: r.id, Why: r.why, Path: shown, Command: c}
-		if e := g.exception(r.id, func(e gr.Exception) bool { return e.MatchesPath(p, g.Repo.Root) }); e != nil && !r.fixed {
+		if e := g.exception(r.id, func(e gr.Exception) bool { return e.MatchesPath(p, g.repo.Root) }); e != nil && !r.fixed {
 			f.Exception = e
 			d.Lifted = append(d.Lifted, f)
 			continue
@@ -246,18 +276,18 @@ func (g *Guard) checkPath(rules []pathRule, p, shown string, c *gr.Command, d *D
 // normalize is the one reading of a path the guard checks, from an edit
 // tool or a command that writes it (spec 0058, "Path resolution"; spec
 // 0069): backslashes become slashes; on a project root with a drive
-// letter, Git Bash's /d/… is D:/…; a relative path is joined to g.Dir,
+// letter, Git Bash's /d/… is D:/…; a relative path is joined to g.dir,
 // the payload's cwd, else to the project root; and the result is
 // cleaned. The rules then see only absolute, clean, slash-separated
 // paths.
 func (g *Guard) normalize(p string) string {
-	root := g.Repo.Root
+	root := g.repo.Root
 	p = strings.ReplaceAll(p, `\`, "/")
 	if len(root) >= 2 && root[1] == ':' && isGitBashDrive(p) {
 		p = strings.ToUpper(p[1:2]) + ":" + p[2:]
 	}
 	if !gr.IsAbs(p) {
-		p = filepath.Join(cmp.Or(g.Dir, root), filepath.FromSlash(p))
+		p = filepath.Join(cmp.Or(g.dir, root), filepath.FromSlash(p))
 	}
 	return filepath.ToSlash(filepath.Clean(filepath.FromSlash(p)))
 }
@@ -271,9 +301,9 @@ func isGitBashDrive(p string) bool {
 
 // exception returns the first exception for rule that matches.
 func (g *Guard) exception(rule string, matches func(gr.Exception) bool) *gr.Exception {
-	for i, e := range g.Policy.Exceptions {
+	for i, e := range g.policy.Exceptions {
 		if e.Rule == rule && matches(e) {
-			return &g.Policy.Exceptions[i]
+			return &g.policy.Exceptions[i]
 		}
 	}
 	return nil

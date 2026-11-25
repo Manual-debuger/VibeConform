@@ -131,18 +131,17 @@ func readPayload(r io.Reader) (payload, error) {
 
 func hook(env Env) int {
 	p, perr := readPayload(env.Stdin)
-	g := New(sessionRepo(env, p.Cwd), env.Now())
-	g.Dir = p.Cwd
-	var d Decision
-	var t gr.Target
+	repo := sessionRepo(env, p.Cwd)
+	g := New(repo, Options{Now: env.Now(), Dir: p.Cwd})
+	var c Call
 	if perr == nil {
-		t, perr = gr.ParseTarget(p.ToolName, p.ToolInput)
+		c.Target, perr = gr.ParseTarget(p.ToolName, p.ToolInput)
 	}
 	if perr != nil {
-		d = g.DecideError(gr.IDPayloadError, perr.Error())
-	} else {
-		d = g.Decide(t)
+		c = Call{Err: &CallError{Rule: gr.IDPayloadError, Why: perr.Error()}}
 	}
+	d := g.Decide(c)
+	t := c.Target
 	switch {
 	case d.Outcome == Ask:
 		out, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]string{
@@ -152,18 +151,18 @@ func hook(env Env) int {
 		}})
 		say(env.Stdout, string(out))
 		return exitAllow
-	case d.Outcome == Deny && d.Observe:
+	case d.Refuses():
+		say(env.Stderr, "vibe-guard: refused by rule "+d.Finding.Rule+": "+reasonTail(d, t))
+		return exitDeny
+	case d.Outcome == Deny:
 		line := "vibe-guard (observe): would refuse by rule " + d.Finding.Rule + ": " + reasonTail(d, t)
 		say(env.Stderr, line)
-		if g.Repo.CommonDir != "" {
-			if err := appendLine(filepath.Join(g.Repo.CommonDir, LogFile), line); err != nil {
+		if repo.CommonDir != "" {
+			if err := appendLine(filepath.Join(repo.CommonDir, LogFile), line); err != nil {
 				say(env.Stderr, "vibe-guard (observe): the log cannot be written: "+err.Error())
 			}
 		}
 		return exitAllow
-	case d.Outcome == Deny:
-		say(env.Stderr, "vibe-guard: refused by rule "+d.Finding.Rule+": "+reasonTail(d, t))
-		return exitDeny
 	}
 	return exitAllow
 }
@@ -277,8 +276,8 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 	if gr.IsEditTool(tool) {
 		t = gr.Target{Tool: tool, Path: arg}
 	}
-	g := New(sessionRepo(env, ""), env.Now())
-	d := g.Decide(t)
+	g := New(sessionRepo(env, ""), Options{Now: env.Now()})
+	d := g.Decide(Call{Target: t})
 	w := env.Stdout
 	sayf(w, "tool: %s\n", tool)
 	if gr.IsEditTool(tool) {
@@ -287,7 +286,7 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 		sayf(w, "command: %s\n", arg)
 	}
 	observe := ""
-	if d.Outcome == Deny && d.Observe {
+	if d.Outcome == Deny && !d.Refuses() {
 		observe = " (observe mode: the hook allows the call and logs it)"
 	}
 	sayf(w, "decision: %s%s\n", d.Outcome, observe)
@@ -304,7 +303,7 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 	if d.Finding == nil && len(d.Lifted) == 0 {
 		say(w, "rule: none")
 	}
-	if d.Outcome == Deny && !d.Observe {
+	if d.Refuses() {
 		return exitDeny
 	}
 	return exitAllow

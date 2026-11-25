@@ -194,8 +194,13 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   package.
 - **`internal/guard`** is `vibe-guard`'s logic: the baseline rules, the
   decision, observe mode, the unlock marker, `hook`, `explain`, `relock`,
-  and the reference hook commands. It imports `internal/guardrule` and
-  nothing from `internal/contract`. `cmd/vibe-guard`
+  and the reference hook commands. Its `Guard` keeps its state
+  unexported: `New(repo, Options{Now, Dir})` loads the policy, and one
+  `Decide(Call)` decides a target or a payload error, applies a policy
+  error and observe mode in one place, and returns a `Decision` whose
+  `Refuses` gives `hook` and `explain` their exit code (spec 0070).
+  It imports `internal/guardrule` and nothing from `internal/contract`.
+  `cmd/vibe-guard`
   is a thin `main` over it, a separate binary that opens no network
   connection.
 - **`internal/contract`** imports `internal/guardrule`, never
