@@ -1092,8 +1092,10 @@ VibeConform computes:
   this repository, short mode skips three kinds of test (spec 0056): the
   tests that run the contract probes (`internal/contract/probetest`,
   the guard probes in `internal/contract`, the probe tests of
-  `internal/cli`), the tests that run the guard corpus through
-  subprocesses (`internal/guard`), and the tests that run the reference
+  `internal/cli`), the tests that run `vibe-guard` as a subprocess
+  (`internal/guard`: the reference-hook tests and a small smoke set;
+  the guard corpus runs in-process and is not skipped, spec 0070), and
+  the tests that run the reference
   hooks (`internal/setupskill`: the Stop-hook matrix and the hooks run
   from a subdirectory). Each skip message names `task verify`, which
   runs them. Short mode is Go only: pytest and the TypeScript test
