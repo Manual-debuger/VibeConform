@@ -208,6 +208,12 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   hooks in `.claude/settings.json`. Its guard corpus is embedded in
   `vibe`; `internal/guard`'s tests run the same corpus through
   `vibe-guard`.
+- **`internal/guard`'s tests run `guard.Main` in-process** with an
+  `Env` (stdin, captured output, the variables the test sets, the
+  fixture's directory, a fixed clock), the corpus included, under
+  `go test -short` too. Only the reference-hook tests and the binary set
+  (one deny, allow and `ask` payload, one `explain`, `version`) run the
+  built `vibe-guard` as a subprocess (spec 0070).
 - The dependency is one way: `internal/contract` → `internal/guardrule`
   ← `internal/guard`. `task lint` enforces it for non-test code with
   `depguard` (`.golangci.yml`, spec 0061), and tests in each package

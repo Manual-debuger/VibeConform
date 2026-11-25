@@ -25,7 +25,7 @@ import (
 //     names and the fixed clock testNow. The corpus and every behaviour
 //     test run here, under -short too.
 //  2. vibe-guard as a subprocess, through runBinary: the reference-hook
-//     tests and the smoke set (smoke_test.go). The binary is built once,
+//     tests and the binary set (binary_test.go). The binary is built once,
 //     on first use. VIBE_GUARD_BIN names a prebuilt binary instead, so
 //     that a prebuilt test binary (go test -c) runs with no Go toolchain
 //     and no network, as CI's network-disabled job does.

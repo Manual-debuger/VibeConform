@@ -1117,11 +1117,11 @@ runner or the guard's matcher directly.
   spec first used for every guard test. Since spec 0070 it covers only
   what the in-process seam cannot: the reference-hook tests (`bash` runs
   the reference PreToolUse command, with and without `vibe-guard` on
-  `PATH`, for every corpus case), and a smoke set that runs one deny,
+  `PATH`, for every corpus case), and a binary set that runs one deny,
   one allow and one `ask` payload on the binary's real stdin, one
-  `explain` and `version`. Each smoke call must give exactly what
-  `guard.Main` gives in-process. The binary is built once, on first use,
-  or `VIBE_GUARD_BIN` names a prebuilt one, so that CI's
+  `explain` and `version`. Each call of the binary set must give
+  exactly what `guard.Main` gives in-process. The binary is built once,
+  on first use, or `VIBE_GUARD_BIN` names a prebuilt one, so that CI's
   network-disabled job needs no toolchain. Short mode skips these tests.
   The contract's guard-probe tests keep running the real binary; they
   check the audit, not the guard.

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The smoke set runs the vibe-guard binary as Claude Code and a person
+// The binary set runs the vibe-guard binary as Claude Code and a person
 // do (spec 0070, "The guard's tests"): a payload on its real stdin, the
 // exit code from the process. Each call must give exactly what
 // guard.Main gives in-process for the same call, so the in-process
@@ -19,9 +19,9 @@ func skipSubprocessInShort(t *testing.T) {
 	}
 }
 
-// TestSmokeBinary: one deny, one allow and one ask payload on the
-// binary's stdin, and one explain.
-func TestSmokeBinary(t *testing.T) {
+// TestBinary: one deny, one allow and one ask payload on the binary's
+// stdin, and one explain.
+func TestBinary(t *testing.T) {
 	skipSubprocessInShort(t)
 	r := newRepo(t, `{"version": 2, "rules": [{"id": "ask-docker-push", "level": "ask", "command": "docker push", "reason": "pushes an image"}]}`)
 	cases := []struct {
