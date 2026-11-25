@@ -10,17 +10,15 @@
 package probetest_test
 
 import (
-	"context"
 	"encoding/json"
-	"io/fs"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 func TestMain(m *testing.M) {
@@ -36,104 +34,29 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// The probe fixtures, shared with internal/cli's tests.
+// The probe fixtures, under internal/contract/testdata.
 var (
-	cliTestdata            = filepath.Join("..", "..", "cli", "testdata", "contract")
-	probeGoFixture         = filepath.Join(cliTestdata, "probe-go")
-	probePythonFixture     = filepath.Join(cliTestdata, "probe-python")
-	probeTypeScriptFixture = filepath.Join(cliTestdata, "probe-typescript")
+	probeGoFixture         = contracttest.ProbeGo
+	probePythonFixture     = contracttest.ProbePython
+	probeTypeScriptFixture = contracttest.ProbeTypeScript
 )
 
 // fixtureEdit changes a fixture before or after git add.
-type fixtureEdit struct {
-	path      string
-	content   string
-	remove    bool
-	untracked bool
-}
+type fixtureEdit = contracttest.Edit
 
 // withFile writes path (slash separated) before git add: it is tracked.
-func withFile(path, content string) fixtureEdit {
-	return fixtureEdit{path: path, content: content}
-}
+func withFile(path, content string) fixtureEdit { return contracttest.WithFile(path, content) }
 
 // withoutFile removes path before git add.
-func withoutFile(path string) fixtureEdit {
-	return fixtureEdit{path: path, remove: true}
-}
+func withoutFile(path string) fixtureEdit { return contracttest.WithoutFile(path) }
 
 // fixtureFrom copies the tree src into a temporary directory (testdata's
 // dot-claude directories become .claude), applies edits and runs git
-// init and git add, and returns the root.
+// init and git add, and returns the root: the probe copy is made with
+// git.
 func fixtureFrom(t *testing.T, src string, edits ...fixtureEdit) string {
 	t.Helper()
-	dir := t.TempDir()
-	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil {
-			return err
-		}
-		parts := strings.Split(rel, string(filepath.Separator))
-		for i, part := range parts {
-			if part == "dot-claude" {
-				parts[i] = ".claude"
-			}
-		}
-		dst := filepath.Join(dir, filepath.Join(parts...))
-		if d.IsDir() {
-			return os.MkdirAll(dst, 0o750)
-		}
-		data, err := os.ReadFile(p) // #nosec G304 -- testdata
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(dst, data, 0o600)
-	})
-	if err != nil {
-		t.Fatalf("copying %s: %v", src, err)
-	}
-	for _, e := range edits {
-		if !e.untracked {
-			applyEdit(t, dir, e)
-		}
-	}
-	git(t, dir, "init", "-q")
-	git(t, dir, "-c", "core.autocrlf=false", "add", "-A")
-	for _, e := range edits {
-		if e.untracked {
-			applyEdit(t, dir, e)
-		}
-	}
-	return dir
-}
-
-func applyEdit(t *testing.T, dir string, e fixtureEdit) {
-	t.Helper()
-	p := filepath.Join(dir, filepath.FromSlash(e.path))
-	if e.remove {
-		if err := os.Remove(p); err != nil {
-			t.Fatalf("removing %s: %v", e.path, err)
-		}
-		return
-	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(p, []byte(e.content), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func git(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
+	return contracttest.GitFixture(t, src, edits...)
 }
 
 // probeFixture builds a repository from the Go probe fixture with edits.
@@ -265,74 +188,28 @@ func requireTool(t *testing.T, name string) {
 func ids(list ...string) []string { return list }
 
 // audit runs contract.Audit on dir with only the rules ids, in this
-// process's environment unless probe says otherwise.
+// process's environment unless probe says otherwise. contracttest.Audit
+// checks the report for failures without a file or a fix.
 func audit(t *testing.T, dir string, ids []string, probe contract.ProbeOptions) *contract.Report {
 	t.Helper()
-	ctx := context.Background()
-	repo, err := contract.OpenRepo(ctx, dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(filepath.Join(dir, "vibe.yaml")) // #nosec G304 -- the fixture's
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := contract.Parse("vibe.yaml", data, repo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var rules []contract.Rule
-	for _, r := range contract.Rules() {
-		if slices.Contains(ids, r.ID) {
-			rules = append(rules, r)
-		}
-	}
-	if len(rules) != len(ids) {
-		t.Fatalf("rules %v: some ID is not in the registry", ids)
-	}
-	return contract.Audit(ctx, cfg, repo, contract.Options{Rules: rules, Probe: probe})
+	return contracttest.Audit(t, dir, contract.Options{Rules: contracttest.Rules(t, ids...), Probe: probe})
 }
 
 // rule returns one rule's result.
 func rule(t *testing.T, rep *contract.Report, id string) contract.RuleResult {
 	t.Helper()
-	for _, rr := range rep.Rules {
-		if rr.Rule.ID == id {
-			return rr
-		}
-	}
-	t.Fatalf("the report has no rule %s", id)
-	return contract.RuleResult{}
+	return contracttest.RuleResult(t, rep, id)
 }
 
 // findingText is every finding of a rule, one per line, as vibe audit
 // --json lists them.
-func findingText(rr contract.RuleResult) string {
-	var b strings.Builder
-	for _, f := range rr.Findings() {
-		b.WriteString(f.File + ": " + f.Message + " Fix: " + f.Fix + "\n")
-	}
-	return b.String()
-}
+func findingText(rr contract.RuleResult) string { return contracttest.FindingText(rr) }
 
 // assertPart checks the result of one part of a rule and that the rule's
 // findings hold each of findings.
 func assertPart(t *testing.T, rep *contract.Report, id string, kind contract.PartKind, want contract.Result, findings ...string) {
 	t.Helper()
-	rr := rule(t, rep, id)
-	i := slices.IndexFunc(rr.Parts, func(p contract.PartOutcome) bool { return p.Kind == kind })
-	if i < 0 {
-		t.Fatalf("%s has no %s part: %+v", id, kind, rr.Parts)
-	}
-	text := findingText(rr)
-	if got := rr.Parts[i].Result; got != want {
-		t.Errorf("%s %s = %s, want %s\nfindings:\n%s", id, kind, got, want, text)
-	}
-	for _, f := range findings {
-		if !strings.Contains(text, f) {
-			t.Errorf("%s findings missing %q\nfindings:\n%s", id, f, text)
-		}
-	}
+	contracttest.AssertPart(t, rep, id, kind, want, findings...)
 }
 
 // assertListedOnce checks that exactly one finding of a rule holds text.

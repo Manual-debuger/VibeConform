@@ -3,15 +3,14 @@ package contract_test
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // The runner orders the execution and probe parts by the needs they
@@ -27,26 +26,10 @@ func runnerFixture(t *testing.T) (*contract.Config, *contract.Repo) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not on PATH")
 	}
-	dir := t.TempDir()
-	data := []byte("contract: 1.2.0\nplatforms: [linux]\nagents: []\n")
-	for name, content := range map[string][]byte{"vibe.yaml": data, "go.mod": []byte("module fixture\n\ngo 1.22\n")} {
-		if err := os.WriteFile(filepath.Join(dir, name), content, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, args := range [][]string{{"init", "-q"}, {"add", "-A"}} {
-		cmd := exec.Command("git", args...) // #nosec G204 -- fixed arguments
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	ctx := context.Background()
-	repo, err := contract.OpenRepo(ctx, dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := contract.Parse("vibe.yaml", data, repo)
+	dir := contracttest.GitFixture(t, t.TempDir(),
+		contracttest.WithFile("vibe.yaml", "contract: 1.2.0\nplatforms: [linux]\nagents: []\n"),
+		contracttest.WithFile("go.mod", "module fixture\n\ngo 1.22\n"))
+	cfg, repo, err := contract.Load(context.Background(), dir, "", contracttest.OpenRepo)
 	if err != nil {
 		t.Fatal(err)
 	}

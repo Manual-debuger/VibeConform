@@ -102,6 +102,12 @@ path and language. A single-language repository is one component at its
 root.
 _Avoid_: package, workspace, sub-project
 
+**Language record**:
+Everything `vibe` knows about one component language, in one place: its
+identifier, manifest, lockfiles, test files, planted defects and
+update-bot names. Each language the contract supports has exactly one.
+_Avoid_: language table, language config, language plugin
+
 **Setup skill**:
 The agent skill that gives an adopting repository the properties the
 contract requires, and runs the audit until it passes. It is
@@ -131,6 +137,20 @@ guardrail settings. An agent cannot grant it to itself. The person runs
 `vibe unlock` in their own terminal; the agent's next Stop, or
 `vibe-guard relock`, ends it.
 _Avoid_: override, bypass, escape
+
+**Project root**:
+The directory an agent session runs in: `CLAUDE_PROJECT_DIR` when it is
+set. Otherwise it is the Git top found from the working directory, or
+that directory when no `.git` is above it. The guard reads the policy,
+relative paths and the agent guardrail settings against it. A nested
+project's root is below the Git top.
+_Avoid_: repository root, sub-project
+
+**Git top**:
+The directory that holds `.git`, found by walking up from the project
+root. It is the project root unless the project is below it. The unlock
+marker and `vibe-guard.log` are in its common Git directory.
+_Avoid_: repository root, Git root
 
 ## CI
 

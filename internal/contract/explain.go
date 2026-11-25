@@ -28,7 +28,21 @@ var ruleDetails = map[string]func() string{
 	},
 	"V-07": secretSampleText,
 	"V-08": v08Details,
+	"A-02": guardCorpusText,
+	"A-03": guardCorpusText,
 	"A-09": a09CasesText,
+}
+
+// guardCorpusText prints the guard corpus's counts by guard rule ID, for
+// A-02 and A-03 (spec 0053, "Report and CLI").
+func guardCorpusText() string {
+	byRule, deny, allow := guardCorpusCounts()
+	var b strings.Builder
+	fmt.Fprintf(&b, "Guard corpus:\n  %d cases: %d deny and %d allow. Deny cases by guard rule ID:\n", deny+allow, deny, allow)
+	for _, c := range byRule {
+		fmt.Fprintf(&b, "  %-26s %3d\n", c.Rule, c.Deny)
+	}
+	return b.String()
 }
 
 // a09CasesText lists A-09's corpus cases: decision, tool and command.
@@ -101,16 +115,9 @@ func RuleDetails(id string) string {
 	return ""
 }
 
-// defectLanguages is the order --explain lists the samples in.
-var defectLanguages = []struct{ id, name string }{
-	{LanguageGo, "Go"},
-	{LanguagePython, "Python"},
-	{LanguageTypeScript, "TypeScript"},
-}
-
 // defectSamplesText prints the planted defect samples of a rule's kinds
-// (ruleDefectKinds) exactly, in every language that has one, each line
-// indented by four spaces.
+// (ruleDefectKinds) exactly, in every language that has one, in the
+// language registry's order, each line indented by four spaces.
 func defectSamplesText(rule string) string {
 	kinds := ruleDefectKinds[rule]
 	var b strings.Builder
@@ -120,9 +127,9 @@ func defectSamplesText(rule string) string {
 		"  reset between defects. In Go samples, {{package}} is the package clause\n" +
 		"  of the test file beside it, without a _test suffix in a file that is not\n" +
 		"  a _test.go file.\n")
-	for _, lang := range defectLanguages {
+	for _, lang := range languageRegistry {
 		for _, kind := range kinds {
-			s, ok := defectSamples[lang.id][kind]
+			s, ok := lang.sample(kind)
 			if !ok {
 				continue
 			}

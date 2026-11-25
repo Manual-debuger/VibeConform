@@ -33,50 +33,20 @@ func complexityHead(marker string) string {
 		"%[1]s cognitive complexity %[3]d (the complexity defect).\n", marker, complexityBranches+1, complexityBranches)
 }
 
-// complexityLayout is how one language writes V-06's sample.
+// complexityLayout is how one language writes V-06's sample; each
+// language record holds its own. branch takes the threshold and the
+// constant it adds.
 type complexityLayout struct {
 	name, head, branch, tail string
 }
 
-// complexityLayouts holds the sample's layout by language. branch takes
-// the threshold and the constant it adds.
-var complexityLayouts = map[string]complexityLayout{
-	LanguageGo: {
-		// A non-test file, since repositories commonly relax lint for
-		// test files (spec 0061, "The Go V-06 sample is a non-test file").
-		name: "vibe_probe_complexity.go",
-		head: complexityHead("//") + "\n" +
-			"package {{package}}\n\n" +
-			"// VibeProbeComplexity adds a constant to a running total for each\n" +
-			"// threshold that n exceeds.\n" +
-			"func VibeProbeComplexity(n int) int {\n\ttotal := 0\n",
-		branch: "\tif n > %d {\n\t\ttotal += %d\n\t}\n",
-		tail:   "\treturn total\n}\n",
-	},
-	LanguagePython: {
-		name: "vibe_probe_complexity.py",
-		head: complexityHead("#") +
-			"def vibe_probe_complexity(n: int) -> int:\n    total = 0\n",
-		branch: "    if n > %d:\n        total += %d\n",
-		tail:   "    return total\n",
-	},
-	LanguageTypeScript: {
-		name: "vibe_probe_complexity.ts",
-		head: complexityHead("//") +
-			"export function vibeProbeComplexity(n: number): number {\n  let total = 0\n",
-		branch: "  if (n > %d) {\n    total += %d\n  }\n",
-		tail:   "  return total\n}\n",
-	},
-}
-
-// complexitySample is V-06's sample in a language (spec 0061, "V-06,
+// complexitySample is V-06's sample in a layout (spec 0061, "V-06,
 // complexity"): one function of one integer parameter that holds
 // complexityBranches consecutive, unnested if statements, each adding a
 // constant to a running total, and returns the total. One return
 // statement, no nesting and no duplicated branches. The spec says 40 if
 // statements; its implementation notes say why the sample has 41.
-func complexitySample(lang string) defectSample {
-	l := complexityLayouts[lang]
+func complexitySample(l complexityLayout) defectSample {
 	var b strings.Builder
 	b.WriteString(l.head)
 	for i := range complexityBranches {

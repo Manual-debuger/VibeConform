@@ -1,10 +1,8 @@
 package contract_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"maps"
 	"os"
 	"os/exec"
@@ -16,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 	"github.com/Manual-debuger/VibeConform/internal/guard"
 )
 
@@ -43,7 +42,7 @@ func TestMain(m *testing.M) {
 }
 
 // probeGoFixture is the Go probe fixture of the vibe audit tests.
-var probeGoFixture = filepath.Join("..", "cli", "testdata", "contract", "probe-go")
+var probeGoFixture = contracttest.ProbeGo
 
 // guardFixture copies the probe fixture into a new Git repository, with
 // files (slash-separated path to content) added, and returns its root.
@@ -53,45 +52,11 @@ func guardFixture(t *testing.T, files map[string]string) string {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go is not on PATH")
 	}
-	dir := t.TempDir()
-	err := filepath.WalkDir(probeGoFixture, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(probeGoFixture, p)
-		if err != nil {
-			return err
-		}
-		dst := filepath.Join(dir, strings.ReplaceAll(rel, "dot-claude", ".claude"))
-		if d.IsDir() {
-			return os.MkdirAll(dst, 0o750)
-		}
-		data, err := os.ReadFile(p) // #nosec G304 -- testdata
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(dst, data, 0o600)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	var edits []contracttest.Edit
 	for rel, content := range files {
-		p := filepath.Join(dir, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		edits = append(edits, contracttest.WithFile(rel, content))
 	}
-	for _, args := range [][]string{{"init", "-q"}, {"-c", "core.autocrlf=false", "add", "-A"}} {
-		cmd := exec.Command("git", args...) // #nosec G204 -- fixed arguments
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	return dir
+	return contracttest.GitFixture(t, probeGoFixture, edits...)
 }
 
 // guardSettings is a .claude/settings.json whose PreToolUse hooks, one
@@ -194,19 +159,6 @@ func audit(t *testing.T, dir string, ids []string, pathFirst ...string) *contrac
 // with extra directories first on the probe runs' PATH.
 func auditRules(t *testing.T, dir string, rules []contract.Rule, pathFirst ...string) *contract.Report {
 	t.Helper()
-	ctx := context.Background()
-	repo, err := contract.OpenRepo(ctx, dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(filepath.Join(dir, "vibe.yaml")) // #nosec G304 -- the fixture's
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := contract.Parse("vibe.yaml", data, repo)
-	if err != nil {
-		t.Fatal(err)
-	}
 	env := os.Environ()
 	if len(pathFirst) > 0 {
 		path := strings.Join(append(slices.Clone(pathFirst), os.Getenv("PATH")), string(os.PathListSeparator))
@@ -216,7 +168,7 @@ func auditRules(t *testing.T, dir string, rules []contract.Rule, pathFirst ...st
 		})
 		env = append(env, "PATH="+path)
 	}
-	return contract.Audit(ctx, cfg, repo, contract.Options{Rules: rules, Probe: contract.ProbeOptions{Env: env}})
+	return contracttest.Audit(t, dir, contract.Options{Rules: rules, Probe: contract.ProbeOptions{Env: env}})
 }
 
 // part returns a rule's part of a kind.

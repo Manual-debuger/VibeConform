@@ -13,9 +13,19 @@ import (
 // .gitlab-ci.yml is tracked. Other providers cannot be decided, and no CI
 // at all fails.
 //
-// The GitHub checks keep reading CI.Workflows, so that their results and
-// wording stay those of contract 1.0.1. The GitLab checks read the
-// provider-neutral parts: Jobs, Run and Includes.
+// Each reader fills the whole model when the CI is read: every job with
+// its commands, scripts and runner platforms, the default branch, and
+// the run of each pipeline kind. The GitHub reader adds each job's uses:
+// references and the parsed workflows; the GitLab reader each job's
+// images and the includes it does not follow. Each reader also sets its provider's
+// wording (ci_wording.go): the words of findings that differ by provider.
+//
+// C-01, C-02, C-04, C-05 and D-03 each have one implementation
+// (checks_ci.go) that reads only the model and the wording, and none
+// compares the provider (spec 0067). C-03 reads the GitHub workflows
+// (CI.Workflows), which no other provider has; the registry makes it not
+// applicable on GitLab CI. R-01's CI part (vibe_calls.go) reads the model
+// too.
 
 // CIProvider is the CI provider the C rules read. The values are the
 // --json tokens.
@@ -72,10 +82,20 @@ type CI struct {
 	Includes []CIInclude
 	// Workflows are the GitHub workflows that parsed.
 	Workflows []*Workflow
+	// DefaultBranch is the branch the reader decided the runs for: the
+	// target of refs/remotes/origin/HEAD, or else main or master, as the
+	// provider's configuration suggests.
+	DefaultBranch string
 
+	// runs are the jobs that run for each pipeline kind, as the reader
+	// decided them.
 	runs map[PipelineKind]*CIRun
-	// gh maps a GitHub job to its CIJob.
-	gh map[*Job]*CIJob
+	// noteOnRun, when set, has the report note the default branch the
+	// reader assumed, at the first Run. The GitHub reader sets it; the
+	// GitLab reader notes the branch when it reads the configuration.
+	noteOnRun func()
+	// wording is the provider's words for findings (ci_wording.go).
+	wording *ciWording
 }
 
 // CIJob is one job.
@@ -101,8 +121,33 @@ type CIJob struct {
 	// Images are the GitLab job's image: and services: entries, after
 	// resolution (default: included).
 	Images []CIImage
+	// Uses are the GitHub job's uses: references: the job's own (a
+	// reusable workflow), then each step's (an action), in order. Local
+	// ./ references are kept.
+	Uses []CIUses
+	// Platforms are the platforms the job runs on (PlatformLinux,
+	// PlatformWindows, PlatformMacOS), for each matrix combination that
+	// names one: GitHub runs-on with strategy: matrix expanded, GitLab
+	// tags: with parallel: matrix expanded and the image rule.
+	Platforms []string
+	// UnknownRunners describe the runners whose platform is unknown, as
+	// C-05 quotes them: on GitHub the runs-on labels as written, on GitLab
+	// the job and its tags.
+	UnknownRunners []string
 
 	key string
+}
+
+// CIUses is one GitHub uses: reference.
+type CIUses struct {
+	File string
+	// Line is the job's uses: line, or the step's line, from 1.
+	Line int
+	// Where names it for a finding: "job build" or "job build, step 2".
+	Where string
+	// Ref is the reference as written, such as actions/checkout@v4 or
+	// ./.github/workflows/test.yml.
+	Ref string
 }
 
 // CIImage is one GitLab image: or services: entry.
@@ -168,6 +213,13 @@ type CIInclude struct {
 	Node *yaml.Node
 }
 
+// Target is the value under the include's kind key: the project,
+// component, remote URL or template. It is "" when the entry is not a map
+// or that value is not a string.
+func (inc CIInclude) Target() string {
+	return scalarOr(mapValue(inc.Node, string(inc.Kind)), "")
+}
+
 // CIIncludeKind is the kind of a GitLab include: the key that names
 // what it includes.
 type CIIncludeKind string
@@ -198,33 +250,27 @@ type CISkip struct {
 	File string
 	Line int
 	Why  string
+	// Fix is the fix of a finding about the job: what makes it run for
+	// the kind. Only the GitLab reader skips jobs; it words the fix.
+	Fix string
 }
 
-// Run returns the jobs that run for kind. GitHub follows local reusable
-// workflows with the caller's triggers; GitLab evaluates workflow:rules,
-// rules: and only/except, and follows child pipelines the parent waits
-// for, with the trigger job's rules as their outer condition.
-func (ci *CI) Run(env *Env, kind PipelineKind) *CIRun {
-	if r := ci.runs[kind]; r != nil {
-		return r
+// Run returns the jobs that run for kind, as the reader decided them when
+// it read the CI. GitHub follows local reusable workflows with the
+// caller's triggers; GitLab evaluates workflow:rules, rules: and
+// only/except, and follows child pipelines the parent waits for, with the
+// trigger job's rules as their outer condition. Both readers decide every
+// pipeline kind, for CI.DefaultBranch. The first call makes the note the
+// reader left for it, if any (noteOnRun).
+func (ci *CI) Run(kind PipelineKind) *CIRun {
+	if ci.noteOnRun != nil {
+		ci.noteOnRun()
+		ci.noteOnRun = nil
 	}
-	// GitLab runs are decided when the configuration is read, for every
-	// kind; GitHub ones here, on first use, as contract 1.0.1 did.
-	if ci.Provider != CIGitHub || (kind != KindMergeRequest && kind != KindDefaultPush) {
+	r := ci.runs[kind]
+	if r == nil {
 		panic(fmt.Sprintf("contract: no %s run for pipeline kind %d", ci.Provider.Name(), kind))
 	}
-	event := eventPullRequest
-	if kind == KindDefaultPush {
-		event = eventPush
-	}
-	r := &CIRun{}
-	for _, j := range jobsTriggered(ci.Workflows, event, defaultBranch(env, ci.Workflows)) {
-		r.Jobs = append(r.Jobs, ci.gh[j.job])
-	}
-	if ci.runs == nil {
-		ci.runs = map[PipelineKind]*CIRun{}
-	}
-	ci.runs[kind] = r
 	return r
 }
 
@@ -259,7 +305,7 @@ func (e *Env) gitLabCI() (*CI, bool) {
 func (e *Env) readCI() *ciState {
 	ws := e.Workflows()
 	if len(ws.Files) > 0 {
-		return &ciState{ci: githubCI(ws), res: Pass(), ok: true}
+		return &ciState{ci: githubCI(e, ws), res: Pass(), ok: true}
 	}
 	if e.Repo.HasFile(gitlabCIFile) {
 		return &ciState{ci: readGitLabCI(e), res: Pass(), ok: true}
@@ -268,7 +314,7 @@ func (e *Env) readCI() *ciState {
 		return &ciState{res: Undecided(Finding{
 			File: ws.OtherCI[0],
 			Message: fmt.Sprintf("contract %s reads GitHub Actions and GitLab CI only, and this repository's CI is %s",
-				Implemented, joinWords(ws.OtherCI, "and")),
+				Implemented, joinWords(ws.OtherCI, " and ")),
 			Fix: "run CI in GitHub Actions under .github/workflows/ or in GitLab CI (.gitlab-ci.yml), or wait for a vibe that reads this provider",
 		})}
 	}
@@ -279,9 +325,11 @@ func (e *Env) readCI() *ciState {
 	})}
 }
 
-// githubCI is the model of the GitHub workflows.
-func githubCI(ws *Workflows) *CI {
-	ci := &CI{Provider: CIGitHub, Dir: workflowDir + "/", gh: map[*Job]*CIJob{}}
+// githubCI is the model of the GitHub workflows. A run is the jobs the
+// trigger walk finds for its event on the default branch; a GitHub run
+// has no skipped jobs.
+func githubCI(env *Env, ws *Workflows) *CI {
+	ci := &CI{Provider: CIGitHub, Dir: workflowDir + "/", wording: githubWording}
 	for _, wf := range ws.Files {
 		if wf.Err != nil {
 			ci.Broken = append(ci.Broken, ParseFailure(wf.File, wf.Err))
@@ -289,19 +337,53 @@ func githubCI(ws *Workflows) *CI {
 		}
 		ci.Workflows = append(ci.Workflows, wf)
 		for _, j := range wf.Jobs {
-			cj := &CIJob{File: wf.File, ID: j.ID, Line: j.Node.Line, Node: j.Node, Commands: j.Commands(),
-				key: githubJobKey(wf.File, j.ID)}
-			for _, s := range j.Steps {
-				if s.HasRun {
-					cj.Scripts = append(cj.Scripts, CIScript{File: wf.File, Line: s.Line,
-						Where: fmt.Sprintf("job %s, step %d", j.ID, s.Index+1), Counts: true, Script: s.Run})
-				}
-			}
-			ci.Jobs = append(ci.Jobs, cj)
-			ci.gh[j] = cj
+			ci.Jobs = append(ci.Jobs, githubJob(wf, j))
 		}
 	}
+	byKey := map[string]*CIJob{}
+	for _, j := range ci.Jobs {
+		byKey[j.Key()] = j
+	}
+	// GitHub notes an assumed branch when a rule first reads the runs
+	// (C-01, C-04 or R-01), as contract 1.0.1 did.
+	branch, assumed := githubDefaultBranch(env, ci.Workflows)
+	if assumed {
+		ci.noteOnRun = func() { noteAssumedBranch(env, branch) }
+	}
+	ci.DefaultBranch = branch
+	ci.runs = map[PipelineKind]*CIRun{}
+	for _, k := range []struct {
+		kind  PipelineKind
+		event string
+	}{{KindMergeRequest, eventPullRequest}, {KindDefaultPush, eventPush}} {
+		r := &CIRun{}
+		for _, j := range jobsTriggered(ci.Workflows, k.event, branch) {
+			r.Jobs = append(r.Jobs, byKey[githubJobKey(j.wf.File, j.job.ID)])
+		}
+		ci.runs[k.kind] = r
+	}
 	return ci
+}
+
+// githubJob is the model of one workflow job: its run: steps, its uses:
+// references and its runner platforms.
+func githubJob(wf *Workflow, j *Job) *CIJob {
+	cj := &CIJob{File: wf.File, ID: j.ID, Line: j.Node.Line, Node: j.Node, Commands: j.Commands(),
+		key: githubJobKey(wf.File, j.ID)}
+	if j.Uses != "" {
+		cj.Uses = append(cj.Uses, CIUses{File: wf.File, Line: j.UsesLine, Where: cj.where(), Ref: j.Uses})
+	}
+	for _, s := range j.Steps {
+		where := fmt.Sprintf("%s, step %d", cj.where(), s.Index+1)
+		if s.Uses != "" {
+			cj.Uses = append(cj.Uses, CIUses{File: wf.File, Line: s.Line, Where: where, Ref: s.Uses})
+		}
+		if s.HasRun {
+			cj.Scripts = append(cj.Scripts, CIScript{File: wf.File, Line: s.Line, Where: where, Counts: true, Script: s.Run})
+		}
+	}
+	cj.Platforms, cj.UnknownRunners = runnerPlatforms(j)
+	return cj
 }
 
 // commandsOfJobs returns every command of the jobs that counts as calling.

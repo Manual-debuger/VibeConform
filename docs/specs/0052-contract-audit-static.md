@@ -604,6 +604,14 @@ Verdict: cannot decide. 10 rules did not run (--static); 1 MUST rule already fai
 
 ## Testing Decisions
 
+> **Note (2026-11-16):** ADR 0028
+> ([`0028-rule-tests-through-contract-audit.md`](../decisions/0028-rule-tests-through-contract-audit.md))
+> supersedes the first bullet below. Rule, engine, configuration and
+> probe tests run `contract.Load` and `contract.Audit` in package
+> `contract_test` and assert on the report model. The `vibe audit`
+> command stays the seam for flags, exit codes, the CLI's error text and
+> the golden reports (spec 0065).
+
 - **One seam: the `vibe audit` command, in-process.** Tests build the
   root command, point `--repo-root` (and `--config`) at a fixture
   repository and assert three things: the exit code, the rule results

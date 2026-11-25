@@ -103,7 +103,7 @@ func readGitLabCI(env *Env) *CI {
 	r := &glReader{env: env, origin: map[*yaml.Node]string{}, docs: map[string]*yaml.Node{},
 		loaded: map[string]bool{}, seen: map[string]bool{}, seenIncludes: map[*yaml.Node]bool{},
 		pipelines: map[string]*glPipeline{}, dropped: map[string]map[string]*glWhy{}}
-	ci := &CI{Provider: CIGitLab, Dir: gitlabCIFile}
+	ci := &CI{Provider: CIGitLab, Dir: gitlabCIFile, wording: gitlabWording}
 
 	all := &glContext{all: true}
 	r.walk(r.pipeline([]string{gitlabCIFile}, "", all, nil), all, nil, 0, nil, func(j *CIJob, _ bool, _ *glWhy) {
@@ -111,7 +111,13 @@ func readGitLabCI(env *Env) *CI {
 	})
 	ci.Includes = r.includes
 
-	branch := gitlabDefaultBranch(env, r)
+	// GitLab notes an assumed branch when it reads the configuration, as
+	// contract 1.0.1 did.
+	branch, assumed := gitlabDefaultBranch(env, r)
+	if assumed {
+		noteAssumedBranch(env, branch)
+	}
+	ci.DefaultBranch = branch
 	ci.runs = map[PipelineKind]*CIRun{
 		KindMergeRequest: r.run(KindMergeRequest, branch, ci.Jobs),
 		KindDefaultPush:  r.run(KindDefaultPush, branch, ci.Jobs),
@@ -714,6 +720,7 @@ func (r *glReader) readJob(k *yaml.Node, name, child string, node *yaml.Node, ct
 		}
 	}
 	cj.Images = r.images(node)
+	cj.Platforms, cj.UnknownRunners = gitlabPlatforms(cj)
 	return &glJob{ci: cj, node: node, child: r.childFiles(cj.File, name, node, ctx)}
 }
 
@@ -866,20 +873,21 @@ func (r *glReader) run(kind PipelineKind, branch string, every []*CIJob) *CIRun 
 		})
 	}
 	out := &CIRun{}
+	fix := gitlabSkipFix(gitlabWording.kind(kind, branch))
 	for _, k := range order {
 		e := got[k]
 		if e.runs {
 			out.Jobs = append(out.Jobs, e.job)
 			continue
 		}
-		out.Skipped = append(out.Skipped, CISkip{Job: e.job, File: e.why.file, Line: e.why.line, Why: e.why.text})
+		out.Skipped = append(out.Skipped, CISkip{Job: e.job, File: e.why.file, Line: e.why.line, Why: e.why.text, Fix: fix})
 	}
 	for _, j := range every {
 		if got[j.Key()] != nil {
 			continue
 		}
 		if why := r.droppedWhy(j, contexts); why != nil {
-			out.Skipped = append(out.Skipped, CISkip{Job: j, File: why.file, Line: why.line, Why: why.text})
+			out.Skipped = append(out.Skipped, CISkip{Job: j, File: why.file, Line: why.line, Why: why.text, Fix: fix})
 		}
 	}
 	return out
@@ -888,15 +896,11 @@ func (r *glReader) run(kind PipelineKind, branch string, every []*CIJob) *CIRun 
 // gitlabDefaultBranch decides the default branch for GitLab CI: the
 // target of refs/remotes/origin/HEAD, or else main or master, the one the
 // configuration's conditions name more often (rules: if: literals,
-// only/except refs), main on a tie. In that case the report says which it
-// assumed.
-func gitlabDefaultBranch(env *Env, r *glReader) string {
-	if env.defaultBranch != "" {
-		return env.defaultBranch
-	}
+// only/except refs), main on a tie. assumed is true in that case, and the
+// reader has the report say which it assumed.
+func gitlabDefaultBranch(env *Env, r *glReader) (branch string, assumed bool) {
 	if b := env.Repo.originHead; b != "" {
-		env.defaultBranch = b
-		return b
+		return b, false
 	}
 	named := map[string]int{}
 	for _, f := range slices.Sorted(maps.Keys(r.docs)) {
@@ -908,9 +912,7 @@ func gitlabDefaultBranch(env *Env, r *glReader) string {
 			branch, best = b, named[b]
 		}
 	}
-	noteAssumedBranch(env, branch)
-	env.defaultBranch = branch
-	return branch
+	return branch, true
 }
 
 // countBranchNames counts the literals named in if: conditions and the

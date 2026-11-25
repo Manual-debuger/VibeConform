@@ -16,12 +16,11 @@ import (
 // checkV04: every required entrypoint is declared and non-empty, and each
 // command of every declared entrypoint is one simple command.
 func checkV04(env *Env, _ Needed) PartResult {
-	names := RequiredEntrypoints
-	if _, ok := env.Config.Entrypoints[EntrypointSetup]; ok {
-		names = append(names[:len(names):len(names)], EntrypointSetup)
-	}
 	var problems []Finding
-	for _, name := range names {
+	for _, name := range EntrypointOrder() {
+		if _, declared := env.Config.Entrypoints[name]; !declared && !slices.Contains(RequiredEntrypoints, name) {
+			continue
+		}
 		problems = append(problems, env.entrypoint(name).problems...)
 	}
 	if len(problems) > 0 {
@@ -185,5 +184,5 @@ func quoteCommands(cmds []string) string {
 	for i, c := range cmds {
 		quoted[i] = "`" + strings.TrimSpace(c) + "`"
 	}
-	return joinWords(quoted, "and")
+	return joinWords(quoted, " and ")
 }

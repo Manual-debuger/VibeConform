@@ -726,6 +726,21 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   `git`. The guard therefore works with only the operating system's
   `PATH` (A-03), and a missing Git cannot make an unreadable marker look
   valid.
+  - **Amended by spec 0068 (#180).** The guard names two directories
+    apart. The **project root** is `CLAUDE_PROJECT_DIR` as given, not
+    walked up. Without it, the payload's `cwd`, else the working
+    directory, walked up to the directory holding `.git`; without
+    `.git` above it, the start directory. The policy, exception globs,
+    relative paths and the guardrail-settings paths are read against
+    the project root. The **Git top** is the directory holding `.git`,
+    found by walking up from the project root. The Git directory and
+    the common Git directory are read from the Git top's `.git` as
+    above. The unlock marker and `vibe-guard.log` stay in the common
+    Git directory. When the project root is below the Git top, the
+    guard protects the guardrail settings of both, and one marker
+    unlocks both. The Git top's `policy.json` is not read then.
+    `hook`, `explain` and `relock` get both directories from one
+    function in `internal/guard`.
 - **Parsing.**
   - `Bash` commands are parsed with `syntax.LangBash`, because the Bash
     tool runs bash. The audit's parsing stays POSIX (ADR 0026).

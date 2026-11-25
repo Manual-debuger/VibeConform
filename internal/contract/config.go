@@ -68,16 +68,7 @@ const (
 var (
 	platforms = []string{PlatformLinux, PlatformWindows, PlatformMacOS}
 	agents    = []string{AgentClaude, AgentCodex}
-	languages = []string{LanguageGo, LanguagePython, LanguageTypeScript}
 )
-
-// rootManifests maps each manifest that decides the root component's
-// language, in the order errors name them.
-var rootManifests = []struct{ file, language string }{
-	{"go.mod", LanguageGo},
-	{"pyproject.toml", LanguagePython},
-	{"package.json", LanguageTypeScript},
-}
 
 // Component is one single-language part of the repository.
 type Component struct {
@@ -100,6 +91,11 @@ const (
 var RequiredEntrypoints = []string{EntrypointVerify, EntrypointVerifyFast, EntrypointFmt, EntrypointFmtCheck}
 
 var entrypointNames = append(slices.Clone(RequiredEntrypoints), EntrypointSetup)
+
+// EntrypointOrder returns every entrypoint name in the order V-04 and
+// vibe doctor check them: the required ones, then setup. It returns a
+// copy.
+func EntrypointOrder() []string { return slices.Clone(entrypointNames) }
 
 // Entrypoint is one declared entrypoint.
 type Entrypoint struct {
@@ -306,8 +302,8 @@ func (p *configParser) components(v *yaml.Node) error {
 				c.Path = path
 				return err
 			case "language":
-				if !isString(v) || !slices.Contains(languages, v.Value) {
-					return p.fail(at+".language", "%s is not one of %s", describe(v), strings.Join(languages, ", "))
+				if _, known := lookupLanguage(v.Value); !isString(v) || !known {
+					return p.fail(at+".language", "%s is not one of %s", describe(v), strings.Join(languageIDs(), ", "))
 				}
 				c.Language = v.Value
 				return nil
@@ -373,32 +369,15 @@ func hasDrive(p string) bool {
 }
 
 // detectComponents decides the root component's language from the tracked
-// manifests at the root: exactly one must be there.
+// manifests at the root, with the function DetectComponents uses.
 func (p *configParser) detectComponents() error {
-	var found []string
-	language := ""
-	for _, m := range rootManifests {
-		if p.repo.HasFile(m.file) {
-			found = append(found, m.file)
-			language = m.language
-		}
+	language, err := rootLanguage(p.repo.HasFile)
+	if err != nil {
+		return p.fail("components", "%v", err)
 	}
-	all := make([]string, len(rootManifests))
-	for i, m := range rootManifests {
-		all[i] = m.file
-	}
-	switch len(found) {
-	case 0:
-		return p.fail("components", "the repository root has no tracked %s, so its language is unknown; "+
-			"declare components with path and language", joinWords(all, "or"))
-	case 1:
-		p.cfg.Components = []Component{{Path: ".", Language: language}}
-		p.cfg.ComponentsDetected = true
-		return nil
-	default:
-		return p.fail("components", "the repository root has %s, so its language is ambiguous; "+
-			"declare components with path and language", joinWords(found, "and"))
-	}
+	p.cfg.Components = []Component{{Path: ".", Language: language}}
+	p.cfg.ComponentsDetected = true
+	return nil
 }
 
 func (p *configParser) entrypoints(v *yaml.Node) error {
@@ -574,10 +553,12 @@ func describe(n *yaml.Node) string {
 	}
 }
 
-// joinWords joins words as "a, b and c" (or "or").
-func joinWords(words []string, conj string) string {
+// joinWords joins words with ", " and puts last before the final word:
+// " and " gives "a, b and c", " or " gives "a or b", and ", or " gives
+// "a, b, or c". One word is itself, and none is "".
+func joinWords(words []string, last string) string {
 	if len(words) <= 1 {
 		return strings.Join(words, "")
 	}
-	return strings.Join(words[:len(words)-1], ", ") + " " + conj + " " + words[len(words)-1]
+	return strings.Join(words[:len(words)-1], ", ") + last + words[len(words)-1]
 }

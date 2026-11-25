@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
 // reportHeader starts the contract audit's report: a valid configuration
@@ -37,7 +40,7 @@ func assertExit(t *testing.T, r auditResult, want int) {
 
 func TestContractAuditValidConfigReachesEngine(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t)
+	dir := contracttest.Fixture(t, contracttest.Baseline)
 	r := runVibeAudit(t, "--repo-root", dir)
 	assertExit(t, r, 1)
 	assertReport(t, r)
@@ -50,7 +53,7 @@ func TestContractAuditValidConfigReachesEngine(t *testing.T) {
 func TestContractAuditOutsideWorkTree(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	data, err := os.ReadFile(filepath.Join(baselineFixture, "vibe.yaml"))
+	data, err := os.ReadFile(filepath.Join(contracttest.Baseline, "vibe.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +69,7 @@ func TestContractAuditOutsideWorkTree(t *testing.T) {
 // .git/config, like a dubious-ownership refusal, read as ErrNotWorkTree).
 func TestContractAuditGitFailureIsNotNotWorkTree(t *testing.T) {
 	t.Parallel()
-	dir := contractGitFixture(t)
+	dir := contracttest.GitFixture(t, contracttest.Baseline)
 	cfg := filepath.Join(dir, ".git", "config")
 	f, err := os.OpenFile(cfg, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -92,7 +95,7 @@ func TestContractAuditGitFailureIsNotNotWorkTree(t *testing.T) {
 // fallback (regression: every error read as "no origin/HEAD").
 func TestContractAuditOriginHEADGitFailure(t *testing.T) {
 	t.Parallel()
-	dir := contractGitFixture(t)
+	dir := contracttest.GitFixture(t, contracttest.Baseline)
 	ref := filepath.Join(dir, ".git", "refs", "remotes", "origin", "HEAD")
 	if err := os.MkdirAll(filepath.Dir(ref), 0o755); err != nil {
 		t.Fatal(err)
@@ -111,7 +114,7 @@ func TestContractAuditOriginHEADGitFailure(t *testing.T) {
 
 func TestContractAuditRepoRootMustBeTopLevel(t *testing.T) {
 	t.Parallel()
-	dir := contractGitFixture(t, withFile("sub/vibe.yaml", "contract: 1.0.0\n"))
+	dir := contracttest.GitFixture(t, contracttest.Baseline, contracttest.WithFile("sub/vibe.yaml", "contract: 1.0.0\n"))
 	r := runVibeAudit(t, "--repo-root", filepath.Join(dir, "sub"))
 	assertExit(t, r, 1)
 	assertStderr(t, r, "top level of its Git work tree")
@@ -119,8 +122,8 @@ func TestContractAuditRepoRootMustBeTopLevel(t *testing.T) {
 
 func TestAuditDispatchBothKeys(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t,
-		withFile("vibe.yaml", "contract: 1.0.0\nstandard: prod-go\nversion: v1\n"))
+	dir := contracttest.Fixture(t, contracttest.Baseline,
+		contracttest.WithFile("vibe.yaml", "contract: 1.0.0\nstandard: prod-go\nversion: v1\n"))
 	r := runVibeAudit(t, "--repo-root", dir)
 	assertExit(t, r, 1)
 	assertStderr(t, r, "vibe.yaml:", "contract", "standard", "both")
@@ -128,7 +131,7 @@ func TestAuditDispatchBothKeys(t *testing.T) {
 
 func TestAuditDispatchNeitherKey(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t, withFile("vibe.yaml", "platforms: [linux]\n"))
+	dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithFile("vibe.yaml", "platforms: [linux]\n"))
 	r := runVibeAudit(t, "--repo-root", dir)
 	assertExit(t, r, 1)
 	assertStderr(t, r, "vibe.yaml:", "contract", "standard", "neither")
@@ -136,7 +139,7 @@ func TestAuditDispatchNeitherKey(t *testing.T) {
 
 func TestAuditDispatchEmptyFileNamesBothKeys(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t, withFile("vibe.yaml", "# nothing yet\n"))
+	dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithFile("vibe.yaml", "# nothing yet\n"))
 	r := runVibeAudit(t, "--repo-root", dir)
 	assertExit(t, r, 1)
 	assertStderr(t, r, "vibe.yaml:", "contract", "standard", "neither")
@@ -144,7 +147,7 @@ func TestAuditDispatchEmptyFileNamesBothKeys(t *testing.T) {
 
 func TestAuditDispatchNotAMapping(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t, withFile("vibe.yaml", "- contract\n"))
+	dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithFile("vibe.yaml", "- contract\n"))
 	r := runVibeAudit(t, "--repo-root", dir)
 	assertExit(t, r, 1)
 	assertStderr(t, r, "vibe.yaml:", "map")
@@ -157,7 +160,7 @@ func TestAuditV1PointsAtTheMigrationGuide(t *testing.T) {
 	t.Parallel()
 	for _, flags := range [][]string{nil, {"--static"}, {"--json"}, {"--config", "vibe.yaml"}} {
 		t.Run(strings.Join(append([]string{"audit"}, flags...), " "), func(t *testing.T) {
-			dir := contractFixture(t, withFile("vibe.yaml", "standard: prod-go\nversion: v1\n"))
+			dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithFile("vibe.yaml", "standard: prod-go\nversion: v1\n"))
 			args := []string{"--repo-root", dir}
 			if len(flags) == 2 {
 				args = append(args, flags[0], filepath.Join(dir, flags[1]))
@@ -177,13 +180,13 @@ func TestAuditV1PointsAtTheMigrationGuide(t *testing.T) {
 func TestAuditConfigSelectsV2Beside(t *testing.T) {
 	t.Parallel()
 	// --config reads only the file it names, whatever vibe.yaml holds.
-	v2, err := os.ReadFile(filepath.Join(baselineFixture, "vibe.yaml"))
+	v2, err := os.ReadFile(filepath.Join(contracttest.Baseline, "vibe.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := contractFixture(t,
-		withFile("vibe.yaml", "standard: prod-go\nversion: v1\n"),
-		withFile("vibe.v2.yaml", string(v2)))
+	dir := contracttest.Fixture(t, contracttest.Baseline,
+		contracttest.WithFile("vibe.yaml", "standard: prod-go\nversion: v1\n"),
+		contracttest.WithFile("vibe.v2.yaml", string(v2)))
 
 	r := runVibeAudit(t, "--repo-root", dir, "--config", filepath.Join(dir, "vibe.v2.yaml"))
 	assertExit(t, r, 1)
@@ -192,8 +195,8 @@ func TestAuditConfigSelectsV2Beside(t *testing.T) {
 
 func TestAuditConfigErrorsNameTheConfigFile(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t,
-		withFile("vibe.v2.yaml", "contract: 1.0.0\nplatforms: [bsd]\n"))
+	dir := contracttest.Fixture(t, contracttest.Baseline,
+		contracttest.WithFile("vibe.v2.yaml", "contract: 1.0.0\nplatforms: [bsd]\n"))
 	cfg := filepath.Join(dir, "vibe.v2.yaml")
 	r := runVibeAudit(t, "--repo-root", dir, "--config", cfg)
 	assertExit(t, r, 1)
@@ -206,7 +209,7 @@ func TestAuditMissingVibeYAMLSaysRunInit(t *testing.T) {
 	t.Parallel()
 	for _, flags := range [][]string{nil, {"--static"}, {"--json"}} {
 		t.Run(strings.Join(append([]string{"audit"}, flags...), " "), func(t *testing.T) {
-			dir := contractFixture(t, withoutFile("vibe.yaml"))
+			dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithoutFile("vibe.yaml"))
 			r := runVibeAudit(t, append([]string{"--repo-root", dir}, flags...)...)
 			assertExit(t, r, 1)
 			assertStderr(t, r, "vibe.yaml", "run `vibe init`")
@@ -219,7 +222,7 @@ func TestAuditMissingVibeYAMLSaysRunInit(t *testing.T) {
 
 func TestAuditConfigMissingFile(t *testing.T) {
 	t.Parallel()
-	dir := contractFixture(t)
+	dir := contracttest.Fixture(t, contracttest.Baseline)
 	r := runVibeAudit(t, "--repo-root", dir, "--config", filepath.Join(dir, "absent.yaml"))
 	assertExit(t, r, 1)
 	assertStderr(t, r, "absent.yaml")
@@ -239,6 +242,31 @@ func TestAuditExplain(t *testing.T) {
 			r := runVibeAudit(t, append([]string{"--explain", "C-02"}, other...)...)
 			assertExit(t, r, 1)
 			assertStderr(t, r, "--explain", other[0])
+		}
+	})
+	t.Run("several other flags are named in cobra's order", func(t *testing.T) {
+		r := runVibeAudit(t, "--static", "--explain", "C-02", "--repo-root", ".", "--json")
+		assertExit(t, r, 1)
+		assertStderr(t, r, "--explain reads no repository and no configuration; drop --json, --repo-root, --static\n")
+	})
+	t.Run("a flag that no list holds", func(t *testing.T) {
+		// The flag exists only in this command tree, so a refusal proves
+		// that --explain visits the set flags and keeps no list of them.
+		root := newRootCmd("test", contractSeams{openRepo: contracttest.OpenRepo})
+		audit, _, err := root.Find([]string{"audit"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		audit.Flags().Bool("added-in-test", false, "a flag vibe audit does not have")
+		var out, errOut bytes.Buffer
+		root.SetOut(&out)
+		root.SetErr(&errOut)
+		root.SetArgs([]string{"audit", "--explain", "C-02", "--added-in-test"})
+		r := auditResult{code: ExitCode(root.Execute()), stdout: out.String(), stderr: errOut.String()}
+		assertExit(t, r, 1)
+		assertStderr(t, r, "--explain reads no repository and no configuration; drop --added-in-test\n")
+		if r.stdout != "" {
+			t.Errorf("--explain printed the rule although it refused:\n%s", r.stdout)
 		}
 	})
 	t.Run("reads no configuration", func(t *testing.T) {
