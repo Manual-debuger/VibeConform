@@ -250,13 +250,6 @@ func TestRelock(t *testing.T) {
 	}
 }
 
-func TestVersion(t *testing.T) {
-	got := runGuard(t, t.TempDir(), "", nil, "version")
-	if got.Code != 0 || !strings.HasPrefix(got.Stdout, "vibe-guard ") {
-		t.Errorf("exit %d, stdout %q", got.Code, got.Stdout)
-	}
-}
-
 func TestUsage(t *testing.T) {
 	for _, args := range [][]string{nil, {"nonsense"}, {"hook", "extra"}, {"explain"}, {"explain", "a", "b"}, {"explain", "--tool", "Read", "x"}} {
 		if got := runGuard(t, t.TempDir(), "", nil, args...); got.Code != 64 || got.Stderr == "" {

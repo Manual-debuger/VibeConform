@@ -111,8 +111,8 @@ func TestShellWritesToGuardrailFiles(t *testing.T) { //nolint:gocognit // baseli
 		valid  bool
 	}{
 		{"no marker", "", false},
-		{"valid marker", marker(time.Now().Add(time.Hour)), true},
-		{"expired marker", marker(time.Now().Add(-time.Minute)), false},
+		{"valid marker", marker(testNow.Add(time.Hour)), true},
+		{"expired marker", marker(testNow.Add(-time.Minute)), false},
 	}
 	for _, m := range markers {
 		for _, f := range files {

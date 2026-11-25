@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/guard"
@@ -84,15 +85,13 @@ func referenceHook(t *testing.T, bash, path string, r repo, stdin string) result
 // the reference PreToolUse command refuses every corpus case, allow
 // cases included, and says how to install the guard (#105's done-when).
 func TestReferenceHookWithoutVibeGuard(t *testing.T) {
-	if testing.Short() {
-		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
-	}
+	skipSubprocessInShort(t)
 	bash := findBash(t)
 	empty := t.TempDir()
 	for _, c := range contract.GuardCorpus() {
 		t.Run(c.Name, func(t *testing.T) {
 			t.Parallel()
-			r := corpusRepo(t, c)
+			r := corpusRepo(t, c, time.Now())
 			got := referenceHook(t, bash, empty, r, payloadFor(t, c, r.Root))
 			if got.Code != 2 || !strings.HasPrefix(got.Stderr, "vibe-guard is not installed; install it: go install ") {
 				t.Errorf("exit %d, stderr %q; want exit 2 and the install line", got.Code, got.Stderr)
@@ -104,14 +103,13 @@ func TestReferenceHookWithoutVibeGuard(t *testing.T) {
 // TestReferenceHookWithVibeGuard: with only vibe-guard on PATH, the
 // reference command decides the corpus as vibe-guard does.
 func TestReferenceHookWithVibeGuard(t *testing.T) {
-	if testing.Short() {
-		t.Skip("short mode skips this test, which runs the guard corpus through subprocesses; task verify runs it")
-	}
+	skipSubprocessInShort(t)
 	bash := findBash(t)
-	dir := filepath.Dir(guardBin)
-	if filepath.Base(guardBin) != "vibe-guard"+exeSuffix() {
+	bin := guardBin(t)
+	dir := filepath.Dir(bin)
+	if filepath.Base(bin) != "vibe-guard"+exeSuffix() {
 		dir = t.TempDir()
-		data, err := os.ReadFile(guardBin)
+		data, err := os.ReadFile(bin)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -122,7 +120,7 @@ func TestReferenceHookWithVibeGuard(t *testing.T) {
 	for _, c := range contract.GuardCorpus() {
 		t.Run(c.Name, func(t *testing.T) {
 			t.Parallel()
-			r := corpusRepo(t, c)
+			r := corpusRepo(t, c, time.Now())
 			got := referenceHook(t, bash, dir, r, payloadFor(t, c, r.Root))
 			want := 0
 			if c.Want == contract.WantDeny {
