@@ -1,12 +1,9 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -35,7 +32,7 @@ func newUnlockCmd() *cobra.Command {
 			if minutes < 1 || minutes > unlockMaxMinutes {
 				return fmt.Errorf("unlock: --minutes must be from 1 to %d, not %d", unlockMaxMinutes, minutes)
 			}
-			dir, err := gitCommonDir(repoRoot)
+			dir, err := unlockDir(repoRoot)
 			if err != nil {
 				return fmt.Errorf("unlock: %w", err)
 			}
@@ -58,20 +55,18 @@ func newUnlockCmd() *cobra.Command {
 	return cmd
 }
 
-// gitCommonDir is git rev-parse --git-common-dir of repoRoot, as an
-// absolute path.
-func gitCommonDir(repoRoot string) (string, error) {
-	c := exec.Command("git", "rev-parse", "--git-common-dir")
-	c.Dir = repoRoot
-	var stderr bytes.Buffer
-	c.Stderr = &stderr
-	out, err := c.Output()
+// unlockDir is the common Git directory of repoRoot, where the unlock
+// marker goes. It is found as vibe-guard finds it (spec 0069): by
+// reading .git in repoRoot or the nearest directory above it, never by
+// running git, so GIT_DIR and GIT_COMMON_DIR are not read.
+func unlockDir(repoRoot string) (string, error) {
+	root, err := filepath.Abs(repoRoot)
 	if err != nil {
-		return "", fmt.Errorf("git rev-parse --git-common-dir in %s: %w: %s", repoRoot, err, strings.TrimSpace(stderr.String()))
+		return "", err
 	}
-	dir := strings.TrimSpace(string(out))
-	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(repoRoot, dir)
+	if dir := guardrule.FindRepo(root, root).CommonDir; dir != "" {
+		return dir, nil
 	}
-	return filepath.Abs(dir)
+	return "", fmt.Errorf("no Git directory found for %s by reading .git there and in the directories above, as vibe-guard does; "+
+		"GIT_DIR and GIT_COMMON_DIR are not read, so a work tree without .git cannot be unlocked", root)
 }

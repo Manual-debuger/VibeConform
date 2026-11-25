@@ -156,3 +156,98 @@ func TestUnlockOutsideGit(t *testing.T) {
 		t.Error("a marker was written outside Git")
 	}
 }
+
+// assertNoMarker fails when gitDir holds an unlock marker.
+func assertNoMarker(t *testing.T, gitDir string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(gitDir, "vibe-unlock")); err == nil {
+		t.Errorf("a marker was written in %s", gitDir)
+	}
+}
+
+// TestUnlockSeparateGitDir: in a repository made with
+// --separate-git-dir, the marker goes into the separate Git directory,
+// which is where vibe-guard reads it (spec 0069).
+func TestUnlockSeparateGitDir(t *testing.T) {
+	t.Parallel()
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitDir := filepath.Join(t.TempDir(), "repo.git")
+	contracttest.Git(t, t.TempDir(), "init", "-q", "--separate-git-dir", gitDir, wt)
+	before := time.Now()
+	if r := runVibeUnlock(t, "--repo-root", wt); r.err != nil {
+		t.Fatalf("vibe unlock: %v\n%s", r.err, r.stderr)
+	}
+	assertExpiryIn(t, readMarker(t, gitDir), before, 15*time.Minute)
+}
+
+// TestUnlockProjectBelowGitTop: a --repo-root below the Git top is
+// walked up to the Git top, and the marker goes into its Git directory.
+func TestUnlockProjectBelowGitTop(t *testing.T) {
+	t.Parallel()
+	top := gitInit(t)
+	proj := filepath.Join(top, "proj")
+	if err := os.MkdirAll(proj, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	before := time.Now()
+	if r := runVibeUnlock(t, "--repo-root", proj); r.err != nil {
+		t.Fatalf("vibe unlock: %v\n%s", r.err, r.stderr)
+	}
+	assertExpiryIn(t, readMarker(t, filepath.Join(top, ".git")), before, 15*time.Minute)
+}
+
+// TestUnlockIgnoresGitEnvironment: with GIT_DIR or GIT_COMMON_DIR set to
+// another repository, vibe unlock still writes the marker in
+// --repo-root's own common Git directory, where vibe-guard reads it, and
+// nothing in the other repository (spec 0069, bug 3). Not parallel: it
+// sets the environment.
+func TestUnlockIgnoresGitEnvironment(t *testing.T) {
+	for _, name := range []string{"GIT_DIR", "GIT_COMMON_DIR"} {
+		t.Run(name, func(t *testing.T) {
+			dir, other := gitInit(t), gitInit(t)
+			t.Setenv(name, filepath.Join(other, ".git"))
+			before := time.Now()
+			if r := runVibeUnlock(t, "--repo-root", dir); r.err != nil {
+				t.Fatalf("vibe unlock: %v\n%s", r.err, r.stderr)
+			}
+			assertExpiryIn(t, readMarker(t, filepath.Join(dir, ".git")), before, 15*time.Minute)
+			assertNoMarker(t, filepath.Join(other, ".git"))
+		})
+	}
+}
+
+// TestUnlockWorkTreeWithoutDotGit: a work tree used with a bare Git
+// directory through GIT_DIR has no .git, so vibe-guard finds no Git
+// directory there. vibe unlock fails, writes nothing and says that
+// GIT_DIR is not read. Not parallel: it sets the environment.
+func TestUnlockWorkTreeWithoutDotGit(t *testing.T) {
+	bare := filepath.Join(t.TempDir(), "dotfiles.git")
+	contracttest.Git(t, t.TempDir(), "init", "-q", "--bare", bare)
+	work := t.TempDir()
+	t.Setenv("GIT_DIR", bare)
+	t.Setenv("GIT_WORK_TREE", work)
+	r := runVibeUnlock(t, "--repo-root", work)
+	if r.err == nil {
+		t.Fatal("vibe unlock in a work tree without .git succeeded")
+	}
+	for _, want := range []string{work, ".git", "vibe-guard", "GIT_DIR", "GIT_COMMON_DIR"} {
+		if !strings.Contains(r.err.Error(), want) {
+			t.Errorf("the message does not say %q: %v", want, r.err)
+		}
+	}
+	assertNoMarker(t, bare)
+	assertNoMarker(t, work)
+}
+
+// TestUnlockRunsNoGit: vibe unlock finds the common Git directory by
+// reading files, as vibe-guard does, so it works without git on PATH.
+// Not parallel: it sets the environment.
+func TestUnlockRunsNoGit(t *testing.T) {
+	dir := gitInit(t)
+	t.Setenv("PATH", t.TempDir())
+	before := time.Now()
+	if r := runVibeUnlock(t, "--repo-root", dir); r.err != nil {
+		t.Fatalf("vibe unlock without git on PATH: %v\n%s", r.err, r.stderr)
+	}
+	assertExpiryIn(t, readMarker(t, filepath.Join(dir, ".git")), before, 15*time.Minute)
+}

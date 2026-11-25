@@ -86,9 +86,9 @@ func sessionRepo(env Env, cwd string) Repo {
 		if abs, err := filepath.Abs(d); err == nil {
 			d = abs
 		}
-		return walkToGitTop(d, d)
+		return gr.FindRepo(d, d)
 	}
-	return walkToGitTop(cmp.Or(cwd, env.Dir), "")
+	return gr.FindRepo(cmp.Or(cwd, env.Dir), "")
 }
 
 type payload struct {
