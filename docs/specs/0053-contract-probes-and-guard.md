@@ -939,6 +939,10 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
     for example in a work tree used with a bare Git directory through
     `GIT_DIR`, it is an error that names the directory and says that
     `GIT_DIR` and `GIT_COMMON_DIR` are not read, and nothing is written.
+    When a `.git` was found but leads to no common Git directory (a
+    `.git` file without a `gitdir:` line, an empty `commondir`), the
+    message also names that `.git`, in the Git top, and says it could
+    not be read.
 - The marker lives in the common Git directory, so every linked
   worktree of the repository shares one unlock.
 - `vibe unlock` is meant for a person's own terminal. A `Bash` or

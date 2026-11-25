@@ -1647,7 +1647,10 @@ unlocked until 2026-10-17T14:05:00Z (/path/to/repo/.git/vibe-unlock)
   and says
   `no Git directory found for <dir> by reading .git there and in the
   directories above, as vibe-guard does; GIT_DIR and GIT_COMMON_DIR are
-  not read, …`.
+  not read, …`. When a `.git` is found but cannot be read (a `.git` file
+  without a `gitdir:` line, or an empty `commondir`), the message names
+  that `.git` instead: `no Git directory found for <dir>: <top>/.git
+  could not be read as vibe-guard reads it …`.
 - When the project root is a folder below the Git top (the directory
   that holds `.git`), the guard protects the guardrail settings of both:
   the project's `.claude/settings.json` and `.claude/hooks/`, and the Git

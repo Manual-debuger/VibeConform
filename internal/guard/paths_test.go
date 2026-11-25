@@ -33,6 +33,18 @@ func assertExplainRefused(t *testing.T, r repo, tool, p, rule string) {
 	}
 }
 
+// assertExplainAllowed runs explain for an edit tool and checks that it
+// allows the call.
+func assertExplainAllowed(t *testing.T, r repo, tool, p string) {
+	t.Helper()
+	got := r.explain(t, "--tool", tool, p)
+	if got.Code != 0 || !hasLine(got.Stdout, "decision: allow") {
+		t.Errorf("explain --tool %s %s: exit %d, output\n%s\nwant exit 0 and decision allow", tool, p, got.Code, got.Stdout)
+	}
+}
+
+var editTools = []string{"Write", "Edit", "MultiEdit"}
+
 // TestGuardrailSettingsThroughDotDot is a regression test (spec 0069,
 // bug 1): an edit path that leaves the project with ".." and comes back
 // was allowed, so the agent could change its own hooks without an
@@ -56,8 +68,12 @@ func TestGuardrailSettingsThroughDotDot(t *testing.T) {
 	}
 
 	writeFile(t, filepath.Join(r.CommonDir, "vibe-unlock"), marker(time.Now().Add(10*time.Minute)))
-	for _, p := range paths {
-		assertAllowed(t, r.hook(t, editPayload("Write", p, r.Root)))
+	for _, tool := range editTools {
+		for _, p := range paths {
+			assertAllowed(t, r.hook(t, editPayload(tool, p, r.Root)))
+			assertAllowed(t, r.hook(t, editPayload(tool, p, "")))
+			assertExplainAllowed(t, r, tool, p)
+		}
 	}
 }
 
@@ -69,9 +85,11 @@ func TestBuiltInPathRulesThroughDotDot(t *testing.T) {
 	env, envAbs := dotDot(r.Root, ".env")
 	for _, p := range []string{policy, policyAbs} {
 		assertRefused(t, r.hook(t, writePayload(p)), "guard-policy-file")
+		assertExplainRefused(t, r, "Write", p, "guard-policy-file")
 	}
 	for _, p := range []string{env, envAbs} {
 		assertRefused(t, r.hook(t, writePayload(p)), "secret-file")
+		assertExplainRefused(t, r, "Write", p, "secret-file")
 	}
 }
 
@@ -81,12 +99,13 @@ func TestDotDotToASiblingProject(t *testing.T) {
 	r := newRepo(t, enforcePolicy)
 	for _, p := range []string{"../other/.claude/settings.json", filepath.ToSlash(r.Root) + "/../other/.claude/settings.json"} {
 		assertAllowed(t, r.hook(t, writePayload(p)))
+		assertExplainAllowed(t, r, "Write", p)
 	}
 }
 
 // TestProjectBelowGitTopThroughDotDot: from top/proj, a path that leaves
 // the Git top and comes back to its settings is refused (spec 0068's
-// protection holds for every spelling).
+// protection holds for every spelling), and a valid marker allows it.
 func TestProjectBelowGitTopThroughDotDot(t *testing.T) {
 	top, proj := nestedProject(t, "", enforcePolicy)
 	p := "../../" + filepath.Base(top.Root) + "/.claude/settings.json"
@@ -95,6 +114,21 @@ func TestProjectBelowGitTopThroughDotDot(t *testing.T) {
 	}
 	assertExplainRefused(t, proj, "Write", p, "guardrail-settings")
 	assertRefused(t, proj.hook(t, editPayload("Write", "../.claude/settings.json", proj.Root)), "guardrail-settings")
+
+	abs := filepath.ToSlash(proj.Root) + "/../../" + filepath.Base(top.Root) + "/.claude/settings.json"
+	for _, tool := range editTools {
+		assertRefused(t, proj.hook(t, editPayload(tool, abs, proj.Root)), "guardrail-settings")
+		assertRefused(t, proj.hook(t, editPayload(tool, abs, "")), "guardrail-settings")
+		assertExplainRefused(t, proj, tool, abs, "guardrail-settings")
+	}
+
+	writeFile(t, filepath.Join(top.CommonDir, "vibe-unlock"), marker(time.Now().Add(10*time.Minute)))
+	for _, tool := range editTools {
+		for _, q := range []string{p, abs, "../.claude/settings.json"} {
+			assertAllowed(t, proj.hook(t, editPayload(tool, q, proj.Root)))
+			assertExplainAllowed(t, proj, tool, q)
+		}
+	}
 }
 
 // TestRepositoryPathRulesThroughDotDot: a repository path rule and an
@@ -106,13 +140,17 @@ func TestRepositoryPathRulesThroughDotDot(t *testing.T) {
 	secrets, secretsAbs := dotDot(r.Root, "secrets/a")
 	for _, p := range []string{"secrets/a", secrets, secretsAbs} {
 		assertRefused(t, r.hook(t, writePayload(p)), "no-secrets")
+		assertExplainRefused(t, r, "Write", p, "no-secrets")
 	}
 	assertAllowed(t, r.hook(t, writePayload("../other/secrets/a")))
+	assertExplainAllowed(t, r, "Write", "../other/secrets/a")
 	env, envAbs := dotDot(r.Root, ".env")
 	for _, p := range []string{".env", env, envAbs} {
 		assertAllowed(t, r.hook(t, writePayload(p)))
+		assertExplainAllowed(t, r, "Write", p)
 	}
 	assertRefused(t, r.hook(t, writePayload("../other/.env")), "secret-file")
+	assertExplainRefused(t, r, "Write", "../other/.env", "secret-file")
 }
 
 // TestEditPathsResolveAgainstCwd is a regression test (spec 0069, bug
@@ -126,6 +164,14 @@ func TestEditPathsResolveAgainstCwd(t *testing.T) {
 		assertAllowed(t, r.hook(t, editPayload(tool, ".claude/settings.json", sub)))
 	}
 	assertRefused(t, r.hook(t, editPayload("Write", "../.claude/hooks/policy.json", sub)), "guard-policy-file")
+
+	// explain has no cwd, so it reads the same paths spelled absolute.
+	subSlash := filepath.ToSlash(sub)
+	for _, tool := range editTools {
+		assertExplainRefused(t, r, tool, subSlash+"/../.claude/settings.json", "guardrail-settings")
+		assertExplainAllowed(t, r, tool, subSlash+"/.claude/settings.json")
+	}
+	assertExplainRefused(t, r, "Write", subSlash+"/../.claude/hooks/policy.json", "guard-policy-file")
 }
 
 // TestEditPathInGitBashForm is a regression test (spec 0069, bug 2): on

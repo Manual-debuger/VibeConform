@@ -243,25 +243,24 @@ func (g *Guard) checkPath(rules []pathRule, p, shown string, c *gr.Command, d *D
 	return nil
 }
 
-// normalizePath is the one reading of a path the guard checks, from an
-// edit tool or a command that writes it (spec 0058, "Path resolution";
-// spec 0069): backslashes become slashes; on a root with a drive letter,
-// Git Bash's /d/… is D:/…; a relative path is joined to dir, the
-// payload's cwd, else to root; and the result is cleaned. The rules then
-// see only absolute, clean, slash-separated paths.
-func normalizePath(root, dir, p string) string {
+// normalize is the one reading of a path the guard checks, from an edit
+// tool or a command that writes it (spec 0058, "Path resolution"; spec
+// 0069): backslashes become slashes; on a project root with a drive
+// letter, Git Bash's /d/… is D:/…; a relative path is joined to g.Dir,
+// the payload's cwd, else to the project root; and the result is
+// cleaned. The rules then see only absolute, clean, slash-separated
+// paths.
+func (g *Guard) normalize(p string) string {
+	root := g.Repo.Root
 	p = strings.ReplaceAll(p, `\`, "/")
 	if len(root) >= 2 && root[1] == ':' && isGitBashDrive(p) {
 		p = strings.ToUpper(p[1:2]) + ":" + p[2:]
 	}
 	if !gr.IsAbs(p) {
-		p = filepath.Join(cmp.Or(dir, root), filepath.FromSlash(p))
+		p = filepath.Join(cmp.Or(g.Dir, root), filepath.FromSlash(p))
 	}
 	return filepath.ToSlash(filepath.Clean(filepath.FromSlash(p)))
 }
-
-// normalize reads p as normalizePath does, in g's repository.
-func (g *Guard) normalize(p string) string { return normalizePath(g.Repo.Root, g.Dir, p) }
 
 // isGitBashDrive reports whether p starts with a Git Bash drive, such as
 // /d or /d/….

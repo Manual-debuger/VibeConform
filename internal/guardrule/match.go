@@ -240,19 +240,22 @@ func (r Rule) MatchesPath(p, root string) bool {
 // (no "." or ".." elements where they can be removed).
 func RelPath(root, p string) string {
 	p = path.Clean(strings.ReplaceAll(p, `\`, "/"))
-	root = strings.TrimRight(strings.ReplaceAll(root, `\`, "/"), "/")
-	if root == "" {
+	root = strings.ReplaceAll(root, `\`, "/")
+	if strings.TrimRight(root, "/") == "" {
 		return p
 	}
-	root = strings.TrimRight(path.Clean(root), "/")
+	// path.Clean leaves a trailing slash only on "/", which becomes "" so
+	// that root+"/" is the prefix of every absolute path.
+	root = strings.TrimSuffix(path.Clean(root), "/")
+	fold := hasDrive(root)
 	full := p
 	if !IsAbs(p) {
 		full = path.Clean(root + "/" + p)
 	}
-	if rel, ok := cutPrefixFold(full, root+"/", hasDrive(root)); ok {
+	if rel, ok := cutPrefixFold(full, root+"/", fold); ok {
 		return rel
 	}
-	if _, ok := cutPrefixFold(full+"/", root+"/", hasDrive(root)); ok && !IsAbs(p) {
+	if !IsAbs(p) && (full == root || fold && strings.EqualFold(full, root)) {
 		return "." // a relative p that names root itself, as path.Clean gives it
 	}
 	return p

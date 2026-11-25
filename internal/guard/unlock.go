@@ -35,7 +35,7 @@ var guardrailSettingsRe = regexp.MustCompile(`(?i)^\.claude/+(settings\.json$|ho
 // .claude/settings.json or a path under its .claude/hooks/ (spec 0051
 // names the repository's files) or, when the project is below the Git
 // top, the Git top's: a session opened at the top runs those (spec
-// 0068). p is absolute and clean (normalizePath), and is taken relative
+// 0068). p is absolute and clean (normalize), and is taken relative
 // to the project root, as an exception glob is. The same names
 // elsewhere, such as the person's own ~/.claude/settings.json or a
 // sibling project's, are not this session's guardrails.
@@ -52,7 +52,7 @@ func (g *Guard) matchGuardrailSettings(p string) bool {
 
 // isMarker reports whether p is the unlock marker: a file named
 // vibe-unlock inside a .git directory, or in the repository's Git or
-// common Git directory. p is absolute and clean (normalizePath). Names
+// common Git directory. p is absolute and clean (normalize). Names
 // are compared without case, since Windows and macOS file systems do.
 func (g *Guard) isMarker(p string) bool {
 	parts := strings.Split(p, "/")

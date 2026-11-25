@@ -251,3 +251,52 @@ func TestUnlockRunsNoGit(t *testing.T) {
 	}
 	assertExpiryIn(t, readMarker(t, filepath.Join(dir, ".git")), before, 15*time.Minute)
 }
+
+// TestUnlockUnreadableDotGit: a .git that exists but leads to no common
+// Git directory (a .git file without a "gitdir:" line, or a Git
+// directory whose commondir file is empty) is an error that names that
+// .git, in the Git top above --repo-root, and says it could not be read.
+// It does not say there is no .git. Nothing is written.
+func TestUnlockUnreadableDotGit(t *testing.T) {
+	t.Parallel()
+	cases := map[string]func(t *testing.T, top string) (gitDir string){
+		"gitdir file": func(t *testing.T, top string) string {
+			writeTestFile(t, filepath.Join(top, ".git"), "not a gitdir line\n")
+			return ""
+		},
+		"empty commondir": func(t *testing.T, top string) string {
+			gitDir := filepath.Join(t.TempDir(), "wt-git")
+			writeTestFile(t, filepath.Join(gitDir, "commondir"), "\n")
+			writeTestFile(t, filepath.Join(top, ".git"), "gitdir: "+gitDir+"\n")
+			return gitDir
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			top := t.TempDir()
+			gitDir := setup(t, top)
+			proj := filepath.Join(top, "proj")
+			if err := os.MkdirAll(proj, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			r := runVibeUnlock(t, "--repo-root", proj)
+			if r.err == nil {
+				t.Fatal("vibe unlock with an unreadable .git succeeded")
+			}
+			for _, want := range []string{filepath.Join(top, ".git"), "could not be read", "GIT_DIR", "GIT_COMMON_DIR"} {
+				if !strings.Contains(r.err.Error(), want) {
+					t.Errorf("the message does not say %q: %v", want, r.err)
+				}
+			}
+			if strings.Contains(r.err.Error(), "without .git") {
+				t.Errorf("the message says there is no .git: %v", r.err)
+			}
+			assertNoMarker(t, top)
+			assertNoMarker(t, proj)
+			if gitDir != "" {
+				assertNoMarker(t, gitDir)
+			}
+		})
+	}
+}
