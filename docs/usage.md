@@ -1482,8 +1482,15 @@ reference commands.
 - `vibe-guard relock` deletes the unlock marker; the Stop hook runs it.
 - `vibe-guard version`.
 
-**What it reads.** The repository root is `CLAUDE_PROJECT_DIR`, else the
-payload's `cwd`, walked up to `.git`. Bash commands are parsed as bash,
+**What it reads.** The guard reads the policy, exception globs and
+relative paths against the project root. The project root is
+`CLAUDE_PROJECT_DIR` as given, also when it is a folder below the
+directory that holds `.git` (spec 0068). Without `CLAUDE_PROJECT_DIR`,
+it is the payload's `cwd`, else the working directory, walked up to
+`.git`. The unlock marker and `vibe-guard.log` are in the common Git
+directory, found by walking up from the project root to `.git`. To
+`explain` a call for a project in a subfolder, set
+`CLAUDE_PROJECT_DIR` to that folder. Bash commands are parsed as bash,
 PowerShell commands by a small tokenizer (aliases and parameter prefixes
 included). Wrappers (`sudo`, `env`, `xargs`, `find -exec`, `timeout`, …)
 are stripped and `bash -c`, `eval` and `pwsh -c` strings parsed again,
@@ -1623,6 +1630,14 @@ unlocked until 2026-10-17T14:05:00Z (/path/to/repo/.git/vibe-unlock)
   It writes the expiry, RFC 3339 UTC, into `vibe-unlock` in the common
   Git directory, so every linked worktree shares it. Running it again
   replaces the expiry.
+- The marker is per Git repository, not per project. One unlock covers
+  every project in the Git repository, and you can run it from any
+  folder in it.
+- When the project root is a folder below the Git top (the directory
+  that holds `.git`), the guard protects the guardrail settings of both:
+  the project's `.claude/settings.json` and `.claude/hooks/`, and the Git
+  top's. One unlock lifts both. A sibling project's settings are
+  ordinary files.
 - The agent's next Stop locks again (`vibe-guard relock` in the Stop
   hook). To lock earlier, run `vibe-guard relock` yourself.
 - An agent's `Bash` or `PowerShell` call of `vibe unlock` is refused.

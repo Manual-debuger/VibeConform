@@ -1,0 +1,86 @@
+== baseline matrix
+no findings
+
+== two jobs
+no findings
+
+== label lists
+no findings
+
+== a runner group with labels
+no findings
+
+== matrix include adds Windows
+no findings
+
+== matrix of includes only
+no findings
+
+== matrix exclude removes one combination only
+no findings
+
+== matrix exclude removes Windows
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no Windows runner (called in .github/workflows/ci.yml job v)
+fix: run `task verify` on Windows too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}
+
+== matrix include merged into a combination
+no findings
+
+== an expression that is not one matrix value
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no Linux or Windows runner (called in .github/workflows/ci.yml job v); runners of unknown platform: ${{ matrix.runner || matrix.os }}
+fix: run `task verify` on Linux and Windows too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}
+
+== a matrix from an expression
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no Linux or Windows runner (called in .github/workflows/ci.yml job v); runners of unknown platform: ${{ matrix.os }}
+fix: run `task verify` on Linux and Windows too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}
+
+== runs-on from an input
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no Windows runner (called in .github/workflows/ci.yml job l, .github/workflows/ci.yml job w); runners of unknown platform: ${{ inputs.os }}
+fix: run `task verify` on Windows too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}
+
+== Linux only
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no Windows runner (called in .github/workflows/ci.yml job l)
+fix: run `task verify` on Windows too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}
+
+== macOS and Windows
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no Linux runner (called in .github/workflows/ci.yml job m, .github/workflows/ci.yml job w)
+fix: run `task verify` on Linux too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}
+
+== list verify, one command on Linux only
+file: .github/workflows/ci.yml
+message: the verify command `task lint` runs on no Windows runner (called in .github/workflows/ci.yml job lint)
+fix: run `task lint` on Windows too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}
+
+== in a local reusable workflow
+no findings
+
+== verify called nowhere
+file: .github/workflows/
+message: no workflow step calls the verify command `task verify`, so it runs on no runner
+fix: call `task verify` in a job that runs on ubuntu-latest and windows-latest (a matrix over os)
+
+== not applicable without windows
+file: vibe.yaml
+message: not applicable: platforms does not include windows
+fix: 
+
+== verify missing points at V-04
+file: vibe.yaml
+message: this rule needs the verify entrypoint, and V-04 finds it unusable: entrypoints.verify is not declared
+fix: fix V-04 first: declare entrypoints.verify as the command that runs it, such as task verify
+
+== a workflow that does not parse
+file: .github/workflows/broken.yml
+message: does not parse: line 3: job x must be a map
+fix: fix the syntax so that the file parses
+
+== another CI provider
+file: .circleci/config.yml
+message: contract 1.2.0 reads GitHub Actions and GitLab CI only, and this repository's CI is .circleci/config.yml
+fix: run CI in GitHub Actions under .github/workflows/ or in GitLab CI (.gitlab-ci.yml), or wait for a vibe that reads this provider

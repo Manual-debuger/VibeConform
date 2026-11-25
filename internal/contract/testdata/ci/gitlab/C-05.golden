@@ -1,0 +1,85 @@
+== baseline
+no findings
+
+== tags ignore case and match inside a tag
+no findings
+
+== untagged with an image is Linux
+no findings
+
+== untagged with a default image is Linux
+no findings
+
+== untagged without an image is unknown
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no Linux runner (called in .gitlab-ci.yml job a, .gitlab-ci.yml job b); runners of unknown platform: job a: no tags and no image
+fix: run `task verify` on Linux too: in a job whose tags name a runner of that platform, such as tags: [windows] (saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags
+
+== a tag that names no platform is unknown
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no Linux runner (called in .gitlab-ci.yml job a, .gitlab-ci.yml job b); runners of unknown platform: job a: tags [docker]
+fix: run `task verify` on Linux too: in a job whose tags name a runner of that platform, such as tags: [windows] (saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags
+
+== a tag beside a platform tag
+no findings
+
+== Linux only
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no Windows runner (called in .gitlab-ci.yml job a)
+fix: run `task verify` on Windows too: in a job whose tags name a runner of that platform, such as tags: [windows] (saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags
+
+== macOS and Windows
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no Linux runner (called in .gitlab-ci.yml job a, .gitlab-ci.yml job b)
+fix: run `task verify` on Linux too: in a job whose tags name a runner of that platform, such as tags: [windows] (saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags
+
+== a matrix over tags
+no findings
+
+== a matrix with $VAR
+no findings
+
+== a matrix of several entries
+no findings
+
+== a matrix that leaves Windows out
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no Windows runner (called in .gitlab-ci.yml job verify)
+fix: run `task verify` on Windows too: in a job whose tags name a runner of that platform, such as tags: [windows] (saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags
+
+== a tag variable the matrix does not set is unknown
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no Linux or Windows runner (called in .gitlab-ci.yml job verify); runners of unknown platform: job verify: tags [$RUNNER]; job verify: tags [$RUNNER]
+fix: run `task verify` on Linux and Windows too: in a job whose tags name a runner of that platform, such as tags: [windows] (saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags
+
+== after_script does not count
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no Windows runner (called in .gitlab-ci.yml job a)
+fix: run `task verify` on Windows too: in a job whose tags name a runner of that platform, such as tags: [windows] (saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags
+
+== tags from default:
+no findings
+
+== list verify, one command on Linux only
+file: .gitlab-ci.yml
+message: the verify command `task lint` runs on no Windows runner (called in .gitlab-ci.yml job lint)
+fix: run `task lint` on Windows too: in a job whose tags name a runner of that platform, such as tags: [windows] (saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags
+
+== verify called nowhere
+file: .gitlab-ci.yml
+message: no job calls the verify command `task verify`, so it runs on no runner
+fix: call `task verify` in a job on a Linux runner (tags: [linux], or no tags and an image:) and in one with tags: [windows]
+
+== not applicable without windows
+file: vibe.yaml
+message: not applicable: platforms does not include windows
+fix: 
+
+== a .gitlab-ci.yml that does not parse
+file: .gitlab-ci.yml
+message: does not parse: yaml: line 1: did not find expected node content
+fix: fix the syntax so that the file parses
+
+file: .gitlab-ci.yml
+message: no job calls the verify command `task verify`, so it runs on no runner
+fix: call `task verify` in a job on a Linux runner (tags: [linux], or no tags and an image:) and in one with tags: [windows]

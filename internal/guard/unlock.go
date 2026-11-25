@@ -31,14 +31,26 @@ func (g *Guard) unlocked() bool {
 
 var guardrailSettingsRe = regexp.MustCompile(`(?i)^\.claude/+(settings\.json$|hooks/+[^/])`)
 
-// matchGuardrailSettings reports whether p is the repository's
+// matchGuardrailSettings reports whether p is the project's
 // .claude/settings.json or a path under its .claude/hooks/ (spec 0051
-// names the repository's files). p is taken relative to the repository
-// root, as an exception glob is: a relative path, or an absolute one
-// inside the root. The same names elsewhere, such as the person's own
-// ~/.claude/settings.json, are not the repository's guardrails.
+// names the repository's files) or, when the project is below the Git
+// top, the Git top's: a session opened at the top runs those (spec
+// 0068). p is taken relative to the project root, as an exception glob
+// is: a relative path, or an absolute one inside the root. The same
+// names elsewhere, such as the person's own ~/.claude/settings.json or a
+// sibling project's, are not this session's guardrails.
 func (g *Guard) matchGuardrailSettings(p string) bool {
-	return guardrailSettingsRe.MatchString(gr.RelPath(g.Repo.Root, p))
+	if guardrailSettingsRe.MatchString(gr.RelPath(g.Repo.Root, p)) {
+		return true
+	}
+	top := g.Repo.GitTop
+	if top == "" || filepath.Clean(top) == filepath.Clean(g.Repo.Root) {
+		return false
+	}
+	if !gr.IsAbs(p) {
+		p = g.Repo.Root + "/" + p
+	}
+	return guardrailSettingsRe.MatchString(gr.RelPath(top, p))
 }
 
 // isMarker reports whether p is the unlock marker: a file named

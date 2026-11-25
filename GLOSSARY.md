@@ -138,6 +138,20 @@ guardrail settings. An agent cannot grant it to itself. The person runs
 `vibe-guard relock`, ends it.
 _Avoid_: override, bypass, escape
 
+**Project root**:
+The directory an agent session runs in: `CLAUDE_PROJECT_DIR` when it is
+set. Otherwise it is the Git top found from the working directory, or
+that directory when no `.git` is above it. The guard reads the policy,
+relative paths and the agent guardrail settings against it. A nested
+project's root is below the Git top.
+_Avoid_: repository root, sub-project
+
+**Git top**:
+The directory that holds `.git`, found by walking up from the project
+root. It is the project root unless the project is below it. The unlock
+marker and `vibe-guard.log` are in its common Git directory.
+_Avoid_: repository root, Git root
+
 ## CI
 
 **CI provider**:

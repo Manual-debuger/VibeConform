@@ -1,0 +1,172 @@
+== baseline
+no findings
+
+== vibe by path is not a call of vibe
+no findings
+
+== vibe --version in a job that calls no entrypoint
+no findings
+
+== vibe --version in a job that calls verify
+file: .github/workflows/ci.yml
+message: line 12: job v, step 2: `vibe --version` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe --version in a job that calls one command of a list verify
+file: .github/workflows/ci.yml
+message: line 17: job test, step 2: `vibe --version` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe --version in a job that calls fmt-check
+file: .github/workflows/ci.yml
+message: line 17: job fmt, step 2: `vibe --version` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe --version with more words is a call
+file: .github/workflows/ci.yml
+message: line 17: job install, step 2: `vibe --version --json` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe version is a call
+file: .github/workflows/ci.yml
+message: line 17: job install, step 2: `vibe version` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe --version in an entrypoint
+file: vibe.yaml
+message: entrypoints.setup: `vibe --version` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe --version in a hook
+file: .husky/pre-commit
+message: pre-commit script: `vibe --version` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a verify entrypoint that calls vibe
+file: vibe.yaml
+message: entrypoints.verify: `vibe verify` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a setup entrypoint that calls vibe
+file: vibe.yaml
+message: entrypoints.setup: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a CI step outside the audit job
+file: .github/workflows/ci.yml
+message: line 17: job sync, step 2: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe audit in a job that also calls verify
+file: .github/workflows/audit.yml
+message: line 12: job audit, step 2: `vibe audit` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== vibe audit in a push-only workflow
+file: .github/workflows/audit.yml
+message: line 9: job audit, step 2: `vibe audit` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== other vibe commands in the audit job
+no findings
+
+== the audit job in a local reusable workflow
+no findings
+
+== a lefthook command
+file: lefthook.yml
+message: line 4: pre-commit.commands.sync: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a lefthook job in a group
+file: .lefthook.yml
+message: line 5: pre-push.jobs[0].group.jobs[0]: `vibe audit` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a lefthook file it extends
+file: hooks/extra.yml
+message: line 4: pre-push.commands.s: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== an untracked lefthook file it extends
+no findings
+
+== a tracked lefthook-local.yml it extends is personal
+no findings
+
+== a ./ path it extends
+file: hooks/extra.yml
+message: line 4: pre-push.commands.s: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== only the first lefthook file is read
+no findings
+
+== an extending file replaces a command of the same name
+no findings
+
+== a lefthook script
+file: .lefthook/pre-commit/sync.sh
+message: pre-commit script: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a lefthook hook other than pre-commit and pre-push
+file: lefthook.yml
+message: line 4: post-checkout.commands.s: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a pre-commit entry with its args
+file: .pre-commit-config.yaml
+message: line 4: hook sync: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a husky hook other than pre-commit and pre-push
+file: .husky/commit-msg
+message: commit-msg script: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a Claude Code settings file the A rules do not accept
+file: .claude/settings.json
+message: does not parse: hooks.Stop[0].matcher must be a string
+fix: fix the syntax so that the file parses
+
+== lefthook commands without vibe
+no findings
+
+== a pre-commit local hook
+file: .pre-commit-config.yaml
+message: line 4: hook sync: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a husky script
+file: .husky/pre-push
+message: pre-push script: `vibe audit` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a Claude Code hook
+file: .claude/settings.json
+message: hooks.Stop: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
+
+== a Claude Code settings file that does not parse
+file: .claude/settings.json
+message: does not parse: unexpected end of JSON input
+fix: fix the syntax so that the file parses
+
+== a lefthook file that does not parse
+file: lefthook.yml
+message: does not parse: yaml: line 1: did not find expected node content
+fix: fix the syntax so that the file parses
+
+== a workflow that does not parse
+file: .github/workflows/broken.yml
+message: does not parse: yaml: line 1: did not find expected node content
+fix: fix the syntax so that the file parses
+
+== no CI: entrypoints and hooks still read
+no findings
+
+== no CI, a hook calls vibe
+file: .husky/pre-commit
+message: pre-commit script: `vibe sync` calls vibe, so it does not work without vibe
+fix: call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe
