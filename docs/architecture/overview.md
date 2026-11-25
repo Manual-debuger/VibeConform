@@ -171,7 +171,8 @@ against, and the rule IDs both share:
 
 ```text
 cmd/vibe     → internal/cli → internal/contract ─┐
-                           └─────────────────────┤ (vibe unlock: the marker)
+                           └─────────────────────┤ (vibe unlock: the marker
+                                                 │  and where it goes)
 cmd/vibe-guard ──────────────→ internal/guard ───┤
                                                  ↓
                                         internal/guardrule
@@ -185,9 +186,12 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   on: the contract guard rule IDs and the guard-internal ones,
   `policy.json` version 2 parsing, exception matching, the policy file
   paths, the unlock marker's name and format (`vibe unlock` writes it,
-  `vibe-guard` reads it, the audit plants it), and the decomposition of a
-  Bash or PowerShell command into simple commands. It imports no
-  `internal/` package.
+  `vibe-guard` reads it, the audit plants it), the finder of the Git top
+  and the common Git directory that holds the marker (`FindRepo`, which
+  reads `.git` files and runs no `git`; `vibe-guard` and `vibe unlock`
+  both call it, spec 0069), and the decomposition of a Bash or
+  PowerShell command into simple commands. It imports no `internal/`
+  package.
 - **`internal/guard`** is `vibe-guard`'s logic: the baseline rules, the
   decision, observe mode, the unlock marker, `hook`, `explain`, `relock`,
   and the reference hook commands. It imports `internal/guardrule` and
