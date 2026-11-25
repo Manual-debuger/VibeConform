@@ -17,7 +17,7 @@ const (
 	unlockMaxMinutes     = 240
 )
 
-func newUnlockCmd() *cobra.Command {
+func newUnlockCmd(seams contractSeams) *cobra.Command {
 	var projectRoot string
 	var minutes int
 	cmd := &cobra.Command{
@@ -36,7 +36,7 @@ func newUnlockCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("unlock: %w", err)
 			}
-			expiry := time.Now().Add(time.Duration(minutes) * time.Minute).UTC().Truncate(time.Second)
+			expiry := seams.clock().Add(time.Duration(minutes) * time.Minute).UTC().Truncate(time.Second)
 			stamp := expiry.Format(time.RFC3339)
 			marker := filepath.Join(dir, guardrule.UnlockMarkerFile)
 			if err := os.WriteFile(marker, guardrule.FormatUnlockMarker(expiry), 0o600); err != nil {
