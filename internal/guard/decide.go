@@ -273,21 +273,28 @@ func (g *Guard) checkPath(rules []pathRule, p, shown string, c *gr.Command, d *D
 	return nil
 }
 
-// normalize is the one reading of a path the guard checks, from an edit
-// tool or a command that writes it (spec 0058, "Path resolution"; spec
-// 0069): backslashes become slashes; on a project root with a drive
-// letter, Git Bash's /d/… is D:/…; a relative path is joined to g.dir,
-// the payload's cwd, else to the project root; and the result is
-// cleaned. The rules then see only absolute, clean, slash-separated
-// paths.
+// normalize is the path p as the guard checks it, from an edit tool or a
+// command that writes it: readPath against g.dir, the payload's cwd,
+// else the project root. The rules then see only absolute, clean,
+// slash-separated paths.
 func (g *Guard) normalize(p string) string {
-	root := g.repo.Root
+	return readPath(p, cmp.Or(g.dir, g.repo.Root), g.repo.Root)
+}
+
+// readPath is the guard's one reading of a path (spec 0058, "Path
+// resolution"; spec 0069): backslashes become slashes; when root has a
+// drive letter, Git Bash's /d/… is D:/…; a path that gr.IsAbs does not
+// call absolute is joined to dir; and the result is cleaned and
+// slash-separated. vibe-guard reads every path it is given this way: the
+// paths the rules check, explain's default-tool test and
+// CLAUDE_PROJECT_DIR.
+func readPath(p, dir, root string) string {
 	p = strings.ReplaceAll(p, `\`, "/")
 	if len(root) >= 2 && root[1] == ':' && isGitBashDrive(p) {
 		p = strings.ToUpper(p[1:2]) + ":" + p[2:]
 	}
 	if !gr.IsAbs(p) {
-		p = filepath.Join(cmp.Or(g.dir, root), filepath.FromSlash(p))
+		p = filepath.Join(dir, filepath.FromSlash(p))
 	}
 	return filepath.ToSlash(filepath.Clean(filepath.FromSlash(p)))
 }
