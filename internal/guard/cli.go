@@ -77,18 +77,30 @@ func Main(args []string, env Env, version string) int {
 // sessionRepo finds the repository a call acts in, for hook, explain
 // and relock (spec 0068). CLAUDE_PROJECT_DIR, when set, is the project
 // root as given, made absolute and not walked up: Claude Code sets it to
-// the directory the session runs in, which may be below the Git top. The
-// Git top is found by walking up from it. Without it, the payload's cwd,
-// else the process's working directory, is walked up to the Git top,
-// which is then also the project root.
+// the directory the session runs in, which may be below the Git top. A
+// relative one is joined to Env's working directory. The Git top is found
+// by walking up from it. Without it, the payload's cwd, else Env's
+// working directory, is walked up to the Git top, which is then also the
+// project root.
 func sessionRepo(env Env, cwd string) Repo {
 	if d := env.Getenv("CLAUDE_PROJECT_DIR"); d != "" {
-		if abs, err := filepath.Abs(d); err == nil {
-			d = abs
-		}
+		d = inDir(env.Dir, d)
 		return gr.FindRepo(d, d)
 	}
 	return gr.FindRepo(cmp.Or(cwd, env.Dir), "")
+}
+
+// inDir is p joined to dir when p is relative, and cleaned. On Windows a
+// path rooted without a volume (\x) takes dir's volume.
+func inDir(dir, p string) string {
+	switch {
+	case filepath.IsAbs(p):
+	case filepath.VolumeName(p) == "" && p != "" && os.IsPathSeparator(p[0]):
+		p = filepath.VolumeName(dir) + p
+	default:
+		p = filepath.Join(dir, p)
+	}
+	return filepath.Clean(p)
 }
 
 type payload struct {
@@ -263,7 +275,7 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 	if tool == "" {
 		tool = gr.Bash
 		if !strings.ContainsAny(arg, " \t\n") {
-			if _, err := os.Stat(arg); err == nil {
+			if _, err := os.Stat(inDir(env.Dir, arg)); err == nil {
 				tool = gr.Write
 			}
 		}
@@ -278,6 +290,7 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 		t = gr.Target{Tool: tool, Path: arg}
 	}
 	g := New(sessionRepo(env, ""), env.Now())
+	g.Dir = env.Dir
 	d := g.Decide(t)
 	w := env.Stdout
 	sayf(w, "tool: %s\n", tool)

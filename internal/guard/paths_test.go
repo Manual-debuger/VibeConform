@@ -165,7 +165,7 @@ func TestEditPathsResolveAgainstCwd(t *testing.T) {
 	}
 	assertRefused(t, r.hook(t, editPayload("Write", "../.claude/hooks/policy.json", sub)), "guard-policy-file")
 
-	// explain has no cwd, so it reads the same paths spelled absolute.
+	// explain, run in the root, reads the same paths spelled absolute.
 	subSlash := filepath.ToSlash(sub)
 	for _, tool := range editTools {
 		assertExplainRefused(t, r, tool, subSlash+"/../.claude/settings.json", "guardrail-settings")
