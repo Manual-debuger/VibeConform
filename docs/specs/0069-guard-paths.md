@@ -1,6 +1,6 @@
 # Spec 0069: The guard reads every path one way, and `vibe unlock` finds the marker where the guard does
 
-Status: draft (2026-11-25). Issue #163, the bug-fix part. Part of the
+Status: approved (2026-11-25). Issue #163, the bug-fix part. Part of the
 design review #167 (guard track) and #166 (the fail-open
 `Rule.MatchesCommand`). A bug fix with regression tests. The rest of
 #163 (a deeper `Guard` interface and in-process tests) is spec 0070.
