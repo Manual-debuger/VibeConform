@@ -12,7 +12,7 @@ func NewRootCmd(version string) *cobra.Command {
 	return newRootCmd(version, contractSeams{})
 }
 
-// newRootCmd is NewRootCmd with the contract audit's test seams.
+// newRootCmd is NewRootCmd with the CLI's test seams.
 func newRootCmd(version string, seams contractSeams) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "vibe",
@@ -33,7 +33,7 @@ func newRootCmd(version string, seams contractSeams) *cobra.Command {
 		newInitCmd(seams),
 		newAuditCmd(seams),
 		newDoctorCmd(seams),
-		newUnlockCmd(),
+		newUnlockCmd(seams),
 	)
 	for _, name := range []string{"sync", "diff", "check"} {
 		root.AddCommand(newRemovedCmd(name))
