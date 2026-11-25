@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"maps"
 	"os"
 	"path/filepath"
@@ -52,6 +54,24 @@ func under(dir string, edits []contracttest.Edit) []contracttest.Edit {
 	return contracttest.Under(dir, edits...)
 }
 
+// monorepo is a Go, a Python and a TypeScript component below the root,
+// beside manifests that are not components: a package.json without
+// tsconfig.json, manifests of dependencies, a manifest below the depth
+// init looks at, and a manifest inside another component.
+var monorepo = slices.Concat(withoutGo,
+	[]contracttest.Edit{contracttest.WithFile("services/api/go.mod", "module example.com/api\n\ngo 1.24\n")},
+	under("tools/py", pyFiles),
+	under("web/app", tsFiles),
+	[]contracttest.Edit{
+		contracttest.Dependabot("gomod directory /services/api", "pip directory /tools/py", "npm directory /web/app", "github-actions directory /"),
+		contracttest.WithFile("docs/site/package.json", "{}\n"),
+		contracttest.WithFile("node_modules/dep/package.json", "{}\n"),
+		contracttest.WithFile("node_modules/dep/tsconfig.json", "{}\n"),
+		contracttest.WithFile("third/vendor/x/go.mod", "module x\n"),
+		contracttest.WithFile("a/b/c/d/go.mod", "module d\n"),
+		contracttest.WithFile("services/api/tools/go.mod", "module tools\n"),
+	})
+
 // TestInitWritesAConfigTheAuditReads: on each fixture vibe init writes a
 // version 2 vibe.yaml with the components it finds, which the audit's
 // parser reads. The audit then fails V-04 for the four undeclared
@@ -59,22 +79,6 @@ func under(dir string, edits []contracttest.Edit) []contracttest.Edit {
 // (spec 0059, Desired Behavior 10).
 func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	t.Parallel()
-	monorepo := slices.Concat(withoutGo,
-		[]contracttest.Edit{contracttest.WithFile("services/api/go.mod", "module example.com/api\n\ngo 1.24\n")},
-		under("tools/py", pyFiles),
-		under("web/app", tsFiles),
-		// Not components: a package.json without tsconfig.json, manifests
-		// of dependencies, a manifest below the depth init looks at, and a
-		// manifest inside another component.
-		[]contracttest.Edit{
-			contracttest.Dependabot("gomod directory /services/api", "pip directory /tools/py", "npm directory /web/app", "github-actions directory /"),
-			contracttest.WithFile("docs/site/package.json", "{}\n"),
-			contracttest.WithFile("node_modules/dep/package.json", "{}\n"),
-			contracttest.WithFile("node_modules/dep/tsconfig.json", "{}\n"),
-			contracttest.WithFile("third/vendor/x/go.mod", "module x\n"),
-			contracttest.WithFile("a/b/c/d/go.mod", "module d\n"),
-			contracttest.WithFile("services/api/tools/go.mod", "module tools\n"),
-		})
 	for _, c := range []struct {
 		name          string
 		edits         []contracttest.Edit
@@ -134,6 +138,80 @@ func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocycl
 						t.Errorf("%s = %s for another reason than V-04: %s %s (fix: %s)", r.ID, r.Result, f.File, f.Message, f.Fix)
 					}
 				}
+			}
+		})
+	}
+}
+
+// TestInitPrintsWhatItWrote: vibe init prints the file it wrote, each
+// component, each manifest it skipped and the next step, byte for byte as
+// before spec 0066.
+func TestInitPrintsWhatItWrote(t *testing.T) {
+	t.Parallel()
+	const next = "next: declare the entrypoints in vibe.yaml; until then vibe audit fails V-04\n"
+	for _, c := range []struct {
+		name  string
+		edits []contracttest.Edit
+		want  string
+	}{
+		{"go at the root", []contracttest.Edit{contracttest.WithoutFile("vibe.yaml")},
+			"wrote vibe.yaml\ncomponent . (go)\n" + next},
+		{"monorepo", monorepo,
+			"wrote vibe.yaml\n" +
+				"component services/api (go)\n" +
+				"component tools/py (python)\n" +
+				"component web/app (typescript)\n" +
+				"skipped services/api/tools: inside the component services/api (go); components do not nest\n" +
+				next},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir := contracttest.Fixture(t, contracttest.Baseline, c.edits...)
+			out, err := runInit(t, dir)
+			if err != nil {
+				t.Fatalf("vibe init: %v\n%s", err, out)
+			}
+			if out != c.want {
+				t.Errorf("output =\n%s\nwant\n%s", out, c.want)
+			}
+		})
+	}
+}
+
+// failingWriter fails each write that starts with prefix and takes every
+// other write.
+type failingWriter struct{ prefix string }
+
+var errOutput = errors.New("output closed")
+
+func (w failingWriter) Write(p []byte) (int, error) {
+	if strings.HasPrefix(string(p), w.prefix) {
+		return 0, errOutput
+	}
+	return len(p), nil
+}
+
+// TestInitOutputErrors: when printing fails after vibe.yaml is written,
+// init returns the error, prefixed with "init: " for every line but the
+// last, the next step, whose error it returns as it is, as before spec
+// 0066.
+func TestInitOutputErrors(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ prefix, want string }{
+		{"wrote ", "init: " + errOutput.Error()},
+		{"component ", "init: " + errOutput.Error()},
+		{"next: ", errOutput.Error()},
+	} {
+		t.Run(c.prefix, func(t *testing.T) {
+			t.Parallel()
+			dir := contracttest.Fixture(t, contracttest.Baseline, contracttest.WithoutFile("vibe.yaml"))
+			root := newRootCmd("test", contractSeams{openRepo: contracttest.OpenRepo})
+			root.SetOut(failingWriter{c.prefix})
+			root.SetErr(io.Discard)
+			root.SetArgs([]string{"init", "--repo-root", dir})
+			err := root.Execute()
+			if !errors.Is(err, errOutput) || err.Error() != c.want {
+				t.Errorf("error = %v, want %q", err, c.want)
 			}
 		})
 	}
@@ -212,8 +290,9 @@ func TestInitRaceLostIsAnError(t *testing.T) {
 }
 
 // TestInitNeedsAComponent: with no manifest in the tracked files, vibe
-// init says what it looked for and writes nothing, since the audit could
-// not read a vibe.yaml without components.
+// init says what it looked for, byte for byte as before spec 0066, and
+// writes nothing, since the audit could not read a vibe.yaml without
+// components.
 func TestInitNeedsAComponent(t *testing.T) {
 	t.Parallel()
 	dir := contracttest.Fixture(t, contracttest.Baseline, withoutGo...)
@@ -222,13 +301,31 @@ func TestInitNeedsAComponent(t *testing.T) {
 	if code := ExitCode(err); code != exitError {
 		t.Fatalf("exit %d, want %d:\n%s", code, exitError, out)
 	}
-	for _, want := range []string{"go.mod", "pyproject.toml", "tsconfig.json"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output lacks %q:\n%s", want, out)
-		}
+	const want = "init: found no component in the tracked files: no go.mod, pyproject.toml, " +
+		"or package.json beside a tsconfig.json within 3 directories of the root; " +
+		"commit the project's manifest and run vibe init again"
+	if err == nil || err.Error() != want {
+		t.Errorf("error = %v, want %q", err, want)
 	}
 	if after := contracttest.TreeHash(t, dir); !maps.Equal(before, after) {
 		t.Error("the failed init changed the repository")
+	}
+}
+
+// TestInitHelpNamesTheManifests: vibe init --help names the manifests
+// with the same phrase as the "found no component" error (spec 0066).
+func TestInitHelpNamesTheManifests(t *testing.T) {
+	t.Parallel()
+	root := newRootCmd("test", contractSeams{openRepo: contracttest.OpenRepo})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetArgs([]string{"init", "--help"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("vibe init --help: %v", err)
+	}
+	if want := "(go.mod, pyproject.toml, or package.json beside a tsconfig.json)"; !strings.Contains(out.String(), want) {
+		t.Errorf("help lacks %q:\n%s", want, out.String())
 	}
 }
 

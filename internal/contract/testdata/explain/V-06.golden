@@ -1,0 +1,376 @@
+Check:
+Probe: with the complexity defect (a function of cyclomatic complexity 42 and cognitive complexity 41) in each component, `verify` exits non-zero. A complexity limit of 40 or less, of either metric, catches it.
+
+Part check (probe):
+with the complexity defect (a function of cyclomatic complexity 42 and cognitive complexity 41) in each component, `verify` exits non-zero. A complexity limit of 40 or less, of either metric, catches it.
+
+Details:
+Threshold:
+  The sample's cyclomatic complexity is 42 and its cognitive complexity 41.
+  A linter reports a value above its limit, so a limit of 40 or less, of
+  either metric, catches it. A specific suppression (one rule at one
+  function, with a reason) is the repository's choice; the sample carries
+  none.
+
+Planted defects:
+  One at a time, each into the first directory, in sorted path order,
+  inside a component that holds a test file of its language; the copy is
+  reset between defects. In Go samples, {{package}} is the package clause
+  of the test file beside it, without a _test suffix in a file that is not
+  a _test.go file.
+
+  Go, complexity: vibe_probe_complexity.go
+    // Planted by vibe audit: a function of cyclomatic complexity 42 and
+    // cognitive complexity 41 (the complexity defect).
+
+    package {{package}}
+
+    // VibeProbeComplexity adds a constant to a running total for each
+    // threshold that n exceeds.
+    func VibeProbeComplexity(n int) int {
+    	total := 0
+    	if n > 0 {
+    		total += 2
+    	}
+    	if n > 1 {
+    		total += 3
+    	}
+    	if n > 2 {
+    		total += 4
+    	}
+    	if n > 3 {
+    		total += 5
+    	}
+    	if n > 4 {
+    		total += 6
+    	}
+    	if n > 5 {
+    		total += 7
+    	}
+    	if n > 6 {
+    		total += 8
+    	}
+    	if n > 7 {
+    		total += 9
+    	}
+    	if n > 8 {
+    		total += 10
+    	}
+    	if n > 9 {
+    		total += 11
+    	}
+    	if n > 10 {
+    		total += 12
+    	}
+    	if n > 11 {
+    		total += 13
+    	}
+    	if n > 12 {
+    		total += 14
+    	}
+    	if n > 13 {
+    		total += 15
+    	}
+    	if n > 14 {
+    		total += 16
+    	}
+    	if n > 15 {
+    		total += 17
+    	}
+    	if n > 16 {
+    		total += 18
+    	}
+    	if n > 17 {
+    		total += 19
+    	}
+    	if n > 18 {
+    		total += 20
+    	}
+    	if n > 19 {
+    		total += 21
+    	}
+    	if n > 20 {
+    		total += 22
+    	}
+    	if n > 21 {
+    		total += 23
+    	}
+    	if n > 22 {
+    		total += 24
+    	}
+    	if n > 23 {
+    		total += 25
+    	}
+    	if n > 24 {
+    		total += 26
+    	}
+    	if n > 25 {
+    		total += 27
+    	}
+    	if n > 26 {
+    		total += 28
+    	}
+    	if n > 27 {
+    		total += 29
+    	}
+    	if n > 28 {
+    		total += 30
+    	}
+    	if n > 29 {
+    		total += 31
+    	}
+    	if n > 30 {
+    		total += 32
+    	}
+    	if n > 31 {
+    		total += 33
+    	}
+    	if n > 32 {
+    		total += 34
+    	}
+    	if n > 33 {
+    		total += 35
+    	}
+    	if n > 34 {
+    		total += 36
+    	}
+    	if n > 35 {
+    		total += 37
+    	}
+    	if n > 36 {
+    		total += 38
+    	}
+    	if n > 37 {
+    		total += 39
+    	}
+    	if n > 38 {
+    		total += 40
+    	}
+    	if n > 39 {
+    		total += 41
+    	}
+    	if n > 40 {
+    		total += 42
+    	}
+    	return total
+    }
+
+  Python, complexity: vibe_probe_complexity.py
+    # Planted by vibe audit: a function of cyclomatic complexity 42 and
+    # cognitive complexity 41 (the complexity defect).
+    def vibe_probe_complexity(n: int) -> int:
+        total = 0
+        if n > 0:
+            total += 2
+        if n > 1:
+            total += 3
+        if n > 2:
+            total += 4
+        if n > 3:
+            total += 5
+        if n > 4:
+            total += 6
+        if n > 5:
+            total += 7
+        if n > 6:
+            total += 8
+        if n > 7:
+            total += 9
+        if n > 8:
+            total += 10
+        if n > 9:
+            total += 11
+        if n > 10:
+            total += 12
+        if n > 11:
+            total += 13
+        if n > 12:
+            total += 14
+        if n > 13:
+            total += 15
+        if n > 14:
+            total += 16
+        if n > 15:
+            total += 17
+        if n > 16:
+            total += 18
+        if n > 17:
+            total += 19
+        if n > 18:
+            total += 20
+        if n > 19:
+            total += 21
+        if n > 20:
+            total += 22
+        if n > 21:
+            total += 23
+        if n > 22:
+            total += 24
+        if n > 23:
+            total += 25
+        if n > 24:
+            total += 26
+        if n > 25:
+            total += 27
+        if n > 26:
+            total += 28
+        if n > 27:
+            total += 29
+        if n > 28:
+            total += 30
+        if n > 29:
+            total += 31
+        if n > 30:
+            total += 32
+        if n > 31:
+            total += 33
+        if n > 32:
+            total += 34
+        if n > 33:
+            total += 35
+        if n > 34:
+            total += 36
+        if n > 35:
+            total += 37
+        if n > 36:
+            total += 38
+        if n > 37:
+            total += 39
+        if n > 38:
+            total += 40
+        if n > 39:
+            total += 41
+        if n > 40:
+            total += 42
+        return total
+
+  TypeScript, complexity: vibe_probe_complexity.ts
+    // Planted by vibe audit: a function of cyclomatic complexity 42 and
+    // cognitive complexity 41 (the complexity defect).
+    export function vibeProbeComplexity(n: number): number {
+      let total = 0
+      if (n > 0) {
+        total += 2
+      }
+      if (n > 1) {
+        total += 3
+      }
+      if (n > 2) {
+        total += 4
+      }
+      if (n > 3) {
+        total += 5
+      }
+      if (n > 4) {
+        total += 6
+      }
+      if (n > 5) {
+        total += 7
+      }
+      if (n > 6) {
+        total += 8
+      }
+      if (n > 7) {
+        total += 9
+      }
+      if (n > 8) {
+        total += 10
+      }
+      if (n > 9) {
+        total += 11
+      }
+      if (n > 10) {
+        total += 12
+      }
+      if (n > 11) {
+        total += 13
+      }
+      if (n > 12) {
+        total += 14
+      }
+      if (n > 13) {
+        total += 15
+      }
+      if (n > 14) {
+        total += 16
+      }
+      if (n > 15) {
+        total += 17
+      }
+      if (n > 16) {
+        total += 18
+      }
+      if (n > 17) {
+        total += 19
+      }
+      if (n > 18) {
+        total += 20
+      }
+      if (n > 19) {
+        total += 21
+      }
+      if (n > 20) {
+        total += 22
+      }
+      if (n > 21) {
+        total += 23
+      }
+      if (n > 22) {
+        total += 24
+      }
+      if (n > 23) {
+        total += 25
+      }
+      if (n > 24) {
+        total += 26
+      }
+      if (n > 25) {
+        total += 27
+      }
+      if (n > 26) {
+        total += 28
+      }
+      if (n > 27) {
+        total += 29
+      }
+      if (n > 28) {
+        total += 30
+      }
+      if (n > 29) {
+        total += 31
+      }
+      if (n > 30) {
+        total += 32
+      }
+      if (n > 31) {
+        total += 33
+      }
+      if (n > 32) {
+        total += 34
+      }
+      if (n > 33) {
+        total += 35
+      }
+      if (n > 34) {
+        total += 36
+      }
+      if (n > 35) {
+        total += 37
+      }
+      if (n > 36) {
+        total += 38
+      }
+      if (n > 37) {
+        total += 39
+      }
+      if (n > 38) {
+        total += 40
+      }
+      if (n > 39) {
+        total += 41
+      }
+      if (n > 40) {
+        total += 42
+      }
+      return total
+    }

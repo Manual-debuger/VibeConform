@@ -1,0 +1,5 @@
+Check:
+Execution, per component, by the lockfile found. For `go.sum`: run `go mod tidy`, then `git diff --exit-code go.mod go.sum`. For `uv.lock`: `uv lock --check`. For `poetry.lock`: `poetry check --lock`. For `pnpm-lock.yaml`: `pnpm install --frozen-lockfile --lockfile-only`. For `package-lock.json`: `npm ci --dry-run`. A component with dependencies and no recognized lockfile fails.
+
+Part check (execution):
+per component, by the lockfile found. For `go.sum`: run `go mod tidy`, then `git diff --exit-code go.mod go.sum`. For `uv.lock`: `uv lock --check`. For `poetry.lock`: `poetry check --lock`. For `pnpm-lock.yaml`: `pnpm install --frozen-lockfile --lockfile-only`. For `package-lock.json`: `npm ci --dry-run`. A component with dependencies and no recognized lockfile fails.

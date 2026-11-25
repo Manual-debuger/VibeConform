@@ -19,14 +19,6 @@ import (
 
 var dependabotFiles = []string{".github/dependabot.yml", ".github/dependabot.yaml"}
 
-// dependabotEcosystems are the package-ecosystem values that cover a
-// component's language.
-var dependabotEcosystems = map[string][]string{
-	LanguageGo:         {"gomod"},
-	LanguagePython:     {"pip", "uv"},
-	LanguageTypeScript: {"npm", "bun"},
-}
-
 // renovateFile is one place Renovate reads its configuration from. jwcc
 // files are JSON5 forms, read as JSON with comments and trailing commas.
 type renovateFile struct {
@@ -42,15 +34,6 @@ var renovateFiles = []renovateFile{
 	{".github/renovate.json", false}, {".github/renovate.json5", true},
 	{".gitlab/renovate.json", false}, {".gitlab/renovate.json5", true},
 	{".renovaterc", false}, {".renovaterc.json", false}, {".renovaterc.json5", true},
-}
-
-// renovateManagers are the Renovate managers that cover a component's
-// language. enabledManagers leaves a component out when it names none
-// of them.
-var renovateManagers = map[string][]string{
-	LanguageGo:         {"gomod"},
-	LanguagePython:     {"pep621", "poetry", "pip_requirements", "pip-compile", "pipenv", "setup-cfg", "pip_setup"},
-	LanguageTypeScript: {"npm", "bun"},
 }
 
 const githubActions = "github-actions"
@@ -191,11 +174,11 @@ func dependabot(env *Env) *updateBot {
 		return b
 	}
 	for i, c := range env.Config.Components {
-		ecosystems := dependabotEcosystems[c.Language]
+		ecosystems := c.language().dependabotEcosystems
 		if !slices.ContainsFunc(updates, func(u dependabotUpdate) bool { return u.covers(ecosystems, c.Path) }) {
 			b.Uncovered[i] = Finding{
 				File:    file,
-				Message: fmt.Sprintf("no updates entry for %s covers component %s", joinWords(ecosystems, "or"), c.Path),
+				Message: fmt.Sprintf("no updates entry for %s covers component %s", joinWords(ecosystems, " or "), c.Path),
 				Fix: fmt.Sprintf("add an updates entry with package-ecosystem: %s and directory: %s",
 					ecosystems[0], dependabotDir(c.Path)),
 			}
@@ -427,11 +410,11 @@ func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) { //nolint:gocogn
 			}
 		}
 		for i, c := range env.Config.Components {
-			managers := renovateManagers[c.Language]
+			managers := c.language().renovateManagers
 			if !slices.ContainsFunc(managers, func(m string) bool { return slices.Contains(enabled, m) }) {
 				b.Uncovered[i] = Finding{
 					File:    b.File,
-					Message: fmt.Sprintf("enabledManagers leaves out %s, which component %s needs", joinWords(managers, "or"), c.Path),
+					Message: fmt.Sprintf("enabledManagers leaves out %s, which component %s needs", joinWords(managers, " or "), c.Path),
 					Fix:     fmt.Sprintf("add %s to enabledManagers", managers[0]),
 				}
 			}

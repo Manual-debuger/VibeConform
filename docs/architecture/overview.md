@@ -64,6 +64,26 @@ internal/contract
   and a version 1 file (`contract.ErrConfigV1`) are exit 1; the CLI adds
   the pointer (`vibe init`, or the migration guide). `vibe init --skill`
   writes the setup skill and reads no configuration.
+- **Language records** (spec 0066). Each component language is one
+  record in a source file of its own (`internal/contract/language_*.go`):
+  its identifier and display name, its manifest and dependency reader,
+  the files detection wants beside the manifest, its lockfiles with
+  their check and fix commands, its test file patterns, its planted
+  defect samples and complexity layout, and its Dependabot ecosystems
+  and Renovate managers. `languageRegistry` lists the records in the
+  contract's language order (Go, Python, TypeScript). The valid
+  `language` values, the root manifests, D-01's lockfile order and check
+  text, and the order of the `--explain` samples are derived from it.
+  An internal test fails when a record leaves a fact empty. V-05's
+  Python filter is the one language check outside the records, because
+  V-05 is a Python rule in the contract.
+- **Component detection** (spec 0066). `contract.DetectComponents`
+  reads the tracked file list and returns the components, the nested
+  manifests and whether the audit's implicit root detection finds the
+  same components. The depth limit (`contract.DetectionDepth`), the
+  skipped dependency directories, the priority between manifests and the
+  manifest phrase (`contract.ManifestPhrase`) are the contract's. The
+  audit's root detection and that answer use one function.
 - **Dependency direction.** The CLI imports `internal/contract`, never
   the reverse, and renders its report model as text or JSON
   (`internal/cli/contract_*.go`). `internal/contract/imports_test.go`
@@ -118,15 +138,27 @@ internal/contract
   (merge request, push to the default branch) the jobs that run and
   why the others do not. `Env.CI()` picks the provider once per audit:
   GitHub Actions when tracked workflows exist, otherwise GitLab CI when
-  `.gitlab-ci.yml` is tracked. The GitHub reader wraps the existing
-  workflow parsing, and the GitHub checks keep reading the workflows
-  directly so their 1.0.1 results and wording do not change. The GitLab
-  reader (`gitlab_ci.go`) resolves `.gitlab-ci.yml` statically: anchors,
-  local includes, `default:`, `extends:`, `!reference` and child
-  pipelines the parent waits for. `gitlab_rules.go` evaluates
+  `.gitlab-ci.yml` is tracked. Each reader fills the whole model when
+  it reads the CI (spec 0067): the runs of both pipeline kinds, each
+  job's runner platforms, and the references C-02 checks (GitHub
+  `uses:`, GitLab images and includes). The GitHub reader
+  (`githubCI` in `ci_model.go`) wraps the existing workflow parsing and
+  decides its runs with the trigger walk (`workflow_triggers.go`). The
+  GitLab reader (`gitlab_ci.go`) resolves `.gitlab-ci.yml` statically:
+  anchors, local includes, `default:`, `extends:`, `!reference` and
+  child pipelines the parent waits for. `gitlab_rules.go` evaluates
   `workflow:rules`, `rules:` and `only`/`except` over a closed list of
-  conditions, and `gitlab_checks.go` holds the C, D-03 and R-01 checks
-  on that model. Both readers live in `internal/contract` and add no
+  conditions. `CI.Run` is a lookup for both providers. C-01, C-02,
+  C-04, C-05 and D-03 each have one implementation (`checks_ci.go`)
+  that reads only the model, and no C check compares the provider. The
+  words of a finding that differ by provider ("pull requests" or "merge
+  request pipelines", the trigger hint, some messages and fixes) come
+  from the provider's wording (`ci_wording.go`), which the reader sets,
+  so each provider keeps its text. C-03 reads the GitHub workflows
+  (`CI.Workflows`), which only the GitHub reader fills; the registry
+  makes it not applicable on GitLab CI. A new provider needs a reader
+  and a wording; those five rules need no change. Both readers live in
+  `internal/contract` and add no
   import: they use `gopkg.in/yaml.v3`, the package's shell parser and
   `internal/guardrule`, which the package already imported, so the
   dependency direction above is unchanged. The report model carries the provider
@@ -275,10 +307,15 @@ internal/
   doctor/                   # vibe doctor's checks; imports only contract, for the configuration, hook reader and bash resolution (spec 0059)
 ```
 
-- **`vibe init`** (spec 0059) detects components from the tracked files
-  with a small function in `internal/cli`, and checks the file it writes
-  with `contract.Parse`, so it never writes a configuration `vibe audit`
-  cannot read.
+- **`vibe init`** (spec 0059) gets the components from
+  `contract.DetectComponents`, which reads the tracked file list and
+  shares its root rule with the audit's implicit root detection (spec
+  0066). The contract owns the language records and component
+  detection; init holds no language knowledge and no detection code.
+  Init only renders what it gets, with the contract's manifest phrase
+  in its help text and its "found no component" error, and checks the
+  file it writes with `contract.Parse`, so it never writes a
+  configuration `vibe audit` cannot read.
 - **`vibe doctor`** loads the configuration with `contract.Load` and
   hands the outcome, a load error with the CLI's text included, to
   `doctor.Run`, which chooses the checks and their order (git,

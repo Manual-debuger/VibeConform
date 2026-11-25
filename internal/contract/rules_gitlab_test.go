@@ -119,7 +119,7 @@ func TestRuleC01GitLab(t *testing.T) {
 	t.Parallel()
 	v := func(extra string) []contracttest.Edit { return gitlab(glOnly(glVerify("verify", extra))) }
 	rules := func(conds ...string) []contracttest.Edit { return v(glRules(conds...)) }
-	contracttest.RunRuleCases(t, "C-01", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitLab, "C-01", []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass", Edits: gitlab(glBase)},
 		{Name: "a job with no rules runs in both kinds", Want: "pass", Edits: v("")},
 		{Name: "verify inside a condition", Want: "pass",
@@ -441,7 +441,7 @@ func TestRuleC04GitLab(t *testing.T) {
 	audit := func(extra, script string) []contracttest.Edit {
 		return gitlab(verify + "conformance:audit:\n" + extra + "  script:\n" + script)
 	}
-	contracttest.RunRuleCases(t, "C-04", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitLab, "C-04", []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass", Edits: gitlab(glBase)},
 		{Name: "merge requests only", Want: "pass", Edits: audit(glRules(glMR), "    - vibe audit\n")},
 		{Name: "after building vibe, in one line", Want: "pass",
@@ -506,7 +506,7 @@ func TestRuleC02GitLab(t *testing.T) {
 	run := func(key, line string) []contracttest.Edit {
 		return glWithJob("x:\n  " + key + ":\n    - " + line + "\n  script: [echo]\n")
 	}
-	contracttest.RunRuleCases(t, "C-02", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitLab, "C-02", []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass", Edits: gitlab(glBase)},
 
 		// Images and services.
@@ -595,7 +595,7 @@ func TestRuleC02GitLab(t *testing.T) {
 // permissions.
 func TestRuleC03GitLab(t *testing.T) {
 	t.Parallel()
-	contracttest.RunRuleCases(t, "C-03", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitLab, "C-03", []contracttest.RuleCase{
 		{Name: "GitLab only", Want: "not_applicable", Edits: gitlab(glBase),
 			Findings: []string{"not applicable", "GitLab", "job tokens have no per-file permissions", "project setting"}},
 		{Name: "even when .gitlab-ci.yml does not parse", Want: "not_applicable", Edits: gitlab("x: [\n")},
@@ -611,7 +611,7 @@ func TestRuleC05GitLab(t *testing.T) {
 	matrix := func(tags, entries string) []contracttest.Edit {
 		return only(glVerify("verify", "  parallel:\n    matrix:\n"+entries+"  tags: "+tags+"\n"))
 	}
-	contracttest.RunRuleCases(t, "C-05", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitLab, "C-05", []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass", Edits: gitlab(glBase)},
 		{Name: "tags ignore case and match inside a tag", Want: "pass", Edits: only(
 			glVerify("a", "  tags: [saas-Linux-small-amd64]\n") + glVerify("b", "  tags: [SAAS-WINDOWS-MEDIUM-AMD64]\n"))},
@@ -667,7 +667,7 @@ func TestRuleD03GitLab(t *testing.T) {
 		"scan:\n  script:\n    - go install golang.org/x/vuln/cmd/govulncheck@v1.1.4\n    - govulncheck ./...\n\n", "", 1)
 	with := func(more string) []contracttest.Edit { return gitlab(noScan + more) }
 	include := func(entry string) []contracttest.Edit { return gitlab("include:\n" + entry + noScan) }
-	contracttest.RunRuleCases(t, "D-03", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitLab, "D-03", []contracttest.RuleCase{
 		{Name: "baseline govulncheck", Want: "pass", Edits: gitlab(glBase)},
 		{Name: "pip-audit in before_script", Want: "pass", Edits: with("scan:\n  before_script: [pip-audit]\n  script: [echo]\n")},
 		{Name: "trivy in after_script", Want: "pass", Edits: with("scan:\n  script: [echo]\n  after_script: [trivy fs .]\n")},
@@ -708,7 +708,7 @@ func TestRuleD03GitLabTemplateFailsC02(t *testing.T) {
 // C-04 audit job's; vibe --version in a job that calls no entrypoint.
 func TestRuleR01GitLab(t *testing.T) {
 	t.Parallel()
-	contracttest.RunPartCases(t, "R-01", contract.Static, []contracttest.RuleCase{
+	ciPartCases(t, goldenGitLab, "R-01", contract.Static, []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass", Edits: gitlab(glBase)},
 		{Name: "vibe in a script", Want: "fail", Edits: glWithJob("sync:\n  script:\n    - vibe sync && git diff --exit-code\n"),
 			Findings: []string{".gitlab-ci.yml: ", "line 25: job sync, script", "`vibe sync`"}},

@@ -1,0 +1,55 @@
+== baseline govulncheck
+no findings
+
+== pip-audit
+no findings
+
+== osv-scanner
+no findings
+
+== trivy
+no findings
+
+== pnpm audit
+no findings
+
+== npm audit inside a list
+no findings
+
+== in a scheduled workflow
+no findings
+
+== a scanner run through another command
+file: .github/workflows/
+message: no workflow step runs a recognized vulnerability scanner (govulncheck, pip-audit, pnpm audit, npm audit, osv-scanner or trivy)
+fix: add a CI step that runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python or pnpm audit for TypeScript
+
+== installing a scanner is not running it
+file: .github/workflows/
+message: no workflow step runs a recognized vulnerability scanner (govulncheck, pip-audit, pnpm audit, npm audit, osv-scanner or trivy)
+fix: add a CI step that runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python or pnpm audit for TypeScript
+
+== a scanner action is not recognized
+file: .github/workflows/
+message: no workflow step runs a recognized vulnerability scanner (govulncheck, pip-audit, pnpm audit, npm audit, osv-scanner or trivy)
+fix: add a CI step that runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python or pnpm audit for TypeScript
+
+== no scanner
+file: .github/workflows/
+message: no workflow step runs a recognized vulnerability scanner (govulncheck, pip-audit, pnpm audit, npm audit, osv-scanner or trivy)
+fix: add a CI step that runs the scanner for the component's language, such as govulncheck ./... for Go, pip-audit for Python or pnpm audit for TypeScript
+
+== a workflow that does not parse
+file: .github/workflows/broken.yml
+message: does not parse: line 5: job x: step 1: run must be a string
+fix: fix the syntax so that the file parses
+
+== no CI
+file: .github/workflows/
+message: the repository has no CI configuration
+fix: add a GitHub Actions workflow under .github/workflows/ or a GitLab CI configuration (.gitlab-ci.yml)
+
+== another CI provider
+file: .buildkite/
+message: contract 1.2.0 reads GitHub Actions and GitLab CI only, and this repository's CI is .buildkite/
+fix: run CI in GitHub Actions under .github/workflows/ or in GitLab CI (.gitlab-ci.yml), or wait for a vibe that reads this provider

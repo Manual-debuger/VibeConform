@@ -77,72 +77,13 @@ var defectCatchers = map[defectKind]string{
 	defectSecret:     "a secret scanner over the working tree's files",
 }
 
-// defectSamples holds the samples by language and kind. Spec 0053
-// ("Planted defects") quotes each one; change both together.
-var defectSamples = map[string]map[defectKind]defectSample{
-	LanguageGo: {
-		// Test files, so that they may use the package clause of an
-		// external test package; gofmt rewrites the spacing, go vet
-		// reports the Printf call.
-		defectFormat: {Name: "vibe_probe_format_test.go", Content: "// Planted by vibe audit: an unformatted file (the format defect).\n\n" +
-			"package {{package}}\n\nfunc  vibeProbeFormat()  {}\n"},
-		defectStaticAnalysis: {Name: "vibe_probe_static_analysis_test.go", Content: "// Planted by vibe audit: a Printf call whose arguments do not match its format\n" +
-			"// (the static-analysis defect).\n\n" +
-			"package {{package}}\n\nimport \"fmt\"\n\n" +
-			"func vibeProbeStaticAnalysis() { fmt.Printf(\"%d\\n\", \"vibe audit\") }\n"},
-		// V-08: V-01's test file, its Printf call under a nolint
-		// directive that names no linter. go vet ignores the directive;
-		// golangci-lint honors it.
-		defectBlanketSuppression: {Name: "vibe_probe_blanket_suppression_test.go", Content: "// Planted by vibe audit: a Printf call whose arguments do not match its format\n" +
-			"// (the static-analysis defect), under a blanket suppression.\n\n" +
-			"package {{package}}\n\nimport \"fmt\"\n\n" +
-			"func vibeProbeStaticAnalysis() { fmt.Printf(\"%d\\n\", \"vibe audit\") } //nolint\n"},
-		defectTest: {Name: "vibe_probe_test.go", Content: "// Planted by vibe audit: a test that fails (the test defect).\n\n" +
-			"package {{package}}\n\nimport \"testing\"\n\n" +
-			"func TestVibeProbe(t *testing.T) { t.Fatal(\"planted by vibe audit: this test fails\") }\n"},
-		defectComplexity: complexitySample(LanguageGo),
-		defectSecret:     secretSample,
-	},
-	LanguagePython: {
-		defectFormat: {Name: "vibe_probe_format.py", Content: "# Planted by vibe audit: an unformatted file (the format defect).\n" +
-			"vibe_probe = [1,2 ,3]\n"},
-		defectStaticAnalysis: {Name: "vibe_probe_static_analysis.py", Content: "# Planted by vibe audit: a reference to an undefined name (the static-analysis defect).\n" +
-			"def vibe_probe() -> int:\n    return vibe_probe_undefined_name\n"},
-		// V-08: Pyright honors # type: ignore, Ruff honors # noqa.
-		defectBlanketSuppression: {Name: "vibe_probe_blanket_suppression.py", Content: "# Planted by vibe audit: a reference to an undefined name (the static-analysis defect),\n" +
-			"# under blanket suppressions.\n" +
-			"def vibe_probe() -> int:\n    return vibe_probe_undefined_name  # type: ignore  # noqa\n"},
-		defectTest: {Name: "vibe_probe_test.py", Content: "# Planted by vibe audit: a test that fails (the test defect).\n" +
-			"def test_vibe_probe() -> None:\n    assert False, \"planted by vibe audit: this test fails\"\n"},
-		defectTypeError: {Name: "vibe_probe_type_error.py", Content: "# Planted by vibe audit: a function annotated -> int that returns a string (the type-error defect).\n" +
-			"def vibe_probe_type_error() -> int:\n    return \"vibe audit\"\n"},
-		defectComplexity: complexitySample(LanguagePython),
-		defectSecret:     secretSample,
-	},
-	LanguageTypeScript: {
-		defectFormat: {Name: "vibe_probe_format.ts", Content: "// Planted by vibe audit: an unformatted file (the format defect).\n" +
-			"export const vibeProbe = [1,2 ,3]\n"},
-		defectStaticAnalysis: {Name: "vibe_probe_static_analysis.ts", Content: "// Planted by vibe audit: a reference to an undefined name (the static-analysis defect).\n" +
-			"export const vibeProbe: number = vibeProbeUndefinedName;\n"},
-		// V-08: ESLint honors eslint-disable, tsc honors @ts-ignore. No
-		// semicolon, so that Prettier with semi: false (the setup skill's
-		// configuration) finds nothing to change.
-		defectBlanketSuppression: {Name: "vibe_probe_blanket_suppression.ts", Content: "// Planted by vibe audit: a reference to an undefined name (the static-analysis defect),\n" +
-			"// under blanket suppressions.\n" +
-			"/* eslint-disable */\n" +
-			"// @ts-ignore\n" +
-			"export const vibeProbe: number = vibeProbeUndefinedName\n"},
-		defectTest: {Name: "vibe_probe.test.ts", Content: "// Planted by vibe audit: a test file that throws when it is loaded (the test defect).\n" +
-			"export {};\n\nthrow new Error(\"planted by vibe audit: this test fails\");\n"},
-		defectComplexity: complexitySample(LanguageTypeScript),
-		defectSecret:     secretSample,
-	},
-}
+// The samples by language and kind are in the language records
+// (languageFacts.sample); spec 0053 ("Planted defects") quotes each one.
 
 // secretSample is V-07's sample (spec 0061, "V-07, secret"): a plain
 // text file holding a PEM private-key block with a fixed base64 body. A
-// secret does not depend on the language, so every language has the same
-// sample. The boundary lines are assembled here, at run time, so that no
+// secret does not depend on the language, so every language record
+// refers to this one sample. The boundary lines are assembled here, at run time, so that no
 // file in this repository holds a literal private-key block for secret
 // scanners to report.
 var secretSample = func() defectSample {
@@ -176,6 +117,7 @@ func plantDir(env *Env, comp Component) (dir, testFile string, ok bool) {
 	} else {
 		files = env.Repo.FilesUnder(comp.Path)
 	}
+	lang := comp.language()
 	best := ""
 	for _, f := range files {
 		d, name := path.Split(f)
@@ -183,7 +125,7 @@ func plantDir(env *Env, comp Component) (dir, testFile string, ok bool) {
 		if d == "" {
 			d = "."
 		}
-		if !isTestFile(comp.Language, name) || underVendor(d) {
+		if !lang.isTestFile(name) || underVendor(d) {
 			continue
 		}
 		if !ok || d < dir || (d == dir && f < best) {
@@ -212,10 +154,12 @@ func (e errNoTests) Error() string { return "component " + e.component + " has n
 
 // defectFor places a defect kind's sample for the component's language
 // in the component. It returns errNoTests when no directory qualifies,
-// and an error when the sample cannot be built.
+// and an error when the language has no record or no such sample, or
+// the sample cannot be built.
 func defectFor(env *Env, comp Component, kind defectKind) (plantedDefect, error) {
-	sample, ok := defectSamples[comp.Language][kind]
-	if !ok {
+	lang, known := lookupLanguage(comp.Language)
+	sample, ok := lang.sample(kind)
+	if !known || !ok {
 		return plantedDefect{}, fmt.Errorf("this vibe has no %s sample for %s", kind, comp.Language)
 	}
 	return plantSample(env, comp, sample)

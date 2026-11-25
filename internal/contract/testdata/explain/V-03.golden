@@ -1,0 +1,5 @@
+Check:
+Execution: in the probe copy with the unformatted-file defect planted, after `fmt-check` runs, `git status --porcelain` lists only the planted file, with its content unchanged
+
+Part check (execution):
+in the probe copy with the unformatted-file defect planted, after `fmt-check` runs, `git status --porcelain` lists only the planted file, with its content unchanged
