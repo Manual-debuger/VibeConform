@@ -84,11 +84,11 @@ func TestProjectBelowGitTopUnlock(t *testing.T) {
 	settings := []string{".claude/settings.json", filepath.Join(proj.Root, ".claude", "settings.json"), filepath.Join(top.Root, ".claude", "hooks", "pre.sh")}
 	markerFile := filepath.Join(top.CommonDir, "vibe-unlock")
 
-	writeFile(t, markerFile, marker(time.Now().Add(-time.Minute)))
+	writeFile(t, markerFile, marker(testNow.Add(-time.Minute)))
 	for _, p := range settings {
 		assertRefused(t, proj.hook(t, editPayload("Write", p, proj.Root)), "guardrail-settings")
 	}
-	writeFile(t, markerFile, marker(time.Now().Add(10*time.Minute)))
+	writeFile(t, markerFile, marker(testNow.Add(10*time.Minute)))
 	for _, p := range settings {
 		assertAllowed(t, proj.hook(t, editPayload("Write", p, proj.Root)))
 	}
@@ -159,7 +159,7 @@ func TestProjectBelowGitTopObserveLog(t *testing.T) {
 func TestProjectBelowGitTopRelock(t *testing.T) {
 	top, proj := nestedProject(t, "", "")
 	markerFile := filepath.Join(top.CommonDir, "vibe-unlock")
-	writeFile(t, markerFile, marker(time.Now().Add(10*time.Minute)))
+	writeFile(t, markerFile, marker(testNow.Add(10*time.Minute)))
 	got := runGuard(t, proj.Root, "", []string{"CLAUDE_PROJECT_DIR=" + proj.Root}, "relock")
 	if got.Code != 0 || got.Stderr != "" {
 		t.Fatalf("exit %d, stderr %q", got.Code, got.Stderr)
@@ -195,6 +195,6 @@ func TestProjectBelowGitTopAgreesWithGit(t *testing.T) {
 	}
 	r := repo{Root: proj}
 	assertRefused(t, r.hook(t, editPayload("Write", filepath.Join(proj, ".claude", "settings.json"), proj)), "guardrail-settings")
-	writeFile(t, filepath.Join(common, "vibe-unlock"), marker(time.Now().Add(10*time.Minute)))
+	writeFile(t, filepath.Join(common, "vibe-unlock"), marker(testNow.Add(10*time.Minute)))
 	assertAllowed(t, r.hook(t, editPayload("Write", filepath.Join(proj, ".claude", "settings.json"), proj)))
 }

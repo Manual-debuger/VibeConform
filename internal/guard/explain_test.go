@@ -28,7 +28,7 @@ func TestExplainDefaultToolFromSubdir(t *testing.T) {
 	r := newRepo(t, enforcePolicy)
 	sub := subdir(t, r)
 	writeFile(t, filepath.Join(sub, "x.env"), "X=1\n")
-	got := mainIn(t, sub, map[string]string{"CLAUDE_PROJECT_DIR": r.Root}, "explain", "x.env")
+	got := runGuard(t, sub, "", r.projectEnv(), "explain", "x.env")
 	if got.Code != 2 || !hasLine(got.Stdout, "tool: Write") || !hasLine(got.Stdout, "rule: secret-file") {
 		t.Errorf("exit %d, output\n%s\nwant exit 2, tool Write and rule secret-file", got.Code, got.Stdout)
 	}
@@ -39,12 +39,12 @@ func TestExplainDefaultToolFromSubdir(t *testing.T) {
 func TestExplainRelativePathFromSubdir(t *testing.T) {
 	r := newRepo(t, enforcePolicy)
 	sub := subdir(t, r)
-	vars := map[string]string{"CLAUDE_PROJECT_DIR": r.Root}
-	got := mainIn(t, sub, vars, "explain", "--tool", "Write", ".claude/settings.json")
+	vars := r.projectEnv()
+	got := runGuard(t, sub, "", vars, "explain", "--tool", "Write", ".claude/settings.json")
 	if got.Code != 0 || !hasLine(got.Stdout, "decision: allow") || !hasLine(got.Stdout, "rule: none") {
 		t.Errorf("from sub: exit %d, output\n%s\nwant exit 0, allow and rule none", got.Code, got.Stdout)
 	}
-	got = mainIn(t, r.Root, vars, "explain", "--tool", "Write", ".claude/settings.json")
+	got = runGuard(t, r.Root, "", vars, "explain", "--tool", "Write", ".claude/settings.json")
 	if got.Code != 2 || !hasLine(got.Stdout, "rule: guardrail-settings") {
 		t.Errorf("from the root: exit %d, output\n%s\nwant exit 2 and rule guardrail-settings", got.Code, got.Stdout)
 	}
@@ -55,7 +55,7 @@ func TestExplainRelativePathFromSubdir(t *testing.T) {
 func TestExplainFromRootInProcess(t *testing.T) {
 	r := newRepo(t, enforcePolicy)
 	writeFile(t, filepath.Join(r.Root, ".env"), "X=1\n")
-	got := mainIn(t, r.Root, map[string]string{"CLAUDE_PROJECT_DIR": r.Root}, "explain", ".env")
+	got := runGuard(t, r.Root, "", r.projectEnv(), "explain", ".env")
 	if got.Code != 2 || !hasLine(got.Stdout, "tool: Write") || !hasLine(got.Stdout, "rule: secret-file") {
 		t.Errorf("exit %d, output\n%s\nwant exit 2, tool Write and rule secret-file", got.Code, got.Stdout)
 	}
@@ -66,7 +66,7 @@ func TestExplainFromRootInProcess(t *testing.T) {
 func TestRelativeProjectDirReadAgainstEnv(t *testing.T) {
 	r := newRepo(t, `{"version": 2, "rules": [{"id": "no-hi", "level": "deny", "command": "echo hi", "reason": "the project's rule"}]}`)
 	parent, name := filepath.Dir(r.Root), filepath.Base(r.Root)
-	got := mainIn(t, parent, map[string]string{"CLAUDE_PROJECT_DIR": name}, "explain", "echo hi")
+	got := runGuard(t, parent, "", []string{"CLAUDE_PROJECT_DIR=" + name}, "explain", "echo hi")
 	if got.Code != 2 || !hasLine(got.Stdout, "rule: no-hi") {
 		t.Errorf("exit %d, output\n%s\nwant exit 2 and rule no-hi from %s's policy", got.Code, got.Stdout, name)
 	}

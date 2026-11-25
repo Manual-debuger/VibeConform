@@ -67,7 +67,7 @@ func TestGuardrailSettingsThroughDotDot(t *testing.T) {
 		}
 	}
 
-	writeFile(t, filepath.Join(r.CommonDir, "vibe-unlock"), marker(time.Now().Add(10*time.Minute)))
+	writeFile(t, filepath.Join(r.CommonDir, "vibe-unlock"), marker(testNow.Add(10*time.Minute)))
 	for _, tool := range editTools {
 		for _, p := range paths {
 			assertAllowed(t, r.hook(t, editPayload(tool, p, r.Root)))
@@ -122,7 +122,7 @@ func TestProjectBelowGitTopThroughDotDot(t *testing.T) {
 		assertExplainRefused(t, proj, tool, abs, "guardrail-settings")
 	}
 
-	writeFile(t, filepath.Join(top.CommonDir, "vibe-unlock"), marker(time.Now().Add(10*time.Minute)))
+	writeFile(t, filepath.Join(top.CommonDir, "vibe-unlock"), marker(testNow.Add(10*time.Minute)))
 	for _, tool := range editTools {
 		for _, q := range []string{p, abs, "../.claude/settings.json"} {
 			assertAllowed(t, proj.hook(t, editPayload(tool, q, proj.Root)))
