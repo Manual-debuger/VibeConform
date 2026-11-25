@@ -10,6 +10,9 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Manual-debuger/VibeConform/internal/guard"
 )
 
 // Seam 2 (spec 0053, "Testing Decisions"): vibe-guard runs as a
@@ -121,6 +124,23 @@ func runGuard(t *testing.T, dir, stdin string, env []string, args ...string) res
 	case err != nil:
 		t.Fatalf("running vibe-guard: %v", err)
 	}
+	return result{code, out.String(), errOut.String()}
+}
+
+// mainIn runs guard.Main in-process with args, its Env's working
+// directory dir and Getenv reading only vars. The test process's own
+// directory and environment are never read.
+func mainIn(t *testing.T, dir string, vars map[string]string, args ...string) result {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	code := guard.Main(args, guard.Env{
+		Stdin:  strings.NewReader(""),
+		Stdout: &out,
+		Stderr: &errOut,
+		Getenv: func(k string) string { return vars[k] },
+		Dir:    dir,
+		Now:    func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) },
+	}, "test")
 	return result{code, out.String(), errOut.String()}
 }
 

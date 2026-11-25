@@ -1466,7 +1466,12 @@ reference commands.
   decision, the rule ID, the simple command and words (or the path) that
   matched, and any exception that applied, and exits as `hook` would. The
   tool defaults to `Bash`, or `Write` for one word that names an existing
-  path.
+  path. A relative path is read against the directory `explain` runs in,
+  for the default tool and for the decision alike, as `hook` reads it
+  against the payload's `cwd`: from `sub`, `explain .env` is about
+  `sub/.env`, and `explain --tool Write .claude/settings.json` is about
+  `sub/.claude/settings.json`, not the project's settings (spec 0070).
+  From the project root nothing changes.
 
   ```console
   $ vibe-guard explain 'rm -rf /'
@@ -1482,10 +1487,12 @@ reference commands.
 - `vibe-guard relock` deletes the unlock marker; the Stop hook runs it.
 - `vibe-guard version`.
 
-**What it reads.** The guard reads the policy, exception globs and
-relative paths against the project root. The project root is
-`CLAUDE_PROJECT_DIR` as given, also when it is a folder below the
-directory that holds `.git` (spec 0068). Without `CLAUDE_PROJECT_DIR`,
+**What it reads.** The guard reads the policy and exception globs
+against the project root, and a relative path against the payload's
+`cwd` (`hook`) or its working directory (`explain`), else the project
+root. The project root is `CLAUDE_PROJECT_DIR` as given, also when it is
+a folder below the directory that holds `.git` (spec 0068); a relative
+one is joined to the working directory. Without `CLAUDE_PROJECT_DIR`,
 it is the payload's `cwd`, else the working directory, walked up to
 `.git`. The unlock marker and `vibe-guard.log` are in the common Git
 directory, found by walking up from the project root to `.git`. To
