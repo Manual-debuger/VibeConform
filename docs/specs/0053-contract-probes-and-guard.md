@@ -696,6 +696,27 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   in PowerShell without case; a word of the command that holds an
   expansion never matches. For the audit, an exception matches a corpus
   case when it matches some simple command of the case's command.
+- **The audit's reading of an exception is at least as wide as
+  `vibe-guard`'s, on purpose** (spec 0070, "The two readings of an
+  exception"). `vibe-guard` lifts a rule for the simple command or the
+  path that rule refused, a path exception lifts a shell write too (spec
+  0058), and it never lifts a fixed rule (the unlock marker, the
+  self-unlock command). The audit checks a guard as a black box and
+  cannot know which simple command a rule refused, so `Exception.Matches`
+  accepts an exception that matches *some* simple command of the case.
+  If the audit's reading were narrower, it would fail a repository whose
+  `vibe-guard` lets a case through by a valid exception.
+  `TestTwoReadingsOfAnException` in `internal/guard` keeps it so: for
+  each deny case of the corpus it builds exceptions (each word prefix of
+  each expansion-free simple command for a command rule; the edited
+  path, each literal shell-write path and `**` for a path rule), runs the
+  case through `guard.Main` with each one alone, and asserts that
+  `Exception.Matches` accepts every exception the guard lets the case
+  through by. A failure is fixed in `Exception.Matches`, a contract
+  PATCH under spec 0051. The audit is still wider in the other direction:
+  an exception that matches another simple command of a compound case,
+  or names a fixed rule, counts for A-02. Narrowing that is MAJOR:
+  #227, with #50 and #120.
 
 ### `vibe-guard` (#105)
 
