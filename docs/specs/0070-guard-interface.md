@@ -1,6 +1,6 @@
 # Spec 0070: A deeper `Guard`, one way to decide a call, and the guard's tests in-process
 
-Status: draft. Issue #163, the refactor part (items 1, 4 and 6). Part of
+Status: approved (2026-11-25). Issue #163, the refactor part (items 1, 4 and 6). Part of
 the design review #167 (guard track). Spec 0069 fixed the bugs of #163
 (items 2, 3 and 5). Mostly a refactor, with two small behaviour fixes in
 `vibe-guard explain`. Amends spec 0053 ("Testing Decisions", "Guard rule
