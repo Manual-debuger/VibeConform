@@ -193,7 +193,9 @@ func checkMatch(s string) error {
 // its words are a prefix of c's, and, with args, some later word
 // matches the regular expression. A word of c that holds an expansion
 // counts as matching, unless a known word already rules the match out
-// (spec 0053, "Unknown words").
+// (spec 0053, "Unknown words"). An args that does not compile, which
+// only a rule built outside ParsePolicy can carry, fails closed: the
+// prefix alone matches (spec 0069).
 func (r Rule) MatchesCommand(c Command) bool {
 	if r.Command == "" {
 		return false
@@ -208,7 +210,7 @@ func (r Rule) MatchesCommand(c Command) bool {
 	re := r.args
 	if re == nil {
 		if re, err = regexp.Compile(r.Args); err != nil {
-			return false
+			return true // fail closed: a deny rule refuses, an ask rule asks
 		}
 	}
 	for i, w := range c.Words {

@@ -187,3 +187,24 @@ func TestRuleMatches(t *testing.T) {
 		t.Error("AppliesTo")
 	}
 }
+
+// A rule built outside ParsePolicy can carry an args that does not
+// compile. It fails closed: a command with the rule's prefix matches, so
+// a deny rule refuses and an ask rule asks (spec 0069, bug 4).
+func TestRuleWithUncompilableArgsFailsClosed(t *testing.T) {
+	r := guardrule.Rule{ID: "kubectl-bad", Level: "deny", Command: "kubectl", Args: "(["}
+	cmds, err := guardrule.Commands(guardrule.ShellBash, "kubectl get pods")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.MatchesCommand(cmds[0]) {
+		t.Error("a command with the prefix: MatchesCommand = false, want true")
+	}
+	other, err := guardrule.Commands(guardrule.ShellBash, "helm list")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.MatchesCommand(other[0]) {
+		t.Error("a command without the prefix: MatchesCommand = true, want false")
+	}
+}
