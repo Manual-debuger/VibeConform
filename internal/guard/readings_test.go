@@ -45,7 +45,7 @@ type readingsTally struct {
 // A failure is a lift the audit does not accept. The fix belongs in
 // Exception.Matches, a contract PATCH under spec 0051.
 func TestTwoReadingsOfAnException(t *testing.T) {
-	var n readingsTally
+	var tally readingsTally
 	t.Run("corpus", func(t *testing.T) {
 		for _, c := range contract.GuardCorpus() {
 			if c.Want != contract.WantDeny {
@@ -53,7 +53,7 @@ func TestTwoReadingsOfAnException(t *testing.T) {
 			}
 			t.Run(c.Name, func(t *testing.T) {
 				t.Parallel()
-				checkReadings(t, c, &n)
+				checkReadings(t, c, &tally)
 			})
 		}
 	})
@@ -61,26 +61,28 @@ func TestTwoReadingsOfAnException(t *testing.T) {
 		return
 	}
 	t.Logf("%d deny cases, %d exceptions (%d from shell writes), %d lifts (%d command, %d path)",
-		n.cases.Load(), n.exceptions.Load(), n.shellWrites.Load(), n.lifts.Load(), n.commandLifts.Load(), n.pathLifts.Load())
+		tally.cases.Load(), tally.exceptions.Load(), tally.shellWrites.Load(), tally.lifts.Load(),
+		tally.commandLifts.Load(), tally.pathLifts.Load())
 	// The test must not pass vacuously: the guard lifts command and path
 	// rules by the exceptions built here, and shell writes are read.
-	if n.commandLifts.Load() == 0 || n.pathLifts.Load() == 0 {
-		t.Errorf("the guard lifted %d command and %d path cases; want some of each", n.commandLifts.Load(), n.pathLifts.Load())
+	if tally.commandLifts.Load() == 0 || tally.pathLifts.Load() == 0 {
+		t.Errorf("the guard lifted %d command and %d path cases; want some of each",
+			tally.commandLifts.Load(), tally.pathLifts.Load())
 	}
-	if n.shellWrites.Load() == 0 {
+	if tally.shellWrites.Load() == 0 {
 		t.Error("no path exception was built from a shell write")
 	}
 }
 
 // checkReadings runs c with each exception built for it.
-func checkReadings(t *testing.T, c contract.GuardCase, n *readingsTally) {
+func checkReadings(t *testing.T, c contract.GuardCase, tally *readingsTally) {
 	t.Helper()
 	r := corpusRepo(t, c, testNow)
-	n.cases.Add(1)
+	tally.cases.Add(1)
 	for _, e := range exceptionsBuiltFor(t, c, r.Root) {
-		n.exceptions.Add(1)
+		tally.exceptions.Add(1)
 		if e.shellWrite {
-			n.shellWrites.Add(1)
+			tally.shellWrites.Add(1)
 		}
 		writeFile(t, filepath.Join(r.Root, ".claude", "hooks", "policy.json"), policyWith(t, e.Exception))
 		got := r.hook(t, payloadFor(t, c, r.Root))
@@ -92,11 +94,11 @@ func checkReadings(t *testing.T, c contract.GuardCase, n *readingsTally) {
 		case got.Code != 0:
 			t.Fatalf("exception %+v: exit %d, stderr %q", e.Exception, got.Code, got.Stderr)
 		}
-		n.lifts.Add(1)
+		tally.lifts.Add(1)
 		if gr.IsPathRule(e.Rule) {
-			n.pathLifts.Add(1)
+			tally.pathLifts.Add(1)
 		} else {
-			n.commandLifts.Add(1)
+			tally.commandLifts.Add(1)
 		}
 		if !e.Matches(c.Target(), r.Root) {
 			t.Errorf("vibe-guard lets the case through by exception {rule %q, match %q}, which the audit's reading "+
@@ -106,8 +108,8 @@ func checkReadings(t *testing.T, c contract.GuardCase, n *readingsTally) {
 	}
 }
 
-// exceptionsBuiltFor builds the exceptions for c's rule, in a repository
-// rooted at root.
+// exceptionsBuiltFor builds the exceptions for c's rule, with root as
+// the project root.
 func exceptionsBuiltFor(t *testing.T, c contract.GuardCase, root string) []builtException {
 	t.Helper()
 	tgt := c.Target()
@@ -118,29 +120,29 @@ func exceptionsBuiltFor(t *testing.T, c contract.GuardCase, root string) []built
 			t.Fatalf("a deny case for rule %s does not parse: %v", c.Rule, err)
 		}
 	}
-	ex := func(match string) gr.Exception {
+	exceptionFor := func(match string) gr.Exception {
 		return gr.Exception{Rule: c.Rule, Match: match, Reason: "two readings"}
 	}
 	if !gr.IsPathRule(c.Rule) {
-		return commandExceptions(t, cmds, ex)
+		return commandExceptions(t, cmds, exceptionFor)
 	}
 	var out []builtException
 	if gr.IsEditTool(tgt.Tool) {
-		out = append(out, builtException{Exception: ex(gr.RelPath(root, tgt.Path))})
+		out = append(out, builtException{Exception: exceptionFor(gr.RelPath(root, tgt.Path))})
 	}
 	for _, cmd := range cmds {
 		for _, w := range cmd.Writes {
 			if w.Literal {
-				out = append(out, builtException{Exception: ex(gr.RelPath(root, w.Text)), shellWrite: true})
+				out = append(out, builtException{Exception: exceptionFor(gr.RelPath(root, w.Text)), shellWrite: true})
 			}
 		}
 	}
-	return append(out, builtException{Exception: ex("**")})
+	return append(out, builtException{Exception: exceptionFor("**")})
 }
 
 // commandExceptions builds an exception from each word prefix of each
 // simple command of cmds that holds no expansion.
-func commandExceptions(t *testing.T, cmds []gr.Command, ex func(string) gr.Exception) []builtException {
+func commandExceptions(t *testing.T, cmds []gr.Command, exceptionFor func(string) gr.Exception) []builtException {
 	t.Helper()
 	var out []builtException
 	for _, cmd := range cmds {
@@ -148,9 +150,7 @@ func commandExceptions(t *testing.T, cmds []gr.Command, ex func(string) gr.Excep
 			continue
 		}
 		for k := 1; k <= len(cmd.Words); k++ {
-			if m, ok := commandMatch(t, cmd, k); ok {
-				out = append(out, builtException{Exception: ex(m)})
-			}
+			out = append(out, builtException{Exception: exceptionFor(commandMatch(t, cmd, k))})
 		}
 	}
 	return out
@@ -172,11 +172,12 @@ var (
 
 // commandMatch writes the first k words of cmd as an exception match in
 // cmd's language: a word with no special character as it is, any other
-// word single-quoted. The match must parse back to the same words (its
-// first simple command; a match such as "bash -c 'rm -rf x'" also holds
-// the commands it runs); ok is false for a PowerShell name that needs
-// quoting, which PowerShell would read as a string, not a command.
-func commandMatch(t *testing.T, cmd gr.Command, k int) (match string, ok bool) {
+// word single-quoted. A PowerShell command name that needs quoting is
+// written after the call operator (& 'name'), because a quoted first
+// word alone is a string expression, not a command. The match must parse
+// back to the same words (its first simple command; a match such as
+// "bash -c 'rm -rf x'" also holds the commands it runs).
+func commandMatch(t *testing.T, cmd gr.Command, k int) string {
 	t.Helper()
 	parts := make([]string, k)
 	for i, w := range cmd.Words[:k] {
@@ -184,7 +185,7 @@ func commandMatch(t *testing.T, cmd gr.Command, k int) (match string, ok bool) {
 		case cmd.Shell == gr.ShellPowerShell && psBare.MatchString(w.Text):
 			parts[i] = w.Text
 		case cmd.Shell == gr.ShellPowerShell && i == 0:
-			return "", false
+			parts[i] = "& '" + strings.ReplaceAll(w.Text, "'", "''") + "'"
 		case cmd.Shell == gr.ShellPowerShell:
 			parts[i] = "'" + strings.ReplaceAll(w.Text, "'", "''") + "'"
 		case bashBare.MatchString(w.Text):
@@ -193,7 +194,7 @@ func commandMatch(t *testing.T, cmd gr.Command, k int) (match string, ok bool) {
 			parts[i] = "'" + strings.ReplaceAll(w.Text, "'", `'\''`) + "'"
 		}
 	}
-	match = strings.Join(parts, " ")
+	match := strings.Join(parts, " ")
 	back, err := gr.Commands(cmd.Shell, match)
 	if err != nil || len(back) == 0 || len(back[0].Words) != k || len(back[0].Redirects) > 0 {
 		t.Fatalf("the match %q built from %q does not parse back to %d words: %v", match, cmd.String(), k, err)
@@ -203,7 +204,7 @@ func commandMatch(t *testing.T, cmd gr.Command, k int) (match string, ok bool) {
 			t.Fatalf("the match %q built from %q parses back to word %d %q", match, cmd.String(), i, w.Text)
 		}
 	}
-	return match, true
+	return match
 }
 
 // policyWith is a policy.json that holds e alone.
