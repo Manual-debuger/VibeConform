@@ -1,6 +1,7 @@
 package contract_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -55,7 +56,7 @@ func TestRuleC03(t *testing.T) {
 	perms := func(p string) contracttest.Edit {
 		return contracttest.WithFile(".github/workflows/extra.yml", "on: push\n"+p+"jobs:\n"+jobs)
 	}
-	contracttest.RunRuleCases(t, "C-03", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitHub, "C-03", []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass"},
 		{Name: "read-all", Want: "pass", Edits: []contracttest.Edit{perms("permissions: read-all\n")}},
 		{Name: "empty map", Want: "pass", Edits: []contracttest.Edit{perms("permissions: {}\n")}},
@@ -91,7 +92,7 @@ func TestRuleC01(t *testing.T) {
 	linux := ciVerifyJob("v", "ubuntu-latest")
 	onPush := func(filters string) string { return "on:\n  pull_request:\n  push:\n" + filters }
 	onPR := func(filters string) string { return "on:\n  push:\n    branches: [main]\n  pull_request:\n" + filters }
-	contracttest.RunRuleCases(t, "C-01", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitHub, "C-01", []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass"},
 		{Name: "on as a list", Want: "pass", Edits: []contracttest.Edit{ciWith("on: [pull_request, push]\n", linux)}},
 		{Name: "on as one event per workflow", Want: "pass", Edits: []contracttest.Edit{
@@ -232,6 +233,39 @@ func TestRuleC01DefaultBranch(t *testing.T) {
 	})
 }
 
+// When the report notes the assumed default branch (contract 1.0.1): on
+// GitHub Actions only when C-01, C-04 or R-01 reads the runs, so an
+// audit that runs none of them has no note; on GitLab CI whenever the
+// configuration is read. Regression: spec 0067 first noted it whenever
+// the GitHub workflows were read, which every audit does.
+func TestRuleCIDefaultBranchNote(t *testing.T) {
+	t.Parallel()
+	assumed := func(rep *contract.Report) bool {
+		return slices.ContainsFunc(rep.Notes, func(n string) bool { return strings.Contains(n, "assume the default branch") })
+	}
+	for _, tc := range []struct {
+		name  string
+		edits []contracttest.Edit
+		rules []string
+		want  bool
+	}{
+		{name: "GitHub, C-02 and C-03 only", rules: []string{"C-02", "C-03"}},
+		{name: "GitHub, C-01", rules: []string{"C-01"}, want: true},
+		{name: "GitHub, C-04", rules: []string{"C-04"}, want: true},
+		{name: "GitHub, R-01", rules: []string{"A-02", "R-01"}, want: true},
+		{name: "GitLab, C-02 only", edits: gitlab(glOnly(glVerify("verify", ""))), rules: []string{"C-02"}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rep := contracttest.Audit(t, contracttest.GitFixture(t, contracttest.Baseline, tc.edits...),
+				contract.Options{Static: true, Rules: contracttest.Rules(t, tc.rules...)})
+			if got := assumed(rep); got != tc.want {
+				t.Errorf("the report notes an assumed default branch: %t, want %t; notes %q", got, tc.want, rep.Notes)
+			}
+		})
+	}
+}
+
 // C-02: every uses: but a local path is pinned to a 40-character commit
 // SHA, and no run: step has a word ending in @latest. Every workflow
 // counts, whatever its triggers.
@@ -245,7 +279,7 @@ func TestRuleC02(t *testing.T) {
 	}
 	run := func(script string) contracttest.Edit { return extra(ciJob("x", "ubuntu-latest", script)) }
 	const sha = "@08eba0b27e820071cde6df949e0beb9ba4906955"
-	contracttest.RunRuleCases(t, "C-02", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitHub, "C-02", []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass"},
 		{Name: "local action", Want: "pass", Edits: []contracttest.Edit{step("./.github/actions/setup")}},
 		{Name: "action in a subdirectory, pinned", Want: "pass", Edits: []contracttest.Edit{step("github/codeql-action/init" + sha)}},
@@ -274,6 +308,15 @@ func TestRuleC02(t *testing.T) {
 		{Name: "@latest inside a word is not a version", Want: "pass", Edits: []contracttest.Edit{run("echo user@latest.example")}},
 		{Name: "a GitHub expression version is not @latest", Want: "pass",
 			Edits: []contracttest.Edit{run("go install github.com/go-task/task/v3/cmd/task@${{ env.TASK_VERSION }}")}},
+		// Spec 0067, "C-02": the unpinned uses: findings come before the
+		// @latest findings, and a word repeated in one run: step gives one
+		// finding, as on GitLab CI.
+		{Name: "an @latest run: step before an unpinned uses: step", Want: "fail", Edits: []contracttest.Edit{extra(
+			"  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npx prettier@latest --check .\n      - uses: actions/setup-go@v5\n")},
+			Findings: []string{"prettier@latest", "actions/setup-go@v5"}},
+		{Name: "a run: step that repeats one @latest word", Want: "fail",
+			Edits:    []contracttest.Edit{run("npx prettier@latest --check . && npx prettier@latest --write .")},
+			Findings: []string{"prettier@latest"}},
 		{Name: "a workflow that does not parse", Want: "fail",
 			Edits:    []contracttest.Edit{contracttest.WithFile(".github/workflows/broken.yml", "on: push\njobs:\n  x:\n    steps: {}\n")},
 			Findings: []string{".github/workflows/broken.yml: ", "steps must be a list"}},
@@ -291,7 +334,7 @@ func ciAuditWith(on, jobs string) contracttest.Edit {
 // verify command.
 func TestRuleC04(t *testing.T) {
 	t.Parallel()
-	contracttest.RunRuleCases(t, "C-04", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitHub, "C-04", []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass"},
 		{Name: "vibe audit after building vibe, in one step", Want: "pass", Edits: []contracttest.Edit{
 			ciAuditWith(ciPRAndPush, ciJob("audit", "ubuntu-latest", "go build -o \"$HOME/bin/vibe\" ./cmd/vibe && vibe audit --json"))}},
@@ -333,7 +376,7 @@ func TestRuleC04(t *testing.T) {
 func TestRuleR01(t *testing.T) {
 	t.Parallel()
 	const others = "  verify-fast: task verify:fast\n  fmt: task fmt\n  fmt-check: task fmt:check\n"
-	contracttest.RunPartCases(t, "R-01", contract.Static, []contracttest.RuleCase{
+	ciPartCases(t, goldenGitHub, "R-01", contract.Static, []contracttest.RuleCase{
 		{Name: "baseline", Want: "pass"},
 		{Name: "vibe by path is not a call of vibe", Want: "pass", Edits: []contracttest.Edit{
 			ciWith(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("sync", "ubuntu-latest", "|\n          \"$RUNNER_TEMP/bin/vibe\" sync"))}},
@@ -466,7 +509,7 @@ func ciMatrixJob(matrix string) string {
 func TestRuleC05(t *testing.T) {
 	t.Parallel()
 	ubuntu, windows := ciVerifyJob("l", "ubuntu-22.04"), ciVerifyJob("w", "windows-2022")
-	contracttest.RunRuleCases(t, "C-05", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitHub, "C-05", []contracttest.RuleCase{
 		{Name: "baseline matrix", Want: "pass"},
 		{Name: "two jobs", Want: "pass", Edits: []contracttest.Edit{ciWith(ciPRAndPush, ubuntu+windows)}},
 		{Name: "label lists", Want: "pass", Edits: []contracttest.Edit{ciWith(ciPRAndPush,
@@ -529,7 +572,7 @@ func TestRuleD03(t *testing.T) {
 	scan := func(script string) contracttest.Edit {
 		return contracttest.WithFile(ciFile, ciWorkflow(ciPRAndPush, ciVerifyJob("v", "ubuntu-latest")+ciJob("scan", "ubuntu-latest", script)))
 	}
-	contracttest.RunRuleCases(t, "D-03", []contracttest.RuleCase{
+	ciRuleCases(t, goldenGitHub, "D-03", []contracttest.RuleCase{
 		{Name: "baseline govulncheck", Want: "pass"},
 		{Name: "pip-audit", Want: "pass", Edits: []contracttest.Edit{scan("pip-audit -r requirements.txt")}},
 		{Name: "osv-scanner", Want: "pass", Edits: []contracttest.Edit{scan("osv-scanner scan -r .")}},
