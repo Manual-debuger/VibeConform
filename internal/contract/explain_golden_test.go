@@ -30,7 +30,7 @@ func explainText(t *testing.T, id string) string {
 		t.Fatalf("no rule %s", id)
 	}
 	var b strings.Builder
-	b.WriteString("Check:\n" + rule.Check + "\n")
+	b.WriteString("Check:\n" + rule.Check() + "\n")
 	for _, p := range rule.Parts {
 		b.WriteString("\nPart check (" + string(p.Kind) + "):\n" + p.Check + "\n")
 	}

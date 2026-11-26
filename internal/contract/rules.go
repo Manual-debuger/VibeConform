@@ -2,6 +2,7 @@ package contract
 
 import (
 	"slices"
+	"strings"
 )
 
 // Level is how binding a rule is (spec 0051, "The verdict"): a failed
@@ -107,7 +108,12 @@ type LastFunc func(env *Env, earlier Earlier) PartResult
 // RunLast.
 type Part struct {
 	Kind PartKind
-	// Check is the part's check as spec 0051 states it.
+	// Lead is the text spec 0051 writes before the part's check in the
+	// rule's check, such as "Static: ", "Execution and probe: " or
+	// "Static, ". An empty lead continues the text of the part before it.
+	Lead string
+	// Check is the part's check as spec 0051 states it, without its
+	// lead. --explain prints it as the part's check.
 	Check string
 	// Run decides every part but the last part.
 	Run CheckFunc
@@ -124,8 +130,6 @@ type Rule struct {
 	Category Category
 	// Title is the rule sentence of spec 0051.
 	Title string
-	// Check is the rule's check as spec 0051 states it, every part.
-	Check string
 	// Source names the specs, ADRs and principles the rule comes from.
 	Source string
 	// Since is the contract version that added the rule, such as "1.2.0",
@@ -139,6 +143,16 @@ type Rule struct {
 	// It returns why the rule is not applicable. It sees the repository,
 	// not only the configuration: C-03 is not applicable on GitLab CI.
 	applies func(env *Env) (bool, string)
+}
+
+// Check is the rule's check as spec 0051 states it, every part: each
+// part's lead and check, in order, joined by a space (spec 0073).
+func (r Rule) Check() string {
+	texts := make([]string, len(r.Parts))
+	for i, p := range r.Parts {
+		texts[i] = p.Lead + p.Check
+	}
+	return strings.Join(texts, " ")
 }
 
 // Waivable reports whether a waiver may suspend the rule: only SHOULD
@@ -190,25 +204,39 @@ func notOnGitLab(env *Env) (bool, string) {
 	return true, ""
 }
 
+// The leads the part constructors give, one for each kind. A part whose
+// lead differs in spec 0051 sets it with withLead.
+const (
+	leadStatic    = "Static: "
+	leadExecution = "Execution: "
+	leadProbe     = "Probe: "
+)
+
+// withLead is the part with the lead spec 0051 writes before it.
+func (p Part) withLead(lead string) Part {
+	p.Lead = lead
+	return p
+}
+
 func static(check string, run CheckFunc) Part {
-	return Part{Kind: Static, Check: check, Run: run}
+	return Part{Kind: Static, Lead: leadStatic, Check: check, Run: run}
 }
 
 // executionRun is an execution part this vibe implements.
 func executionRun(check string, run CheckFunc) Part {
-	return Part{Kind: Execution, Check: check, Run: run}
+	return Part{Kind: Execution, Lead: leadExecution, Check: check, Run: run}
 }
 
 // executionLast is the last part: an execution part that runs after
 // every other execution and probe part and gets their results (spec
 // 0071).
 func executionLast(check string, run LastFunc) Part {
-	return Part{Kind: Execution, Check: check, RunLast: run}
+	return Part{Kind: Execution, Lead: leadExecution, Check: check, RunLast: run}
 }
 
 // probeRun is a probe part this vibe implements.
 func probeRun(check string, run CheckFunc) Part {
-	return Part{Kind: Probe, Check: check, Run: run}
+	return Part{Kind: Probe, Lead: leadProbe, Check: check, Run: run}
 }
 
 func needsWindows(cfg *Config) (bool, string) {
@@ -240,31 +268,27 @@ const notApplicableWithoutClaude = "when `agents` does not include `claude`"
 var rules = []Rule{
 	{
 		ID: "V-01", Level: Must, Category: categoryVerification,
-		Title: "`verify` covers formatting, static analysis and tests",
-		Check: "Execution and probe: in the probe copy, `verify` exits 0. With each planted defect in each " +
-			"component, it exits non-zero. The report names each defect kind (format, static analysis, test) " +
-			"that did not make it fail.",
+		Title:  "`verify` covers formatting, static analysis and tests",
 		Source: "spec 0011, principle 2",
 		Parts: []Part{
-			executionRun("in the probe copy, `verify` exits 0.", checkV01Execution),
-			{Kind: Probe, Check: "With each planted defect in each component, it exits non-zero. The report names each defect " +
-				"kind (format, static analysis, test) that did not make it fail.", Run: checkV01Probe},
+			executionRun("in the probe copy, `verify` exits 0.", checkV01Execution).withLead("Execution and probe: "),
+			// The probe part continues the sentence the execution part's
+			// lead opens.
+			probeRun("With each planted defect in each component, it exits non-zero. The report names each defect "+
+				"kind (format, static analysis, test) that did not make it fail.", checkV01Probe).withLead(""),
 		},
 	},
 	{
 		ID: "V-02", Level: Must, Category: categoryVerification,
 		Title:  "`verify-fast` catches the same defects",
-		Check:  "Probe: with each planted defect in each component, `verify-fast` exits non-zero. The contract does not measure speed.",
 		Source: "spec 0023",
 		Parts: []Part{
-			{Kind: Probe, Check: "with each planted defect in each component, `verify-fast` exits non-zero. The contract does not measure speed.", Run: checkV02Probe},
+			probeRun("with each planted defect in each component, `verify-fast` exits non-zero. The contract does not measure speed.", checkV02Probe),
 		},
 	},
 	{
 		ID: "V-03", Level: Must, Category: categoryVerification,
-		Title: "`fmt-check` writes no file",
-		Check: "Execution: in the probe copy with the unformatted-file defect planted, after `fmt-check` runs, " +
-			"`git status --porcelain` lists only the planted file, with its content unchanged",
+		Title:  "`fmt-check` writes no file",
 		Source: "spec 0011",
 		Parts: []Part{
 			executionRun("in the probe copy with the unformatted-file defect planted, after `fmt-check` runs, "+
@@ -274,7 +298,6 @@ var rules = []Rule{
 	{
 		ID: "V-04", Level: Must, Category: categoryVerification,
 		Title:  "The entrypoints are declared and used",
-		Check:  "Static: `vibe.yaml` declares every required entrypoint, each non-empty. The other rules check that CI and hooks call them.",
 		Source: "ADR 0025 (replaces ADR 0009's protected task names)",
 		Parts: []Part{
 			static("`vibe.yaml` declares every required entrypoint, each non-empty. The other rules check that CI and hooks call them.", checkV04),
@@ -282,9 +305,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "V-05", Level: Should, Category: categoryVerification, Since: "1.2.0",
-		Title: "`verify` catches a type error",
-		Check: "Probe: with the type-error defect planted in each Python component, `verify` exits non-zero. " +
-			"Components in other languages are skipped: there a type error is a compile error, which V-01 shows.",
+		Title:             "`verify` catches a type error",
 		Source:            "spec 0061, ADR 0027",
 		NotApplicableWhen: "when no component is Python",
 		Parts: []Part{
@@ -295,9 +316,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "V-06", Level: Should, Category: categoryVerification, Since: "1.2.0",
-		Title: "`verify` catches an over-complex function",
-		Check: "Probe: with the complexity defect (" + complexityFunction + ") " +
-			"in each component, `verify` exits non-zero. " + complexityCatches,
+		Title:  "`verify` catches an over-complex function",
 		Source: "spec 0061, ADR 0027",
 		Parts: []Part{
 			probeRun("with the complexity defect ("+complexityFunction+") "+
@@ -306,9 +325,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "V-07", Level: Should, Category: categoryVerification, Since: "1.2.0",
-		Title: "`verify` catches a secret in the working tree",
-		Check: "Probe: with the secret defect (a PEM private-key block in a plain text file) planted once, in the " +
-			"first component in configuration order that has tests, `verify` exits non-zero.",
+		Title:  "`verify` catches a secret in the working tree",
 		Source: "spec 0061, ADR 0027",
 		Parts: []Part{
 			probeRun("with the secret defect (a PEM private-key block in a plain text file) planted once, in the "+
@@ -317,9 +334,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "V-08", Level: Should, Category: categoryVerification, Since: "1.2.0",
-		Title: "Blanket suppressions do not hide a defect",
-		Check: "Probe: with V-01's static-analysis defect under the language's blanket suppressions planted in each " +
-			"component, `verify` exits non-zero. A component without tests leaves it undecided.",
+		Title:  "Blanket suppressions do not hide a defect",
 		Source: "spec 0061, ADR 0027",
 		Parts: []Part{
 			probeRun("with V-01's static-analysis defect under the language's blanket suppressions planted in each "+
@@ -329,14 +344,12 @@ var rules = []Rule{
 	{
 		ID: "H-01", Level: Should, Category: categoryHooks,
 		Title:  "Hook configuration is committed and installs with one command",
-		Check:  "Static: a recognized hook manager's configuration is committed",
 		Source: "spec 0011",
 		Parts:  []Part{static("a recognized hook manager's configuration is committed", checkH01)},
 	},
 	{
 		ID: "H-02", Level: Should, Category: categoryHooks,
 		Title:  "pre-commit checks formatting; pre-push runs verification",
-		Check:  "Static: the pre-commit hook calls `fmt-check` or `fmt`; the pre-push hook calls `verify-fast` or `verify`",
 		Source: "spec 0011, ADR 0017",
 		Parts: []Part{
 			static("the pre-commit hook calls `fmt-check` or `fmt`; the pre-push hook calls `verify-fast` or `verify`", checkH02),
@@ -345,7 +358,6 @@ var rules = []Rule{
 	{
 		ID: "C-01", Level: Must, Category: categoryCI,
 		Title:  "CI runs `verify` on pull requests and on pushes to the default branch",
-		Check:  "Static: workflows triggered by `pull_request` and by `push` to the default branch call `verify`",
 		Source: "spec 0010",
 		Parts: []Part{
 			static("workflows triggered by `pull_request` and by `push` to the default branch call `verify`", checkC01),
@@ -353,20 +365,17 @@ var rules = []Rule{
 	},
 	{
 		ID: "C-02", Level: Must, Category: categoryCI,
-		Title: "Toolchains and actions are pinned",
-		Check: "Static, across every workflow (not only generated ones): every `uses:` other than a local path is " +
-			"pinned to a full 40-character commit SHA, and no `run:` step contains a command word ending in `@latest`",
+		Title:  "Toolchains and actions are pinned",
 		Source: "spec 0044",
 		Parts: []Part{
 			static("across every workflow (not only generated ones): every `uses:` other than a local path is "+
-				"pinned to a full 40-character commit SHA, and no `run:` step contains a command word ending in `@latest`", checkC02),
+				"pinned to a full 40-character commit SHA, and no `run:` step contains a command word ending in `@latest`", checkC02).
+				withLead("Static, "),
 		},
 	},
 	{
 		ID: "C-03", Level: Must, Category: categoryCI,
-		Title: "Workflow permissions default to read",
-		Check: "Static: every workflow has top-level `permissions` that grant no write scope (`contents: read`, " +
-			"`read-all` or `{}`). Jobs may widen them.",
+		Title:             "Workflow permissions default to read",
 		Source:            "spec 0010",
 		NotApplicableWhen: "when the C rules read GitLab CI",
 		Parts: []Part{
@@ -378,7 +387,6 @@ var rules = []Rule{
 	{
 		ID: "C-04", Level: Must, Category: categoryCI,
 		Title:  "The audit runs in its own job",
-		Check:  "Static: a job triggered on pull requests runs `vibe audit` (or the setup action followed by it) and does not call `verify`",
 		Source: "spec 0022",
 		Parts: []Part{
 			static("a job triggered on pull requests runs `vibe audit` (or the setup action followed by it) and does not call `verify`", checkC04),
@@ -386,9 +394,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "C-05", Level: Should, Category: categoryCI,
-		Title: "Tests run on Linux and Windows",
-		Check: "Static: the steps that call `verify` run on a Linux runner and on a Windows runner, after matrix " +
-			"expansion. Not applicable when `platforms` does not include `windows`.",
+		Title:             "Tests run on Linux and Windows",
 		Source:            "principle 2",
 		NotApplicableWhen: "when `platforms` does not include `windows`",
 		Parts: []Part{
@@ -400,7 +406,6 @@ var rules = []Rule{
 	{
 		ID: "A-01", Level: Must, Category: categoryAgents,
 		Title:             "Shell commands and file edits pass through the guard",
-		Check:             "Static: in `.claude/settings.json`, PreToolUse hooks match each of `Bash`, `PowerShell`, `Write`, `Edit` and `MultiEdit`",
 		Source:            "spec 0021",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
@@ -410,10 +415,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "A-02", Level: Must, Category: categoryAgents,
-		Title: "The guard refuses the baseline unless an exception says otherwise",
-		Check: "Probe: every corpus case is fed to every PreToolUse hook command that matches its tool. A deny case " +
-			"is satisfied as described under \"Guard policy and exceptions\". Every allow case must be allowed. " +
-			"A hook \"refuses\" by exiting 2.",
+		Title:             "The guard refuses the baseline unless an exception says otherwise",
 		Source:            "specs 0012, 0047",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
@@ -425,9 +427,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "A-03", Level: Must, Category: categoryAgents,
-		Title: "The guard fails closed",
-		Check: "Probe: every deny case is still refused in two situations: with `PATH` reduced to the operating " +
-			"system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON",
+		Title:             "The guard fails closed",
 		Source:            "spec 0021",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
@@ -438,10 +438,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "A-04", Level: Must, Category: categoryAgents,
-		Title: "The guard is loosened only through listed exceptions",
-		Check: "Static: `.claude/hooks/policy.json` is valid version 2; every exception names a guard rule ID and " +
-			"has a non-empty reason; when a PreToolUse hook runs `vibe-guard hook`, vibe-guard can load it; " +
-			"the audit lists them. Tightening is not restricted.",
+		Title:             "The guard is loosened only through listed exceptions",
 		Source:            "spec 0050, ADR 0024",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
@@ -453,22 +450,19 @@ var rules = []Rule{
 	},
 	{
 		ID: "A-05", Level: Must, Category: categoryAgents,
-		Title: "The agent's turn ends with `verify-fast`",
-		Check: "Static: a Stop hook calls `verify-fast`. Probe: with a planted defect, the Stop hook exits 2 for a " +
-			"payload with `stop_hook_active: false`, and exits 0 for one with `stop_hook_active: true`",
+		Title:             "The agent's turn ends with `verify-fast`",
 		Source:            "spec 0023",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
 			static("a Stop hook calls `verify-fast`.", checkA05),
-			{Kind: Probe, Check: "with a planted defect, the Stop hook exits 2 for a payload with `stop_hook_active: false`, " +
-				"and exits 0 for one with `stop_hook_active: true`", Run: checkA05Probe},
+			probeRun("with a planted defect, the Stop hook exits 2 for a payload with `stop_hook_active: false`, "+
+				"and exits 0 for one with `stop_hook_active: true`", checkA05Probe),
 		},
 		applies: onConfig(needsClaude),
 	},
 	{
 		ID: "A-06", Level: Should, Category: categoryAgents,
 		Title:             "Edited files are formatted",
-		Check:             "Static: a PostToolUse hook that matches `Write` and `Edit` calls `fmt`",
 		Source:            "spec 0023",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts:             []Part{static("a PostToolUse hook that matches `Write` and `Edit` calls `fmt`", checkA06)},
@@ -477,7 +471,6 @@ var rules = []Rule{
 	{
 		ID: "A-07", Level: Should, Category: categoryAgents,
 		Title:             "Session start injects facts and changes nothing",
-		Check:             "Static: a SessionStart hook exists. Execution: running it in the probe copy exits 0, and `git status --porcelain` stays empty.",
 		Source:            "spec 0023",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
@@ -490,11 +483,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "A-08", Level: Must, Category: categoryAgents,
-		Title: "An agent changes guardrail settings only after a person unlocks them",
-		Check: "Probe: a `Write` to `.claude/settings.json` and an `Edit` under `.claude/hooks/` are refused with no " +
-			"marker, allowed with a valid marker, and refused with an expired marker. A `Bash` call that runs " +
-			"`vibe unlock`, and any `Write` or `Bash` that creates the marker, are refused. After the Stop hook " +
-			"runs, the marker is gone.",
+		Title:             "An agent changes guardrail settings only after a person unlocks them",
 		Source:            "ADR 0025",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
@@ -507,9 +496,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "A-09", Level: Should, Category: categoryAgents, Since: "1.2.0",
-		Title: "The guard refuses commands that skip Git hooks",
-		Check: "Probe: every A-09 corpus case is fed to every PreToolUse hook command that matches its tool. A deny " +
-			"case is satisfied as described under \"Guard policy and exceptions\". Every allow case must be allowed.",
+		Title:             "The guard refuses commands that skip Git hooks",
 		Source:            "spec 0061, ADR 0027",
 		NotApplicableWhen: notApplicableWithoutClaude,
 		Parts: []Part{
@@ -522,17 +509,14 @@ var rules = []Rule{
 	{
 		ID: "D-01", Level: Must, Category: categoryDependencies,
 		Title:  "Lockfiles are committed and match the declared dependencies",
-		Check:  "Execution, " + d01CheckText,
 		Source: "specs 0010, 0020",
 		Parts: []Part{
-			executionRun(d01CheckText, checkD01),
+			executionRun(d01CheckText, checkD01).withLead("Execution, "),
 		},
 	},
 	{
 		ID: "D-02", Level: Should, Category: categoryDependencies,
-		Title: "An update bot covers dependencies and actions, without automerge",
-		Check: "Static: `.github/dependabot.yml` or a Renovate configuration covers each component's ecosystem " +
-			"and `github-actions`, and enables no automerge",
+		Title:  "An update bot covers dependencies and actions, without automerge",
 		Source: "spec 0010",
 		Parts: []Part{
 			static("`.github/dependabot.yml` or a Renovate configuration covers each component's ecosystem "+
@@ -541,9 +525,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "D-03", Level: Should, Category: categoryDependencies,
-		Title: "CI scans for known vulnerabilities",
-		Check: "Static: a workflow runs a recognized scanner: `govulncheck`, `pip-audit`, `pnpm audit`, " +
-			"`npm audit`, `osv-scanner` or `trivy`. Adding one is MINOR.",
+		Title:  "CI scans for known vulnerabilities",
 		Source: "spec 0010",
 		Parts: []Part{
 			static("a workflow runs a recognized scanner: `govulncheck`, `pip-audit`, `pnpm audit`, "+
@@ -552,11 +534,7 @@ var rules = []Rule{
 	},
 	{
 		ID: "R-01", Level: Must, Category: categoryRemovability,
-		Title: "Everything but the audit works without vibe",
-		Check: "Static: no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 " +
-			"and `vibe --version` in a CI job that calls no entrypoint. " +
-			"Execution: with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases " +
-			"are still refused.",
+		Title:  "Everything but the audit works without vibe",
 		Source: "principle 3, spec 0017",
 		Parts: []Part{
 			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 "+
@@ -570,7 +548,6 @@ var rules = []Rule{
 	{
 		ID: "R-02", Level: Should, Category: categoryRemovability,
 		Title:             "Agents are told the verification entrypoints",
-		Check:             "Static: `AGENTS.md` exists and contains every `verify` command, and `CLAUDE.md` exists and references `AGENTS.md`",
 		Source:            "spec 0043",
 		NotApplicableWhen: "when `agents` is empty; its `CLAUDE.md` half when `agents` does not include `claude`",
 		Parts: []Part{
@@ -581,7 +558,6 @@ var rules = []Rule{
 	{
 		ID: "R-03", Level: Should, Category: categoryRemovability,
 		Title:  "Pull requests report verification",
-		Check:  "Static: a pull request template exists and has a heading containing \"verif\" (case-insensitive)",
 		Source: "spec 0010",
 		Parts: []Part{
 			static("a pull request template exists and has a heading containing \"verif\" (case-insensitive)", checkR03),

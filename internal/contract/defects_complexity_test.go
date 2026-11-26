@@ -135,7 +135,7 @@ func TestV06RuleTextStatesTheThreshold(t *testing.T) {
 	if !ok {
 		t.Fatal("no rule V-06")
 	}
-	texts := []string{r.Check}
+	texts := []string{r.Check()}
 	for _, p := range r.Parts {
 		texts = append(texts, p.Check)
 	}
