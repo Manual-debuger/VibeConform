@@ -82,6 +82,23 @@ func (c GuardCase) Target() guardrule.Target {
 	return t
 }
 
+// ExceptionMatches reports whether ex matches the case under the reading
+// of the audited contract, Contract1 or Contract2, with root as the
+// project root. Under Contract1 a command exception may prefix any simple
+// command of the case. Under Contract2 it must prefix one the case's rule
+// refuses (Refuses, or the case's one simple command), and no exception
+// matches a fixed case (spec 0072, "The audit's reading under 2.0.0").
+// The exception's rule must be the case's in both.
+func (c GuardCase) ExceptionMatches(ex guardrule.Exception, root, audited string) bool {
+	if ex.Rule != c.Rule {
+		return false
+	}
+	if audited == Contract1 {
+		return ex.Matches(c.Target(), root)
+	}
+	return !c.Fixed && ex.Matches(c.Target(), root, c.Refuses...)
+}
+
 var guardCorpus = sync.OnceValue(func() []GuardCase {
 	cases, err := parseGuardCorpus(guardCorpusJSON)
 	if err != nil {

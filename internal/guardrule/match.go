@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -60,12 +61,17 @@ func ParseTarget(tool string, input json.RawMessage) (Target, error) {
 // Matches reports whether the exception matches the target: for a path
 // rule, its glob matches the path made relative to root (RelPath); for a
 // command rule, its words are a prefix of the words of some simple
-// command of the target's command (MatchesCommand). A command that does
-// not parse matches no exception.
+// command of the target's command (MatchesCommand). With refused, only
+// the simple commands whose words (Command.String) are one of refused
+// count: the simple commands the rule refused, which is how a guard
+// reads an exception (spec 0072, "The audit's reading under 2.0.0").
+// Without, every simple command counts. A command that does not parse
+// matches no exception. refused does not change a path rule's match.
 //
-// This is the reading the audit's A-02 needs. A guard, which knows the
-// simple command a rule refused, calls MatchesCommand on that command.
-func (e Exception) Matches(t Target, root string) bool {
+// This is the reading the audit's A-02 needs: contract 1.x passes no
+// refused, 2.0.0 the case's. A guard, which knows the simple command a
+// rule refused, calls MatchesCommand on that command.
+func (e Exception) Matches(t Target, root string, refused ...string) bool {
 	if IsPathRule(e.Rule) {
 		return t.Path != "" && IsEditTool(t.Tool) && e.MatchesPath(t.Path, root)
 	}
@@ -78,6 +84,9 @@ func (e Exception) Matches(t Target, root string) bool {
 		return false
 	}
 	for _, c := range cmds {
+		if len(refused) > 0 && !slices.Contains(refused, c.String()) {
+			continue
+		}
 		if e.MatchesCommand(c) {
 			return true
 		}
