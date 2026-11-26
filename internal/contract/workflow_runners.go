@@ -29,7 +29,7 @@ type matrixCombo map[string]string
 // runnerPlatforms returns the platforms a job runs on, one entry per
 // matrix combination, and the runners whose platform is unknown, as
 // written.
-func runnerPlatforms(j *Job) (platforms, unknown []string) {
+func runnerPlatforms(j *workflowJob) (platforms, unknown []string) {
 	combos, matrixKnown := matrixCombos(j.Strategy)
 	for _, combo := range combos {
 		p, label := comboPlatform(j.RunsOn, combo, matrixKnown)
@@ -90,11 +90,11 @@ func labelPlatform(label string) string {
 	case strings.Contains(l, "${{"):
 		return ""
 	case l == "linux" || strings.HasPrefix(l, "ubuntu-"):
-		return PlatformLinux
+		return platformLinux
 	case l == "windows" || strings.HasPrefix(l, "windows-"):
-		return PlatformWindows
+		return platformWindows
 	case l == "macos" || strings.HasPrefix(l, "macos-"):
-		return PlatformMacOS
+		return platformMacOS
 	}
 	return ""
 }

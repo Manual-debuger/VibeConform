@@ -29,7 +29,7 @@ func TestGoComplexitySampleBuildsAndPassesVet(t *testing.T) {
 	if strings.HasSuffix(d.Path, "_test.go") || !strings.HasPrefix(d.Path, "foo/") {
 		t.Fatalf("planted at %s, want a non-test file in foo/", d.Path)
 	}
-	goVet(t, env.Repo.Root(), d)
+	goVet(t, env.repo.rootDir(), d)
 	fn := onlyFunc(t, d)
 	if !fn.Name.IsExported() || fn.Doc == nil || !strings.HasPrefix(fn.Doc.Text(), fn.Name.Name+" ") {
 		t.Errorf("func %s: want an exported function with a doc comment that starts with its name", fn.Name.Name)

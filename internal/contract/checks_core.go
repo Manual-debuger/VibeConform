@@ -15,10 +15,10 @@ import (
 
 // checkV04: every required entrypoint is declared and non-empty, and each
 // command of every declared entrypoint is one simple command.
-func checkV04(env *Env, _ Needed) PartResult {
+func checkV04(env *Env) PartResult {
 	var problems []Finding
 	for _, name := range EntrypointOrder() {
-		if _, declared := env.Config.Entrypoints[name]; !declared && !slices.Contains(RequiredEntrypoints, name) {
+		if _, declared := env.config.Entrypoints[name]; !declared && !slices.Contains(requiredEntrypoints, name) {
 			continue
 		}
 		problems = append(problems, env.entrypoint(name).problems...)
@@ -33,20 +33,20 @@ func checkV04(env *Env, _ Needed) PartResult {
 // Claude Code is in use, CLAUDE.md contains the string AGENTS.md. The
 // rule is not applicable with no agents; its CLAUDE.md half without
 // claude.
-func checkR02(env *Env, _ Needed) PartResult {
+func checkR02(env *Env) PartResult {
 	halves := []PartResult{agentsMDNamesVerify(env)}
-	if slices.Contains(env.Config.Agents, AgentClaude) {
+	if slices.Contains(env.config.agents, agentClaude) {
 		halves = append(halves, claudeMDPointsToAgentsMD(env))
 	}
-	return Merge(halves...)
+	return merge(halves...)
 }
 
 func agentsMDNamesVerify(env *Env) PartResult {
 	const file = "AGENTS.md"
-	if missing := needEntrypoint(env, EntrypointVerify); missing != nil {
+	if missing := needEntrypoint(env, entrypointVerify); missing != nil {
 		return Fail(*missing)
 	}
-	verify := env.EntrypointSource(EntrypointVerify)
+	verify := env.entrypointSource(entrypointVerify)
 	data, res, ok := readDocument(env, file, Finding{
 		File:    file,
 		Message: "is missing, so agents are not told how to verify their work",
@@ -98,9 +98,9 @@ var prTemplateHeading = regexp.MustCompile(`^ {0,3}#{1,6}(?:[ \t]|$)`)
 
 // checkR03: every tracked pull request template has an ATX heading
 // containing "verif", case-insensitive.
-func checkR03(env *Env, _ Needed) PartResult {
+func checkR03(env *Env) PartResult {
 	var templates []string
-	for _, f := range env.Repo.Files() {
+	for _, f := range env.repo.Files() {
 		if isPRTemplate(f) {
 			templates = append(templates, f)
 		}
@@ -114,9 +114,9 @@ func checkR03(env *Env, _ Needed) PartResult {
 	}
 	var findings []Finding
 	for _, f := range templates {
-		data, err := env.ReadFile(f)
+		data, err := env.readFile(f)
 		if err != nil {
-			return Undecided(Finding{File: f, Message: fmt.Sprintf("cannot be read: %v", err), Fix: "make the file readable"})
+			return undecided(Finding{File: f, Message: fmt.Sprintf("cannot be read: %v", err), Fix: "make the file readable"})
 		}
 		if !hasVerifHeading(string(data)) {
 			findings = append(findings, Finding{
@@ -161,7 +161,7 @@ func hasVerifHeading(text string) bool {
 // needEntrypoint returns the V-04 finding for an entrypoint a rule needs,
 // or nil when it is usable.
 func needEntrypoint(env *Env, name string) *Finding {
-	_, missing := env.Entrypoint(name)
+	_, missing := env.entrypointCommands(name)
 	return missing
 }
 
@@ -169,12 +169,12 @@ func needEntrypoint(env *Env, name string) *Finding {
 // tracked fails the rule with missing; a file that cannot be read leaves
 // it undecided.
 func readDocument(env *Env, file string, missing Finding) ([]byte, PartResult, bool) {
-	data, err := env.ReadFile(file)
+	data, err := env.readFile(file)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return nil, Fail(missing), false
 	case err != nil:
-		return nil, Undecided(Finding{File: file, Message: fmt.Sprintf("cannot be read: %v", err), Fix: "make the file readable"}), false
+		return nil, undecided(Finding{File: file, Message: fmt.Sprintf("cannot be read: %v", err), Fix: "make the file readable"}), false
 	}
 	return data, Pass(), true
 }

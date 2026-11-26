@@ -163,8 +163,8 @@ func (s *probeSession) build(env *Env) *Finding { //nolint:gocognit // baseline:
 	if err := os.MkdirAll(s.root, 0o750); err != nil {
 		return &Finding{Message: "cannot create the probe copy: " + err.Error()}
 	}
-	repoRoot := env.Repo.Root()
-	for _, rel := range env.Repo.Files() {
+	repoRoot := env.repo.rootDir()
+	for _, rel := range env.repo.Files() {
 		src := filepath.Join(repoRoot, filepath.FromSlash(rel))
 		dst := filepath.Join(s.root, filepath.FromSlash(rel))
 		info, err := os.Lstat(src)
@@ -177,7 +177,7 @@ func (s *probeSession) build(env *Env) *Finding { //nolint:gocognit // baseline:
 		switch {
 		case info.IsDir():
 			// A gitlink: submodules are not copied.
-			env.Note("the probe copy leaves out the submodule %s", rel)
+			env.note("the probe copy leaves out the submodule %s", rel)
 		case info.Mode()&os.ModeSymlink != 0:
 			target, err := os.Readlink(src)
 			if err == nil {
@@ -307,10 +307,10 @@ func (s *probeSession) ReadFile(rel string) ([]byte, error) {
 
 // runSetup runs the setup entrypoint once, first, when it is declared.
 func (s *probeSession) runSetup(env *Env) {
-	if _, declared := env.Config.Entrypoints[EntrypointSetup]; !declared {
+	if _, declared := env.config.Entrypoints[entrypointSetup]; !declared {
 		return
 	}
-	run := s.RunEntrypoint(env, EntrypointSetup, EntrypointSetup)
+	run := s.RunEntrypoint(env, entrypointSetup, entrypointSetup)
 	s.setup = &run
 }
 
@@ -324,7 +324,7 @@ func (s *probeSession) precondition(env *Env) *Finding {
 	}
 	if s.setup != nil && !s.setup.OK() {
 		return &Finding{
-			File:    env.Config.File,
+			File:    env.config.file,
 			Message: "cannot decide: setup did not succeed, so no execution or probe part can run: " + s.setup.describe(),
 			Fix:     "fix entrypoints.setup so that it succeeds in a fresh clone",
 		}
@@ -341,8 +341,8 @@ func (s *probeSession) progress(label string) {
 	}
 }
 
-// RunOpts change one run.
-type RunOpts struct {
+// runOpts change one run.
+type runOpts struct {
 	// Dir is the run's directory, slash separated and relative to the
 	// copy's root; "" is the root.
 	Dir string
@@ -353,14 +353,14 @@ type RunOpts struct {
 	Limit time.Duration
 }
 
-func (s *probeSession) dir(o RunOpts) string {
+func (s *probeSession) dir(o runOpts) string {
 	if o.Dir == "" || o.Dir == "." {
 		return s.root
 	}
 	return filepath.Join(s.root, filepath.FromSlash(o.Dir))
 }
 
-func (s *probeSession) env(o RunOpts) []string {
+func (s *probeSession) env(o runOpts) []string {
 	if o.Env != nil {
 		return o.Env
 	}
@@ -369,7 +369,7 @@ func (s *probeSession) env(o RunOpts) []string {
 
 // RunProgram runs argv directly, without a shell: the program found on
 // the run's PATH. label names the run; file declares it.
-func (s *probeSession) RunProgram(label, file string, argv []string, o RunOpts) runOutcome {
+func (s *probeSession) RunProgram(label, file string, argv []string, o runOpts) runOutcome {
 	out := runOutcome{Label: label, Command: strings.Join(argv, " "), File: file}
 	env := s.env(o)
 	prog := lookPath(argv[0], env, s.dir(o))
@@ -410,9 +410,9 @@ func (s *probeSession) HookPayload(event string, fields map[string]any) []byte {
 
 // RunHook runs one hook command the way Claude Code does: bash -c
 // '<command>' with payload on stdin, in the copy. limit is the hook's own
-// timeout, or zero for DefaultHookTimeout. Without bash, the outcome is
+// timeout, or zero for defaultHookTimeout. Without bash, the outcome is
 // undecided.
-func (s *probeSession) RunHook(label, command string, limit time.Duration, payload []byte, o RunOpts) runOutcome {
+func (s *probeSession) RunHook(label, command string, limit time.Duration, payload []byte, o runOpts) runOutcome {
 	out := s.runHook(label, command, limit, payload, o)
 	s.recordShimCalls(&out)
 	return out
@@ -420,14 +420,14 @@ func (s *probeSession) RunHook(label, command string, limit time.Duration, paylo
 
 // runHook is RunHook without recording the shim's calls, so that runs
 // can happen concurrently. The caller records the calls afterwards.
-func (s *probeSession) runHook(label, command string, limit time.Duration, payload []byte, o RunOpts) runOutcome {
+func (s *probeSession) runHook(label, command string, limit time.Duration, payload []byte, o runOpts) runOutcome {
 	out := runOutcome{Label: label, Command: command, File: claudeSettingsFile}
 	if s.bashErr != nil {
 		out.Undecided = s.bashErr.Error()
 		return out
 	}
 	if limit <= 0 {
-		limit = DefaultHookTimeout
+		limit = defaultHookTimeout
 	}
 	if o.Limit > 0 {
 		limit = o.Limit
@@ -485,11 +485,11 @@ type entrypointRun struct {
 // added to the environment. label names the run, such as "fmt-check
 // with the format defect in .".
 func (s *probeSession) RunEntrypoint(env *Env, name, label string) entrypointRun {
-	file := env.Config.File
-	if _, missing := env.Entrypoint(name); missing != nil {
+	file := env.config.file
+	if _, missing := env.entrypointCommands(name); missing != nil {
 		return entrypointRun{runOutcome: runOutcome{Label: label, File: file, Undecided: missing.Message}, Missing: missing}
 	}
-	sources := env.EntrypointSource(name)
+	sources := env.entrypointSource(name)
 	run := entrypointRun{runOutcome: runOutcome{Label: label, Command: strings.Join(sources, "; "), File: file}}
 	s.progress(label)
 	for _, src := range sources {

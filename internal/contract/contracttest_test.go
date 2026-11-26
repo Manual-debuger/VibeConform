@@ -25,7 +25,7 @@ func (r *errorRecorder) Errorf(format string, args ...any) {
 func failingStandIn(finding contract.Finding) contract.Rule {
 	return contract.Rule{ID: "T-01", Parts: []contract.Part{{
 		Kind: contract.Static,
-		Run: func(*contract.Env, contract.Needed) contract.PartResult {
+		Run: func(*contract.Env) contract.PartResult {
 			return contract.Fail(finding)
 		},
 	}}}

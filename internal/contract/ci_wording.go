@@ -4,11 +4,11 @@ import "fmt"
 
 // The words of C-01, C-04, C-05 and D-03 findings that differ by CI
 // provider (spec 0067, "The model"). Each reader puts its provider's
-// wording in CI.wording; the rules take every provider-specific phrase,
+// wording in ciModel.wording; the rules take every provider-specific phrase,
 // message and fix from it, so a rule is written once and keeps each
 // provider's text. The two wordings are next to each other here for
-// comparison. A finding about the CI as a whole names CI.Dir. The fix of
-// a finding about a skipped job is in the run (CISkip.Fix): only the
+// comparison. A finding about the CI as a whole names ciModel.Dir. The fix of
+// a finding about a skipped job is in the run (ciSkip.Fix): only the
 // GitLab reader skips jobs, and it words the fix with gitlabSkipFix.
 
 // ciWording is one provider's words for the CI rules' findings.
@@ -24,8 +24,8 @@ type ciWording struct {
 	// job of the kind calls. verify is the quoted verify commands.
 	noJobRuns    func(what string) string
 	noJobRunsFix func(what, verify string) string
-	notCalled    func(what string, c Command) string
-	notCalledFix func(what string, c Command) string
+	notCalled    func(what string, c shellCommand) string
+	notCalledFix func(what string, c shellCommand) string
 
 	// C-04: no job that runs for merge requests runs vibe audit. The
 	// message is followed by hint.
@@ -34,9 +34,9 @@ type ciWording struct {
 
 	// C-05: no job calls a verify command, and the fix of a verify command
 	// that runs on no runner of the lacking platforms.
-	uncalledOnRunner    func(c Command) string
-	uncalledOnRunnerFix func(c Command) string
-	lackingPlatformFix  func(c Command, lacking string) string
+	uncalledOnRunner    func(c shellCommand) string
+	uncalledOnRunnerFix func(c shellCommand) string
+	lackingPlatformFix  func(c shellCommand, lacking string) string
 
 	// D-03: no job runs a recognized scanner.
 	noScanner    string
@@ -44,8 +44,8 @@ type ciWording struct {
 }
 
 // kind names a pipeline kind for findings.
-func (w *ciWording) kind(k PipelineKind, defaultBranch string) string {
-	if k == KindMergeRequest {
+func (w *ciWording) kind(k pipelineKind, defaultBranch string) string {
+	if k == kindMergeRequest {
 		return w.mergeRequests
 	}
 	return "pushes to " + defaultBranch
@@ -61,22 +61,22 @@ var githubWording = &ciWording{
 	noJobRunsFix: func(what, verify string) string {
 		return fmt.Sprintf("trigger a workflow that calls %s on %s", verify, what)
 	},
-	notCalled: func(what string, c Command) string {
+	notCalled: func(what string, c shellCommand) string {
 		return fmt.Sprintf("no workflow that runs on %s calls the verify command `%s`", what, c)
 	},
-	notCalledFix: func(what string, c Command) string {
+	notCalledFix: func(what string, c shellCommand) string {
 		return fmt.Sprintf("add a step that runs `%s` as its own command to a job that runs on %s", c, what)
 	},
 	noAuditJob:    "no job of a workflow that runs on pull requests runs vibe audit",
 	noAuditJobFix: "add a job, triggered on pull_request, whose step runs vibe audit (any arguments) and that does not call verify",
 
-	uncalledOnRunner: func(c Command) string {
+	uncalledOnRunner: func(c shellCommand) string {
 		return fmt.Sprintf("no workflow step calls the verify command `%s`, so it runs on no runner", c)
 	},
-	uncalledOnRunnerFix: func(c Command) string {
+	uncalledOnRunnerFix: func(c shellCommand) string {
 		return fmt.Sprintf("call `%s` in a job that runs on ubuntu-latest and windows-latest (a matrix over os)", c)
 	},
-	lackingPlatformFix: func(c Command, lacking string) string {
+	lackingPlatformFix: func(c shellCommand, lacking string) string {
 		return fmt.Sprintf("run `%s` on %s too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}",
 			c, lacking)
 	},
@@ -96,23 +96,23 @@ var gitlabWording = &ciWording{
 	noJobRunsFix: func(what, verify string) string {
 		return fmt.Sprintf("add a job that runs in %s and calls %s", what, verify)
 	},
-	notCalled: func(what string, c Command) string {
+	notCalled: func(what string, c shellCommand) string {
 		return fmt.Sprintf("no job that runs in %s calls the verify command `%s`", what, c)
 	},
-	notCalledFix: func(what string, c Command) string {
+	notCalledFix: func(what string, c shellCommand) string {
 		return fmt.Sprintf("add `%s` as its own command to the script of a job that runs in %s", c, what)
 	},
 	noAuditJob: "no job that runs in merge request pipelines runs vibe audit",
 	noAuditJobFix: "add a job that runs in merge request pipelines, whose script runs vibe audit (any arguments) " +
 		"and that calls no verify command",
 
-	uncalledOnRunner: func(c Command) string {
+	uncalledOnRunner: func(c shellCommand) string {
 		return fmt.Sprintf("no job calls the verify command `%s`, so it runs on no runner", c)
 	},
-	uncalledOnRunnerFix: func(c Command) string {
+	uncalledOnRunnerFix: func(c shellCommand) string {
 		return fmt.Sprintf("call `%s` in a job on a Linux runner (tags: [linux], or no tags and an image:) and in one with tags: [windows]", c)
 	},
-	lackingPlatformFix: func(c Command, lacking string) string {
+	lackingPlatformFix: func(c shellCommand, lacking string) string {
 		return fmt.Sprintf("run `%s` on %s too: in a job whose tags name a runner of that platform, such as tags: [windows] "+
 			"(saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags", c, lacking)
 	},
@@ -125,7 +125,7 @@ var gitlabWording = &ciWording{
 
 // gitlabSkipFix is the fix of a finding about a job that would count for
 // what (the pipeline kind, worded by gitlabWording.kind) but that a
-// condition left out. The GitLab reader puts it in each CISkip.
+// condition left out. The GitLab reader puts it in each ciSkip.
 func gitlabSkipFix(what string) string {
 	return "make the job run in " + what + " with conditions the audit reads " +
 		"($CI_PIPELINE_SOURCE, $CI_MERGE_REQUEST_IID, $CI_COMMIT_BRANCH, $CI_COMMIT_TAG, $CI_COMMIT_REF_NAME, $CI_DEFAULT_BRANCH), " +

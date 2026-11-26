@@ -113,9 +113,9 @@ var secretSample = func() defectSample {
 func plantDir(env *Env, comp Component) (dir, testFile string, ok bool) {
 	var files []string
 	if comp.Path == "." {
-		files = env.Repo.Files()
+		files = env.repo.Files()
 	} else {
-		files = env.Repo.FilesUnder(comp.Path)
+		files = env.repo.filesUnder(comp.Path)
 	}
 	lang := comp.language()
 	best := ""
@@ -175,7 +175,7 @@ func plantSample(env *Env, comp Component, sample defectSample) (plantedDefect, 
 	}
 	content := sample.Content
 	if strings.Contains(content, "{{package}}") {
-		src, err := env.ReadFile(testFile)
+		src, err := env.readFile(testFile)
 		if err != nil {
 			return plantedDefect{}, err
 		}
@@ -194,7 +194,7 @@ func plantSample(env *Env, comp Component, sample defectSample) (plantedDefect, 
 	if dir != "." {
 		p = dir + "/" + sample.Name
 	}
-	if env.Repo.HasFile(p) {
+	if env.repo.HasFile(p) {
 		return plantedDefect{}, fmt.Errorf("%s already exists, so the sample cannot be planted there", p)
 	}
 	return plantedDefect{Path: p, Content: []byte(content)}, nil

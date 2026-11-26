@@ -19,12 +19,12 @@ import (
 // must not hand Env to another goroutine.
 type Env struct {
 	ctx    context.Context
-	Config *Config
-	Repo   *Repo
+	config *Config
+	repo   *Repo
 
 	files          map[string]fileEntry
 	entrypoints    map[string]*entrypointState
-	workflows      *Workflows
+	workflows      *workflowSet
 	ci             *ciState
 	hookMgrs       *[]*hookManager
 	claudeSettings *parsedClaudeSettings
@@ -42,26 +42,23 @@ type fileEntry struct {
 }
 
 func newEnv(ctx context.Context, cfg *Config, repo *Repo) *Env {
-	return &Env{ctx: ctx, Config: cfg, Repo: repo, files: map[string]fileEntry{}}
+	return &Env{ctx: ctx, config: cfg, repo: repo, files: map[string]fileEntry{}}
 }
 
-// Context is the audit's context, for checks that run git.
-func (e *Env) Context() context.Context { return e.ctx }
-
-// ReadFile returns a tracked file's working-tree content. The error wraps
+// readFile returns a tracked file's working-tree content. The error wraps
 // fs.ErrNotExist when the file is not tracked.
-func (e *Env) ReadFile(name string) ([]byte, error) {
+func (e *Env) readFile(name string) ([]byte, error) {
 	if f, ok := e.files[name]; ok {
 		return f.data, f.err
 	}
-	data, err := e.Repo.ReadFile(name)
+	data, err := e.repo.ReadFile(name)
 	e.files[name] = fileEntry{data, err}
 	return data, err
 }
 
-// Note records a fact the audit assumed, such as the default branch, for
+// note records a fact the audit assumed, such as the default branch, for
 // the report.
-func (e *Env) Note(format string, args ...any) {
+func (e *Env) note(format string, args ...any) {
 	note := fmt.Sprintf(format, args...)
 	for _, n := range e.notes {
 		if n == note {
@@ -73,7 +70,7 @@ func (e *Env) Note(format string, args ...any) {
 
 // entrypointState is one entrypoint as V-04 sees it.
 type entrypointState struct {
-	commands []Command
+	commands []shellCommand
 	// problems are V-04's findings; any problem makes the entrypoint
 	// unusable for the rules that need it.
 	problems []Finding
@@ -91,8 +88,8 @@ func (e *Env) entrypoint(name string) *entrypointState {
 	e.entrypoints[name] = st
 
 	at := "entrypoints." + name
-	file := e.Config.File
-	ep, declared := e.Config.Entrypoints[name]
+	file := e.config.file
+	ep, declared := e.config.Entrypoints[name]
 	switch {
 	case !declared:
 		st.problems = append(st.problems, Finding{File: file,
@@ -122,33 +119,33 @@ func (e *Env) entrypoint(name string) *entrypointState {
 	return st
 }
 
-// Entrypoint returns a required or declared entrypoint's commands, parsed.
+// entrypointCommands returns a required or declared entrypoint's commands, parsed.
 // When V-04 finds the entrypoint missing, empty or malformed, it returns
 // nil and a finding that points at V-04: a rule that needs the
 // entrypoint fails with it (spec 0052, "Missing entrypoint").
-func (e *Env) Entrypoint(name string) ([]Command, *Finding) {
+func (e *Env) entrypointCommands(name string) ([]shellCommand, *Finding) {
 	st := e.entrypoint(name)
 	if len(st.problems) == 0 {
 		return st.commands, nil
 	}
 	return nil, &Finding{
-		File:    e.Config.File,
+		File:    e.config.file,
 		Message: fmt.Sprintf("this rule needs the %s entrypoint, and V-04 finds it unusable: %s", name, st.problems[0].Message),
 		Fix:     "fix V-04 first: " + st.problems[0].Fix,
 	}
 }
 
-// EntrypointSource returns an entrypoint's commands as written in the
+// entrypointSource returns an entrypoint's commands as written in the
 // configuration, for checks that compare text (R-02).
-func (e *Env) EntrypointSource(name string) []string {
-	return e.Config.Entrypoints[name].Commands
+func (e *Env) entrypointSource(name string) []string {
+	return e.config.Entrypoints[name].Commands
 }
 
 func exampleCommand(name string) string {
 	switch name {
-	case EntrypointVerifyFast:
+	case entrypointVerifyFast:
 		return "task verify:fast"
-	case EntrypointFmtCheck:
+	case entrypointFmtCheck:
 		return "task fmt:check"
 	default:
 		return "task " + strings.ReplaceAll(name, "-", ":")

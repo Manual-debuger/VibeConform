@@ -68,12 +68,12 @@ type hookEntry struct {
 	// Where locates it in File, such as "line 4: pre-commit.commands.fmt".
 	Where string
 	// Commands are its simple commands.
-	Commands []Command
+	Commands []shellCommand
 }
 
 // commands returns every simple command a Git hook runs.
-func (m *hookManager) commands(hook string) []Command {
-	var out []Command
+func (m *hookManager) commands(hook string) []shellCommand {
+	var out []shellCommand
 	for _, en := range m.Entries[hook] {
 		out = append(out, en.Commands...)
 	}
@@ -186,7 +186,7 @@ type lefthookFile struct {
 func (e *Env) lefthook() *hookManager { //nolint:gocognit // baseline: pre-existing complexity
 	var main string
 	for _, f := range lefthookFiles {
-		if e.Repo.HasFile(f) {
+		if e.repo.HasFile(f) {
 			main = f
 			break
 		}
@@ -198,19 +198,19 @@ func (e *Env) lefthook() *hookManager { //nolint:gocognit // baseline: pre-exist
 
 	root, err := e.readYAMLMap(main)
 	if err != nil {
-		m.Broken = append(m.Broken, ParseFailure(main, err))
+		m.Broken = append(m.Broken, parseFailure(main, err))
 		return m
 	}
 	files := []lefthookFile{{main, root}}
 	if ext := mapValue(root, "extends"); ext != nil {
 		for _, name := range stringList(ext) {
 			name = strings.TrimPrefix(path.Clean(name), "./")
-			if lefthookLocal(name) || !e.Repo.HasFile(name) {
+			if lefthookLocal(name) || !e.repo.HasFile(name) {
 				continue
 			}
 			n, err := e.readYAMLMap(name)
 			if err != nil {
-				m.Broken = append(m.Broken, ParseFailure(name, err))
+				m.Broken = append(m.Broken, parseFailure(name, err))
 				continue
 			}
 			files = append(files, lefthookFile{name, n})
@@ -288,13 +288,13 @@ func (e *Env) lefthookScript(m *hookManager, hook, name string, entry *yaml.Node
 		}
 	}
 	file := path.Join(".lefthook", hook, name)
-	data, err := e.ReadFile(file)
+	data, err := e.readFile(file)
 	if err != nil {
 		return nil
 	}
-	cmds, err := ParseCommands(string(data))
+	cmds, err := parseCommands(string(data))
 	if err != nil {
-		m.scriptBroken(hook, ParseFailure(file, err))
+		m.scriptBroken(hook, parseFailure(file, err))
 		return nil
 	}
 	return []hookEntry{{File: file, Where: hook + " script", Commands: cmds}}
@@ -306,7 +306,7 @@ func runEntry(file, at string, n *yaml.Node) []hookEntry {
 	if n == nil || n.Kind != yaml.ScalarNode {
 		return nil
 	}
-	cmds, err := ParseCommands(n.Value)
+	cmds, err := parseCommands(n.Value)
 	if err != nil {
 		return nil
 	}
@@ -329,7 +329,7 @@ var preCommitLegacyStages = map[string]string{
 // merge-commit and push count as pre-commit, pre-merge-commit and
 // pre-push.
 func (e *Env) preCommit() *hookManager { //nolint:gocognit // baseline: pre-existing complexity
-	if !e.Repo.HasFile(preCommitFile) {
+	if !e.repo.HasFile(preCommitFile) {
 		return nil
 	}
 	m := &hookManager{Name: "pre-commit", File: preCommitFile, Entries: map[string][]hookEntry{}}
@@ -338,7 +338,7 @@ func (e *Env) preCommit() *hookManager { //nolint:gocognit // baseline: pre-exis
 		err = checkPreCommitShape(root)
 	}
 	if err != nil {
-		m.Broken = append(m.Broken, ParseFailure(preCommitFile, err))
+		m.Broken = append(m.Broken, parseFailure(preCommitFile, err))
 		return m
 	}
 	defaults := []string{hookPreCommit}
@@ -360,7 +360,7 @@ func (e *Env) preCommit() *hookManager { //nolint:gocognit // baseline: pre-exis
 			if !ok {
 				continue
 			}
-			en := hookEntry{File: preCommitFile, Where: fmt.Sprintf("line %d: hook %s", h.Line, scalarOr(mapValue(h, "id"), "")), Commands: []Command{cmd}}
+			en := hookEntry{File: preCommitFile, Where: fmt.Sprintf("line %d: hook %s", h.Line, scalarOr(mapValue(h, "id"), "")), Commands: []shellCommand{cmd}}
 			stages := defaults
 			if s := mapValue(h, "stages"); s != nil {
 				stages = stringList(s)
@@ -396,18 +396,18 @@ func checkPreCommitShape(root *yaml.Node) error {
 // preCommitCommand is a local hook's command: its entry's words followed
 // by its args. pre-commit splits entry into words and runs no shell, so
 // an entry that is not one simple command calls nothing.
-func preCommitCommand(h *yaml.Node) (Command, bool) {
+func preCommitCommand(h *yaml.Node) (shellCommand, bool) {
 	entry := mapValue(h, "entry")
 	if entry == nil || entry.Kind != yaml.ScalarNode {
-		return Command{}, false
+		return shellCommand{}, false
 	}
 	cmd, err := ParseSimpleCommand(entry.Value)
 	if err != nil {
-		return Command{}, false
+		return shellCommand{}, false
 	}
 	if args := mapValue(h, "args"); args != nil {
 		for _, a := range stringList(args) {
-			cmd.Words = append(cmd.Words, Word{Text: a, Literal: true})
+			cmd.Words = append(cmd.Words, shellWord{Text: a, Literal: true})
 		}
 	}
 	return cmd, true
@@ -420,7 +420,7 @@ const huskyDir = ".husky"
 // .husky/_/, helpers a hook sources) are not hooks: husky runs only the
 // scripts named for a Git hook.
 func (e *Env) husky() *hookManager {
-	files := e.Repo.FilesUnder(huskyDir)
+	files := e.repo.filesUnder(huskyDir)
 	if len(files) == 0 {
 		return nil
 	}
@@ -430,13 +430,13 @@ func (e *Env) husky() *hookManager {
 	}
 	for _, h := range allGitHooks {
 		file := huskyDir + "/" + h
-		data, err := e.ReadFile(file)
+		data, err := e.readFile(file)
 		if err != nil {
 			continue
 		}
-		cmds, err := ParseCommands(string(data))
+		cmds, err := parseCommands(string(data))
 		if err != nil {
-			m.scriptBroken(h, ParseFailure(file, err))
+			m.scriptBroken(h, parseFailure(file, err))
 			continue
 		}
 		m.addEntry(h, hookEntry{File: file, Where: h + " script", Commands: cmds})
@@ -447,7 +447,7 @@ func (e *Env) husky() *hookManager {
 // readYAMLMap reads a tracked YAML file whose top level must be a map.
 // An empty file is an empty map.
 func (e *Env) readYAMLMap(file string) (*yaml.Node, error) {
-	data, err := e.ReadFile(file)
+	data, err := e.readFile(file)
 	if err != nil {
 		return nil, err
 	}

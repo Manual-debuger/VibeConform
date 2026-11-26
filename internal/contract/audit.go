@@ -10,9 +10,6 @@ type Options struct {
 	// Static runs only the static parts: every execution and probe part
 	// is not run, and the audit reaches no verdict (spec 0052, Q18).
 	Static bool
-	// Now decides whether waivers have expired. The zero value means the
-	// current time.
-	Now time.Time
 	// Rules replaces the registry. Nil means Rules(). Tests use it to
 	// stand in for parts.
 	Rules []Rule
@@ -25,10 +22,7 @@ type Options struct {
 // and probe parts run in a probe copy, which is deleted before Audit
 // returns (spec 0053).
 func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
-	now := opts.Now
-	if now.IsZero() {
-		now = time.Now()
-	}
+	now := time.Now()
 	list := opts.Rules
 	if list == nil {
 		list = Rules()
@@ -40,17 +34,22 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 		waivers[w.Rule] = w
 	}
 
-	order := runOrder(list)
+	last := lastPart(list)
 	rep := &Report{Contract: cfg.Contract, Static: opts.Static}
-	pending := map[partRef]bool{}
+	var pending []partRef
+	var lastPending *partRef
 	for i, rule := range list {
 		rr, parts := auditRule(env, rule, waivers, now, opts.Static)
 		rep.Rules = append(rep.Rules, rr)
 		for _, j := range parts {
-			pending[partRef{rule: i, part: j}] = true
+			if p := (partRef{rule: i, part: j}); last != nil && p == *last {
+				lastPending = last
+			} else {
+				pending = append(pending, p)
+			}
 		}
 	}
-	ran := runPending(env, rep, list, order, pending, opts.Probe)
+	ran := runPending(env, rep, list, pending, lastPending, opts.Probe)
 	for i := range rep.Rules {
 		if rep.Rules[i].Result == "" {
 			rep.Rules[i].Result = combine(rep.Rules[i].Parts)
@@ -60,7 +59,7 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 	for _, r := range ran {
 		rep.GuardExceptionUses = append(rep.GuardExceptionUses, r.result.guardUses...)
 	}
-	if ci, _, ok := env.CI(); ok {
+	if ci, _, ok := env.pickCI(); ok {
 		rep.CIProvider = ci.Provider
 	}
 	rep.Notes = env.notes
@@ -73,17 +72,17 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 // of the execution and probe parts left to run in the probe copy; the
 // rule's result is set once they ran.
 func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, staticOnly bool) (RuleResult, []int) {
-	rr := RuleResult{Rule: rule, Required: env.Config.Requires(rule.ID)}
+	rr := RuleResult{Rule: rule, Required: env.config.requires(rule.ID)}
 	if w, ok := waivers[rule.ID]; ok {
 		rr.Waiver = &WaiverStatus{Reason: w.Reason, Until: w.Until, Expired: !now.Before(waiverEnd(w))}
 	}
 
-	if ok, why := rule.Applies(env); !ok {
+	if ok, why := rule.appliesTo(env); !ok {
 		rr.NotApplicable = why
 		if rr.Waiver != nil {
 			rr.Waiver.Unused = true
 		}
-		return settle(rr, ResultNotApplicable, Finding{File: env.Config.File, Message: "not applicable: " + why}), nil
+		return settle(rr, ResultNotApplicable, Finding{File: env.config.file, Message: "not applicable: " + why}), nil
 	}
 	if rr.Waiver != nil && !rr.Waiver.Expired {
 		return settle(rr, ResultWaived), nil
@@ -96,7 +95,7 @@ func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, st
 		case staticOnly && part.Kind != Static:
 			po.Result = ResultNotRun
 		case part.Kind == Static:
-			po.Result, po.Findings = decided(part.Run(env, Needed{}))
+			po.Result, po.Findings = decided(part.Run(env))
 		default:
 			pending = append(pending, j)
 		}
@@ -105,14 +104,15 @@ func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, st
 	return rr, pending
 }
 
-// runPending runs the pending execution and probe parts in order (see
-// runOrder), in one probe copy built for them, each from a reset copy.
-// Each part gets the results of the parts it needs that ran before it,
-// and the calls of vibe the shim recorded while they ran. It returns
-// every part that ran, in run order. The copy is deleted (or kept, for
-// --keep-probe-copy) before it returns.
-func runPending(env *Env, rep *Report, list []Rule, order []partRef, pending map[partRef]bool, opts ProbeOptions) []partRun {
-	if len(pending) == 0 {
+// runPending runs the pending execution and probe parts in rule-list
+// order, and in part order inside a rule, then the last part when it is
+// pending (last is nil when it is not), in one probe copy built for them, each from a reset copy. The
+// last part gets the results of every part that ran before it, the
+// calls of vibe the shim recorded while they ran and those of setup. It
+// returns every part that ran, in run order. The copy is deleted (or
+// kept, for --keep-probe-copy) before it returns.
+func runPending(env *Env, rep *Report, list []Rule, pending []partRef, last *partRef, opts ProbeOptions) []partRun {
+	if len(pending) == 0 && last == nil {
 		return nil
 	}
 
@@ -124,25 +124,28 @@ func runPending(env *Env, rep *Report, list []Rule, order []partRef, pending map
 	// ran holds every part that ran, in run order, for one audit.
 	var ran []partRun
 	setupCalls := s.takeCalls()
-	for _, p := range order {
-		if !pending[p] {
-			continue
-		}
-		part := list[p.rule].Parts[p.part]
+	runOne := func(p partRef, check CheckFunc) {
 		po := &rep.Rules[p.rule].Parts[p.part]
 		if f := s.precondition(env); f != nil {
 			po.Result, po.Findings = ResultUndecided, []Finding{*f}
-			continue
+			return
 		}
 		if err := s.Reset(); err != nil {
 			po.Result, po.Findings = ResultUndecided, []Finding{{Message: "cannot decide: cannot reset the probe copy: " + err.Error()}}
-			continue
+			return
 		}
-		key := keyOf(list, p)
-		r := part.Run(env, Needed{self: key, needs: part.Needs, ran: ran, setupCalls: setupCalls})
+		r := check(env)
 		r.Result, r.Findings = decided(r)
-		ran = append(ran, partRun{key: key, result: r, calls: s.takeCalls()})
+		ran = append(ran, partRun{key: keyOf(list, p), result: r, calls: s.takeCalls()})
 		po.Result, po.Findings = r.Result, r.Findings
+	}
+	for _, p := range pending {
+		runOne(p, list[p.rule].Parts[p.part].Run)
+	}
+	if last != nil {
+		earlier := Earlier{ran: ran, setupCalls: setupCalls}
+		runLast := list[last.rule].Parts[last.part].RunLast
+		runOne(*last, func(env *Env) PartResult { return runLast(env, earlier) })
 	}
 	return ran
 }

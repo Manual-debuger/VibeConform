@@ -27,22 +27,22 @@ var otherCIFiles = []string{
 	".travis.yml", "bitbucket-pipelines.yml", ".buildkite/", ".drone.yml",
 }
 
-// Workflows is the repository's CI configuration.
-type Workflows struct {
+// workflowSet is the repository's CI configuration.
+type workflowSet struct {
 	// Files is every tracked .github/workflows/*.yml and *.yaml, sorted by
 	// path. A file that does not parse is kept with Err set.
-	Files []*Workflow
+	Files []*workflow
 	// OtherCI lists the tracked CI files of other providers, in
 	// otherCIFiles order.
 	OtherCI []string
 }
 
-// Workflow is one GitHub Actions workflow file.
-type Workflow struct {
+// workflow is one GitHub Actions workflow file.
+type workflow struct {
 	File string
 	// Err is set when the file does not parse as a workflow: invalid
 	// YAML, or jobs and steps that are not the maps and lists GitHub
-	// reads. Every rule that needs the file fails with ParseFailure.
+	// reads. Every rule that needs the file fails with parseFailure.
 	Err error
 	// Root is the workflow's top-level mapping.
 	Root *yaml.Node
@@ -53,11 +53,11 @@ type Workflow struct {
 	// workflow has none.
 	Permissions *yaml.Node
 	// Jobs are the workflow's jobs in file order.
-	Jobs []*Job
+	Jobs []*workflowJob
 }
 
-// Job is one job of a workflow.
-type Job struct {
+// workflowJob is one job of a workflow.
+type workflowJob struct {
 	ID   string
 	Node *yaml.Node
 	// Name is the job's name:, or "".
@@ -71,11 +71,11 @@ type Job struct {
 	// nil. Runner and matrix expansion are C-05's to read.
 	RunsOn   *yaml.Node
 	Strategy *yaml.Node
-	Steps    []*Step
+	Steps    []*workflowStep
 }
 
-// Step is one step of a job.
-type Step struct {
+// workflowStep is one step of a job.
+type workflowStep struct {
 	// Index is the step's position in the job, from 0.
 	Index int
 	// Line is the step's line in the workflow file, from 1.
@@ -86,30 +86,30 @@ type Step struct {
 	// HasRun is true when the step has a run: script.
 	HasRun bool
 	// Run is the parsed run: script when HasRun.
-	Run Script
+	Run shellScript
 }
 
 // Commands returns every simple command of a job's run: steps, in order.
 // A step that does not parse contributes none.
-func (j *Job) Commands() []Command {
-	var out []Command
+func (j *workflowJob) Commands() []shellCommand {
+	var out []shellCommand
 	for _, s := range j.Steps {
 		out = append(out, s.Run.Commands...)
 	}
 	return out
 }
 
-// Workflows reads the repository's GitHub Actions workflows once per
+// githubWorkflows reads the repository's GitHub Actions workflows once per
 // audit.
-func (e *Env) Workflows() *Workflows {
+func (e *Env) githubWorkflows() *workflowSet {
 	if e.workflows != nil {
 		return e.workflows
 	}
-	ws := &Workflows{}
-	for _, f := range e.Repo.Files() {
+	ws := &workflowSet{}
+	for _, f := range e.repo.Files() {
 		if path.Dir(f) == workflowDir && (strings.HasSuffix(f, ".yml") || strings.HasSuffix(f, ".yaml")) {
-			data, err := e.ReadFile(f)
-			wf := &Workflow{File: f}
+			data, err := e.readFile(f)
+			wf := &workflow{File: f}
 			if err != nil {
 				wf.Err = err
 			} else {
@@ -120,12 +120,12 @@ func (e *Env) Workflows() *Workflows {
 	}
 	for _, other := range otherCIFiles {
 		if dir, ok := strings.CutSuffix(other, "/"); ok {
-			if files := e.Repo.FilesUnder(dir); len(files) > 0 {
+			if files := e.repo.filesUnder(dir); len(files) > 0 {
 				ws.OtherCI = append(ws.OtherCI, other)
 			}
 			continue
 		}
-		if e.Repo.HasFile(other) {
+		if e.repo.HasFile(other) {
 			ws.OtherCI = append(ws.OtherCI, other)
 		}
 	}
@@ -133,7 +133,7 @@ func (e *Env) Workflows() *Workflows {
 	return ws
 }
 
-func (wf *Workflow) parse(data []byte) error {
+func (wf *workflow) parse(data []byte) error {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return err
@@ -166,11 +166,11 @@ func (wf *Workflow) parse(data []byte) error {
 	return nil
 }
 
-func parseJob(id string, n *yaml.Node) (*Job, error) { //nolint:gocognit // baseline: pre-existing complexity
+func parseJob(id string, n *yaml.Node) (*workflowJob, error) { //nolint:gocognit // baseline: pre-existing complexity
 	if n.Kind != yaml.MappingNode {
 		return nil, lineError(n, "job "+id+" must be a map")
 	}
-	j := &Job{ID: id, Node: n, RunsOn: mapValue(n, "runs-on"), Strategy: mapValue(n, "strategy")}
+	j := &workflowJob{ID: id, Node: n, RunsOn: mapValue(n, "runs-on"), Strategy: mapValue(n, "strategy")}
 	if v := mapValue(n, "name"); v != nil && v.Kind == yaml.ScalarNode {
 		j.Name = v.Value
 	}
@@ -192,7 +192,7 @@ func parseJob(id string, n *yaml.Node) (*Job, error) { //nolint:gocognit // base
 		if sn.Kind != yaml.MappingNode {
 			return nil, lineError(sn, fmt.Sprintf("job %s: step %d must be a map", id, i+1))
 		}
-		s := &Step{Index: i, Line: sn.Line, Node: sn}
+		s := &workflowStep{Index: i, Line: sn.Line, Node: sn}
 		if v := mapValue(sn, "uses"); v != nil {
 			if v.Kind != yaml.ScalarNode {
 				return nil, lineError(v, fmt.Sprintf("job %s: step %d: uses must be a string", id, i+1))
@@ -204,7 +204,7 @@ func parseJob(id string, n *yaml.Node) (*Job, error) { //nolint:gocognit // base
 				return nil, lineError(v, fmt.Sprintf("job %s: step %d: run must be a string", id, i+1))
 			}
 			s.HasRun = true
-			s.Run = ParseRunStep(v.Value)
+			s.Run = parseRunStep(v.Value)
 		}
 		j.Steps = append(j.Steps, s)
 	}

@@ -26,14 +26,14 @@ const (
 	// that happens to live in a directory named r01-shim is not one.
 	shimMarker  = "vibe-r01-shim"
 	shimLogName = "r01-shim.log"
-	// ShimExitCode is the shim's exit code: a shell's "command not found".
-	ShimExitCode = 127
+	// shimExitCode is the shim's exit code: a shell's "command not found".
+	shimExitCode = 127
 	shimMessage  = "vibe is not available during the R-01 probe"
 )
 
 // RunAsShim makes the running executable act as the R-01 shim when it is
 // one: it records its arguments, prints why it refuses, and returns
-// ShimExitCode and true. Otherwise it returns false and does nothing.
+// shimExitCode (127) and true. Otherwise it returns false and does nothing.
 // cmd/vibe's main calls it first, and so does every test binary that
 // runs the full audit in-process, since the shim is a copy of the
 // running executable.
@@ -59,7 +59,7 @@ func RunAsShim() (int, bool) {
 		}
 	}
 	fmt.Fprintln(os.Stderr, shimMessage)
-	return ShimExitCode, true
+	return shimExitCode, true
 }
 
 // shimCall is one call of vibe the shim recorded.

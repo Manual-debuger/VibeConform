@@ -230,7 +230,7 @@ func TestStandIn(t *testing.T) {
 			continue
 		}
 		for _, p := range r.Parts {
-			got := p.Run(nil, contract.Needed{})
+			got := p.Run(nil)
 			if got.Result != w || len(got.Findings) != 1 || got.Findings[0].File == "" || got.Findings[0].Fix == "" {
 				t.Errorf("%s %s part = %+v, want %s with a finding naming a file and a fix", r.ID, p.Kind, got, w)
 			}
@@ -248,7 +248,7 @@ func TestStandInLeavesItsInputUntouched(t *testing.T) {
 		t.Helper()
 		for _, r := range rules {
 			if r.ID == "V-01" {
-				return r.Parts[0].Run(nil, contract.Needed{}).Result
+				return r.Parts[0].Run(nil).Result
 			}
 		}
 		t.Fatal("no V-01")
@@ -260,6 +260,30 @@ func TestStandInLeavesItsInputUntouched(t *testing.T) {
 	if got := result(out); got != contract.ResultFail {
 		t.Errorf("the output's V-01 = %s, want fail", got)
 	}
+}
+
+// StandIn keeps R-01's execution part the last part, so the stand-in
+// rules run in the registry's order and pass the runner's validation.
+func TestStandInKeepsTheLastPart(t *testing.T) {
+	t.Parallel()
+	for _, r := range contracttest.StandIn(nil, contract.ResultFail, "R-01") {
+		if r.ID != "R-01" {
+			continue
+		}
+		for _, p := range r.Parts {
+			if p.Kind != contract.Execution {
+				continue
+			}
+			if p.Run != nil || p.RunLast == nil {
+				t.Fatalf("R-01's execution part sets Run %t and RunLast %t, want only RunLast", p.Run != nil, p.RunLast != nil)
+			}
+			if got := p.RunLast(nil, contract.Earlier{}); got.Result != contract.ResultFail {
+				t.Errorf("R-01's execution part = %s, want fail", got.Result)
+			}
+			return
+		}
+	}
+	t.Fatal("no execution part of R-01")
 }
 
 // RuleIDs lists a level's rules in registry order, without those named.

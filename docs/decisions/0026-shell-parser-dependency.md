@@ -49,6 +49,10 @@ generates already runs it.
    nothing. The checks see `Command` and `Word`, not the parser's
    types.
 
+   > **Note (2026-11-26):** spec 0071 made these types unexported, so
+   > they are now `shellCommand` and `shellWord`. The decision is the
+   > same.
+
 ## Consequences
 
 - The audit decides "called" the way a shell would run the command,

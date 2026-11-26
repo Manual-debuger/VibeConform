@@ -74,8 +74,8 @@ func (c *glContext) child() *glContext {
 }
 
 // contextsFor returns the contexts a pipeline kind is read in.
-func contextsFor(kind PipelineKind, branch string) []*glContext {
-	if kind == KindDefaultPush {
+func contextsFor(kind pipelineKind, branch string) []*glContext {
+	if kind == kindDefaultPush {
 		return []*glContext{{source: "push", branch: refDefault, ref: refDefault, defaultBranch: branch}}
 	}
 	return []*glContext{

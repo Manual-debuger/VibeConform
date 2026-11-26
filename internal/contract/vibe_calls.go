@@ -21,11 +21,11 @@ import (
 type vibeCall struct {
 	file  string
 	where string
-	cmd   Command
+	cmd   shellCommand
 }
 
 // callsVibe returns the commands in cmds whose first word is vibe.
-func callsVibe(file, where string, cmds []Command) []vibeCall {
+func callsVibe(file, where string, cmds []shellCommand) []vibeCall {
 	var out []vibeCall
 	for _, c := range cmds {
 		if c.HasPrefix("vibe") {
@@ -40,10 +40,10 @@ func callsVibe(file, where string, cmds []Command) []vibeCall {
 func entrypointVibeCalls(env *Env) []vibeCall {
 	var out []vibeCall
 	for _, name := range entrypointNames {
-		if _, ok := env.Config.Entrypoints[name]; !ok {
+		if _, ok := env.config.Entrypoints[name]; !ok {
 			continue
 		}
-		out = append(out, callsVibe(env.Config.File, "entrypoints."+name, env.entrypoint(name).commands)...)
+		out = append(out, callsVibe(env.config.file, "entrypoints."+name, env.entrypoint(name).commands)...)
 	}
 	return out
 }
@@ -76,10 +76,10 @@ func hookVibeCalls(env *Env) ([]vibeCall, PartResult) { //nolint:gocognit // bas
 	}
 	res := failIf(broken)
 
-	if env.Repo.HasFile(claudeSettingsFile) {
+	if env.repo.HasFile(claudeSettingsFile) {
 		s, sres, ok := env.readClaudeSettings("")
 		if !ok {
-			return calls, Merge(res, sres)
+			return calls, merge(res, sres)
 		}
 		for _, event := range slices.Sorted(maps.Keys(s.Events)) {
 			for _, entry := range s.Events[event] {
@@ -95,13 +95,13 @@ func hookVibeCalls(env *Env) ([]vibeCall, PartResult) { //nolint:gocognit // bas
 // exempt. In a job that calls no declared entrypoint, a command that is
 // exactly vibe --version tests the installed binary and is not a call of
 // vibe (spec 0055, "R-01 and tool-installation tests").
-func ciVibeCalls(env *Env, ci *CI, exempt []*CIJob) []vibeCall {
+func ciVibeCalls(env *Env, ci *ciModel, exempt []*ciJob) []vibeCall {
 	var out []vibeCall
 	for _, j := range ci.Jobs {
-		if slices.ContainsFunc(exempt, func(e *CIJob) bool { return e.Key() == j.Key() }) {
+		if slices.ContainsFunc(exempt, func(e *ciJob) bool { return e.Key() == j.Key() }) {
 			continue
 		}
-		var all []Command
+		var all []shellCommand
 		for _, s := range j.Scripts {
 			all = append(all, s.Commands...)
 		}
@@ -119,19 +119,19 @@ func ciVibeCalls(env *Env, ci *CI, exempt []*CIJob) []vibeCall {
 }
 
 // vibeVersion is the one vibe command a tool-installation test may run.
-var vibeVersion = Command{Words: []Word{{Text: "vibe", Literal: true}, {Text: "--version", Literal: true}}}
+var vibeVersion = shellCommand{Words: []shellWord{{Text: "vibe", Literal: true}, {Text: "--version", Literal: true}}}
 
 // callsAnEntrypoint reports whether some command in cmds calls a command
 // of a declared entrypoint. Calling one command of a list entrypoint is
 // enough: the job then runs what the entrypoint runs, and vibe there is
 // not only a tool-installation test.
-func callsAnEntrypoint(env *Env, cmds []Command) bool {
+func callsAnEntrypoint(env *Env, cmds []shellCommand) bool {
 	for _, name := range entrypointNames {
-		if _, ok := env.Config.Entrypoints[name]; !ok {
+		if _, ok := env.config.Entrypoints[name]; !ok {
 			continue
 		}
 		for _, want := range env.entrypoint(name).commands {
-			if CallsAny(cmds, want) {
+			if callsAny(cmds, want) {
 				return true
 			}
 		}

@@ -13,10 +13,10 @@ import (
 	"strings"
 )
 
-// ErrNotWorkTree reports that the audit was pointed at a directory that is
+// errNotWorkTree reports that the audit was pointed at a directory that is
 // not inside a Git work tree. The audit reads tracked files only, so it
 // cannot decide anything there (spec 0052, "What static checks read").
-var ErrNotWorkTree = errors.New("not inside a Git work tree")
+var errNotWorkTree = errors.New("not inside a Git work tree")
 
 // Repo is the set of files a static check may read: the files git ls-files
 // lists that exist in the working tree. An untracked file does not count,
@@ -60,7 +60,7 @@ func OpenRepo(ctx context.Context, root string) (*Repo, error) {
 	inside, err := gitOutput(ctx, root, "rev-parse", "--is-inside-work-tree")
 	switch {
 	case notARepository(err):
-		return nil, fmt.Errorf("cannot decide: %s is %w; the audit reads tracked files only", root, ErrNotWorkTree)
+		return nil, fmt.Errorf("cannot decide: %s is %w; the audit reads tracked files only", root, errNotWorkTree)
 	case err != nil:
 		// Inside a work tree git can still refuse, as it does a repository
 		// with dubious ownership or a broken configuration: that is a tool
@@ -68,7 +68,7 @@ func OpenRepo(ctx context.Context, root string) (*Repo, error) {
 		return nil, fmt.Errorf("cannot decide: %w", err)
 	case strings.TrimSpace(string(inside)) != "true":
 		// Inside .git, or a bare repository.
-		return nil, fmt.Errorf("cannot decide: %s is %w; the audit reads tracked files only", root, ErrNotWorkTree)
+		return nil, fmt.Errorf("cannot decide: %s is %w; the audit reads tracked files only", root, errNotWorkTree)
 	}
 	prefix, err := gitOutput(ctx, root, "rev-parse", "--show-prefix")
 	if err != nil {
@@ -121,8 +121,8 @@ func NewRepo(root string, files []string) *Repo {
 	return r
 }
 
-// Root returns the directory the repository was opened at.
-func (r *Repo) Root() string { return r.root }
+// rootDir returns the directory the repository was opened at.
+func (r *Repo) rootDir() string { return r.root }
 
 // Files returns the tracked files, slash separated and sorted.
 func (r *Repo) Files() []string { return slices.Clone(r.files) }
@@ -134,10 +134,10 @@ func (r *Repo) HasFile(path string) bool {
 	return found
 }
 
-// HasDir reports whether dir (slash separated, relative to the root, "."
+// hasDir reports whether dir (slash separated, relative to the root, "."
 // for the root) holds at least one tracked file present in the working
 // tree. A directory that holds none does not exist for the audit.
-func (r *Repo) HasDir(dir string) bool {
+func (r *Repo) hasDir(dir string) bool {
 	if dir == "." {
 		return len(r.files) > 0
 	}
@@ -156,9 +156,9 @@ func (r *Repo) ReadFile(name string) ([]byte, error) {
 	return os.ReadFile(filepath.Join(r.root, filepath.FromSlash(name))) // #nosec G304 -- a tracked file of the audited repository
 }
 
-// FilesUnder returns the tracked files inside dir (slash separated, no
+// filesUnder returns the tracked files inside dir (slash separated, no
 // trailing slash), sorted.
-func (r *Repo) FilesUnder(dir string) []string {
+func (r *Repo) filesUnder(dir string) []string {
 	prefix := dir + "/"
 	var out []string
 	i, _ := slices.BinarySearch(r.files, prefix)

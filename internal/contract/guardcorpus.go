@@ -32,7 +32,7 @@ const (
 
 // The unlock state a case runs in (A-08).
 const (
-	UnlockNone    = "none"
+	unlockNone    = "none"
 	UnlockValid   = "valid"
 	UnlockExpired = "expired"
 )
@@ -46,7 +46,7 @@ type GuardCase struct {
 	// Rule is the guard rule ID of a deny case, and empty for an allow
 	// case.
 	Rule string `json:"rule,omitempty"`
-	// Unlock is UnlockNone, UnlockValid or UnlockExpired.
+	// Unlock is unlockNone, UnlockValid or UnlockExpired.
 	Unlock string `json:"unlock,omitempty"`
 	// Probe is the contract rule whose probe alone reads the case, one of
 	// corpusProbes, or "" for the cases of A-02, A-03, A-08 and R-01.
@@ -116,7 +116,7 @@ func parseGuardCorpus(data []byte) ([]GuardCase, error) {
 	for i := range doc.Cases {
 		c := &doc.Cases[i]
 		if c.Unlock == "" {
-			c.Unlock = UnlockNone
+			c.Unlock = unlockNone
 		}
 		if err := checkGuardCase(*c, seen); err != nil {
 			return nil, fmt.Errorf("case %d (%q): %w", i, c.Name, err)
@@ -137,7 +137,7 @@ func checkGuardCase(c GuardCase, seen map[string]bool) error { //nolint:gocyclo 
 		return fmt.Errorf("want is %q; it must be deny or allow", c.Want)
 	case !slices.Contains(guardrule.A01Tools, tool):
 		return fmt.Errorf("tool %q is not one of the A-01 tools", tool)
-	case c.Unlock != UnlockNone && c.Unlock != UnlockValid && c.Unlock != UnlockExpired:
+	case c.Unlock != unlockNone && c.Unlock != UnlockValid && c.Unlock != UnlockExpired:
 		return fmt.Errorf("unlock is %q; it must be none, valid or expired", c.Unlock)
 	case c.Probe != "" && corpusProbes[c.Probe] == "":
 		return fmt.Errorf("probe is %q; it must be %s or absent", c.Probe, ProbeA09)

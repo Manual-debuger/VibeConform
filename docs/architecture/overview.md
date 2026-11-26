@@ -100,9 +100,10 @@ internal/contract
 - **Shell parsing.** "Called" means a simple command in the shell parse
   tree, so `internal/contract` depends on `mvdan.cc/sh/v3/syntax` (ADR
   0026). `internal/contract/shell.go` is the only file that imports it;
-  every check sees the package's own `Command` and `Word`. Its other
-  third-party imports are ones `vibe` already had: `gopkg.in/yaml.v3`,
-  and `github.com/tailscale/hujson` for Renovate's JSON5 files.
+  every check sees the package's own `shellCommand` and `shellWord`. Its
+  other third-party imports are ones `vibe` already had:
+  `gopkg.in/yaml.v3`, and `github.com/tailscale/hujson` for Renovate's
+  JSON5 files.
 - **Read-only, tracked files only.** Static checks read the working-tree
   content of files `git ls-files` lists and never write. Since spec 0053,
   execution checks and probes run in a *probe copy*: a fresh Git
@@ -113,56 +114,57 @@ internal/contract
   CLI's tests hand a fixture's known file list in through a repository
   seam (`contract.NewRepo`), so a rule-table case starts no git (spec
   0056).
-- **Parts declare their needs** (spec 0064). An execution or probe
-  part lists the parts it needs on its `Part` (`Needs`): one named part,
-  or every other execution and probe part. Only R-01's execution part
-  declares needs, A-02's probe and every other part. The runner checks
-  the needs before it builds the probe copy and panics on a missing
-  part, a cycle or a static part with a need; a registry test keeps
-  `contract.Rules()` valid. It runs the parts in registry order, each
-  after the parts it needs, and hands each part the results of the
-  needs that ran as an argument (`Needed`); a part sees only the needs
-  it declared. Results come back through return values: a part returns
-  all of its output in its `PartResult`, and the runner keeps the
-  results of one audit in run order, each with the `vibe` calls the
-  shim recorded while that part ran, where `Env` cannot reach them.
-  The report's guard exception uses come from A-02's and A-09's
-  results, in run order. R-01 gets A-02's deny verdict and the `vibe`
-  calls of the earlier runs (setup's included) from its needs, so each
-  call is reported once. A check reads `Env` and
-  adds no record to it except through `Note`.
-- **One CI model, two readers** (spec 0055). The C rules, D-03 and
-  R-01 read the repository's CI through one provider-neutral model
+- **One last part** (spec 0071, which replaced spec 0064's needs). The
+  runner decides the static parts first. Then, in the probe copy, it
+  runs the execution and probe parts that have `Run`, in registry order
+  and in part order inside a rule. Then it runs the one *last part*, the
+  part that has `RunLast`. The last part gets every earlier execution
+  and probe result, and the `vibe` calls of setup, as an argument
+  (`Earlier`). R-01's execution part is the last part: it reads A-02's
+  deny verdict and every `vibe` call from `Earlier`, so each call is
+  reported once. Before it builds the probe copy, also with `--static`,
+  the runner checks the rule list. It panics, and names the part, when
+  two parts are last parts, when a static part is the last part, or when
+  a part sets both or neither of `Run` and `RunLast`; a registry test
+  keeps `contract.Rules()` valid. Results come back through return
+  values (spec 0064): a part returns all of its output in its
+  `PartResult`, and the runner keeps the results of one audit in run
+  order, each with the `vibe` calls the shim recorded while that part
+  ran, where `Env` cannot reach them. The report's guard exception uses
+  come from A-02's and A-09's results, in run order. A check reads `Env`
+  and adds no record to it except through `note`.
+- **One CI model, two readers** (spec 0055). The C rules, D-03 and R-01
+  read the repository's CI through one provider-neutral model
   (`ci_model.go`): the CI provider read, its jobs with their commands
   and scripts, the includes not followed, and for each *pipeline kind*
-  (merge request, push to the default branch) the jobs that run and
-  why the others do not. `Env.CI()` picks the provider once per audit:
+  (merge request, push to the default branch) the jobs that run and why
+  the others do not. `env.pickCI()` picks the provider once per audit:
   GitHub Actions when tracked workflows exist, otherwise GitLab CI when
-  `.gitlab-ci.yml` is tracked. Each reader fills the whole model when
-  it reads the CI (spec 0067): the runs of both pipeline kinds, each
-  job's runner platforms, and the references C-02 checks (GitHub
-  `uses:`, GitLab images and includes). The GitHub reader
-  (`githubCI` in `ci_model.go`) wraps the existing workflow parsing and
-  decides its runs with the trigger walk (`workflow_triggers.go`). The
-  GitLab reader (`gitlab_ci.go`) resolves `.gitlab-ci.yml` statically:
-  anchors, local includes, `default:`, `extends:`, `!reference` and
-  child pipelines the parent waits for. `gitlab_rules.go` evaluates
-  `workflow:rules`, `rules:` and `only`/`except` over a closed list of
-  conditions. `CI.Run` is a lookup for both providers. C-01, C-02,
-  C-04, C-05 and D-03 each have one implementation (`checks_ci.go`)
-  that reads only the model, and no C check compares the provider. The
-  words of a finding that differ by provider ("pull requests" or "merge
-  request pipelines", the trigger hint, some messages and fixes) come
-  from the provider's wording (`ci_wording.go`), which the reader sets,
-  so each provider keeps its text. C-03 reads the GitHub workflows
-  (`CI.Workflows`), which only the GitHub reader fills; the registry
-  makes it not applicable on GitLab CI. A new provider needs a reader
-  and a wording; those five rules need no change. Both readers live in
-  `internal/contract` and add no
-  import: they use `gopkg.in/yaml.v3`, the package's shell parser and
-  `internal/guardrule`, which the package already imported, so the
-  dependency direction above is unchanged. The report model carries the provider
-  read, which the CLI prints as `CI provider read:` and `ci_provider`.
+  `.gitlab-ci.yml` is tracked. Each reader fills the whole model when it
+  reads the CI (spec 0067): the runs of both pipeline kinds, each job's
+  runner platforms, and the references C-02 checks (GitHub `uses:`,
+  GitLab images and includes). The GitHub reader (`githubCI` in
+  `ci_model.go`) wraps the existing workflow parsing and decides its
+  runs with the trigger walk (`workflow_triggers.go`). The GitLab reader
+  (`gitlab_ci.go`) resolves `.gitlab-ci.yml` statically: anchors, local
+  includes, `default:`, `extends:`, `!reference` and child pipelines the
+  parent waits for. `gitlab_rules.go` evaluates `workflow:rules`,
+  `rules:` and `only`/`except` over a closed list of conditions. The
+  model's `Run` is a lookup for both providers. C-01, C-02, C-04, C-05
+  and D-03 each have one implementation (`checks_ci.go`) that reads only
+  the model, and no C check compares the provider. The words of a
+  finding that differ by provider ("pull requests" or "merge request
+  pipelines", the trigger hint, some messages and fixes) come from the
+  provider's wording (`ci_wording.go`), which the reader sets, so each
+  provider keeps its text. C-03 reads the GitHub workflows (the model's
+  `Workflows`), which only the GitHub reader fills; the registry makes
+  it not applicable on GitLab CI. A new provider needs a reader and a
+  wording; those five rules need no change. Both readers live in
+  `internal/contract` and add no import: they use `gopkg.in/yaml.v3`,
+  the package's shell parser and `internal/guardrule`, which the package
+  already imported, so the dependency direction above is unchanged. The
+  report model carries the provider read, which the CLI prints as
+  `CI provider read:` and `ci_provider`.
 
 ### The reference guard
 

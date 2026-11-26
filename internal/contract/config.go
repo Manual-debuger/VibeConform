@@ -13,49 +13,49 @@ import (
 // Config is a vibe.yaml version 2 configuration (spec 0051, "vibe.yaml"),
 // validated against the repository it configures.
 type Config struct {
-	// File names the configuration as the operator gave it, such as
+	// file names the configuration as the operator gave it, such as
 	// vibe.yaml or the --config path. Findings about the configuration
 	// name it.
-	File string
+	file string
 	// Contract is the declared contract version and the one audited.
 	Contract Versions
-	// Platforms is a non-empty list of distinct platforms, in file order.
-	Platforms []string
-	// Agents is a list of distinct agents, in file order; may be empty.
-	Agents []string
+	// platforms is a non-empty list of distinct platforms, in file order.
+	platforms []string
+	// agents is a list of distinct agents, in file order; may be empty.
+	agents []string
 	// Components is the repository's components: declared, or detected
 	// from the root's manifests when the configuration omits them.
 	Components []Component
-	// ComponentsDetected is true when Components was detected.
-	ComponentsDetected bool
+	// componentsDetected is true when Components was detected.
+	componentsDetected bool
 	// Entrypoints holds the declared entrypoints as written. Whether the
 	// required ones are declared and well formed is V-04's to decide.
 	Entrypoints Entrypoints
 	// Waivers is the declared waivers, in file order. At most one per
 	// rule, each for a SHOULD rule.
 	Waivers []Waiver
-	// Require is the SHOULD rules the repository holds itself to, in file
+	// require is the SHOULD rules the repository holds itself to, in file
 	// order (spec 0063): each counts in the verdict like a MUST rule. None
 	// is waived.
-	Require []string
+	require []string
 }
 
-// Requires reports whether the configuration requires the rule id.
-func (c *Config) Requires(id string) bool {
-	return slices.Contains(c.Require, id)
+// requires reports whether the configuration requires the rule id.
+func (c *Config) requires(id string) bool {
+	return slices.Contains(c.require, id)
 }
 
 // The platforms of contract 1.0.0.
 const (
-	PlatformLinux   = "linux"
-	PlatformWindows = "windows"
-	PlatformMacOS   = "macos"
+	platformLinux   = "linux"
+	platformWindows = "windows"
+	platformMacOS   = "macos"
 )
 
 // The agents of contract 1.0.0. Contract 1.0.0 has no Codex rules.
 const (
-	AgentClaude = "claude"
-	AgentCodex  = "codex"
+	agentClaude = "claude"
+	agentCodex  = "codex"
 )
 
 // The component languages of contract 1.0.0.
@@ -66,8 +66,8 @@ const (
 )
 
 var (
-	platforms = []string{PlatformLinux, PlatformWindows, PlatformMacOS}
-	agents    = []string{AgentClaude, AgentCodex}
+	platforms = []string{platformLinux, platformWindows, platformMacOS}
+	agents    = []string{agentClaude, agentCodex}
 )
 
 // Component is one single-language part of the repository.
@@ -80,17 +80,17 @@ type Component struct {
 
 // The entrypoint names (spec 0051, "vibe.yaml").
 const (
-	EntrypointVerify     = "verify"
-	EntrypointVerifyFast = "verify-fast"
-	EntrypointFmt        = "fmt"
-	EntrypointFmtCheck   = "fmt-check"
-	EntrypointSetup      = "setup"
+	entrypointVerify     = "verify"
+	entrypointVerifyFast = "verify-fast"
+	entrypointFmt        = "fmt"
+	entrypointFmtCheck   = "fmt-check"
+	entrypointSetup      = "setup"
 )
 
-// RequiredEntrypoints lists the entrypoints V-04 requires, in report order.
-var RequiredEntrypoints = []string{EntrypointVerify, EntrypointVerifyFast, EntrypointFmt, EntrypointFmtCheck}
+// requiredEntrypoints lists the entrypoints V-04 requires, in report order.
+var requiredEntrypoints = []string{entrypointVerify, entrypointVerifyFast, entrypointFmt, entrypointFmtCheck}
 
-var entrypointNames = append(slices.Clone(RequiredEntrypoints), EntrypointSetup)
+var entrypointNames = append(slices.Clone(requiredEntrypoints), entrypointSetup)
 
 // EntrypointOrder returns every entrypoint name in the order V-04 and
 // vibe doctor check them: the required ones, then setup. It returns a
@@ -99,9 +99,9 @@ func EntrypointOrder() []string { return slices.Clone(entrypointNames) }
 
 // Entrypoint is one declared entrypoint.
 type Entrypoint struct {
-	// Declared is true when the configuration has the key, even with an
+	// declared is true when the configuration has the key, even with an
 	// empty value.
-	Declared bool
+	declared bool
 	// Commands holds the commands as written: one for a string, the list
 	// for a list. A null value has none.
 	Commands []string
@@ -151,11 +151,11 @@ func Parse(file string, data []byte, repo *Repo) (*Config, error) {
 	}
 	if v := field(top, "contract"); v != nil && isString(v) {
 		if major, minor, ok := parseVersion(v.Value); ok && !supported(major, minor) {
-			return nil, &UnsupportedVersionError{File: file, Declared: v.Value}
+			return nil, &UnsupportedVersionError{file: file, declared: v.Value}
 		}
 	}
 
-	p := &configParser{file: file, repo: repo, cfg: &Config{File: file}}
+	p := &configParser{file: file, repo: repo, cfg: &Config{file: file}}
 	if err := p.top(top); err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ type configParser struct {
 }
 
 func (p *configParser) fail(path, format string, args ...any) error {
-	return &ConfigError{File: p.file, Path: path, Reason: fmt.Sprintf(format, args...)}
+	return &ConfigError{File: p.file, Path: path, reason: fmt.Sprintf(format, args...)}
 }
 
 func (p *configParser) top(m *yaml.Node) error {
@@ -180,11 +180,11 @@ func (p *configParser) top(m *yaml.Node) error {
 			return p.contract(v)
 		case "platforms":
 			list, err := p.choices(key, v, platforms, false)
-			p.cfg.Platforms = list
+			p.cfg.platforms = list
 			return err
 		case "agents":
 			list, err := p.choices(key, v, agents, true)
-			p.cfg.Agents = list
+			p.cfg.agents = list
 			return err
 		case "components":
 			return p.components(v)
@@ -340,7 +340,7 @@ func (p *configParser) componentPath(at string, v *yaml.Node) (string, error) {
 		return "", p.fail(at, "%q is not clean; write %q", dir, path.Clean(dir))
 	case dir == ".." || strings.HasPrefix(dir, "../"):
 		return "", p.fail(at, "%q must be inside the repository", dir)
-	case !p.repo.HasDir(dir):
+	case !p.repo.hasDir(dir):
 		return "", p.fail(at, "%q is not a directory with tracked files", dir)
 	}
 	for j, other := range p.cfg.Components {
@@ -376,7 +376,7 @@ func (p *configParser) detectComponents() error {
 		return p.fail("components", "%v", err)
 	}
 	p.cfg.Components = []Component{{Path: ".", Language: language}}
-	p.cfg.ComponentsDetected = true
+	p.cfg.componentsDetected = true
 	return nil
 }
 
@@ -393,7 +393,7 @@ func (p *configParser) entrypoints(v *yaml.Node) error {
 		if !slices.Contains(entrypointNames, key) {
 			return p.fail(at, "unknown entrypoint; the entrypoints are %s", strings.Join(entrypointNames, ", "))
 		}
-		e := Entrypoint{Declared: true}
+		e := Entrypoint{declared: true}
 		switch {
 		case v.Kind == yaml.ScalarNode && v.Tag == "!!null":
 		case isString(v):
@@ -500,10 +500,10 @@ func (p *configParser) require(v *yaml.Node) error {
 		if r.Level != Should {
 			return p.fail(at, "%s is a %s rule; it is always required", r.ID, r.Level)
 		}
-		if j := slices.Index(p.cfg.Require, r.ID); j >= 0 {
+		if j := slices.Index(p.cfg.require, r.ID); j >= 0 {
 			return p.fail(at, "%s is listed twice (also require[%d])", r.ID, j)
 		}
-		p.cfg.Require = append(p.cfg.Require, r.ID)
+		p.cfg.require = append(p.cfg.require, r.ID)
 	}
 	return nil
 }
@@ -512,7 +512,7 @@ func (p *configParser) require(v *yaml.Node) error {
 // waiver expired or not: a waiver lets a SHOULD rule fail, require makes
 // it count.
 func (p *configParser) requiredAndWaived() error {
-	for i, id := range p.cfg.Require {
+	for i, id := range p.cfg.require {
 		for j, w := range p.cfg.Waivers {
 			if w.Rule == id {
 				return p.fail(fmt.Sprintf("require[%d]", i),

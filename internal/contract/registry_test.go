@@ -13,6 +13,7 @@ import (
 // The registry quotes spec 0051 (spec 0052, "Rule registry and results"):
 // each rule's sentence, check, level and source must match the spec's
 // rule table, and each part's check must be a piece of the whole check.
+// Every part of every rule has a check function.
 func TestRegistryQuotesSpec0051(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "specs", "0051-contract-v1.md"))
 	if err != nil {
@@ -36,6 +37,11 @@ func TestRegistryQuotesSpec0051(t *testing.T) { //nolint:gocognit,gocyclo // bas
 
 	must, from0051 := 0, 0
 	for _, r := range Rules() {
+		for _, p := range r.Parts {
+			if p.Run == nil && p.RunLast == nil {
+				t.Errorf("%s %s part has no check", r.ID, p.Kind)
+			}
+		}
 		if r.Since != "" {
 			checkSpec0061Rule(t, r)
 			continue
@@ -70,9 +76,6 @@ func TestRegistryQuotesSpec0051(t *testing.T) { //nolint:gocognit,gocyclo // bas
 			}
 			if !strings.Contains(strings.ToLower(r.Check), string(p.Kind)) {
 				t.Errorf("%s has a %s part its check does not name", r.ID, p.Kind)
-			}
-			if p.Run == nil {
-				t.Errorf("%s %s part has no check", r.ID, p.Kind)
 			}
 		}
 		if r.Level == Must {
@@ -130,32 +133,27 @@ func checkSpec0061Rule(t *testing.T, r Rule) {
 		t.Errorf("%s category = %s", r.ID, r.Category)
 	}
 	for _, p := range r.Parts {
-		if !strings.Contains(r.Check, p.Check) || p.Run == nil {
-			t.Errorf("%s %s part %q is not part of its check, or has no check", r.ID, p.Kind, p.Check)
+		if !strings.Contains(r.Check, p.Check) {
+			t.Errorf("%s %s part %q is not part of its check", r.ID, p.Kind, p.Check)
 		}
 	}
 }
 
-// The registry's needs (spec 0064) keep vibe audit from the runner's
-// panic. Only R-01's execution part declares needs: A-02's probe, whose
-// deny verdict it reads, and every other part, whose vibe calls it
-// lists. A static audit of Rules() does not panic: the runner validates
-// the needs in every audit, --static included, so every need resolves,
-// no static part declares one, and they form no cycle.
-func TestRegistryNeedsResolve(t *testing.T) {
-	r01 := partKey{rule: "R-01", kind: Execution}
+// The registry has one last part (spec 0071): R-01's execution part,
+// which reads A-02's deny verdict and the vibe calls of every other
+// part. A static audit of Rules() does not panic: the runner validates
+// the rule list in every audit, --static included.
+func TestRegistryLastPartIsR01Execution(t *testing.T) {
+	var last []partKey
 	for _, r := range Rules() {
 		for _, p := range r.Parts {
-			key := partKey{rule: r.ID, kind: p.Kind}
-			switch {
-			case key == r01:
-				if want := []Need{NeedPart("A-02", Probe), NeedEveryOther()}; !slices.Equal(p.Needs, want) {
-					t.Errorf("%s needs %v, want %v", key, p.Needs, want)
-				}
-			case len(p.Needs) > 0:
-				t.Errorf("%s needs %v, want no needs", key, p.Needs)
+			if p.RunLast != nil {
+				last = append(last, partKey{rule: r.ID, kind: p.Kind})
 			}
 		}
+	}
+	if want := []partKey{{rule: "R-01", kind: Execution}}; !slices.Equal(last, want) {
+		t.Errorf("the last parts are %v, want %v", last, want)
 	}
 
 	cfg, repo := staticFixture(t)

@@ -21,9 +21,9 @@ var glVariable = regexp.MustCompile(`\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_
 // gitlabPlatforms returns the platforms a resolved job runs on, one per
 // parallel: matrix combination, and describes each combination that names
 // no platform.
-func gitlabPlatforms(j *CIJob) (platforms, unknown []string) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
+func gitlabPlatforms(j *ciJob) (platforms, unknown []string) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	tags := mapValue(j.Node, "tags")
-	image := mapValue(j.Node, string(ImageKey)) != nil
+	image := mapValue(j.Node, string(imageKey)) != nil
 	for _, combo := range parallelCombos(mapValue(j.Node, "parallel")) {
 		var named, words []string
 		if tags != nil && tags.Kind == yaml.SequenceNode {
@@ -37,7 +37,7 @@ func gitlabPlatforms(j *CIJob) (platforms, unknown []string) { //nolint:gocognit
 				})
 				words = append(words, tag)
 				l := strings.ToLower(tag)
-				for _, p := range []string{PlatformWindows, PlatformLinux, PlatformMacOS} {
+				for _, p := range []string{platformWindows, platformLinux, platformMacOS} {
 					if strings.Contains(l, p) && !slices.Contains(named, p) {
 						named = append(named, p)
 					}
@@ -50,7 +50,7 @@ func gitlabPlatforms(j *CIJob) (platforms, unknown []string) { //nolint:gocognit
 		case len(words) == 0 && tags != nil && tags.Kind != yaml.SequenceNode:
 			unknown = append(unknown, j.where()+": tags that are not a list")
 		case len(words) == 0 && image:
-			platforms = append(platforms, PlatformLinux)
+			platforms = append(platforms, platformLinux)
 		case len(words) == 0:
 			unknown = append(unknown, j.where()+": no tags and no image")
 		default:

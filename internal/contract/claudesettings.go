@@ -85,10 +85,10 @@ func (h claudeHookEntry) matches(tool string) bool {
 
 // calls returns every simple command of the entry's command hooks. A
 // command that does not parse as shell calls nothing.
-func (h claudeHookEntry) calls() []Command {
-	var out []Command
+func (h claudeHookEntry) calls() []shellCommand {
+	var out []shellCommand
 	for _, c := range h.Hooks {
-		if cmds, err := ParseCommands(c.Command); err == nil {
+		if cmds, err := parseCommands(c.Command); err == nil {
 			out = append(out, cmds...)
 		}
 	}
@@ -113,7 +113,7 @@ func (e *Env) readClaudeSettings(missingFix string) (s *claudeSettings, result P
 		e.claudeSettings = &parsedClaudeSettings{s, err}
 	}
 	if err := e.claudeSettings.err; err != nil {
-		return nil, Fail(ParseFailure(claudeSettingsFile, err)), false
+		return nil, Fail(parseFailure(claudeSettingsFile, err)), false
 	}
 	return e.claudeSettings.settings, Pass(), true
 }

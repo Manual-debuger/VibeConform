@@ -73,7 +73,7 @@ func ReadConfig(root, configPath string) (file string, data []byte, err error) {
 	if err != nil {
 		return "", nil, err
 	}
-	if schema == SchemaV1 {
+	if schema == schemaV1 {
 		return "", nil, &loadError{
 			msg:      file + " is version 1 (a top-level standard key), which this vibe no longer reads",
 			sentinel: ErrConfigV1,
