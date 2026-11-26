@@ -31,7 +31,7 @@ func newInitCmd(seams cliSeams) *cobra.Command {
 			"are declared, vibe audit fails V-04. It refuses to overwrite an existing\n" +
 			"vibe.yaml, version 1 included.\n\n" +
 			"vibe init --skill writes the setup skill, " + setupskill.Name + ", to " +
-			strings.Join(setupskill.Dirs, " and ") + ",\n" +
+			strings.Join(setupskill.Dirs(), " and ") + ",\n" +
 			"replacing its files and removing files it no longer has. It writes nothing else.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
