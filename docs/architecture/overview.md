@@ -97,6 +97,17 @@ internal/contract
   `internal/cli` import it. Among this module's packages it imports only
   `internal/contract`, and only test files import it; two `depguard`
   rules enforce both. The report goldens stay in `internal/cli/testdata`.
+- **Test Git repositories** (spec 0073). `internal/testkit` is the one
+  helper for a test's isolated temporary Git repository: git runs with
+  the person's global and system configuration ignored, none of the
+  person's `GIT_` variables and no repository above the temporary
+  directory, and the helper inits a repository with one commit and
+  names its common Git directory. Every test that runs git in a
+  repository of its own uses it; `contracttest`'s fixture builder keeps
+  its own git, since `contracttest` may import only `internal/contract`.
+  Only test files import `internal/testkit`, and it imports no package
+  of this module; two `depguard` rules enforce both, as for
+  `contracttest`.
 - **Shell parsing.** "Called" means a simple command in the shell parse
   tree, so `internal/contract` depends on `mvdan.cc/sh/v3/syntax` (ADR
   0026). `internal/contract/shell.go` is the only file that imports it;
@@ -227,6 +238,14 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   commands and the version rule (`InstallVersion`: the version the
   install hint names). The `internal/setupskill` and `internal/doctor`
   boundaries have `depguard` rules too, and no import tests (spec 0063).
+- **One way to find bash** (spec 0073). `guardrule.ResolveBash` finds
+  the bash Claude Code runs hooks with: Git Bash on Windows
+  (`CLAUDE_CODE_GIT_BASH_PATH`, or the `bash.exe` next to `git.exe`,
+  never WSL's), bash on `PATH` elsewhere. The audit, `vibe doctor` and
+  the tests that run hooks (`hookShell` in `internal/setupskill`,
+  `findBash` in `internal/guard`) all call it; each test keeps its own
+  skip policy. `guardrule.LookPath`, which it uses, is also how the
+  audit finds the programs it runs.
 
 ### The setup skill
 
@@ -321,10 +340,11 @@ internal/
   contract/                 # contract audit: vibe.yaml v2, rule registry, static checks, the CI model with its GitHub Actions and GitLab CI readers, probe copy and probes (spec 0052, 0053, 0055)
     contracttest/           # the audit's test seam: fixture builder, listed-fixture opener, audit helper with the report check; imported by test files only (ADR 0028)
     probetest/              # the probe tests that run real tools, in a package of their own for go test's time budget (spec 0053)
-  guardrule/                # guard rule IDs, policy.json v2, command parsing shared by the audit and vibe-guard; imports nothing from internal/ (spec 0053)
+  guardrule/                # guard rule IDs, policy.json v2, command parsing shared by the audit and vibe-guard, ResolveBash; imports nothing from internal/ (spec 0053, 0073)
   guard/                    # vibe-guard: baseline rules, hook/explain/relock, unlock marker, reference commands, version rule; imports only guardrule (spec 0053, 0054)
   setupskill/               # the embedded vibeconform-setup skill, vibe init --skill, and the tests that run its reference hooks; imports only guard (spec 0054)
-  doctor/                   # vibe doctor's checks; imports only contract, for the configuration, hook reader and bash resolution (spec 0059)
+  doctor/                   # vibe doctor's checks; imports only contract, for the configuration and hook reader, and guardrule, for bash resolution (spec 0059, 0073)
+  testkit/                  # the tests' isolated temporary Git repository; imported by test files only, imports nothing from this module (spec 0073)
 ```
 
 - **`vibe init`** (spec 0059) gets the components from
@@ -342,11 +362,12 @@ internal/
   `vibe.yaml`, the entrypoints in `contract.EntrypointOrder`, then what
   the hooks need) and returns the report; the CLI prints it and sets
   the exit code (spec 0065). Doctor reuses the audit's readers (the
-  entrypoint splitter `ParseSimpleCommand`, `ReadClaudeHooks` and
-  `ResolveBash`), so it finds programs and bash exactly as the audit
-  would run them. Among this repository's packages it imports only
-  `internal/contract`; a `depguard` rule in `.golangci.yml` enforces
-  that for non-test code (spec 0063).
+  entrypoint splitter `ParseSimpleCommand` and `ReadClaudeHooks`) and
+  its bash resolution (`guardrule.ResolveBash`, spec 0073), so it finds
+  programs and bash exactly as the audit would run them. Among this
+  repository's packages it imports only `internal/contract` and
+  `internal/guardrule`; a `depguard` rule in `.golangci.yml` enforces
+  that (spec 0063).
 - **The removed commands.** `vibe sync`, `vibe diff` and `vibe check` are
   hidden commands that print the migration guide's path and exit 1.
   `contract.ReadConfig` stays, so that a version 1 `vibe.yaml` gets the
