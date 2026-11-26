@@ -1,4 +1,4 @@
-# The rules of contract 1.2.0
+# The rules of contract 2.0.0
 
 One entry per rule: its level, what satisfies it, and the reference file
 to start from. Keep anything that already satisfies a rule. The audit is
@@ -291,6 +291,13 @@ Every deny case of the guard corpus is refused (exit 2) or let through by
 a listed exception, and every allow case is allowed. `vibe-guard hook`
 does this.
 
+An exception counts for a deny case only when the guard needs it: the
+audit runs the case again without the exception, and the guard must
+refuse it then. A command exception must prefix the simple command the
+case's rule refuses, not another command of the same line. No exception
+counts for the self-unlock commands or the edits of the unlock marker.
+A guard of the repository's own must lift a rule the same way.
+
 ### A-03 (MUST): the guard fails closed
 
 Deny cases are still refused with `PATH` reduced to the system's
@@ -341,7 +348,8 @@ core.hooksPath=…` with `commit` or `push`. It allows `git push -n`, a
 dry run, and a message such as `-m "-n"`. `vibe-guard hook` does this
 (guard rule ID `git-skip-hooks`); it also refuses `LEFTHOOK=0` and
 `HUSKY=0` before `git commit` or `git push`. Add an exception for
-`git-skip-hooks` only when the person asks for one.
+`git-skip-hooks` only when the person asks for one. An exception counts
+as it does for A-02.
 
 ## D: dependencies and supply chain
 
@@ -384,9 +392,11 @@ cannot be pinned), so prefer a scanner command or the pinned component.
 ### R-01 (MUST): everything but the audit works without vibe
 
 No entrypoint, hook command or CI step calls `vibe`, except the audit job
-of C-04. `vibe-guard` is not `vibe`, so the guard hooks are fine. A CI
-job that calls no entrypoint may run `vibe --version` to check an
-installed binary. On GitLab, every job's `before_script`, `script` and
+of C-04. A call by path counts: `"$dir/vibe" verify`, `./bin/vibe
+verify` and `vibe.exe verify` all call `vibe`. `vibe-guard` is not
+`vibe`, so the guard hooks are fine. A CI job that calls no entrypoint
+may run `vibe --version`, by name or by path, to check an installed
+binary. On GitLab, every job's `before_script`, `script` and
 `after_script` is read, except the `conformance:audit` job's.
 
 ### R-02 (SHOULD): agents are told the verification entrypoints

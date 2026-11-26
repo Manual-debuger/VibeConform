@@ -159,6 +159,11 @@ repository enforces its own direction with lint instead of prose.
   R-01 read only the cases they read in 1.1.0, so they do not change.
   A-09 feeds its cases to every PreToolUse hook that matches the
   case's tool, as A-02 does, and honors a guard exception the same way.
+  Under contract 2.0.0 that way is narrower (spec 0072): an exception
+  counts only when it prefixes the simple command the case's rule
+  refuses and the guard refuses the case without it. A-09's cases are
+  single commands and none is fixed, so for them the rerun is the
+  change.
 - A-09's deny cases (Bash, and one PowerShell case):
   `git commit --no-verify`, `git commit -n`, `git commit -nm <msg>`,
   `git push --no-verify`, `git -c core.hooksPath=<path> commit`,

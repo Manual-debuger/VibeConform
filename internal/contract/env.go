@@ -56,6 +56,29 @@ func (e *Env) readFile(name string) ([]byte, error) {
 	return data, err
 }
 
+// The readings that differ between the contracts this vibe implements
+// (spec 0072). A check asks for the reading it needs; each holds under
+// 2.0.0 and not under 1.2.0.
+
+// narrowsExceptions: a command exception counts for a deny case only when
+// it prefixes a simple command the case's rule refuses, and no exception
+// counts for a fixed case (spec 0072, "The audit's reading under 2.0.0").
+func (e *Env) narrowsExceptions() bool { return e.auditsContract2() }
+
+// rerunsExceptions: an exception counts for a deny case only when the
+// case, run again without it, is refused (spec 0072, "The rerun").
+func (e *Env) rerunsExceptions() bool { return e.auditsContract2() }
+
+// readsVibeByPath: R-01 and C-04 recognize vibe by the last path element
+// of a command's first word (spec 0072, "R-01 and C-04").
+func (e *Env) readsVibeByPath() bool { return e.auditsContract2() }
+
+func (e *Env) auditsContract2() bool { return e.auditedVersion() == Contract2 }
+
+// auditedVersion is the contract version the audit applies, for a
+// finding that names it.
+func (e *Env) auditedVersion() string { return e.config.Contract.Audited }
+
 // note records a fact the audit assumed, such as the default branch, for
 // the report.
 func (e *Env) note(format string, args ...any) {

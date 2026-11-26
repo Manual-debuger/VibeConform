@@ -159,7 +159,7 @@ func (g *Guard) Decide(c Call) Decision {
 	return d
 }
 
-func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
+func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit // baseline: pre-existing complexity
 	shell := gr.ShellFor(t.Tool)
 	cmds, err := gr.Commands(shell, t.Command)
 	if err != nil {
@@ -180,31 +180,9 @@ func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit,gocyclo 
 			return Decision{Outcome: Deny, Lifted: d.Lifted, Finding: &Finding{Rule: gr.IDDynamicCommand,
 				Why: "the shell runs a script it reads from standard input, so what runs is not known", Command: c}}
 		}
-		for _, r := range commandRulesFor(c.Shell) {
-			if !r.match(*c) {
-				continue
-			}
-			f := Finding{Rule: r.id, Why: r.why, Command: c}
-			if e := g.exception(r.id, func(e gr.Exception) bool { return e.MatchesCommand(*c) }); e != nil && !r.fixed {
-				f.Exception = e
-				d.Lifted = append(d.Lifted, f)
-				continue
-			}
-			d.Outcome, d.Finding = Deny, &f
+		if f := g.firstRefusal(g.commandMatches(c), &d); f != nil {
+			d.Outcome, d.Finding = Deny, f
 			return d
-		}
-		// The paths the command writes get the guardrail path rules (spec
-		// 0058). A word with an expansion is not a written path: what it
-		// names is not known, and refusing it would refuse common scripts.
-		for _, w := range c.Writes {
-			if !w.Literal {
-				continue
-			}
-			p := g.normalize(w.Text)
-			if f := g.checkPath(shellWriteRules, p, gr.RelPath(g.repo.Root, p), c, &d); f != nil {
-				d.Outcome, d.Finding = Deny, f
-				return d
-			}
 		}
 		for _, r := range g.policy.Rules {
 			if r.Command == "" || !r.AppliesTo(t.Tool) || !r.MatchesCommand(*c) {
@@ -229,7 +207,7 @@ func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit,gocyclo 
 func (g *Guard) decidePath(t gr.Target) Decision {
 	var d Decision
 	p := g.normalize(t.Path)
-	if f := g.checkPath(pathRules, p, t.Path, nil, &d); f != nil {
+	if f := g.firstRefusal(g.pathMatches(pathRules, p, t.Path, nil), &d); f != nil {
 		d.Outcome, d.Finding = Deny, f
 		return d
 	}
@@ -253,17 +231,58 @@ func (g *Guard) decidePath(t gr.Target) Decision {
 	return d
 }
 
-// checkPath checks the path p against rules, in order, and returns the
-// first refusal. A rule an exception lifts is added to d.Lifted. shown is
-// the path a finding names; c is the command that writes p, or nil for
-// an edit.
-func (g *Guard) checkPath(rules []pathRule, p, shown string, c *gr.Command, d *Decision) *Finding {
-	for _, r := range rules {
-		if !r.match(g, p) {
+// ruleMatch is one baseline rule that matches a call: the finding it
+// makes, whether it is fixed (no exception lifts it), and which
+// exceptions lift it.
+type ruleMatch struct {
+	finding Finding
+	fixed   bool
+	lifts   func(gr.Exception) bool
+}
+
+// commandMatches returns the baseline rules that match the simple command
+// c, in the order the guard applies them: the command rules, then the
+// guardrail path rules for each path c writes (spec 0058). A word with an
+// expansion is not a written path: what it names is not known, and
+// refusing it would refuse common scripts.
+func (g *Guard) commandMatches(c *gr.Command) []ruleMatch {
+	var out []ruleMatch
+	for _, r := range commandRulesFor(c.Shell) {
+		if r.match(*c) {
+			out = append(out, ruleMatch{finding: Finding{Rule: r.id, Why: r.why, Command: c}, fixed: r.fixed,
+				lifts: func(e gr.Exception) bool { return e.MatchesCommand(*c) }})
+		}
+	}
+	for _, w := range c.Writes {
+		if !w.Literal {
 			continue
 		}
-		f := Finding{Rule: r.id, Why: r.why, Path: shown, Command: c}
-		if e := g.exception(r.id, func(e gr.Exception) bool { return e.MatchesPath(p, g.repo.Root) }); e != nil && !r.fixed {
+		p := g.normalize(w.Text)
+		out = append(out, g.pathMatches(shellWriteRules, p, gr.RelPath(g.repo.Root, p), c)...)
+	}
+	return out
+}
+
+// pathMatches returns the rules that match the path p, in order. shown
+// is the path a finding names; c is the command that writes p, or nil for
+// an edit.
+func (g *Guard) pathMatches(rules []pathRule, p, shown string, c *gr.Command) []ruleMatch {
+	var out []ruleMatch
+	for _, r := range rules {
+		if r.match(g, p) {
+			out = append(out, ruleMatch{finding: Finding{Rule: r.id, Why: r.why, Path: shown, Command: c}, fixed: r.fixed,
+				lifts: func(e gr.Exception) bool { return e.MatchesPath(p, g.repo.Root) }})
+		}
+	}
+	return out
+}
+
+// firstRefusal applies matches in order and returns the first one that
+// no exception lifts. Each one an exception lifts is added to d.Lifted.
+func (g *Guard) firstRefusal(matches []ruleMatch, d *Decision) *Finding {
+	for _, m := range matches {
+		f := m.finding
+		if e := g.exception(f.Rule, m.lifts); e != nil && !m.fixed {
 			f.Exception = e
 			d.Lifted = append(d.Lifted, f)
 			continue

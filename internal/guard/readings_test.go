@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -15,9 +16,28 @@ import (
 // The two readings of an exception (spec 0070; spec 0053, "Guard rule IDs
 // and exceptions, shared"). vibe-guard lifts a rule for the simple command
 // or the path that rule refused; the audit's A-02 reads an exception
-// through Exception.Matches. The audit's reading must be at least as wide
-// as the guard's: a lift the audit does not accept makes the audit fail a
-// repository whose guard honours a valid exception.
+// through Exception.Matches. Under contract 1.x the audit's reading must
+// be at least as wide as the guard's: a lift the audit does not accept
+// makes the audit fail a repository whose guard honours a valid
+// exception. Under 2.0.0 the two readings are equal (spec 0072, "The
+// audit's reading under 2.0.0"): the audit counts an exception for a case
+// (GuardCase.ExceptionMatchesRefused) exactly when vibe-guard lifts the
+// case by it, except on the cases readingDifferences lists.
+
+// readingDifferences are the deny cases on which vibe-guard does not lift
+// the case by an exception that the audit's 2.0.0 reading counts, and
+// why. On each, the exception lifts the case's rule, and another built-in
+// rule refuses the same call: the audit's reading looks at the case's
+// rule only. The test checks that the guard's refusal names that other
+// rule, and that each listed case still differs.
+var readingDifferences = map[string]struct{ rule, why string }{
+	"PowerShell rm -r -fo": {gr.RmRf,
+		"PowerShell's rm is read as Remove-Item and as the rm program, and -fo is -f -o to rm"},
+	"variant (#105): iex": {gr.RmRf,
+		"PowerShell's rm is read as Remove-Item and as the rm program, and -fo is -f -o to rm"},
+	"guard policy: writing policy.local.json is denied (D12)": {gr.GuardrailSettings,
+		"the file is under .claude/hooks/, which guardrail-settings refuses without an unlock"},
+}
 
 // builtException is one exception the two-readings test builds for a
 // case, and what it was built from.
@@ -30,20 +50,25 @@ type builtException struct {
 type readingsTally struct {
 	cases, exceptions, shellWrites atomic.Int64
 	lifts, commandLifts, pathLifts atomic.Int64
+	differed                       sync.Map // case name to true: a listed difference was seen
 }
 
 // TestTwoReadingsOfAnException runs every deny case of the corpus through
 // "vibe-guard hook" once for each exception built for it, with a policy
 // that holds that exception alone. Whenever the guard lets the case
-// through, the audit's reading (Exception.Matches) must accept that
-// exception for the case. The exceptions built for a case are: for a
+// through, the audit's 1.x reading (Exception.Matches) must accept that
+// exception for the case, and the audit's 2.0.0 reading must count it
+// exactly when the guard lets the case through, but for the cases
+// readingDifferences lists. The exceptions built for a case are: for a
 // command rule, each word prefix of each simple command of the case that
 // holds no expansion; for a path rule, the path the case edits and the
 // path of each literal shell write of the case, made project-relative;
 // for any path rule, "**".
 //
-// A failure is a lift the audit does not accept. The fix belongs in
-// Exception.Matches, a contract PATCH under spec 0051.
+// A failure under 1.x is a lift the audit does not accept. The fix
+// belongs in Exception.Matches, a contract PATCH under spec 0051. A
+// failure under 2.0.0 is a difference between the readings: the corpus's
+// fixed or refuses is wrong, or GuardCase.ExceptionMatchesRefused is.
 func TestTwoReadingsOfAnException(t *testing.T) {
 	var tally readingsTally
 	t.Run("corpus", func(t *testing.T) {
@@ -59,6 +84,11 @@ func TestTwoReadingsOfAnException(t *testing.T) {
 	})
 	if t.Failed() {
 		return
+	}
+	for name := range readingDifferences {
+		if _, ok := tally.differed.Load(name); !ok {
+			t.Errorf("readingDifferences lists %q, on which the readings no longer differ; remove it", name)
+		}
 	}
 	t.Logf("%d deny cases, %d exceptions (%d from shell writes), %d lifts (%d command, %d path)",
 		tally.cases.Load(), tally.exceptions.Load(), tally.shellWrites.Load(), tally.lifts.Load(),
@@ -89,22 +119,45 @@ func checkReadings(t *testing.T, c contract.GuardCase, tally *readingsTally) {
 		switch {
 		case got.Code == 2 && strings.HasPrefix(got.Stderr, "vibe-guard: refused by rule "+gr.IDPolicyError+":"):
 			t.Fatalf("exception %+v: the policy does not load: %s", e.Exception, got.Stderr)
-		case got.Code == 2:
-			continue // the guard does not lift the case by this exception
-		case got.Code != 0:
+		case got.Code != 0 && got.Code != 2:
 			t.Fatalf("exception %+v: exit %d, stderr %q", e.Exception, got.Code, got.Stderr)
 		}
-		tally.lifts.Add(1)
-		if gr.IsPathRule(e.Rule) {
-			tally.pathLifts.Add(1)
-		} else {
-			tally.commandLifts.Add(1)
+		lifted := got.Code == 0
+		if lifted {
+			tally.lifts.Add(1)
+			if gr.IsPathRule(e.Rule) {
+				tally.pathLifts.Add(1)
+			} else {
+				tally.commandLifts.Add(1)
+			}
 		}
-		if !e.Matches(c.Target(), r.Root) {
-			t.Errorf("vibe-guard lets the case through by exception {rule %q, match %q}, which the audit's reading "+
-				"(Exception.Matches) does not accept; widen Exception.Matches (spec 0070, \"The two readings of an exception\")",
-				e.Rule, e.Match)
+		compareReadings(t, c, e.Exception, r.Root, got.Stderr, lifted, tally)
+	}
+}
+
+// compareReadings checks the audit's two readings of e for c against the
+// guard's: lifted is whether vibe-guard let the case through, and stderr
+// what it wrote.
+func compareReadings(t *testing.T, c contract.GuardCase, e gr.Exception, root, stderr string, lifted bool, tally *readingsTally) {
+	t.Helper()
+	if lifted && !e.Matches(c.Target(), root) {
+		t.Errorf("vibe-guard lets the case through by exception {rule %q, match %q}, which the audit's 1.x reading "+
+			"(Exception.Matches) does not accept; widen Exception.Matches (spec 0070, \"The two readings of an exception\")",
+			e.Rule, e.Match)
+	}
+	counts := c.ExceptionMatchesRefused(e, root)
+	if d, listed := readingDifferences[c.Name]; listed && counts && !lifted {
+		if refusedBy := "vibe-guard: refused by rule " + d.rule + ":"; !strings.HasPrefix(stderr, refusedBy) {
+			t.Errorf("exception {rule %q, match %q}: a listed difference (%s), but the guard's refusal is %q, not by rule %s",
+				e.Rule, e.Match, d.why, stderr, d.rule)
 		}
+		tally.differed.Store(c.Name, true)
+		return
+	}
+	if counts != lifted {
+		t.Errorf("vibe-guard lifts the case by exception {rule %q, match %q}: %v; the audit's 2.0.0 reading "+
+			"(GuardCase.ExceptionMatchesRefused) counts it: %v; they must agree (spec 0072, \"The audit's reading under 2.0.0\")",
+			e.Rule, e.Match, lifted, counts)
 	}
 }
 

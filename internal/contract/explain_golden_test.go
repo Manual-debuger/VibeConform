@@ -51,11 +51,12 @@ const pemDashes = "{{five dashes}}"
 // text, which names each lockfile's commands, and what --explain prints
 // for V-01 to V-08, the planted defect samples among it. They pin the
 // text byte for byte before the language knowledge moves into records.
+// A-02 and R-01 pin what they say under each contract MAJOR (spec 0072).
 // The goldens are LF (.gitattributes), so a CRLF checkout fails instead
 // of being normalized silently.
 func TestExplainGolden(t *testing.T) {
 	t.Parallel()
-	for _, id := range []string{"D-01", "V-01", "V-02", "V-03", "V-04", "V-05", "V-06", "V-07", "V-08"} {
+	for _, id := range []string{"D-01", "V-01", "V-02", "V-03", "V-04", "V-05", "V-06", "V-07", "V-08", "A-02", "R-01"} {
 		t.Run(id, func(t *testing.T) {
 			t.Parallel()
 			assertGolden(t, filepath.Join("testdata", "explain", id+".golden"), explainText(t, id))

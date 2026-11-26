@@ -17,18 +17,67 @@ import (
 // configure, not only pre-commit and pre-push, and every Claude Code hook
 // event.
 
-// vibeCall is one simple command whose first word is vibe.
+// vibeRecognizer recognizes a call of vibe as the audited contract does,
+// the one reading R-01's three places and C-04's audit job share (spec
+// 0072, "R-01 and C-04"). Under 1.2.0 a command's first word must be the
+// literal vibe. Under 2.0.0 its last path element, after / or \, must be
+// the literal vibe or vibe.exe, compared case-sensitively; the directory
+// part may hold an expansion, the last element may not.
+type vibeRecognizer struct {
+	// byLastElement is set under 2.0.0: vibe is recognized by the last
+	// path element of the first word.
+	byLastElement bool
+}
+
+// vibeRecognizerOf is the recognizer of the contract env audits.
+func vibeRecognizerOf(env *Env) vibeRecognizer {
+	return vibeRecognizer{byLastElement: env.readsVibeByPath()}
+}
+
+// isVibe reports whether w, a command's first word, names vibe.
+func (rec vibeRecognizer) isVibe(w shellWord) bool {
+	if w.Literal && w.Text == "vibe" {
+		// A call by name, which 2.0.0 keeps: vibe, \vibe or vi\be.
+		return true
+	}
+	if !rec.byLastElement {
+		return false
+	}
+	elem, known := w.LastElement()
+	return known && (elem == "vibe" || elem == "vibe.exe")
+}
+
+// runs reports whether c calls vibe with args as its next words, each
+// literal; more words may follow them.
+func (rec vibeRecognizer) runs(c shellCommand, args ...string) bool {
+	if len(c.Words) <= len(args) || !rec.isVibe(c.Words[0]) {
+		return false
+	}
+	for i, a := range args {
+		if w := c.Words[i+1]; !w.Literal || w.Text != a {
+			return false
+		}
+	}
+	return true
+}
+
+// runsAudit reports whether some command in cmds runs vibe audit.
+func (rec vibeRecognizer) runsAudit(cmds []shellCommand) bool {
+	return slices.ContainsFunc(cmds, func(c shellCommand) bool { return rec.runs(c, "audit") })
+}
+
+// vibeCall is one simple command that calls vibe.
 type vibeCall struct {
 	file  string
 	where string
 	cmd   shellCommand
 }
 
-// callsVibe returns the commands in cmds whose first word is vibe.
-func callsVibe(file, where string, cmds []shellCommand) []vibeCall {
+// callsVibe returns the commands in cmds that call vibe.
+func (rec vibeRecognizer) callsVibe(file, where string, cmds []shellCommand) []vibeCall {
 	var out []vibeCall
 	for _, c := range cmds {
-		if c.HasPrefix("vibe") {
+		if rec.runs(c) {
 			out = append(out, vibeCall{file, where, c})
 		}
 	}
@@ -39,11 +88,12 @@ func callsVibe(file, where string, cmds []shellCommand) []vibeCall {
 // finds malformed is skipped: V-04 fails it.
 func entrypointVibeCalls(env *Env) []vibeCall {
 	var out []vibeCall
+	vibe := vibeRecognizerOf(env)
 	for _, name := range entrypointNames {
 		if _, ok := env.config.Entrypoints[name]; !ok {
 			continue
 		}
-		out = append(out, callsVibe(env.config.file, "entrypoints."+name, env.entrypoint(name).commands)...)
+		out = append(out, vibe.callsVibe(env.config.file, "entrypoints."+name, env.entrypoint(name).commands)...)
 	}
 	return out
 }
@@ -56,6 +106,7 @@ func hookVibeCalls(env *Env) ([]vibeCall, PartResult) { //nolint:gocognit // bas
 	var calls []vibeCall
 	var broken []Finding
 	seen := map[string]bool{}
+	vibe := vibeRecognizerOf(env)
 	for _, m := range env.hookManagers() {
 		broken = append(broken, m.Broken...)
 		for _, hook := range slices.Sorted(maps.Keys(m.ScriptBroken)) {
@@ -63,7 +114,7 @@ func hookVibeCalls(env *Env) ([]vibeCall, PartResult) { //nolint:gocognit // bas
 		}
 		for _, hook := range slices.Sorted(maps.Keys(m.Entries)) {
 			for _, en := range m.Entries[hook] {
-				for _, c := range callsVibe(en.File, en.Where, en.Commands) {
+				for _, c := range vibe.callsVibe(en.File, en.Where, en.Commands) {
 					// A pre-commit hook in several stages is one entry.
 					key := c.file + "\x00" + c.where + "\x00" + c.cmd.String()
 					if !seen[key] {
@@ -83,7 +134,7 @@ func hookVibeCalls(env *Env) ([]vibeCall, PartResult) { //nolint:gocognit // bas
 		}
 		for _, event := range slices.Sorted(maps.Keys(s.Events)) {
 			for _, entry := range s.Events[event] {
-				calls = append(calls, callsVibe(claudeSettingsFile, "hooks."+event, entry.calls())...)
+				calls = append(calls, vibe.callsVibe(claudeSettingsFile, "hooks."+event, entry.calls())...)
 			}
 		}
 	}
@@ -97,6 +148,7 @@ func hookVibeCalls(env *Env) ([]vibeCall, PartResult) { //nolint:gocognit // bas
 // vibe (spec 0055, "R-01 and tool-installation tests").
 func ciVibeCalls(env *Env, ci *ciModel, exempt []*ciJob) []vibeCall {
 	var out []vibeCall
+	vibe := vibeRecognizerOf(env)
 	for _, j := range ci.Jobs {
 		if slices.ContainsFunc(exempt, func(e *ciJob) bool { return e.Key() == j.Key() }) {
 			continue
@@ -107,8 +159,8 @@ func ciVibeCalls(env *Env, ci *ciModel, exempt []*ciJob) []vibeCall {
 		}
 		testsTools := !callsAnEntrypoint(env, all)
 		for _, s := range j.Scripts {
-			for _, c := range callsVibe(s.File, fmt.Sprintf("line %d: %s", s.Line, s.Where), s.Commands) {
-				if testsTools && c.cmd.Calls(vibeVersion) {
+			for _, c := range vibe.callsVibe(s.File, fmt.Sprintf("line %d: %s", s.Line, s.Where), s.Commands) {
+				if testsTools && len(c.cmd.Words) == 2 && vibe.runs(c.cmd, "--version") {
 					continue
 				}
 				out = append(out, c)
@@ -117,9 +169,6 @@ func ciVibeCalls(env *Env, ci *ciModel, exempt []*ciJob) []vibeCall {
 	}
 	return out
 }
-
-// vibeVersion is the one vibe command a tool-installation test may run.
-var vibeVersion = shellCommand{Words: []shellWord{{Text: "vibe", Literal: true}, {Text: "--version", Literal: true}}}
 
 // callsAnEntrypoint reports whether some command in cmds calls a command
 // of a declared entrypoint. Calling one command of a list entrypoint is

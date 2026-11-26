@@ -87,6 +87,43 @@ func TestRuleA02Reporting(t *testing.T) {
 	})
 }
 
+// A deny case that no PreToolUse hook runs is not one an exception let
+// through under 2.0.0 (spec 0072, "The rerun"): the "no PreToolUse hook
+// matches" finding names the case and the exception that did not count.
+// Under 1.2.0 the exception counts, as before.
+func TestRuleA02UnmatchedCaseWithAnException(t *testing.T) {
+	t.Parallel()
+	report := func(t *testing.T, version string) *contract.Report {
+		t.Helper()
+		var edits []contracttest.Edit
+		for p, content := range withContract(t, map[string]string{".claude/hooks/policy.json": probeRmBuildException}, version) {
+			edits = append(edits, contracttest.WithFile(p, content))
+		}
+		return probeAuditRules(t, probeFixture(t, edits...), "A-02")
+	}
+	t.Run("2.0.0", func(t *testing.T) {
+		t.Parallel()
+		rep := report(t, contract.Latest)
+		assertPart(t, rep, "A-02", contract.Probe, contract.ResultFail,
+			`no PreToolUse hook matches Bash, so its `,
+			`"rm -r -f (spec 0047)" (the exception rm-rf "rm -r -f build" in .claude/hooks/policy.json does not count: `+
+				`no hook ran the case)`)
+		if len(rep.GuardExceptionUses) != 0 {
+			t.Errorf("GuardExceptionUses = %+v, want none", rep.GuardExceptionUses)
+		}
+	})
+	t.Run("1.2.0", func(t *testing.T) {
+		t.Parallel()
+		rep := report(t, contract.Contract1)
+		if text := findingText(part(t, rep, "A-02", contract.Probe)); strings.Contains(text, `"rm -r -f (spec 0047)"`) {
+			t.Errorf("A-02 names a case the exception lets through:\n%s", text)
+		}
+		if want := rmBuildUses(probeRmBuildCases...); !slices.Equal(rep.GuardExceptionUses, want) {
+			t.Errorf("GuardExceptionUses = %+v, want %+v", rep.GuardExceptionUses, want)
+		}
+	})
+}
+
 // What A-08 reports (spec 0053, "A-08 (#106)") when no hook runs. The
 // fixtures with real guards and Stop hooks are in guardprobe_test.go.
 func TestRuleA08Reporting(t *testing.T) {

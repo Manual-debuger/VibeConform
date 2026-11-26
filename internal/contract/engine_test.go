@@ -303,6 +303,29 @@ func TestContractAuditApplicabilityAndWaivers(t *testing.T) { //nolint:gocognit,
 	}
 }
 
+// A vibe implements contracts 1.2.0 and 2.0.0 side by side: a declared
+// 1.y.z is audited as 1.2.0 and a declared 2.0.z as 2.0.0 (spec 0072,
+// "Contract versions").
+func TestContractAuditedVersion(t *testing.T) {
+	t.Parallel()
+	for declared, audited := range map[string]string{
+		"1.0.0": "1.2.0",
+		"1.2.0": "1.2.0",
+		"1.2.5": "1.2.0",
+		"2.0.0": "2.0.0",
+		"2.0.3": "2.0.0",
+	} {
+		t.Run(declared, func(t *testing.T) {
+			t.Parallel()
+			rep := engAuditStatic(t, contracttest.Fixture(t, contracttest.Baseline,
+				contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: " + declared + "\n"}))))
+			if rep.Contract.Declared != declared || rep.Contract.Audited != audited {
+				t.Errorf("contract = %+v, want %s declared, %s audited", rep.Contract, declared, audited)
+			}
+		})
+	}
+}
+
 // The schema and the running vibe's version are the JSON report's
 // (TestContractJSONReportFromTheModel in internal/cli).
 func TestContractAuditReportsEveryRule(t *testing.T) {

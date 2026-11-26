@@ -3,11 +3,13 @@ package guard_test
 import (
 	"encoding/json"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/guard"
 	gr "github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
@@ -88,6 +90,64 @@ func TestCorpus(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-exist
 			}
 		})
 	}
+}
+
+// TestCorpusFixedAndRefuses checks the corpus's fixed and refuses against
+// vibe-guard's rules (spec 0072, "Guard corpus"): a deny case is fixed
+// exactly when a fixed rule refuses it, and the refuses of a case of more
+// than one simple command names, in source order, exactly the simple
+// commands its rule refuses.
+func TestCorpusFixedAndRefuses(t *testing.T) {
+	for _, c := range contract.GuardCorpus() {
+		if c.Want != contract.WantDeny {
+			continue
+		}
+		t.Run(c.Name, func(t *testing.T) {
+			t.Parallel()
+			r := corpusRepo(t, c, testNow)
+			g := guard.New(gr.FindRepo(r.Root, r.Root), guard.Options{Now: testNow, Dir: r.Root})
+			refused, fixed := corpusRefusals(t, g, c)
+			if fixed != c.Fixed {
+				t.Errorf("the corpus says fixed %v; a fixed rule of vibe-guard refuses the case: %v", c.Fixed, fixed)
+			}
+			if !slices.Equal(refused, c.Refuses) {
+				t.Errorf("the corpus says refuses %q; rule %s refuses %q", c.Refuses, c.Rule, refused)
+			}
+		})
+	}
+}
+
+// corpusRefusals is what vibe-guard's rule c.Rule refuses of the deny
+// case c: the simple commands of a compound command case, in source
+// order (none for an edit or a single command), and whether a fixed rule
+// refuses the case.
+func corpusRefusals(t *testing.T, g *guard.Guard, c contract.GuardCase) (refused []string, fixed bool) {
+	t.Helper()
+	tgt := c.Target()
+	if gr.IsEditTool(tgt.Tool) {
+		ok, fixed := g.RuleRefusesEdit(c.Rule, tgt.Path)
+		if !ok {
+			t.Fatalf("rule %s does not refuse the edit of %s", c.Rule, tgt.Path)
+		}
+		return nil, fixed
+	}
+	cmds, err := gr.Commands(gr.ShellFor(tgt.Tool), tgt.Command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range cmds {
+		if ok, f := g.RuleRefuses(c.Rule, cmd); ok {
+			refused = append(refused, cmd.String())
+			fixed = fixed || f
+		}
+	}
+	if len(refused) == 0 {
+		t.Fatalf("rule %s refuses no simple command of %q", c.Rule, tgt.Command)
+	}
+	if len(cmds) == 1 {
+		return nil, fixed
+	}
+	return refused, fixed
 }
 
 func hasLine(out, line string) bool {

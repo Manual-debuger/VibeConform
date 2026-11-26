@@ -28,10 +28,41 @@ var ruleDetails = map[string]func() string{
 	},
 	"V-07": secretSampleText,
 	"V-08": v08Details,
-	"A-02": guardCorpusText,
+	"A-02": func() string { return a02ExceptionsText + "\n" + guardCorpusText() },
 	"A-03": guardCorpusText,
 	"A-09": a09CasesText,
+	"R-01": func() string { return r01VibeCallsText },
 }
+
+// a02ExceptionsText says when an exception counts for a deny case, under
+// each contract MAJOR (spec 0072, "The audit's reading under 2.0.0" and
+// "The rerun").
+const a02ExceptionsText = "Exceptions:\n" +
+	"  Under contract 2.0.0, an exception counts for a deny case only when all\n" +
+	"  of these hold: the guard lets the case through; an exception in\n" +
+	"  `.claude/hooks/policy.json` matches the case; and the guard refuses the\n" +
+	"  case when every exception that matches it is removed from\n" +
+	"  `.claude/hooks/policy.json`. The audit runs the case again in the probe\n" +
+	"  copy without those exceptions, and restores the file after. A command\n" +
+	"  exception must prefix the simple command the case's rule refuses, and no\n" +
+	"  exception matches a fixed case: the self-unlock commands and the edits of\n" +
+	"  the unlock marker. A case that the guard lets through without its\n" +
+	"  exceptions fails. A-09 reads exceptions the same way.\n" +
+	"  Under contract 1.x, an exception counts when it matches the case: a\n" +
+	"  command exception may prefix any simple command of the case, and the case\n" +
+	"  does not run again.\n"
+
+// r01VibeCallsText says what R-01 counts as a call of vibe, under each
+// contract MAJOR (spec 0072, "R-01 and C-04").
+const r01VibeCallsText = "Calls of vibe:\n" +
+	"  Under contract 2.0.0, a command calls `vibe` when the last path element of\n" +
+	"  its first word, after `/` or `\\`, is the literal `vibe` or `vibe.exe`,\n" +
+	"  compared case-sensitively. The directory part may hold an expansion, so\n" +
+	"  `\"$dir/vibe\" verify` and `./bin/vibe verify` are calls. A last element\n" +
+	"  that holds an expansion, such as `\"$bin\" verify`, is not. `vibe-guard` by\n" +
+	"  any path is not a call of `vibe`. C-04's audit job and the `vibe --version`\n" +
+	"  exemption recognize `vibe` the same way.\n" +
+	"  Under contract 1.x, its first word must be the literal `vibe`.\n"
 
 // guardCorpusText prints the guard corpus's counts by guard rule ID, for
 // A-02 and A-03 (spec 0053, "Report and CLI").

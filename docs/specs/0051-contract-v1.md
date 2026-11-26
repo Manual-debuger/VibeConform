@@ -1,6 +1,7 @@
 # Spec 0051: Contract v1.0.0
 
-Current version: 1.1.0 (see "Changes" under "Versioning").
+Current version: 2.0.0 (see "Changes" under "Versioning"). `vibe` also
+audits 1.x, as 1.2.0 (spec 0072).
 
 Status: accepted (2026-10-16). Issue #96. Decided by ADR 0025. Settled
 with the user on 2026-10-16 in a grilling session; "Qn" refers to its
@@ -184,6 +185,23 @@ A deny case counts as satisfied in either of two ways:
 - the guard refuses it, or
 - the guard allows it and an exception for the case's guard rule ID
   matches the case's command or path.
+
+Since 2.0.0 (spec 0072), the second way counts only when all of these
+hold:
+
+1. the guard lets the case through;
+2. the exception matches the case as `vibe-guard` reads it: a command
+   exception prefixes the simple command the case's rule refuses (the
+   corpus's `refuses`), and no exception matches a fixed case (the
+   corpus's `fixed`: the self-unlock commands and the edits of the
+   unlock marker);
+3. the guard refuses the case when every exception that matches it is
+   removed from `policy.json`. The audit reruns the case in the probe
+   copy without them, and restores the file afterwards.
+
+A case that the guard lets through without its exceptions fails. Under
+1.x, a command exception may prefix any simple command of the case, and
+the case does not run again.
 
 The audit lists every case that an exception lets through.
 
@@ -391,6 +409,13 @@ read GitLab CI (see "C: CI"):
   call. No other spelling is exempt (`vibe version`, or
   `vibe --version` with more words, is a call), and `vibe-guard` is not
   `vibe`.
+- **R-01, `vibe` by path** (since 2.0.0, spec 0072): a simple command
+  calls `vibe` when the last path element of its first word, after `/`
+  or `\`, is the literal `vibe` or `vibe.exe`. The directory part may
+  hold an expansion (`"$dir/vibe" verify`); a last element that holds
+  one (`"$bin" verify`) is not a call. The `vibe --version` exemption
+  and C-04's audit job read `vibe` the same way. Under 1.x, the first
+  word must be the literal `vibe`.
 - **R-01 on GitLab CI**: the CI part reads every job's
   `before_script`, `script` and `after_script`, except those of a job
   that satisfies C-04.
@@ -419,6 +444,35 @@ read GitLab CI (see "C: CI"):
 
 ### Changes
 
+- **2.0.0** (2026-11-26, spec 0072, issues #227 and #120 Part B). A
+  MAJOR release. `vibe` still audits a repository that declares 1.x, as
+  1.2.0, with unchanged results; a repository moves to 2.0.0 when it
+  changes its `contract:` line. Each change and why it is MAJOR:
+
+  - **A-02 and A-09 count an exception only when the guard needs it.**
+    The guard must refuse the case once every matching exception is
+    removed from `policy.json` (see "Guard policy and exceptions"). A
+    tightened check: a guard that lets the case through whatever the
+    policy says passed under 1.x and now fails.
+  - **A command exception must prefix the simple command the case's
+    rule refuses, and no exception counts for a fixed case.** The
+    audit's reading of an exception narrows to `vibe-guard`'s. A
+    tightened check: a guard that lifts a compound command because an
+    exception names another of its commands, or lifts the self-unlock
+    command, passed under 1.x and now fails. The corpus gains the
+    `fixed` and `refuses` fields for it; no deny or allow case is added
+    or removed.
+  - **R-01 counts a call of `vibe` by path** (`"$dir/vibe" verify`,
+    `./bin/vibe verify`, `vibe.exe verify`). A tightened check: a
+    repository whose checks run `vibe` by path passed under 1.x and now
+    fails. C-04 recognizes its audit job the same way, which can only
+    exempt more.
+
+  No rule is added or removed. A repository whose guard is `vibe-guard`
+  and that calls `vibe` by name only keeps its verdict.
+- **1.2.0** (spec 0061, ADR 0027). A MINOR release: new SHOULD rules
+  only (V-05 to V-08 and A-09, with A-09's own corpus cases), so no
+  verdict changes.
 - **1.1.0** (2026-10-19, spec 0055, issues #74 and #120 Part A). A
   MINOR release. Each change and why it is MINOR:
 
@@ -474,7 +528,7 @@ read GitLab CI (see "C: CI"):
 
 ## Later versions
 
-These are not in 1.1.0:
+These are not in 2.0.0:
 
 - **Refuse agent reads of credential files** through `permissions.deny`.
   This would be a SHOULD rule, so a MINOR release (Q6).

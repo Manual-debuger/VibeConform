@@ -70,6 +70,12 @@ The fixed set of tool calls that any agent guard must refuse or allow.
 It belongs to the contract and is versioned with it.
 _Avoid_: test cases, fixtures
 
+**Fixed case**:
+A deny case of the guard corpus that no guard exception can lift: the
+self-unlock commands and the edits of the unlock marker. From contract
+2.0.0, no exception counts for one.
+_Avoid_: hard rule, locked case
+
 **Entrypoint**:
 A named command that an adopting repository declares (verify, verify-fast,
 fmt, fmt-check) and that CI, hooks and probes call.
@@ -128,7 +134,10 @@ _Avoid_: sandbox, firewall, policy engine
 **Guard exception**:
 An adopting repository's statement that one agent guard rule lets one
 named command through. Every other rule still applies to it. It is the
-only way to loosen the guard.
+only way to loosen the guard. From contract 2.0.0, the audit counts an
+exception for a deny case only when it matches the command or path the
+case's rule refuses, the case is not a fixed case, and the guard refuses the case
+without it.
 _Avoid_: allow rule, whitelist, override
 
 **Unlock**:

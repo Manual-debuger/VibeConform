@@ -102,7 +102,9 @@ func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocycl
 				t.Fatalf("vibe init: %v\n%s", err, out)
 			}
 			written := readVibeYAML(t, dir)
-			for _, want := range []string{"contract: " + contract.Implemented + "\n", "platforms: [linux, windows]\n", "agents: [claude]\n",
+			// A new repository starts on the latest contract (spec 0072,
+			// user story 13).
+			for _, want := range []string{"contract: 2.0.0\n", "platforms: [linux, windows]\n", "agents: [claude]\n",
 				"#   verify: ", "#   verify-fast: ", "#   fmt: ", "#   fmt-check: "} {
 				if !strings.Contains(written, want) {
 					t.Errorf("vibe.yaml lacks %q:\n%s", want, written)

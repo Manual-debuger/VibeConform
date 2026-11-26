@@ -260,8 +260,8 @@ func latestWords(jobs []*ciJob) []Finding {
 }
 
 // checkC04: a job that runs for merge (pull) requests (reusable
-// workflows and child pipelines followed) has a simple command that
-// starts with the words vibe audit, and calls no verify command.
+// workflows and child pipelines followed) has a simple command that runs
+// vibe audit (vibeRecognizer), and calls no verify command.
 func checkC04(env *Env) PartResult {
 	verify, missing := env.entrypointCommands(entrypointVerify)
 	if missing != nil {
@@ -272,13 +272,14 @@ func checkC04(env *Env) PartResult {
 		return res
 	}
 	run := ci.Run(kindMergeRequest)
-	if len(ciAuditJobs(run, verify)) > 0 {
+	vibe := vibeRecognizerOf(env)
+	if len(ciAuditJobs(vibe, run, verify)) > 0 {
 		return res
 	}
 	w := ci.wording
 	var findings []Finding
 	for _, j := range run.Jobs {
-		if !runsAuditCommand(j.Commands) {
+		if !vibe.runsAudit(j.Commands) {
 			continue
 		}
 		for _, c := range verify {
@@ -290,7 +291,7 @@ func checkC04(env *Env) PartResult {
 		}
 	}
 	for _, s := range run.Skipped {
-		if runsAuditCommand(s.Job.Commands) {
+		if vibe.runsAudit(s.Job.Commands) {
 			findings = append(findings, skipFinding(s, w.mergeRequests))
 		}
 	}
@@ -303,12 +304,13 @@ func checkC04(env *Env) PartResult {
 }
 
 // ciAuditJobs returns the jobs of a run that satisfy C-04: they run vibe
-// audit (a simple command that counts as calling, starting with the words
-// vibe audit) and call no verify command. R-01's CI part exempts them.
-func ciAuditJobs(run *ciRun, verify []shellCommand) []*ciJob {
+// audit (a simple command that calls vibe, as vibe recognizes it, with
+// audit as its next word) and call no verify command. R-01's CI part
+// exempts them.
+func ciAuditJobs(vibe vibeRecognizer, run *ciRun, verify []shellCommand) []*ciJob {
 	var out []*ciJob
 	for _, j := range run.Jobs {
-		if !runsAuditCommand(j.Commands) {
+		if !vibe.runsAudit(j.Commands) {
 			continue
 		}
 		calls := false
@@ -320,15 +322,6 @@ func ciAuditJobs(run *ciRun, verify []shellCommand) []*ciJob {
 		}
 	}
 	return out
-}
-
-func runsAuditCommand(cmds []shellCommand) bool {
-	for _, c := range cmds {
-		if c.HasPrefix("vibe", "audit") {
-			return true
-		}
-	}
-	return false
 }
 
 // checkC05: each verify command is called by a job that runs on a Linux
@@ -475,7 +468,7 @@ func includesDependencyScanning(ci *ciModel) bool {
 }
 
 // checkR01 is R-01's static part: no entrypoint, hook command or CI step
-// has a simple command whose first word is vibe, except in a job that
+// has a simple command that calls vibe (vibeRecognizer), except in a job that
 // satisfies C-04, and except vibe --version in a CI job that calls no
 // entrypoint (spec 0055). On GitLab CI every job's before_script, script
 // and after_script are read. Without CI only the entrypoints and hook
@@ -489,7 +482,7 @@ func checkR01(env *Env) PartResult {
 		// With verify missing (V-04 fails), any vibe audit job that runs
 		// for pull (merge) requests is the audit job.
 		verify, _ := env.entrypointCommands(entrypointVerify)
-		calls = append(calls, ciVibeCalls(env, ci, ciAuditJobs(ci.Run(kindMergeRequest), verify))...)
+		calls = append(calls, ciVibeCalls(env, ci, ciAuditJobs(vibeRecognizerOf(env), ci.Run(kindMergeRequest), verify))...)
 	}
 	var findings []Finding
 	for _, c := range calls {

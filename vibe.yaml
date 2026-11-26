@@ -1,7 +1,7 @@
 # This repository's contract configuration (vibe.yaml version 2, spec
 # 0052). `task audit` and the contract-audit workflow run `vibe audit`
 # on it (spec 0059).
-contract: 1.2.0
+contract: 2.0.0
 platforms: [linux, windows]
 agents: [claude, codex]
 # No components: one Go component at the root, found from go.mod.

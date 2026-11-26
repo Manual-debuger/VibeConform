@@ -166,6 +166,40 @@ func TestExceptionMatches(t *testing.T) {
 	}
 }
 
+// With the simple commands a rule refused, a command exception matches
+// only those (spec 0072, "The audit's reading under 2.0.0").
+func TestExceptionMatchesRefused(t *testing.T) {
+	const root = "/repo"
+	cases := []struct {
+		name    string
+		ex      guardrule.Exception
+		t       guardrule.Target
+		refused []string
+		want    bool
+	}{
+		{"another simple command of the case",
+			guardrule.Exception{Rule: "rm-rf", Match: "cd /tmp"},
+			guardrule.Target{Tool: "Bash", Command: "cd /tmp && rm -rf"}, []string{"rm -rf"}, false},
+		{"the refused simple command",
+			guardrule.Exception{Rule: "rm-rf", Match: "rm -rf"},
+			guardrule.Target{Tool: "Bash", Command: "cd /tmp && rm -rf"}, []string{"rm -rf"}, true},
+		{"a nested refused simple command",
+			guardrule.Exception{Rule: "rm-rf", Match: "rm -rf build"},
+			guardrule.Target{Tool: "Bash", Command: "bash -c 'rm -rf build'"}, []string{"rm -rf build"}, true},
+		{"the shell that runs the refused simple command",
+			guardrule.Exception{Rule: "rm-rf", Match: "bash -c"},
+			guardrule.Target{Tool: "Bash", Command: "bash -c 'rm -rf build'"}, []string{"rm -rf build"}, false},
+		{"refused does not change a path match",
+			guardrule.Exception{Rule: "secret-file", Match: ".env"},
+			guardrule.Target{Tool: "Write", Path: "/repo/.env"}, []string{"x"}, true},
+	}
+	for _, c := range cases {
+		if got := c.ex.MatchesRefused(c.t, root, c.refused); got != c.want {
+			t.Errorf("%s: MatchesRefused = %v", c.name, got)
+		}
+	}
+}
+
 func TestRuleMatches(t *testing.T) {
 	p, err := guardrule.ParsePolicy([]byte(`{"version": 2, "rules": [
 		{"id": "tf", "level": "deny", "reason": "x", "command": "terraform destroy"},

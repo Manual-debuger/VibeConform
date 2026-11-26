@@ -78,7 +78,9 @@ func checkA08(env *Env) PartResult {
 				Message: "cannot decide: " + run.what() + " " + state + ": " + run.undecided().describe()})
 		case c.Want == WantDeny:
 			msg := fmt.Sprintf("%s should be refused %s; %s", run.what(), state, run.exits())
-			for _, ex := range exceptionsFor(exceptions, c, s) {
+			// No exception counts for A-08, so the note names every one the
+			// hook may have honoured: the 1.x reading, under any contract.
+			for _, ex := range exceptionsWhere(exceptions, func(ex guardrule.Exception) bool { return c.ExceptionMatches(ex, s.Root()) }) {
 				msg += fmt.Sprintf("; the exception %s %q in %s does not count: guard exceptions do not satisfy A-08",
 					ex.Rule, ex.Match, guardPolicyFile)
 			}

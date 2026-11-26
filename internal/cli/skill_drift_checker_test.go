@@ -115,7 +115,7 @@ var ruleIDPattern = regexp.MustCompile(`\b[VHCADR]-[0-9]{2}\b`)
 func (c *skillChecker) checkRuleIDs(f skillFile) {
 	for _, id := range uniqueMatches(ruleIDPattern, f.text) {
 		if _, ok := contract.LookupRule(id); !ok {
-			c.problem(f.path, "names rule %s, which contract %s does not have", id, contract.Implemented)
+			c.problem(f.path, "names rule %s, which contract %s does not have", id, contract.Latest)
 		}
 	}
 }
@@ -195,7 +195,7 @@ func (c *skillChecker) checkMarkdown(f skillFile) { //nolint:gocognit // baselin
 			c.checkCommands(f.path, span)
 			c.checkRepoFile(f.path, span)
 			if aboutGuardIDs && guardIDPattern.MatchString(span) && !guardrule.IsContractID(span) {
-				c.problem(f.path, "names guard rule ID %q, which is not one of contract %s's ten", span, contract.Implemented)
+				c.problem(f.path, "names guard rule ID %q, which is not one of contract %s's ten", span, contract.Latest)
 			}
 		}
 	}
@@ -904,8 +904,9 @@ func (c *skillChecker) checkReferenceHooks() {
 var contractVersionPattern = regexp.MustCompile(`\bcontract:? ([0-9]+\.[0-9]+\.[0-9]+)\b`)
 
 // checkContractVersion: SKILL.md, reference/rules.md and the reference
-// vibe.yaml files name the contract version vibe implements, and no
-// other. migrate.md and upgrade.md may name other versions.
+// vibe.yaml files name the contract version a new configuration
+// declares (contract.Latest), and no other. migrate.md and upgrade.md
+// may name other versions.
 func (c *skillChecker) checkContractVersion() {
 	for _, f := range c.files {
 		if f.path != "SKILL.md" && f.path != "reference/rules.md" && pathpkg.Dir(f.path) != "reference/vibe-yaml" {
@@ -915,11 +916,11 @@ func (c *skillChecker) checkContractVersion() {
 		// A vibe.yaml with no contract: is not version 2, which
 		// checkReferenceConfigs reports.
 		if len(matches) == 0 && f.path == "SKILL.md" {
-			c.problem(f.path, "names no contract version; want %s", contract.Implemented)
+			c.problem(f.path, "names no contract version; want %s", contract.Latest)
 		}
 		for _, m := range matches {
-			if m[1] != contract.Implemented {
-				c.problem(f.path, "names contract %s; vibe implements %s", m[1], contract.Implemented)
+			if m[1] != contract.Latest {
+				c.problem(f.path, "names contract %s; vibe implements %s", m[1], contract.Latest)
 			}
 		}
 	}

@@ -252,11 +252,16 @@ func policyExceptions(env *Env) []guardrule.Exception {
 
 // guardFix is the fix for a deny case the guard lets through.
 func guardFix(env *Env, rule string) string {
-	fix := "make the guard refuse it (exit 2), or list an exception for " + rule + " in " + guardPolicyFile
+	return "make the guard refuse it (exit 2), or list an exception for " + rule + " in " + guardPolicyFile + localPolicyNote(env)
+}
+
+// localPolicyNote is what a fix that offers an exception adds when
+// policy.local.json is tracked.
+func localPolicyNote(env *Env) string {
 	if env.repo.HasFile(localPolicyFile) {
-		fix += "; exceptions in the tracked " + localPolicyFile + " do not count"
+		return "; exceptions in the tracked " + localPolicyFile + " do not count"
 	}
-	return fix
+	return ""
 }
 
 // checkA02: every corpus case, fed to every PreToolUse hook that matches
@@ -306,10 +311,14 @@ func feedCorpus(env *Env, s *probeSession, rule string, cases []GuardCase) (resu
 		d := undecided(Finding{Message: "cannot decide: cannot write the unlock marker: " + err.Error()})
 		return d, d, true
 	}
-	t := &corpusTally{env: env, s: s, exceptions: policyExceptions(env), unmatched: map[string][]string{}}
-	for _, run := range runs {
+	t := &corpusTally{env: env, s: s, hooks: hooks, rule: rule, exceptions: policyExceptions(env), unmatched: map[string][]string{}}
+	var reruns map[int]*caseRerun
+	if env.rerunsExceptions() {
+		reruns = t.rerunWithoutExceptions(runs)
+	}
+	for i, run := range runs {
 		if run.c.Want == WantDeny {
-			t.denyCase(run)
+			t.denyCase(run, reruns[i])
 		} else {
 			t.allowCase(run)
 		}
@@ -322,10 +331,13 @@ func feedCorpus(env *Env, s *probeSession, rule string, cases []GuardCase) (resu
 
 // corpusTally collects feedCorpus's verdicts: on every case, on the deny
 // cases alone, the deny cases no hook matched, by tool in the order
-// first seen, and the deny cases guard exceptions let through.
+// first seen, and the deny cases guard exceptions let through. It feeds
+// the probe of rule to hooks, and reads the policy's exceptions.
 type corpusTally struct {
 	env        *Env
 	s          *probeSession
+	hooks      []settingsHook
+	rule       string
 	exceptions []guardrule.Exception
 	all, deny  verdicts
 	unmatched  map[string][]string
@@ -334,35 +346,78 @@ type corpusTally struct {
 }
 
 // denyCase judges a deny case: refused, let through by an exception, run
-// by no hook, or let through.
-func (t *corpusTally) denyCase(run caseRun) {
+// by no hook, or let through. Under 2.0.0 an exception counts only when
+// the case's rerun without it is refused, and a case no hook ran is not
+// one an exception let through: the finding for it names the exception.
+func (t *corpusTally) denyCase(run caseRun, rerun *caseRerun) {
 	c := run.c
 	if run.refused() {
 		return
 	}
 	if u := run.undecided(); u != nil {
-		f := Finding{File: claudeSettingsFile, Message: "cannot decide: " + run.what() + ": " + u.describe()}
-		t.all.undecided(f)
-		t.deny.undecided(f)
+		t.undecidedCase(Finding{File: claudeSettingsFile, Message: "cannot decide: " + run.what() + ": " + u.describe()})
 		return
 	}
-	ex := exceptionsFor(t.exceptions, c, t.s)
+	ex := t.exceptionsFor(c)
 	switch {
-	case len(ex) > 0:
+	case len(ex) > 0 && !t.env.rerunsExceptions():
 		t.uses = append(t.uses, GuardExceptionUse{Rule: ex[0].Rule, Match: ex[0].Match, Case: c.Name})
 	case len(run.runs) == 0:
 		tool := c.Payload.ToolName
 		if _, seen := t.unmatched[tool]; !seen {
 			t.tools = append(t.tools, tool)
 		}
-		t.unmatched[tool] = append(t.unmatched[tool], fmt.Sprintf("%q", c.Name))
+		name := fmt.Sprintf("%q", c.Name)
+		if len(ex) > 0 {
+			name += " (" + exceptionsText(ex) + plural(len(ex), " does", " do") + " not count: no hook ran the case)"
+		}
+		t.unmatched[tool] = append(t.unmatched[tool], name)
+	case len(ex) > 0:
+		t.rerunCase(run, ex, rerun)
 	default:
-		f := Finding{File: claudeSettingsFile,
+		t.failCase(Finding{File: claudeSettingsFile,
 			Message: fmt.Sprintf("%s should be refused (guard rule %s); %s", run.what(), c.Rule, run.exits()),
-			Fix:     guardFix(t.env, c.Rule)}
-		t.all.fail(f)
-		t.deny.fail(f)
+			Fix:     t.denyFix(c)})
 	}
+}
+
+// denyFix is the fix for a deny case the guard lets through and no
+// exception lets through. Under 2.0.0 it offers no exception for a fixed
+// case, and for a compound case that an exception for another of its
+// simple commands matches, it names the simple commands the rule
+// refuses, which the exception must prefix.
+func (t *corpusTally) denyFix(c GuardCase) string {
+	if !t.env.narrowsExceptions() {
+		return guardFix(t.env, c.Rule)
+	}
+	if c.Fixed {
+		return "make the guard refuse it (exit 2); no exception counts for this case, which is fixed: " +
+			"the self-unlock commands and the edits of the unlock marker"
+	}
+	wide := exceptionsWhere(t.exceptions, func(ex guardrule.Exception) bool { return c.ExceptionMatches(ex, t.s.Root()) })
+	if len(c.Refuses) == 0 || len(wide) == 0 {
+		return guardFix(t.env, c.Rule)
+	}
+	refused := make([]string, len(c.Refuses))
+	for i, r := range c.Refuses {
+		refused[i] = fmt.Sprintf("%q", r)
+	}
+	return fmt.Sprintf("make the guard refuse it (exit 2), or list an exception for %s whose match prefixes %s, "+
+		"the simple %s the rule refuses; %s %s another one", c.Rule, strings.Join(refused, " or "),
+		plural(len(refused), "command", "commands"), exceptionsText(wide), plural(len(wide), "prefixes", "prefix")) +
+		localPolicyNote(t.env)
+}
+
+// failCase fails both verdicts with a deny case's finding.
+func (t *corpusTally) failCase(f Finding) {
+	t.all.fail(f)
+	t.deny.fail(f)
+}
+
+// undecidedCase makes both verdicts undecided with a deny case's finding.
+func (t *corpusTally) undecidedCase(f Finding) {
+	t.all.undecided(f)
+	t.deny.undecided(f)
 }
 
 // allowCase judges an allow case: a refusal fails it.
@@ -403,12 +458,22 @@ func allowCaseFinding(env *Env, msg, fix string) Finding {
 	return Finding{File: claudeSettingsFile, Message: msg, Fix: fix}
 }
 
-// exceptionsFor returns the policy exceptions for a case's rule ID that
-// match it.
-func exceptionsFor(exceptions []guardrule.Exception, c GuardCase, s *probeSession) []guardrule.Exception {
+// exceptionsFor returns the policy exceptions that match a case under the
+// audited contract's reading (GuardCase.ExceptionMatchesRefused when it
+// narrows exceptions, else GuardCase.ExceptionMatches), in policy order.
+func (t *corpusTally) exceptionsFor(c GuardCase) []guardrule.Exception {
+	root := t.s.Root()
+	if t.env.narrowsExceptions() {
+		return exceptionsWhere(t.exceptions, func(ex guardrule.Exception) bool { return c.ExceptionMatchesRefused(ex, root) })
+	}
+	return exceptionsWhere(t.exceptions, func(ex guardrule.Exception) bool { return c.ExceptionMatches(ex, root) })
+}
+
+// exceptionsWhere returns the exceptions that match accepts, in order.
+func exceptionsWhere(exceptions []guardrule.Exception, match func(guardrule.Exception) bool) []guardrule.Exception {
 	var out []guardrule.Exception
 	for _, ex := range exceptions {
-		if ex.Rule == c.Rule && ex.Matches(c.Target(), s.Root()) {
+		if match(ex) {
 			out = append(out, ex)
 		}
 	}

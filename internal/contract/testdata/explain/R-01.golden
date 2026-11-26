@@ -1,0 +1,19 @@
+Check:
+Static: no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 and `vibe --version` in a CI job that calls no entrypoint. Execution: with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases are still refused.
+
+Part check (static):
+no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 and `vibe --version` in a CI job that calls no entrypoint.
+
+Part check (execution):
+with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases are still refused.
+
+Details:
+Calls of vibe:
+  Under contract 2.0.0, a command calls `vibe` when the last path element of
+  its first word, after `/` or `\`, is the literal `vibe` or `vibe.exe`,
+  compared case-sensitively. The directory part may hold an expansion, so
+  `"$dir/vibe" verify` and `./bin/vibe verify` are calls. A last element
+  that holds an expansion, such as `"$bin" verify`, is not. `vibe-guard` by
+  any path is not a call of `vibe`. C-04's audit job and the `vibe --version`
+  exemption recognize `vibe` the same way.
+  Under contract 1.x, its first word must be the literal `vibe`.

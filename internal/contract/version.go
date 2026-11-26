@@ -4,33 +4,49 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
-// Implemented is the contract version this vibe implements.
-const Implemented = "1.2.0"
+// The contract versions this vibe implements, side by side: the latest
+// MINOR of each MAJOR it audits (spec 0072, "Contract versions").
+const (
+	// Contract1 is the 1.x contract: a declared 1.y.z is audited as it.
+	Contract1 = "1.2.0"
+	// Contract2 is the 2.x contract: a declared 2.0.z is audited as it.
+	Contract2 = "2.0.0"
+	// Latest is the newest contract this vibe implements. vibe --version
+	// shows it, and a new configuration declares it: vibe init writes it,
+	// and the setup skill names it (spec 0072).
+	Latest = Contract2
+)
+
+// implemented lists the contracts this vibe implements, oldest first.
+var implemented = []string{Contract1, Contract2}
 
 // Versions is the contract version a configuration declares and the one
 // the audit checks it against. They differ for an older MINOR of the same
 // MAJOR, such as 1.0.0 or 1.0.1, and for a newer PATCH: both are audited
-// as Implemented, since a vibe implements the latest MINOR of its MAJOR
-// and a PATCH makes no conformant repository non-conformant (spec 0051,
-// "Versioning"; spec 0052, "Contract versions"); the report shows both.
+// as the contract this vibe implements for that MAJOR, since a vibe
+// implements the latest MINOR of each MAJOR it audits and a PATCH makes no
+// conformant repository non-conformant (spec 0051, "Versioning"; spec
+// 0052, "Contract versions"; spec 0072, "Contract versions"); the report
+// shows both.
 type Versions struct {
 	Declared string
 	Audited  string
 }
 
 // UnsupportedVersionError is a declared contract version this vibe cannot
-// audit: another MAJOR, or a newer MINOR. There is no verdict (spec 0051,
-// "Versioning").
+// audit: a MAJOR it does not implement, or a newer MINOR. There is no
+// verdict (spec 0051, "Versioning").
 type UnsupportedVersionError struct {
 	file     string
 	declared string
 }
 
 func (e *UnsupportedVersionError) Error() string {
-	return fmt.Sprintf("%s: contract: cannot decide; upgrade vibe: this vibe implements contract %s, "+
-		"and the configuration declares %s", e.file, Implemented, e.declared)
+	return fmt.Sprintf("%s: contract: cannot decide; upgrade vibe: this vibe implements contracts %s, "+
+		"and the configuration declares %s", e.file, strings.Join(implemented, " and "), e.declared)
 }
 
 var versionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
@@ -53,9 +69,16 @@ func parseVersion(v string) (major, minor int, ok bool) {
 	return major, minor, true
 }
 
-// supported reports whether a well-formed declared version can be audited
-// with Implemented: the same MAJOR and no newer MINOR.
-func supported(major, minor int) bool {
-	implMajor, implMinor, _ := parseVersion(Implemented)
-	return major == implMajor && minor <= implMinor
+// auditedAs returns the implemented contract a well-formed declared
+// version is audited as: the one of the same MAJOR, when the declared
+// MINOR is not newer. ok is false when this vibe implements no such
+// contract.
+func auditedAs(major, minor int) (audited string, ok bool) {
+	for _, v := range implemented {
+		implMajor, implMinor, _ := parseVersion(v)
+		if major == implMajor && minor <= implMinor {
+			return v, true
+		}
+	}
+	return "", false
 }

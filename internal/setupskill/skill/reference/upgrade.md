@@ -48,7 +48,7 @@ case, and it may need new guardrail settings.
 3. Update `vibe-guard`, then make the guardrail changes.
 4. Set `contract:` in `vibe.yaml` to the new version, and update the
    setup action as in 3a.
-5. Run the audit loop.
+5. Run the audit loop. From 1.x to 2.0, also do section 5 below.
 
 Your next Stop locks the guardrails again (`vibe-guard relock`).
 
@@ -100,3 +100,27 @@ Stop hook reports it.
   `push`. A guard of the repository's own must refuse the same commands
   and allow `git push -n`. Add an exception for `git-skip-hooks` only
   when the person asks for one.
+
+## 5. From contract 1.x to 2.0
+
+2.0.0 tightens A-02, A-09 and R-01. It adds no rule and no guard corpus
+case. A repository whose guard is `vibe-guard` and that calls `vibe` by
+name only passes 2.0.0 as it passed 1.2.0. `vibe` still audits a
+repository that declares 1.x as 1.2.0, so the person chooses when to
+move.
+
+- **A-02 and A-09, exceptions.** An exception counts only when the
+  guard refuses the case without it: the audit runs the case again
+  without the exception. A command exception must prefix the simple
+  command the case's rule refuses, not another command of the same
+  line. No exception counts for the self-unlock commands or the edits
+  of the unlock marker. `vibe-guard` already lifts rules this way. A
+  guard of the repository's own that lets a case through whatever
+  `policy.json` says fails the case: fix the guard, not the policy.
+- **R-01, `vibe` by path.** A command calls `vibe` when the last path
+  element of its first word is `vibe` or `vibe.exe`, as in
+  `"$dir/vibe" verify`, `./bin/vibe verify` or
+  `C:\tools\vibe.exe verify`, quoted or not: `/` and `\` both separate
+  path elements. Replace each such call with the entrypoint
+  command it stands for, as for a call by name. The audit job of C-04
+  and `vibe --version` in a job that calls no entrypoint stay exempt.

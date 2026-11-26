@@ -130,7 +130,7 @@ var v1Fields = map[string]string{
 	"integrations": "agents go in agents; editors moved into the setup skill; repository intelligence has no counterpart",
 	"development":  "the docs layout and development workflow moved into the setup skill",
 	"policy":       "repository policies such as line endings moved into the setup skill",
-	"ci":           "contract " + Implemented + " reads GitHub Actions or GitLab CI and needs no CI provider",
+	"ci":           "contract " + Latest + " reads GitHub Actions or GitLab CI and needs no CI provider",
 }
 
 const v2FieldList = "contract, platforms, agents, components, entrypoints, waivers, require"
@@ -149,13 +149,16 @@ func Parse(file string, data []byte, repo *Repo) (*Config, error) {
 	if top == nil {
 		top = &yaml.Node{Kind: yaml.MappingNode}
 	}
+	var audited string
 	if v := field(top, "contract"); v != nil && isString(v) {
-		if major, minor, ok := parseVersion(v.Value); ok && !supported(major, minor) {
-			return nil, &UnsupportedVersionError{file: file, declared: v.Value}
+		if major, minor, ok := parseVersion(v.Value); ok {
+			if audited, ok = auditedAs(major, minor); !ok {
+				return nil, &UnsupportedVersionError{file: file, declared: v.Value}
+			}
 		}
 	}
 
-	p := &configParser{file: file, repo: repo, cfg: &Config{file: file}}
+	p := &configParser{file: file, repo: repo, cfg: &Config{file: file}, audited: audited}
 	if err := p.top(top); err != nil {
 		return nil, err
 	}
@@ -166,6 +169,20 @@ type configParser struct {
 	file string
 	repo *Repo
 	cfg  *Config
+	// audited is the contract the declared version is audited as, worked
+	// out before the fields are read, and empty when the configuration
+	// declares no well-formed version.
+	audited string
+}
+
+// rulesVersion is the contract version whose rules a waiver or require
+// names: the audited one, or the latest when the declared version is
+// unusable.
+func (p *configParser) rulesVersion() string {
+	if p.audited == "" {
+		return Latest
+	}
+	return p.audited
 }
 
 func (p *configParser) fail(path, format string, args ...any) error {
@@ -242,13 +259,13 @@ func (p *configParser) mapping(m *yaml.Node, prefix string, seen map[string]bool
 
 func (p *configParser) contract(v *yaml.Node) error {
 	if !isString(v) {
-		return p.fail("contract", "must be a contract version X.Y.Z, such as %s", Implemented)
+		return p.fail("contract", "must be a contract version X.Y.Z, such as %s", Latest)
 	}
 	if _, _, ok := parseVersion(v.Value); !ok {
-		return p.fail("contract", "%q is not a contract version X.Y.Z, such as %s", v.Value, Implemented)
+		return p.fail("contract", "%q is not a contract version X.Y.Z, such as %s", v.Value, Latest)
 	}
 	// Parse already refused an unsupported version.
-	p.cfg.Contract = Versions{Declared: v.Value, Audited: Implemented}
+	p.cfg.Contract = Versions{Declared: v.Value, Audited: p.audited}
 	return nil
 }
 
@@ -468,7 +485,7 @@ func (p *configParser) waivers(v *yaml.Node) error { //nolint:gocognit,gocyclo /
 func (p *configParser) waiverRule(at string, v *yaml.Node, w *Waiver) error {
 	r, ok := LookupRule(v.Value)
 	if !isString(v) || !ok {
-		return p.fail(at, "%s is not a rule of contract %s", describe(v), Implemented)
+		return p.fail(at, "%s is not a rule of contract %s", describe(v), p.rulesVersion())
 	}
 	if r.Level != Should {
 		return p.fail(at, "%s is a %s rule; only SHOULD rules can be waived", r.ID, r.Level)
@@ -495,7 +512,7 @@ func (p *configParser) require(v *yaml.Node) error {
 		at := fmt.Sprintf("require[%d]", i)
 		r, ok := LookupRule(item.Value)
 		if !isString(item) || !ok {
-			return p.fail(at, "%s is not a rule of contract %s", describe(item), Implemented)
+			return p.fail(at, "%s is not a rule of contract %s", describe(item), p.rulesVersion())
 		}
 		if r.Level != Should {
 			return p.fail(at, "%s is a %s rule; it is always required", r.ID, r.Level)
