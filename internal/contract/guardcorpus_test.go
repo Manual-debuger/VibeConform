@@ -52,6 +52,9 @@ func TestGuardCorpusIsValid(t *testing.T) {
 func TestGuardCorpusNamesTheRefusedCommands(t *testing.T) {
 	compound := 0
 	for _, c := range GuardCorpus() {
+		if c.Want != WantDeny {
+			continue
+		}
 		if err := checkRefuses(c); err != nil {
 			t.Errorf("%s: %v", c.Name, err)
 		}
