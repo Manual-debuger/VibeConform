@@ -265,6 +265,11 @@ convention.**
   as data), and the registry test.
 - A later change that removes a baseline lowers the ceiling in the same
   commit.
+- *Amended 2026-11-26:* below the ceiling the check passes and prints
+  the new count to record as the ceiling; it does not fail. Two
+  branches that each remove a baseline and lower the ceiling would
+  otherwise leave `main` failing after both merge, because each
+  branch's ceiling is one higher than the merged count.
 
 ### `internal/setupskill`
 
@@ -293,6 +298,11 @@ convention.**
   policy (`VIBE_HOOKS_E2E` or `CI` for the setupskill tests,
   `VIBE_TEST_REQUIRE_TOOLS` for the guard and contract tests). A common
   skip policy is out of scope.
+- *Amended 2026-11-26:* `LookPath`, the PATH search `ResolveBash` uses,
+  moves with it and is exported from `internal/guardrule`, because the
+  contract probe also looks up the programs it runs with it. It was the
+  unexported `lookPath` of `internal/contract`, so it is a new export
+  of `internal/guardrule`.
 
 ### One test-only git helper
 
@@ -319,12 +329,26 @@ convention.**
   each command name, its aliases and its flags, with whether each flag
   takes a value. The usage text is generated from the table. The drift
   checker reads the table and no longer parses help output.
+- *Amended 2026-11-26:* the table lists `-h` and `--help` as aliases of
+  the hidden `help` command, as `guard.Main` already accepted them. The
+  help parsing on `main` knew only `help` and `--version` beside the
+  usage, so the drift checker now also accepts `vibe-guard -h` and
+  `vibe-guard --help` in the skill. It reports nothing new.
 - **The paths the contract reads.** `internal/contract` exports the list
   of repository paths and directories that its rules read. The code that
   reads a path uses the same named value, so that the list and the
   readers cannot drift. The guard's files already have named values in
   `internal/guardrule` (`PolicyFile`, `LocalPolicyFile`). The drift
   checker reads both lists. It no longer reads string literals.
+- *Amended 2026-11-26:* `internal/guard` re-exports
+  `guardrule.PolicyFile` as `guard.PolicyFile`, because depguard lets
+  `internal/setupskill` import only `internal/guard`, and the placement
+  manifest names the policy's place with it.
+- *Amended 2026-11-26:* the drift checker ignores a code span that is
+  only a file extension, such as `.md`: it names a kind of file, not a
+  file. On `main` such a span passed only because the string literals
+  of `internal/contract` held the bare extension; the path list does
+  not.
 - **Not verified:** the contract reads a set of paths that is small
   enough to list. If a rule builds paths from the configuration (for
   example a component's directory joined to a file name), the list holds
