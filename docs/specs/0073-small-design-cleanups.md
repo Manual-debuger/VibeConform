@@ -222,20 +222,29 @@ convention.**
 
 ### Check text from parts (`internal/contract`)
 
-- `Rule.Check` becomes a method. It joins the kinds of the parts
-  ("Static", "Execution and probe", …), a colon and the parts' check
-  texts, as spec 0051 writes them. Each part's text keeps its own
-  capital letter and full stop where spec 0051 has them.
+- `Rule.Check` becomes a method. Each part gets an optional lead, the
+  text that spec 0051 writes before the part's check text: "Static: ",
+  "Probe: ", "Execution and probe: ", "Static, " and so on. `Check()`
+  joins each part's lead and check text, in order. A part with an empty
+  lead continues the text of the part before it (V-01's second part).
+  Each part's text keeps its own capital letter and full stop where
+  spec 0051 has them. The part's check text without the lead is what
+  `--explain` prints today, and it does not change.
+- *Amended 2026-11-26:* the first form of this decision derived one
+  prefix from the joined kinds of the parts and a colon. That form is
+  false for five rules in spec 0051: A-05, A-07 and R-01 give one label
+  per part ("Static: … Probe: …"), and C-02 and D-01 put a comma after
+  the kind ("Static, across every workflow …"). The part texts are
+  output (`--explain` prints them), so they cannot change to fit. The
+  explicit lead replaces the derived prefix.
 - `registry_test.go` keeps comparing each rule's check text with spec
   0051's row, and each spec 0061 rule's text with that spec. The test
   that each part's text is part of the rule's text goes away, because
   it is now true by construction.
-- **Not verified:** each rule's text in spec 0051 is the kind prefix
-  followed by its parts' texts. If a rule's text cannot be derived, the
-  part texts are changed so that it can be. The spec text and the
-  output do not change. If a rule cannot be derived without changing
-  the output, the implementer stops and reports it. The spec is then
-  amended before work continues.
+- With the lead, every rule's text in spec 0051 is the parts' leads and
+  texts joined, so no part text and no output changes. If a rule's
+  text still cannot be derived that way, the implementer stops and
+  reports it.
 
 ### Complexity baselines
 

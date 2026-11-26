@@ -206,8 +206,9 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   and the common Git directory that holds the marker (`FindRepo`, which
   reads `.git` files and runs no `git`; `vibe-guard` and `vibe unlock`
   both call it, spec 0069), and the decomposition of a Bash or
-  PowerShell command into simple commands. It imports no `internal/`
-  package.
+  PowerShell command into simple commands: `wrappers.go` unwraps the
+  commands a wrapper runs (spec 0053), and `writes.go` reads the files a
+  command writes (spec 0058). It imports no `internal/` package.
 - **`internal/guard`** is `vibe-guard`'s logic: the baseline rules, the
   decision, observe mode, the unlock marker, `hook`, `explain`, `relock`,
   and the reference hook commands. Its `Guard` keeps its state
