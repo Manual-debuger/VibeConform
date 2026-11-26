@@ -346,7 +346,7 @@ func (t *corpusTally) denyCase(run caseRun) {
 		t.deny.undecided(f)
 		return
 	}
-	ex := exceptionsFor(t.exceptions, c, t.s)
+	ex := exceptionsFor(t.exceptions, c, t.s, t.env.auditedContract())
 	switch {
 	case len(ex) > 0:
 		t.uses = append(t.uses, GuardExceptionUse{Rule: ex[0].Rule, Match: ex[0].Match, Case: c.Name})
@@ -403,12 +403,13 @@ func allowCaseFinding(env *Env, msg, fix string) Finding {
 	return Finding{File: claudeSettingsFile, Message: msg, Fix: fix}
 }
 
-// exceptionsFor returns the policy exceptions for a case's rule ID that
-// match it.
-func exceptionsFor(exceptions []guardrule.Exception, c GuardCase, s *probeSession) []guardrule.Exception {
+// exceptionsFor returns the policy exceptions that match a case under the
+// reading of the audited contract (GuardCase.ExceptionMatches), in policy
+// order.
+func exceptionsFor(exceptions []guardrule.Exception, c GuardCase, s *probeSession, audited string) []guardrule.Exception {
 	var out []guardrule.Exception
 	for _, ex := range exceptions {
-		if ex.Rule == c.Rule && ex.Matches(c.Target(), s.Root()) {
+		if c.ExceptionMatches(ex, s.Root(), audited) {
 			out = append(out, ex)
 		}
 	}
