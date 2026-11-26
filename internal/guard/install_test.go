@@ -51,3 +51,17 @@ func TestReferencePreToolUseNamesTheReleasePage(t *testing.T) {
 		}
 	}
 }
+
+// TestReleasePage: the release page for an install version is its tag
+// page, and the releases page for latest, which has no tag of its own
+// (spec 0073). ReferencePreToolUse and the setup skill both link to it.
+func TestReleasePage(t *testing.T) {
+	for version, want := range map[string]string{
+		"v0.12.0-alpha.1": "https://github.com/Manual-debuger/VibeConform/releases/tag/v0.12.0-alpha.1",
+		"latest":          "https://github.com/Manual-debuger/VibeConform/releases",
+	} {
+		if got := guard.ReleasePage(version); got != want {
+			t.Errorf("ReleasePage(%q) = %q, want %q", version, got, want)
+		}
+	}
+}

@@ -162,7 +162,7 @@ The guard hooks refuse every tool call when `vibe-guard` is not on
 - **From the release** (no Go needed): download
   `vibe-guard_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows) and
   `checksums.txt` from
-  https://github.com/Manual-debuger/VibeConform/releases/tag/{{VIBE_VERSION}}.
+  {{VIBE_RELEASE_PAGE}}.
   `<version>` is the tag without the leading `v`. Check the archive's
   SHA-256 against its line in `checksums.txt` (`sha256sum -c
   --ignore-missing checksums.txt`, or `Get-FileHash` on Windows) before

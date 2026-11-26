@@ -238,13 +238,18 @@ directory, embedded with `go:embed`, and `Install`, which `vibe init
 ```text
 cmd/vibe → internal/cli ──→ internal/setupskill ──→ internal/guard
            (vibe init --skill)   (embedded skill/)    (InstallVersion,
+                                                       ReleasePage,
                                                        reference commands)
 ```
 
 - **Imports.** Among this repository's packages, `internal/setupskill`
-  imports only `internal/guard`, for the version rule that fills the
-  skill's one placeholder (the `vibe` version). A `depguard` rule in
-  `.golangci.yml` enforces that for non-test code (spec 0063).
+  imports only `internal/guard`, for the version rule and the release
+  page that fill the skill's two placeholders: `{{VIBE_VERSION}}`, the
+  version the install hint names (`InstallVersion`), and
+  `{{VIBE_RELEASE_PAGE}}`, its release page (`ReleasePage`, which the
+  reference PreToolUse command uses too; spec 0073). A `depguard` rule
+  in `.golangci.yml` enforces that for non-test code (spec 0063). The
+  drift checker fails on any other `{{VIBE_…}}` in the skill.
 - **Embedded bytes.** `.gitattributes` forces LF for
   `internal/setupskill/skill/`, and a test fails on any carriage return
   in an embedded file, so a CRLF working copy cannot change what a build
