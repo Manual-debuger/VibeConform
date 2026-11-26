@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"io/fs"
 	"os"
 	pathpkg "path"
@@ -548,7 +545,8 @@ func (c *skillChecker) checkRepoFile(file, span string) {
 		return
 	}
 	isDir := strings.HasSuffix(span, "/")
-	if !isDir && !slices.Contains(repoFileExtensions, pathpkg.Ext(span)) {
+	// A bare extension, such as .md, names a kind of file, not a file.
+	if !isDir && (!slices.Contains(repoFileExtensions, pathpkg.Ext(span)) || pathpkg.Ext(span) == span) {
 		return
 	}
 	if slices.Contains(removedOrAvoided, span) {
@@ -569,14 +567,13 @@ var (
 	knownRepoFilesList []string
 )
 
-// knownRepoFiles are the repository paths the contract reads (the string
-// literals of internal/contract and internal/guardrule) and the paths
-// the reference implementations and vibe init --skill create.
+// knownRepoFiles are the repository paths the contract reads
+// (contract.RepoPaths), the guard's files (internal/guardrule), and the
+// paths the reference implementations and vibe init --skill create
+// (setupskill.Place, setupskill.Dirs).
 func knownRepoFiles() []string {
 	knownRepoFilesOnce.Do(func() {
-		for _, dir := range []string{"../contract", "../guardrule"} {
-			knownRepoFilesList = append(knownRepoFilesList, goStringLiterals(dir)...)
-		}
+		knownRepoFilesList = append(contract.RepoPaths(), guardrule.PolicyFile, guardrule.LocalPolicyFile)
 		for _, stack := range setupskill.Stacks() {
 			for _, provider := range setupskill.Providers() {
 				for _, ref := range referenceFiles(setupskill.FS()) {
@@ -592,34 +589,6 @@ func knownRepoFiles() []string {
 		}
 	})
 	return knownRepoFilesList
-}
-
-// goStringLiterals returns the string literals of the non-test Go files in
-// dir.
-func goStringLiterals(dir string) []string {
-	paths, err := filepath.Glob(filepath.Join(dir, "*.go"))
-	if err != nil {
-		panic(err)
-	}
-	var out []string
-	for _, p := range paths {
-		if strings.HasSuffix(p, "_test.go") {
-			continue
-		}
-		f, err := parser.ParseFile(token.NewFileSet(), p, nil, 0)
-		if err != nil {
-			panic(err)
-		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING {
-				if s, err := strconv.Unquote(lit.Value); err == nil {
-					out = append(out, s)
-				}
-			}
-			return true
-		})
-	}
-	return out
 }
 
 // referenceFiles lists the files under reference/ in skill.

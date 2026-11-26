@@ -345,7 +345,7 @@ func renovate(env *Env) (b *updateBot, pkgProblem *PartResult) {
 		return b, nil
 	}
 
-	const pkg = "package.json"
+	const pkg = rootPackageJSON
 	data, err := env.readFile(pkg)
 	if err != nil {
 		return nil, nil

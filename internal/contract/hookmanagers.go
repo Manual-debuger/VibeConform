@@ -127,7 +127,7 @@ func (e *Env) readHookManagers() []*hookManager {
 // manager.
 func noHookManager() Finding {
 	return Finding{
-		File:    "lefthook.yml",
+		File:    lefthookFiles[0],
 		Message: "no recognized hook manager (lefthook, pre-commit, husky)",
 		Fix: "commit the configuration of lefthook (lefthook.yml), pre-commit (.pre-commit-config.yaml) " +
 			"or husky (.husky/)",
@@ -287,7 +287,7 @@ func (e *Env) lefthookScript(m *hookManager, hook, name string, entry *yaml.Node
 			return nil
 		}
 	}
-	file := path.Join(".lefthook", hook, name)
+	file := path.Join(lefthookScriptDir, hook, name)
 	data, err := e.readFile(file)
 	if err != nil {
 		return nil

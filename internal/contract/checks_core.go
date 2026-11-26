@@ -42,7 +42,7 @@ func checkR02(env *Env) PartResult {
 }
 
 func agentsMDNamesVerify(env *Env) PartResult {
-	const file = "AGENTS.md"
+	const file = agentsFile
 	if missing := needEntrypoint(env, entrypointVerify); missing != nil {
 		return Fail(*missing)
 	}
@@ -73,7 +73,7 @@ func agentsMDNamesVerify(env *Env) PartResult {
 }
 
 func claudeMDPointsToAgentsMD(env *Env) PartResult {
-	const file = "CLAUDE.md"
+	const file = claudeMDFile
 	data, res, ok := readDocument(env, file, Finding{
 		File:    file,
 		Message: "is missing, so Claude Code is not pointed to AGENTS.md",
@@ -82,7 +82,7 @@ func claudeMDPointsToAgentsMD(env *Env) PartResult {
 	if !ok {
 		return res
 	}
-	if !strings.Contains(string(data), "AGENTS.md") {
+	if !strings.Contains(string(data), agentsFile) {
 		return Fail(Finding{
 			File:    file,
 			Message: "does not reference AGENTS.md",
@@ -107,9 +107,9 @@ func checkR03(env *Env) PartResult {
 	}
 	if len(templates) == 0 {
 		return Fail(Finding{
-			File:    ".github/pull_request_template.md",
+			File:    githubPRTemplate,
 			Message: "no pull request template is tracked",
-			Fix:     "create .github/pull_request_template.md with a ## Verification heading",
+			Fix:     "create " + githubPRTemplate + " with a ## Verification heading",
 		})
 	}
 	var findings []Finding
@@ -138,14 +138,13 @@ func checkR03(env *Env) PartResult {
 // .gitlab/merge_request_templates/ (spec 0055, R-03), case-insensitive.
 func isPRTemplate(file string) bool {
 	f := strings.ToLower(file)
-	switch f {
-	case "pull_request_template.md", ".github/pull_request_template.md", "docs/pull_request_template.md":
+	if slices.Contains(prTemplateFiles, f) {
 		return true
 	}
-	if path.Dir(f) == ".gitlab/merge_request_templates" && strings.HasSuffix(f, ".md") {
+	if path.Dir(f) == mrTemplateDir && strings.HasSuffix(f, ".md") {
 		return true
 	}
-	return strings.HasPrefix(f, ".github/pull_request_template/")
+	return strings.HasPrefix(f, prTemplateDir+"/")
 }
 
 func hasVerifHeading(text string) bool {
