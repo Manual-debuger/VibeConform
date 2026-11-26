@@ -186,13 +186,23 @@ func r01GuardHalf(env *Env, earlier Earlier) PartResult {
 	if ok, _ := needsClaude(env.config); !ok {
 		return Pass()
 	}
-	if g, ok := earlier.guardDeny(); ok {
+	if g, ok := a02Deny(earlier); ok {
 		if g.Result == ResultPass {
 			return Pass()
 		}
 		return g
 	}
 	return undecided(Finding{Message: "cannot decide whether the A-02 deny cases are refused without vibe: A-02's probe did not run"})
+}
+
+// a02Deny returns A-02's verdict on its deny cases from the earlier
+// results, or false when A-02's probe did not run.
+func a02Deny(earlier Earlier) (PartResult, bool) {
+	r, ok := earlier.Result("A-02", Probe)
+	if !ok || r.deny == nil {
+		return PartResult{}, false
+	}
+	return *r.deny, true
 }
 
 // d01CheckText is D-01's check text, for the rule and its part. Its

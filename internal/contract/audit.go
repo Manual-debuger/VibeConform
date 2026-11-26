@@ -10,9 +10,6 @@ type Options struct {
 	// Static runs only the static parts: every execution and probe part
 	// is not run, and the audit reaches no verdict (spec 0052, Q18).
 	Static bool
-	// now decides whether waivers have expired. The zero value means the
-	// current time.
-	now time.Time
 	// Rules replaces the registry. Nil means Rules(). Tests use it to
 	// stand in for parts.
 	Rules []Rule
@@ -25,10 +22,7 @@ type Options struct {
 // and probe parts run in a probe copy, which is deleted before Audit
 // returns (spec 0053).
 func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
-	now := opts.now
-	if now.IsZero() {
-		now = time.Now()
-	}
+	now := time.Now()
 	list := opts.Rules
 	if list == nil {
 		list = Rules()
@@ -40,23 +34,22 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 		waivers[w.Rule] = w
 	}
 
-	last, hasLast := lastPart(list)
+	last := lastPart(list)
 	rep := &Report{Contract: cfg.Contract, Static: opts.Static}
 	var pending []partRef
-	lastPending := false
+	var lastPending *partRef
 	for i, rule := range list {
 		rr, parts := auditRule(env, rule, waivers, now, opts.Static)
 		rep.Rules = append(rep.Rules, rr)
 		for _, j := range parts {
-			switch p := (partRef{rule: i, part: j}); {
-			case hasLast && p == last:
-				lastPending = true
-			default:
+			if p := (partRef{rule: i, part: j}); last != nil && p == *last {
+				lastPending = last
+			} else {
 				pending = append(pending, p)
 			}
 		}
 	}
-	ran := runPending(env, rep, list, pending, lastPending, last, opts.Probe)
+	ran := runPending(env, rep, list, pending, lastPending, opts.Probe)
 	for i := range rep.Rules {
 		if rep.Rules[i].Result == "" {
 			rep.Rules[i].Result = combine(rep.Rules[i].Parts)
@@ -66,7 +59,7 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 	for _, r := range ran {
 		rep.GuardExceptionUses = append(rep.GuardExceptionUses, r.result.guardUses...)
 	}
-	if ci, _, ok := env.ciModel(); ok {
+	if ci, _, ok := env.pickCI(); ok {
 		rep.CIProvider = ci.Provider
 	}
 	rep.Notes = env.notes
@@ -113,13 +106,13 @@ func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, st
 
 // runPending runs the pending execution and probe parts in rule-list
 // order, and in part order inside a rule, then the last part when it is
-// pending, in one probe copy built for them, each from a reset copy. The
+// pending (last is nil when it is not), in one probe copy built for them, each from a reset copy. The
 // last part gets the results of every part that ran before it, the
 // calls of vibe the shim recorded while they ran and those of setup. It
 // returns every part that ran, in run order. The copy is deleted (or
 // kept, for --keep-probe-copy) before it returns.
-func runPending(env *Env, rep *Report, list []Rule, pending []partRef, lastPending bool, last partRef, opts ProbeOptions) []partRun {
-	if len(pending) == 0 && !lastPending {
+func runPending(env *Env, rep *Report, list []Rule, pending []partRef, last *partRef, opts ProbeOptions) []partRun {
+	if len(pending) == 0 && last == nil {
 		return nil
 	}
 
@@ -149,10 +142,10 @@ func runPending(env *Env, rep *Report, list []Rule, pending []partRef, lastPendi
 	for _, p := range pending {
 		runOne(p, list[p.rule].Parts[p.part].Run)
 	}
-	if lastPending {
+	if last != nil {
 		earlier := Earlier{ran: ran, setupCalls: setupCalls}
 		runLast := list[last.rule].Parts[last.part].RunLast
-		runOne(last, func(env *Env) PartResult { return runLast(env, earlier) })
+		runOne(*last, func(env *Env) PartResult { return runLast(env, earlier) })
 	}
 	return ran
 }

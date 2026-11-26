@@ -12,7 +12,7 @@ import (
 
 // The static checks that read CI: C-01 to C-05, D-03 and R-01's static
 // part (spec 0052, "Recognition rules"; spec 0055 for GitLab CI). Each
-// starts from ciRead, which applies env.ciModel() and turns every CI file that
+// starts from ciRead, which applies env.pickCI() and turns every CI file that
 // does not parse or resolve into a failure of the rule; the rule then
 // reads the rest. The readers fill the model (ci_model.go): GitHub
 // triggers and the default branch are in workflow_triggers.go, runners
@@ -24,7 +24,7 @@ import (
 // a failure for each file that does not parse (or passes), and the rule
 // merges its own result into it.
 func ciRead(env *Env) (ci *ciModel, res PartResult, ok bool) {
-	ci, res, ok = env.ciModel()
+	ci, res, ok = env.pickCI()
 	if !ok {
 		return nil, res, false
 	}

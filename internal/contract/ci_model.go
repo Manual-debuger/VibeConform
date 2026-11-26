@@ -7,7 +7,7 @@ import (
 )
 
 // The CI model the C rules, D-03 and R-01 read, whichever provider the
-// repository uses (spec 0055, "Which provider is read (Q1)"). env.ciModel()
+// repository uses (spec 0055, "Which provider is read (Q1)"). env.pickCI()
 // picks the provider once per audit: GitHub Actions when tracked
 // .github/workflows/*.yml files exist, GitLab CI when there are none and
 // .gitlab-ci.yml is tracked. Other providers cannot be decided, and no CI
@@ -274,18 +274,18 @@ func (ci *ciModel) Run(kind pipelineKind) *ciRun {
 	return r
 }
 
-// ciState is env.ciModel()'s answer once worked out.
+// ciState is env.pickCI()'s answer once worked out.
 type ciState struct {
 	ci  *ciModel
 	res PartResult
 	ok  bool
 }
 
-// ciModel reads the repository's ciModel once per audit. When ok is false there is
-// no ciModel the audit reads and result is what a rule that needs it decides:
-// cannot decide when another provider's ciModel is tracked, fail when there is
+// pickCI reads the repository's CI once per audit. When ok is false there is
+// no CI the audit reads and result is what a rule that needs it decides:
+// cannot decide when another provider's CI is tracked, fail when there is
 // none (spec 0055, Q1).
-func (e *Env) ciModel() (ci *ciModel, result PartResult, ok bool) {
+func (e *Env) pickCI() (ci *ciModel, result PartResult, ok bool) {
 	if e.ci == nil {
 		e.ci = e.readCI()
 	}
@@ -296,7 +296,7 @@ func (e *Env) ciModel() (ci *ciModel, result PartResult, ok bool) {
 // Rules outside C that read differently on GitLab (C-03's applicability,
 // D-02) ask it.
 func (e *Env) gitLabCI() (*ciModel, bool) {
-	if ci, _, ok := e.ciModel(); ok && ci.Provider == CIGitLab {
+	if ci, _, ok := e.pickCI(); ok && ci.Provider == CIGitLab {
 		return ci, true
 	}
 	return nil, false

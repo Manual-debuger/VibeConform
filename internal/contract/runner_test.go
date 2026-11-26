@@ -187,6 +187,41 @@ func TestPartOfAWaivedRuleIsAbsentFromEarlier(t *testing.T) {
 	}
 }
 
+// The last part also gets the calls of vibe that setup made before any
+// part ran. Earlier keeps the calls unexported, so the registry's last
+// part, R-01's execution part, shows them: it lists setup's call. setup
+// tolerates the shim's refusal, so the parts run.
+func TestLastPartSeesSetupCalls(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode skips this test, which runs the contract probes; task verify runs it")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash is not on PATH")
+	}
+	dir := contracttest.GitFixture(t, t.TempDir(),
+		contracttest.WithFile("vibe.yaml", "contract: 1.2.0\nplatforms: [linux]\nagents: []\n"+
+			"entrypoints:\n  setup: bash -c \"vibe version; exit 0\"\n  verify: git --version\n"),
+		contracttest.WithFile("go.mod", "module fixture\n\ngo 1.22\n"))
+	cfg, repo, err := contract.Load(context.Background(), dir, "", contracttest.OpenRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r01, ok := contract.LookupRule("R-01")
+	if !ok {
+		t.Fatal("no R-01 in the registry")
+	}
+	r := &runner{}
+	rep := runAudit(t, cfg, repo, false, r01, r.rule("T-02", contract.Probe))
+	assertCalled(t, r, "T-02/probe")
+	want := []string{`setup ran "vibe version", and vibe was not available`}
+	if got := executionFindings(t, rep, "R-01"); !slices.Equal(got, want) {
+		t.Errorf("R-01 lists %q, want %q", got, want)
+	}
+}
+
 // panicText runs f and returns what it panicked with, failing the test
 // when it does not panic.
 func panicText(t *testing.T, f func()) (text string) {

@@ -43,16 +43,6 @@ func (e Earlier) Result(id string, kind PartKind) (PartResult, bool) {
 	return PartResult{}, false
 }
 
-// guardDeny returns A-02's verdict on its deny cases, or false when
-// A-02's probe did not run.
-func (e Earlier) guardDeny() (PartResult, bool) {
-	r, ok := e.Result("A-02", Probe)
-	if !ok || r.deny == nil {
-		return PartResult{}, false
-	}
-	return *r.deny, true
-}
-
 // vibeCalls returns the calls of vibe setup made, then those made while
 // the earlier parts ran, in run order.
 func (e Earlier) vibeCalls() []shimCall {
@@ -68,12 +58,12 @@ type partRef struct {
 	rule, part int
 }
 
-// lastPart validates the rule list and returns its last part, or false
+// lastPart validates the rule list and returns its last part, or nil
 // when it has none. It panics, naming the part, when a part sets both or
 // neither of Run and RunLast, when a static part is the last part, or
 // when two parts are last parts. Only a test's Options.Rules can reach
 // the panic: a registry test keeps Rules() valid.
-func lastPart(list []Rule) (partRef, bool) {
+func lastPart(list []Rule) *partRef {
 	var last []partRef
 	for i, rule := range list {
 		for j, part := range rule.Parts {
@@ -93,9 +83,9 @@ func lastPart(list []Rule) (partRef, bool) {
 	}
 	switch len(last) {
 	case 0:
-		return partRef{}, false
+		return nil
 	case 1:
-		return last[0], true
+		return &last[0]
 	}
 	names := make([]string, len(last))
 	for i, ref := range last {

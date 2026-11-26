@@ -13,6 +13,7 @@ import (
 // The registry quotes spec 0051 (spec 0052, "Rule registry and results"):
 // each rule's sentence, check, level and source must match the spec's
 // rule table, and each part's check must be a piece of the whole check.
+// Every part of every rule has a check function.
 func TestRegistryQuotesSpec0051(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "specs", "0051-contract-v1.md"))
 	if err != nil {
@@ -36,6 +37,11 @@ func TestRegistryQuotesSpec0051(t *testing.T) { //nolint:gocognit,gocyclo // bas
 
 	must, from0051 := 0, 0
 	for _, r := range Rules() {
+		for _, p := range r.Parts {
+			if p.Run == nil && p.RunLast == nil {
+				t.Errorf("%s %s part has no check", r.ID, p.Kind)
+			}
+		}
 		if r.Since != "" {
 			checkSpec0061Rule(t, r)
 			continue
@@ -70,9 +76,6 @@ func TestRegistryQuotesSpec0051(t *testing.T) { //nolint:gocognit,gocyclo // bas
 			}
 			if !strings.Contains(strings.ToLower(r.Check), string(p.Kind)) {
 				t.Errorf("%s has a %s part its check does not name", r.ID, p.Kind)
-			}
-			if p.Run == nil && p.RunLast == nil {
-				t.Errorf("%s %s part has no check", r.ID, p.Kind)
 			}
 		}
 		if r.Level == Must {
@@ -130,8 +133,8 @@ func checkSpec0061Rule(t *testing.T, r Rule) {
 		t.Errorf("%s category = %s", r.ID, r.Category)
 	}
 	for _, p := range r.Parts {
-		if !strings.Contains(r.Check, p.Check) || (p.Run == nil && p.RunLast == nil) {
-			t.Errorf("%s %s part %q is not part of its check, or has no check", r.ID, p.Kind, p.Check)
+		if !strings.Contains(r.Check, p.Check) {
+			t.Errorf("%s %s part %q is not part of its check", r.ID, p.Kind, p.Check)
 		}
 	}
 }
