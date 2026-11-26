@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Manual-debuger/VibeConform/internal/testkit"
 )
 
 // The registry quotes spec 0051 (spec 0052, "Rule registry and results"):
@@ -170,22 +172,17 @@ func staticFixture(t *testing.T) (*Config, *Repo) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not on PATH")
 	}
-	dir := t.TempDir()
+	r := testkit.NewRepo(t, "repo")
 	data := []byte("contract: 1.2.0\nplatforms: [linux]\nagents: [claude]\n")
 	for name, content := range map[string][]byte{"vibe.yaml": data, "go.mod": []byte("module fixture\n\ngo 1.22\n")} {
-		if err := os.WriteFile(filepath.Join(dir, name), content, 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(r.Dir, name), content, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, args := range [][]string{{"init", "-q"}, {"add", "-A"}} {
-		cmd := exec.Command("git", args...) // #nosec G204 -- fixed arguments
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
+	r.Init(t)
+	r.Git(t, "add", "-A")
 	ctx := context.Background()
-	repo, err := OpenRepo(ctx, dir)
+	repo, err := OpenRepo(ctx, r.Dir)
 	if err != nil {
 		t.Fatal(err)
 	}

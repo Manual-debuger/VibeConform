@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/Manual-debuger/VibeConform/internal/setupskill"
+	"github.com/Manual-debuger/VibeConform/internal/testkit"
 )
 
 // The reference Stop gate and its green stamp (spec 0057, Desired
@@ -51,10 +52,10 @@ func refStopCommand(t *testing.T) string {
 }
 
 // stopRepo is a scratch directory holding a Taskfile with a reference's
-// stop tasks and the verify:fast stub.
+// stop tasks and the verify:fast stub, and the environment that isolates
+// git in it (testkit.Repo).
 type stopRepo struct {
-	dir string
-	env []string
+	testkit.Repo
 }
 
 func newStopRepo(t *testing.T, taskfile []byte, withGit bool) stopRepo {
@@ -78,35 +79,24 @@ func newStopRepo(t *testing.T, taskfile []byte, withGit bool) stopRepo {
 		t.Fatal(err)
 	}
 
-	parent := t.TempDir()
-	r := stopRepo{dir: filepath.Join(parent, "my repo")}
 	// No user or system git config, and no repository above the temp
-	// directory (see newHookCheckRepo). The Stop command changes to
-	// CLAUDE_PROJECT_DIR, which is the repository here.
-	global := filepath.Join(parent, "gitconfig")
-	if err := os.WriteFile(global, []byte("[user]\n\temail = test@example.com\n\tname = test\n[core]\n\tautocrlf = false\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "CLAUDE_PROJECT_DIR=") {
-			r.env = append(r.env, kv)
-		}
-	}
-	r.env = append(r.env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+global, "GIT_CEILING_DIRECTORIES="+parent)
+	// directory. The Stop command changes to CLAUDE_PROJECT_DIR, which is
+	// the repository here; each run sets it.
+	r := stopRepo{testkit.NewRepo(t, "my repo")}
+	r.Env = slices.DeleteFunc(r.Env, func(kv string) bool { return strings.HasPrefix(kv, "CLAUDE_PROJECT_DIR=") })
 	r.write(t, "Taskfile.yml", string(out))
 	r.write(t, ".gitignore", "ran.log\nfail.flag\n")
 	r.write(t, "calc/calc.go", "package calc\n")
 	if withGit {
-		r.git(t, "init", "-q", "-b", "main")
-		r.git(t, "add", "-A")
-		r.git(t, "commit", "-q", "-m", "init")
+		r.Init(t)
+		r.Commit(t)
 	}
 	return r
 }
 
 func (r stopRepo) write(t *testing.T, rel, content string) {
 	t.Helper()
-	p := filepath.Join(r.dir, filepath.FromSlash(rel))
+	p := filepath.Join(r.Dir, filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -115,22 +105,10 @@ func (r stopRepo) write(t *testing.T, rel, content string) {
 	}
 }
 
-func (r stopRepo) git(t *testing.T, args ...string) string {
-	t.Helper()
-	// #nosec G204 -- fixed arguments
-	cmd := exec.Command("git", args...)
-	cmd.Dir, cmd.Env = r.dir, r.env
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-	return string(out)
-}
-
 // runs reports how often verify:fast has run so far.
 func (r stopRepo) runs(t *testing.T) int {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(r.dir, "ran.log"))
+	data, err := os.ReadFile(filepath.Join(r.Dir, "ran.log"))
 	if errors.Is(err, os.ErrNotExist) {
 		return 0
 	}
@@ -154,7 +132,7 @@ func (r stopRepo) stop(t *testing.T, bash, command string, active bool) (code in
 	}
 	// #nosec G204 -- bash is the hook shell, the command is the reference settings'
 	cmd := exec.Command(bash, "-c", command)
-	cmd.Dir, cmd.Env = r.dir, append(slices.Clone(r.env), "CLAUDE_PROJECT_DIR="+r.dir)
+	cmd.Dir, cmd.Env = r.Dir, append(slices.Clone(r.Env), "CLAUDE_PROJECT_DIR="+r.Dir)
 	cmd.Stdin = bytes.NewReader(payload)
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
@@ -246,7 +224,7 @@ func TestStopGateGreenStamp(t *testing.T) {
 	}
 	expect("first stop", false, 0, true)
 	expect("same tree", false, 0, false)
-	if st := r.git(t, "status", "--porcelain", "--untracked-files=all"); st != "" {
+	if st := r.Git(t, "status", "--porcelain", "--untracked-files=all"); st != "" {
 		t.Errorf("the stamp shows in git status:\n%s", st)
 	}
 
@@ -255,7 +233,7 @@ func TestStopGateGreenStamp(t *testing.T) {
 	expect("after the tracked edit", false, 0, false)
 
 	r.write(t, "calc/staged.go", "package calc\n")
-	r.git(t, "add", "calc/staged.go")
+	r.Git(t, "add", "calc/staged.go")
 	expect("staged file", false, 0, true)
 	expect("after the staged file", false, 0, false)
 
@@ -265,8 +243,8 @@ func TestStopGateGreenStamp(t *testing.T) {
 	r.write(t, "calc/untracked.go", "package calc\n\nconst Y = 2\n")
 	expect("untracked file edited", false, 0, true)
 
-	r.git(t, "add", "-A")
-	r.git(t, "commit", "-q", "-m", "more")
+	r.Git(t, "add", "-A")
+	r.Git(t, "commit", "-q", "-m", "more")
 	expect("commit", false, 0, true)
 	expect("after the commit", false, 0, false)
 
@@ -280,7 +258,7 @@ func TestStopGateGreenStamp(t *testing.T) {
 	}
 	expect("failing again, same tree", false, 2, true)
 	expect("failing, stop_hook_active", true, 0, true)
-	if err := os.Remove(filepath.Join(r.dir, "fail.flag")); err != nil {
+	if err := os.Remove(filepath.Join(r.Dir, "fail.flag")); err != nil {
 		t.Fatal(err)
 	}
 	expect("fixed, same tree", false, 0, true)
@@ -339,14 +317,14 @@ func TestStopGateProjectStamps(t *testing.T) {
 	bash := hookShell(t)
 	command := refStopCommand(t)
 	root := newStopRepo(t, readRef(t, refTaskfiles["go"]), true)
-	taskfile, err := os.ReadFile(filepath.Join(root.dir, "Taskfile.yml"))
+	taskfile, err := os.ReadFile(filepath.Join(root.Dir, "Taskfile.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	sub := stopRepo{dir: filepath.Join(root.dir, "examples", "my app"), env: root.env}
+	sub := stopRepo{testkit.Repo{Dir: filepath.Join(root.Dir, "examples", "my app"), Env: root.Env}}
 	sub.write(t, "Taskfile.yml", string(taskfile))
-	root.git(t, "add", "-A")
-	root.git(t, "commit", "-q", "-m", "a project in a subdirectory")
+	root.Git(t, "add", "-A")
+	root.Git(t, "commit", "-q", "-m", "a project in a subdirectory")
 
 	expect := func(name string, r stopRepo, wantRan bool) {
 		t.Helper()
@@ -365,7 +343,7 @@ func TestStopGateProjectStamps(t *testing.T) {
 	expect("subdirectory, after the root's green run", sub, true)
 	expect("subdirectory, same tree again", sub, false)
 
-	gitDir := filepath.Join(root.dir, ".git")
+	gitDir := filepath.Join(root.Dir, ".git")
 	stamps, err := filepath.Glob(filepath.Join(gitDir, "green-stamp*"))
 	if err != nil {
 		t.Fatal(err)
@@ -377,7 +355,7 @@ func TestStopGateProjectStamps(t *testing.T) {
 	if want := []string{"green-stamp", "green-stamp-examples-my app"}; !slices.Equal(stamps, want) {
 		t.Errorf("stamps in the Git directory = %q, want %q", stamps, want)
 	}
-	if st := root.git(t, "status", "--porcelain", "--untracked-files=all"); strings.Contains(st, "green-stamp") {
+	if st := root.Git(t, "status", "--porcelain", "--untracked-files=all"); strings.Contains(st, "green-stamp") {
 		t.Errorf("a stamp shows in git status:\n%s", st)
 	}
 }
@@ -389,8 +367,8 @@ func TestStopGateLinkedWorktrees(t *testing.T) {
 	bash := hookShell(t)
 	command := refStopCommand(t)
 	main := newStopRepo(t, readRef(t, refTaskfiles["go"]), true)
-	side := stopRepo{dir: filepath.Join(filepath.Dir(main.dir), "side"), env: main.env}
-	main.git(t, "worktree", "add", "-q", "-b", "side", side.dir)
+	side := stopRepo{testkit.Repo{Dir: filepath.Join(filepath.Dir(main.Dir), "side"), Env: main.Env}}
+	main.Git(t, "worktree", "add", "-q", "-b", "side", side.Dir)
 
 	if code, ran, _ := main.stop(t, bash, command, false); code != 0 || !ran {
 		t.Fatalf("main, first stop: exit %d, ran %v", code, ran)

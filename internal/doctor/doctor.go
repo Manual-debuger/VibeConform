@@ -6,7 +6,8 @@
 // asks whether the repository conforms to the contract.
 //
 // It reads the configuration and the hooks with the contract audit's own
-// readers, and imports no other package of this module. Run chooses the
+// readers, finds bash with internal/guardrule's ResolveBash as the audit
+// does, and imports no other package of this module. Run chooses the
 // checks and their order; every check is a function of its inputs and an
 // Env.
 package doctor
@@ -22,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
 // Status is one check's verdict.
@@ -126,7 +127,7 @@ func System() Env {
 			_, err := os.Stat(path)
 			return err == nil
 		},
-		Bash: func() (string, error) { return contract.ResolveBash(os.Environ()) },
+		Bash: func() (string, error) { return guardrule.ResolveBash(os.Environ()) },
 	}
 }
 

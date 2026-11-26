@@ -545,7 +545,7 @@ func systemPath(env []string) string {
 	if runtime.GOOS != "windows" {
 		return "/usr/bin:/bin:/usr/sbin:/sbin"
 	}
-	root, _ := envGet(env, "SystemRoot")
+	root := envGet(env, "SystemRoot")
 	if root == "" {
 		root = `C:\Windows`
 	}

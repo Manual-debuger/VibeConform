@@ -10,7 +10,6 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
-	"os/exec"
 	pathpkg "path"
 	"path/filepath"
 	"regexp"
@@ -28,6 +27,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/guard"
 	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 	"github.com/Manual-debuger/VibeConform/internal/setupskill"
+	"github.com/Manual-debuger/VibeConform/internal/testkit"
 )
 
 // checkSkill is the drift checker (spec 0054, "The drift test (#109)"):
@@ -816,13 +816,14 @@ func buildReferenceConfig(f skillFile, builds *int) error {
 	for _, comp := range decl.Components {
 		files[pathpkg.Join(comp.Path, manifestByLanguage[comp.Language])] = ""
 	}
-	dir, err := os.MkdirTemp("", "vibe-skill-config-")
+	parent, err := os.MkdirTemp("", "vibe-skill-config-")
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.RemoveAll(dir) }()
+	defer func() { _ = os.RemoveAll(parent) }()
 	*builds++
-	if err := writeGitTree(dir, files); err != nil {
+	dir, err := writeGitTree(parent, files)
+	if err != nil {
 		return err
 	}
 	repo, err := contract.OpenRepo(context.Background(), dir)
@@ -833,26 +834,33 @@ func buildReferenceConfig(f skillFile, builds *int) error {
 	return err
 }
 
-// writeGitTree writes files (slash paths) under dir and makes it a Git
-// repository that tracks them all.
-func writeGitTree(dir string, files map[string]string) error {
+// writeGitTree writes files (slash paths) under parent/repo and makes it
+// a Git repository that tracks them all, with git isolated as
+// internal/testkit isolates it. It returns parent/repo.
+func writeGitTree(parent string, files map[string]string) (string, error) {
+	dir := filepath.Join(parent, "repo")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
 	for name, content := range files {
 		p := filepath.Join(dir, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			return err
+			return "", err
 		}
 		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-			return err
+			return "", err
 		}
 	}
-	for _, args := range [][]string{{"init", "-q"}, {"-c", "core.autocrlf=false", "add", "-A"}} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("git %v: %w\n%s", args, err, out)
+	env, err := testkit.GitEnv(parent)
+	if err != nil {
+		return "", err
+	}
+	for _, args := range [][]string{{"init", "-q"}, {"add", "-A"}} {
+		if _, err := testkit.RunGit(env, dir, args...); err != nil {
+			return "", err
 		}
 	}
-	return nil
+	return dir, nil
 }
 
 // checkReferencePolicies: every reference policy.json loads as a valid

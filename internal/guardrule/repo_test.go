@@ -4,54 +4,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	gr "github.com/Manual-debuger/VibeConform/internal/guardrule"
+	"github.com/Manual-debuger/VibeConform/internal/testkit"
 )
-
-// git runs git in dir and returns its trimmed output. ok is false when
-// git fails.
-func git(t *testing.T, dir string, args ...string) (out string, ok bool) {
-	t.Helper()
-	cmd := exec.Command("git", args...) // #nosec G204 -- a test's own arguments
-	cmd.Dir = dir
-	b, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Logf("git %v: %v\n%s", args, err, b)
-		return "", false
-	}
-	return strings.TrimSpace(string(b)), true
-}
-
-func mustGit(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	out, ok := git(t, dir, args...)
-	if !ok {
-		t.Fatalf("git %v failed", args)
-	}
-	return out
-}
-
-// gitInitWithCommit makes a repository with one commit, so that a
-// linked worktree can be added to it.
-func gitInitWithCommit(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	mustGit(t, dir, "init", "-q")
-	mustGit(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init")
-	return dir
-}
-
-// gitCommonDir is git rev-parse --git-common-dir run in dir, absolute.
-func gitCommonDir(t *testing.T, dir string) string {
-	t.Helper()
-	p := filepath.FromSlash(mustGit(t, dir, "rev-parse", "--git-common-dir"))
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(dir, p)
-	}
-	return p
-}
 
 func assertSameDir(t *testing.T, what, got, want string) {
 	t.Helper()
@@ -82,52 +39,53 @@ func TestFindRepoAgreesWithGit(t *testing.T) {
 	}
 	layouts := []struct {
 		name string
-		// make builds the layout and returns the directory to start in.
-		make func(t *testing.T) string
+		// make builds the layout and returns the directory to start in,
+		// with the environment git runs with there.
+		make func(t *testing.T) testkit.Repo
 	}{
-		{"plain repository", func(t *testing.T) string {
-			dir := t.TempDir()
-			mustGit(t, dir, "init", "-q")
-			return dir
+		{"plain repository", func(t *testing.T) testkit.Repo {
+			return testkit.InitRepo(t)
 		}},
-		{"linked worktree", func(t *testing.T) string {
+		{"linked worktree", func(t *testing.T) testkit.Repo {
+			r := testkit.InitWithCommit(t)
 			wt := filepath.Join(t.TempDir(), "wt")
-			mustGit(t, gitInitWithCommit(t), "worktree", "add", "-q", wt)
-			return wt
+			r.Git(t, "worktree", "add", "-q", wt)
+			return testkit.Repo{Dir: wt, Env: r.Env}
 		}},
-		{"separate Git directory", func(t *testing.T) string {
-			wt := filepath.Join(t.TempDir(), "wt")
-			mustGit(t, t.TempDir(), "init", "-q", "--separate-git-dir", filepath.Join(t.TempDir(), "repo.git"), wt)
-			return wt
+		{"separate Git directory", func(t *testing.T) testkit.Repo {
+			r := testkit.NewRepo(t, "wt")
+			r.Git(t, "init", "-q", "--separate-git-dir", filepath.Join(t.TempDir(), "repo.git"))
+			return r
 		}},
-		{"worktree with relative paths", func(t *testing.T) string {
+		{"worktree with relative paths", func(t *testing.T) testkit.Repo {
+			r := testkit.InitWithCommit(t)
 			wt := filepath.Join(t.TempDir(), "wt")
-			if _, ok := git(t, gitInitWithCommit(t), "worktree", "add", "-q", "--relative-paths", wt); !ok {
-				t.Skip("this git has no worktree add --relative-paths")
+			if _, err := r.TryGit("worktree", "add", "-q", "--relative-paths", wt); err != nil {
+				t.Skipf("this git has no worktree add --relative-paths: %v", err)
 			}
-			return wt
+			return testkit.Repo{Dir: wt, Env: r.Env}
 		}},
-		{"project below the Git top", func(t *testing.T) string {
-			top := t.TempDir()
-			mustGit(t, top, "init", "-q")
-			proj := filepath.Join(top, "a", "proj")
+		{"project below the Git top", func(t *testing.T) testkit.Repo {
+			r := testkit.InitRepo(t)
+			proj := filepath.Join(r.Dir, "a", "proj")
 			if err := os.MkdirAll(proj, 0o750); err != nil {
 				t.Fatal(err)
 			}
-			return proj
+			return testkit.Repo{Dir: proj, Env: r.Env}
 		}},
 	}
 	for _, l := range layouts {
 		t.Run(l.name, func(t *testing.T) {
 			t.Parallel()
-			start := l.make(t)
+			s := l.make(t)
+			start := s.Dir
 			r := gr.FindRepo(start, start)
 			if r.Root != start {
 				t.Errorf("project root is %s, want %s", r.Root, start)
 			}
-			assertSameDir(t, "Git top", r.GitTop, filepath.FromSlash(mustGit(t, start, "rev-parse", "--show-toplevel")))
-			assertSameDir(t, "Git directory", r.GitDir, filepath.FromSlash(mustGit(t, start, "rev-parse", "--absolute-git-dir")))
-			assertSameDir(t, "common Git directory", r.CommonDir, gitCommonDir(t, start))
+			assertSameDir(t, "Git top", r.GitTop, filepath.FromSlash(s.Git(t, "rev-parse", "--show-toplevel")))
+			assertSameDir(t, "Git directory", r.GitDir, filepath.FromSlash(s.Git(t, "rev-parse", "--absolute-git-dir")))
+			assertSameDir(t, "common Git directory", r.CommonDir, s.CommonDir(t))
 		})
 	}
 }
