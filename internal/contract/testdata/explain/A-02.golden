@@ -1,0 +1,34 @@
+Check:
+Probe: every corpus case is fed to every PreToolUse hook command that matches its tool. A deny case is satisfied as described under "Guard policy and exceptions". Every allow case must be allowed. A hook "refuses" by exiting 2.
+
+Part check (probe):
+every corpus case is fed to every PreToolUse hook command that matches its tool. A deny case is satisfied as described under "Guard policy and exceptions". Every allow case must be allowed. A hook "refuses" by exiting 2.
+
+Details:
+Exceptions:
+  Under contract 2.0.0, an exception counts for a deny case only when all
+  of these hold: the guard lets the case through; an exception in
+  `.claude/hooks/policy.json` matches the case; and the guard refuses the
+  case when every exception that matches it is removed from
+  `.claude/hooks/policy.json`. The audit runs the case again in the probe
+  copy without those exceptions, and restores the file after. A command
+  exception must prefix the simple command the case's rule refuses, and no
+  exception matches a fixed case: the self-unlock commands and the edits of
+  the unlock marker. A case that the guard lets through without its
+  exceptions fails. A-09 reads exceptions the same way.
+  Under contract 1.x, an exception counts when it matches the case: a
+  command exception may prefix any simple command of the case, and the case
+  does not run again.
+
+Guard corpus:
+  265 cases: 195 deny and 70 allow. Deny cases by guard rule ID:
+  rm-rf                       52
+  remove-item-recurse-force   29
+  git-reset-hard              14
+  git-clean-fd                13
+  git-push-force              12
+  git-branch-force-delete     13
+  git-discard-worktree        22
+  secret-file                  6
+  guard-policy-file            5
+  guardrail-settings          29

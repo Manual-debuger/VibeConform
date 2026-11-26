@@ -18,8 +18,9 @@ const (
 	// vibe --version shows.
 	Latest = Contract2
 	// Initial is the contract a new configuration declares: vibe init
-	// writes it, and the setup skill names it.
-	Initial = Contract1
+	// writes it, and the setup skill names it. A new repository starts on
+	// the latest contract (spec 0072).
+	Initial = Contract2
 )
 
 // implemented lists the contracts this vibe implements, oldest first.

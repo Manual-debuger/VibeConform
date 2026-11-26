@@ -56,6 +56,15 @@ func TestAuditExplainContent(t *testing.T) {
 		{"R-01", []string{
 			"Level: MUST", "Category: R, Removability and repository hygiene", "Checks: static, execution",
 			"Source: principle 3, spec 0017", "Not applicable: never", "Waivable: no",
+			// spec 0072, "R-01 and C-04".
+			"Under contract 2.0.0, a command calls `vibe` when the last path element of its first word, after `/` or `\\`, is the literal `vibe` or `vibe.exe`",
+			"Under contract 1.x, its first word must be the literal `vibe`.",
+		}},
+		// spec 0072, "The audit's reading under 2.0.0" and "The rerun".
+		{"A-02", []string{
+			"Under contract 2.0.0, an exception counts for a deny case only when",
+			"the guard refuses the case when every exception that matches it is removed from `.claude/hooks/policy.json`",
+			"A command exception must prefix the simple command the case's rule refuses, and no exception matches a fixed case",
 		}},
 		{"C-05", []string{
 			"Level: SHOULD", "Category: C, CI", "Checks: static", "Source: principle 2",
