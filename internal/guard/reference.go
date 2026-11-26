@@ -3,7 +3,13 @@ package guard
 import (
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
+
+	gr "github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
+
+// PolicyFile is the repository's guard policy, which vibe-guard reads
+// and the reference policy is written to.
+const PolicyFile = gr.PolicyFile
 
 // The reference hook commands (spec 0053, "The reference hook
 // commands"), as .claude/settings.json runs them.

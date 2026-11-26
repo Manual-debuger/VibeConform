@@ -55,15 +55,15 @@ func referenceRepo(t *testing.T, stack, provider string) map[string]string {
 		t.Fatal(err)
 	}
 	files := map[string]string{}
-	for _, ref := range referenceFiles(setupskill.FS()) {
-		if target, ok := referenceTarget(stack, provider, ref); ok {
-			files[target] = string(rendered[ref])
+	for ref, content := range rendered {
+		if target, ok := setupskill.Place(stack, provider, ref); ok {
+			files[target] = string(content)
 		}
 	}
-	if stack == "monorepo" {
-		for lang, dir := range monorepoComponents {
-			for name, content := range minimalComponents[lang] {
-				files[dir+"/"+name] = content
+	if stack == setupskill.StackMonorepo {
+		for _, c := range setupskill.MonorepoComponents() {
+			for name, content := range minimalComponents[c.Language] {
+				files[c.Dir+"/"+name] = content
 			}
 		}
 	} else {
@@ -143,7 +143,7 @@ func withStopCommand(t *testing.T, files map[string]string, command string) map[
 // reads (spec 0057, constraint 1).
 func TestStaticAuditReadsACdPrefixedHookCommand(t *testing.T) {
 	t.Parallel()
-	base := referenceRepo(t, "monorepo", providerGitHub)
+	base := referenceRepo(t, setupskill.StackMonorepo, setupskill.ProviderGitHub)
 	cases := []struct {
 		name, command, rule string
 		want                contract.Result
@@ -177,8 +177,8 @@ var gitlabDecided = []string{"C-01", "C-02", "C-04", "C-05", "D-02", "D-03", "R-
 
 func TestReferenceImplementationsPassTheStaticAudit(t *testing.T) { //nolint:gocognit // baseline: pre-existing complexity
 	t.Parallel()
-	for _, provider := range referenceProviders {
-		for _, stack := range referenceStacks {
+	for _, provider := range setupskill.Providers() {
+		for _, stack := range setupskill.Stacks() {
 			t.Run(provider+"/"+stack, func(t *testing.T) {
 				t.Parallel()
 				report := auditReference(t, referenceRepo(t, stack, provider))
@@ -188,7 +188,7 @@ func TestReferenceImplementationsPassTheStaticAudit(t *testing.T) { //nolint:goc
 						t.Errorf("MUST rule %s fails: %s", r.Rule.ID, msgs)
 					}
 				}
-				if provider != providerGitLab {
+				if provider != setupskill.ProviderGitLab {
 					return
 				}
 				if report.CIProvider != contract.CIGitLab {
@@ -218,8 +218,8 @@ var githubOnlyTools = []string{"actionlint"}
 // still runs it where the Taskfile names it.
 func TestReferenceVerifyCallsOnlyTheProvidersTools(t *testing.T) { //nolint:gocognit // baseline: pre-existing complexity
 	t.Parallel()
-	for _, provider := range referenceProviders {
-		for _, stack := range referenceStacks {
+	for _, provider := range setupskill.Providers() {
+		for _, stack := range setupskill.Stacks() {
 			t.Run(provider+"/"+stack, func(t *testing.T) {
 				files := referenceRepo(t, stack, provider)
 				ran := verifyCommands(t, files)
@@ -231,9 +231,9 @@ func TestReferenceVerifyCallsOnlyTheProvidersTools(t *testing.T) { //nolint:goco
 						}
 					}
 					switch {
-					case provider == providerGitLab && ran[tool]:
+					case provider == setupskill.ProviderGitLab && ran[tool]:
 						t.Errorf("task verify runs %s, which only checks GitHub Actions and the GitLab CI does not install", tool)
-					case provider == providerGitHub && named && !ran[tool]:
+					case provider == setupskill.ProviderGitHub && named && !ran[tool]:
 						t.Errorf("task verify does not run %s, which the Taskfile names", tool)
 					}
 				}
@@ -373,11 +373,11 @@ func TestGitLabReferencePlantedProblems(t *testing.T) {
 		{name: "a job other than the audit calls vibe", old: "    - task verify\n", new: "    - task verify\n    - vibe audit --static\n",
 			rule: "R-01", finding: "vibe"},
 	}
-	for _, stack := range referenceStacks {
+	for _, stack := range setupskill.Stacks() {
 		for _, c := range cases {
 			t.Run(stack+"/"+c.name, func(t *testing.T) {
 				t.Parallel()
-				files := referenceRepo(t, stack, providerGitLab)
+				files := referenceRepo(t, stack, setupskill.ProviderGitLab)
 				ci := files[".gitlab-ci.yml"]
 				if !strings.Contains(ci, c.old) {
 					t.Fatalf("the %s reference .gitlab-ci.yml does not contain %q", stack, c.old)
