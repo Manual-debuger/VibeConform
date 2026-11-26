@@ -58,6 +58,7 @@ func checkSkill(skill fs.FS) []string {
 		return nil
 	})
 	for _, f := range c.files {
+		c.checkPlaceholders(f)
 		c.checkRuleIDs(f)
 		c.checkSkillPaths(f)
 		if strings.HasSuffix(f.path, ".md") {
@@ -105,6 +106,24 @@ func (c *skillChecker) file(path string) (skillFile, bool) {
 		}
 	}
 	return skillFile{}, false
+}
+
+// placeholderPattern is a setup-skill placeholder's form: a name that
+// starts with VIBE_, in double braces. The reference Taskfiles' templates
+// ({{OS}}, {{.TASK_VERSION}}) and the workflows' expressions
+// (${{ matrix.os }}) also use double braces; they are the person's tools'
+// syntax, which Render leaves alone, and not placeholders.
+var placeholderPattern = regexp.MustCompile(`\{\{\s*VIBE_[^{}]*\}\}`)
+
+// checkPlaceholders: every placeholder in the file is one that Render
+// replaces (spec 0073). Any other would reach the repository as written.
+func (c *skillChecker) checkPlaceholders(f skillFile) {
+	for _, p := range uniqueMatches(placeholderPattern, f.text) {
+		if p != setupskill.VersionPlaceholder && p != setupskill.ReleasePagePlaceholder {
+			c.problem(f.path, "holds %s, which is not a placeholder that Render replaces (%s, %s)",
+				p, setupskill.VersionPlaceholder, setupskill.ReleasePagePlaceholder)
+		}
+	}
 }
 
 // ruleIDPattern is a contract rule ID's form (spec 0051).
@@ -591,7 +610,7 @@ func knownRepoFiles() []string {
 				}
 			}
 		}
-		knownRepoFilesList = append(knownRepoFilesList, setupskill.Dirs...)
+		knownRepoFilesList = append(knownRepoFilesList, setupskill.Dirs()...)
 		for i, p := range knownRepoFilesList {
 			knownRepoFilesList[i] = strings.TrimSuffix(p, "/")
 		}
@@ -890,8 +909,11 @@ func (c *skillChecker) checkReferenceHooks() {
 		return
 	}
 	pre, stop := cfg.Hooks["PreToolUse"], cfg.Hooks["Stop"]
+	// Render replaces the release-page placeholder with the release page
+	// of the version that replaces the version placeholder.
+	releasePage := strings.NewReplacer(setupskill.ReleasePagePlaceholder, guard.ReleasePage(setupskill.VersionPlaceholder))
 	if len(pre) != 1 || len(pre[0].Hooks) != 1 || pre[0].Matcher != guard.ReferencePreToolUseMatcher ||
-		pre[0].Hooks[0].Command != guard.ReferencePreToolUse(setupskill.VersionPlaceholder) {
+		releasePage.Replace(pre[0].Hooks[0].Command) != guard.ReferencePreToolUse(setupskill.VersionPlaceholder) {
 		c.problem(file, "PreToolUse is not the reference guard's matcher and command")
 	}
 	if len(stop) != 1 || len(stop[0].Hooks) != 1 || stop[0].Hooks[0].Command != guard.ReferenceStop {
@@ -943,7 +965,7 @@ func (c *skillChecker) checkSkillIgnored() {
 			c.problem(name, "is missing, so the repository's checks read the skill's own files")
 			continue
 		}
-		for _, dir := range setupskill.Dirs {
+		for _, dir := range setupskill.Dirs() {
 			if !strings.Contains(f.text, dir) {
 				c.problem(name, "does not exclude %s, so the repository's checks read the skill's own files", dir)
 			}

@@ -10,7 +10,7 @@ import (
 
 // migrationGuidePath is the setup skill's migration guide as vibe init
 // --skill writes it, in Claude Code's skill path.
-var migrationGuidePath = setupskill.Dirs[0] + "/reference/migrate.md"
+var migrationGuidePath = setupskill.Dirs()[0] + "/reference/migrate.md"
 
 // migrationPointer is the line that sends a user of the template-sync
 // system to the migration guide (spec 0059, Desired Behavior 8 and 9).
