@@ -169,18 +169,14 @@ func hook(env Env) int {
 // reasonTail is "<why>. Explain: vibe-guard explain '<command>'".
 func reasonTail(d Decision, t gr.Target) string {
 	s := strings.TrimSuffix(d.Finding.Why, ".") + "."
-	if t.Tool == "" {
+	if t.Tool() == "" {
 		return s
 	}
-	arg := t.Command
-	if gr.IsEditTool(t.Tool) {
-		arg = t.Path
-	}
 	explain := "vibe-guard explain "
-	if t.Tool != gr.Bash {
-		explain += "--tool " + t.Tool + " "
+	if t.Tool() != gr.Bash {
+		explain += "--tool " + t.Tool() + " "
 	}
-	return s + " Explain: " + explain + shellQuote(arg)
+	return s + " Explain: " + explain + shellQuote(t.Text())
 }
 
 // shellQuote quotes s for a POSIX shell, on one line: in single quotes,
@@ -273,18 +269,14 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 			strings.Join(append(append([]string{}, gr.CommandTools...), gr.EditTools...), ", "))
 		return exitUsage
 	}
-	t := gr.Target{Tool: tool, Command: arg}
+	t := gr.NewCommandTarget(tool, arg)
 	if gr.IsEditTool(tool) {
-		t = gr.Target{Tool: tool, Path: arg}
+		t = gr.NewPathTarget(tool, arg)
 	}
 	d := g.Decide(Call{Target: t})
 	w := env.Stdout
 	sayf(w, "tool: %s\n", tool)
-	if gr.IsEditTool(tool) {
-		sayf(w, "path: %s\n", arg)
-	} else {
-		sayf(w, "command: %s\n", arg)
-	}
+	sayf(w, "%s: %s\n", t.Kind(), arg)
 	observe := ""
 	if d.Outcome == Deny && !d.Refuses() {
 		observe = " (observe mode: the hook allows the call and logs it)"

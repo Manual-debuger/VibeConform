@@ -103,12 +103,7 @@ func (r caseRun) undecided() *runOutcome {
 func (r caseRun) what() string { return describeGuardCase(r.c) }
 
 func describeGuardCase(c GuardCase) string {
-	t := c.Target()
-	arg := t.Command
-	if guardrule.IsEditTool(t.Tool) {
-		arg = t.Path
-	}
-	return fmt.Sprintf("corpus case %q (%s %q)", c.Name, c.Payload.ToolName, arg)
+	return fmt.Sprintf("corpus case %q (%s %q)", c.Name, c.Payload.ToolName, c.Target().Text())
 }
 
 // exits says how every hook ended.

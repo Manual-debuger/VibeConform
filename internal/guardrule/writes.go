@@ -180,10 +180,26 @@ type psWriter struct {
 	positional int
 	// paths are the parameters that name a written item.
 	paths []string
-	// kind is "" for a cmdlet that writes its paths, or copy, move,
-	// rename or new for the cmdlets that also write a second name.
-	kind string
+	// kind says which second name, if any, the cmdlet also writes; zero
+	// for none.
+	kind psWriterKind
 }
+
+// psWriterKind is what a PowerShell writer writes besides the items its
+// path parameters name. The zero kind writes nothing else.
+type psWriterKind int
+
+const (
+	// psCopies also writes each path's copy in Destination.
+	psCopies psWriterKind = iota + 1
+	// psMoves is psCopies whose paths are removed.
+	psMoves
+	// psRenames also writes each path's NewName, in the path's directory.
+	psRenames
+	// psCreates also writes Name inside each path, or Name alone with no
+	// path.
+	psCreates
+)
 
 var psPathParams = []string{"Path", "LiteralPath"}
 
@@ -196,10 +212,10 @@ var psWriters = map[string]psWriter{
 	"clear-content": {params: []string{"Path", "LiteralPath", "Filter", "Include", "Exclude", "Stream", "Credential"}, positional: 1, paths: psPathParams},
 	"remove-item":   {params: []string{"Path", "LiteralPath", "Filter", "Include", "Exclude", "Stream", "Credential"}, positional: 1, paths: psPathParams},
 	"tee-object":    {params: []string{"FilePath", "LiteralPath", "Path", "Variable", "InputObject", "Encoding"}, positional: 1, paths: []string{"FilePath", "LiteralPath", "Path"}},
-	"rename-item":   {params: []string{"Path", "NewName", "LiteralPath", "Credential"}, positional: 2, paths: psPathParams, kind: "rename"},
-	"new-item":      {params: []string{"Path", "Name", "ItemType", "Type", "Value", "Target", "Credential"}, positional: 1, paths: psPathParams, kind: "new"},
-	"copy-item":     {params: []string{"Path", "Destination", "LiteralPath", "Filter", "Include", "Exclude", "Credential", "ToSession", "FromSession"}, positional: 2, paths: psPathParams, kind: "copy"},
-	"move-item":     {params: []string{"Path", "Destination", "LiteralPath", "Filter", "Include", "Exclude", "Credential"}, positional: 2, paths: psPathParams, kind: "move"},
+	"rename-item":   {params: []string{"Path", "NewName", "LiteralPath", "Credential"}, positional: 2, paths: psPathParams, kind: psRenames},
+	"new-item":      {params: []string{"Path", "Name", "ItemType", "Type", "Value", "Target", "Credential"}, positional: 1, paths: psPathParams, kind: psCreates},
+	"copy-item":     {params: []string{"Path", "Destination", "LiteralPath", "Filter", "Include", "Exclude", "Credential", "ToSession", "FromSession"}, positional: 2, paths: psPathParams, kind: psCopies},
+	"move-item":     {params: []string{"Path", "Destination", "LiteralPath", "Filter", "Include", "Exclude", "Credential"}, positional: 2, paths: psPathParams, kind: psMoves},
 }
 
 var psWriterAliases = map[string]string{
@@ -210,81 +226,112 @@ var psWriterAliases = map[string]string{
 
 // written reads a cmdlet's arguments (without its name) and returns the
 // items it writes.
-func (p psWriter) written(args []Word) []Word { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
-	values := map[string][]Word{}
-	var positional []Word
-	for i := 0; i < len(args); i++ {
-		w := args[i]
-		if w.Literal && !w.Quoted && len(w.Text) > 1 && w.Text[0] == '-' {
-			param := ""
-			for _, name := range p.params {
-				if ok, _ := PSParam(w, name); ok {
-					param = name
-					break
-				}
-			}
-			if param == "" {
-				continue // a switch
-			}
-			if _, value, attached := strings.Cut(w.Text, ":"); attached {
-				values[param] = append(values[param], Word{Text: value, Literal: true})
-			} else if i+1 < len(args) {
-				i++
-				values[param] = append(values[param], args[i])
-			}
-			continue
-		}
-		positional = append(positional, w)
-	}
-	// Positional words go to the first positional parameters; with one
-	// positional parameter, every such word is part of its list (a, b).
-	for i, w := range positional {
-		k := min(i, p.positional-1)
-		if p.positional == 2 && i > 1 {
-			break
-		}
-		values[p.params[k]] = append(values[p.params[k]], w)
-	}
+func (p psWriter) written(args []Word) []Word {
+	values := p.values(args)
 	var paths []Word
 	for _, name := range p.paths {
 		paths = append(paths, values[name]...)
 	}
 	switch p.kind {
-	case "copy", "move":
-		var out []Word
-		for _, dest := range values["Destination"] {
-			out = append(out, dest)
-			for _, s := range paths {
-				out = append(out, inside(dest, s))
-			}
-		}
-		if p.kind == "move" {
+	case psCopies, psMoves:
+		out := copied(values["Destination"], paths)
+		if p.kind == psMoves {
 			out = append(out, paths...)
 		}
 		return out
-	case "rename":
-		out := paths
-		for _, name := range values["NewName"] {
-			for _, s := range paths {
-				dir := Word{Text: ".", Literal: true}
-				if i := strings.LastIndexAny(s.Text, `/\`); i >= 0 {
-					dir = Word{Text: s.Text[:i], Literal: s.Literal, Quoted: s.Quoted}
-				}
-				out = append(out, inside(dir, name))
-			}
-		}
-		return out
-	case "new":
-		out := paths
-		for _, name := range values["Name"] {
-			if len(paths) == 0 {
-				out = append(out, name)
-			}
-			for _, s := range paths {
-				out = append(out, inside(s, name))
-			}
-		}
-		return out
+	case psRenames:
+		return append(paths, renamed(values["NewName"], paths)...)
+	case psCreates:
+		return append(paths, created(values["Name"], paths)...)
 	}
 	return paths
+}
+
+// values binds a cmdlet's arguments to its parameters: a named value by
+// its parameter, and positional words to the first positional
+// parameters. With one positional parameter, every such word is part of
+// its list (a, b).
+func (p psWriter) values(args []Word) map[string][]Word {
+	values := map[string][]Word{}
+	var positional []Word
+	for i := 0; i < len(args); i++ {
+		w := args[i]
+		if !w.Literal || w.Quoted || len(w.Text) < 2 || w.Text[0] != '-' {
+			positional = append(positional, w)
+			continue
+		}
+		param := p.param(w)
+		if param == "" {
+			continue // a switch
+		}
+		if _, value, attached := strings.Cut(w.Text, ":"); attached {
+			values[param] = append(values[param], Word{Text: value, Literal: true})
+		} else if i+1 < len(args) {
+			i++
+			values[param] = append(values[param], args[i])
+		}
+	}
+	for i, w := range positional {
+		if p.positional == 2 && i > 1 {
+			break
+		}
+		k := min(i, p.positional-1)
+		values[p.params[k]] = append(values[p.params[k]], w)
+	}
+	return values
+}
+
+// param is the parameter, of those that take a value, that the
+// parameter word w names, or "" for a switch.
+func (p psWriter) param(w Word) string {
+	for _, name := range p.params {
+		if ok, _ := PSParam(w, name); ok {
+			return name
+		}
+	}
+	return ""
+}
+
+// copied are the copies of paths in each destination: the destination
+// itself, and each path's name inside it.
+func copied(dests, paths []Word) []Word {
+	var out []Word
+	for _, dest := range dests {
+		out = append(out, dest)
+		for _, s := range paths {
+			out = append(out, inside(dest, s))
+		}
+	}
+	return out
+}
+
+// renamed are each path renamed to each new name, in the path's
+// directory.
+func renamed(names, paths []Word) []Word {
+	var out []Word
+	for _, name := range names {
+		for _, s := range paths {
+			dir := Word{Text: ".", Literal: true}
+			if i := strings.LastIndexAny(s.Text, `/\`); i >= 0 {
+				dir = Word{Text: s.Text[:i], Literal: s.Literal, Quoted: s.Quoted}
+			}
+			out = append(out, inside(dir, name))
+		}
+	}
+	return out
+}
+
+// created are each name inside each path, or the name itself with no
+// path.
+func created(names, paths []Word) []Word {
+	var out []Word
+	for _, name := range names {
+		if len(paths) == 0 {
+			out = append(out, name)
+		}
+		for _, s := range paths {
+			out = append(out, inside(s, name))
+		}
+	}
+	return out
 }

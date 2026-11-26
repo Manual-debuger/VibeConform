@@ -12,13 +12,62 @@ import (
 	"sync/atomic"
 )
 
-// Target is what a tool call acts on: the command of a command tool, or
-// the file of a file-edit tool. Both are empty for any other tool.
-type Target struct {
-	Tool    string
-	Command string
-	Path    string
+// TargetKind is what a tool call acts on: nothing, a command or a path.
+type TargetKind int
+
+const (
+	// NoTarget is the kind of a call of a tool that is neither a command
+	// tool nor a file-edit tool, and of the zero Target.
+	NoTarget TargetKind = iota
+	// CommandTarget is the kind of a command tool's call: its text is the
+	// command.
+	CommandTarget
+	// PathTarget is the kind of a file-edit tool's call: its text is the
+	// file's path.
+	PathTarget
+)
+
+// String is "none", "command" or "path".
+func (k TargetKind) String() string {
+	switch k {
+	case CommandTarget:
+		return "command"
+	case PathTarget:
+		return "path"
+	}
+	return "none"
 }
+
+// Target is what a tool call acts on: the command of a command tool, or
+// the file of a file-edit tool. Its kind says which; ParseTarget,
+// NewCommandTarget and NewPathTarget build it.
+type Target struct {
+	tool string
+	kind TargetKind
+	text string
+}
+
+// NewCommandTarget is the target of a call of the command tool tool that
+// runs command.
+func NewCommandTarget(tool, command string) Target {
+	return Target{tool: tool, kind: CommandTarget, text: command}
+}
+
+// NewPathTarget is the target of a call of the file-edit tool tool that
+// edits the file at path.
+func NewPathTarget(tool, path string) Target {
+	return Target{tool: tool, kind: PathTarget, text: path}
+}
+
+// Tool is the name of the tool the call is of.
+func (t Target) Tool() string { return t.tool }
+
+// Kind says whether the target is a command, a path or neither.
+func (t Target) Kind() TargetKind { return t.kind }
+
+// Text is the command of a command target, the path of a path target,
+// and empty for no target.
+func (t Target) Text() string { return t.text }
 
 // PayloadError is a tool call whose input lacks what its tool needs. A
 // guard refuses it under payload-error.
@@ -41,7 +90,7 @@ func ParseTarget(tool string, input json.RawMessage) (Target, error) {
 	case IsEditTool(tool):
 		key = "file_path"
 	default:
-		return Target{Tool: tool}, nil
+		return Target{tool: tool}, nil
 	}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(input, &m); err != nil || m == nil {
@@ -52,12 +101,12 @@ func ParseTarget(tool string, input json.RawMessage) (Target, error) {
 		return Target{}, &PayloadError{fmt.Sprintf("%s tool_input has no string %s", tool, key)}
 	}
 	if IsCommandTool(tool) {
-		return Target{Tool: tool, Command: v}, nil
+		return NewCommandTarget(tool, v), nil
 	}
 	if v == "" {
 		return Target{}, &PayloadError{fmt.Sprintf("%s tool_input.%s is empty", tool, key)}
 	}
-	return Target{Tool: tool, Path: v}, nil
+	return NewPathTarget(tool, v), nil
 }
 
 // Matches reports whether the exception matches the target: for a path
@@ -86,13 +135,13 @@ func (e Exception) MatchesRefused(t Target, root string, refused []string) bool 
 // matches is Matches with only the simple commands that counted accepts.
 func (e Exception) matches(t Target, root string, counted func(Command) bool) bool {
 	if IsPathRule(e.rule) {
-		return t.Path != "" && IsEditTool(t.Tool) && e.MatchesPath(t.Path, root)
+		return t.kind == PathTarget && t.text != "" && e.MatchesPath(t.text, root)
 	}
-	shell := ShellFor(t.Tool)
-	if shell == 0 {
+	shell := ShellFor(t.tool)
+	if t.kind != CommandTarget || shell == 0 {
 		return false
 	}
-	cmds, err := Commands(shell, t.Command)
+	cmds, err := Commands(shell, t.text)
 	if err != nil {
 		return false
 	}

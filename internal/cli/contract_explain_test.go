@@ -171,7 +171,7 @@ func TestAuditExplainA09ListsItsCases(t *testing.T) {
 		t.Fatalf("A-09 has %d corpus cases, want the 13 of spec 0061", len(cases))
 	}
 	for _, c := range cases {
-		want := fmt.Sprintf("\n  %-5s  %-10s  %s\n", c.Want, c.Payload.ToolName, c.Target().Command)
+		want := fmt.Sprintf("\n  %-5s  %-10s  %s\n", c.Want, c.Payload.ToolName, c.Target().Text())
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("--explain A-09 lacks %q:\n%s", want, r.stdout)
 		}
