@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -469,40 +467,21 @@ func checkVibeArgs(args []string) string { //nolint:gocognit // baseline: pre-ex
 	return ""
 }
 
-var (
-	guardCommandsOnce sync.Once
-	guardCommands     map[string]map[string]bool // command -> flag -> takes a value
-)
-
-// vibeGuardCommands is vibe-guard's real command set, read from the
-// usage its help command prints.
+// vibeGuardCommands is vibe-guard's command set, from the command table
+// that internal/guard exports: command or alias -> flag -> whether it
+// takes a value.
 func vibeGuardCommands() map[string]map[string]bool {
-	guardCommandsOnce.Do(func() {
-		var out bytes.Buffer
-		guard.Main([]string{"help"}, guard.Env{
-			Stdin: strings.NewReader(""), Stdout: &out, Stderr: &out,
-			Getenv: func(string) string { return "" }, Now: time.Now,
-		}, "test")
-		guardCommands = map[string]map[string]bool{}
-		for _, line := range strings.Split(out.String(), "\n") {
-			words := strings.Fields(line)
-			if len(words) < 2 || words[0] != "vibe-guard" {
-				continue
-			}
-			flags := map[string]bool{}
-			for i := 2; i < len(words); i++ {
-				w := strings.Trim(words[i], "[]")
-				if strings.HasPrefix(w, "--") {
-					flags[w] = i+1 < len(words) && strings.HasPrefix(words[i+1], "<")
-				}
-			}
-			guardCommands[words[1]] = flags
+	out := map[string]map[string]bool{}
+	for _, c := range guard.Commands() {
+		flags := map[string]bool{}
+		for _, f := range c.Flags {
+			flags[f.Name] = f.TakesValue()
 		}
-		// The aliases guard.Main accepts beside its usage.
-		guardCommands["--version"] = map[string]bool{}
-		guardCommands["help"] = map[string]bool{}
-	})
-	return guardCommands
+		for _, name := range append([]string{c.Name}, c.Aliases...) {
+			out[name] = flags
+		}
+	}
+	return out
 }
 
 // checkVibeGuardArgs checks vibe-guard's arguments against its command
