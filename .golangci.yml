@@ -36,7 +36,9 @@ linters:
     # (V-06, a function of cyclomatic complexity 42 and cognitive
     # complexity 41). Existing code over the limits gets a specific
     # suppression with the reason "baseline: pre-existing complexity",
-    # not a higher limit.
+    # not a higher limit. New code meets the limits: task lint fails when
+    # the count of those suppressions is higher than the ceiling in
+    # internal/baselines/main.go (spec 0073).
     gocyclo:
       min-complexity: 15
     gocognit:
@@ -147,6 +149,15 @@ linters:
           deny:
             - pkg: github.com/Manual-debuger/VibeConform
               desc: testkit imports no package of this module (spec 0073)
+        # internal/baselines is the baseline ceiling task lint runs (spec
+        # 0073), a main package that reads files and imports no package of
+        # this module.
+        baselines:
+          files:
+            - "**/internal/baselines/**"
+          deny:
+            - pkg: github.com/Manual-debuger/VibeConform
+              desc: the baseline ceiling imports no package of this module (spec 0073)
     revive:
       rules:
         - name: exported
