@@ -100,9 +100,10 @@ internal/contract
 - **Shell parsing.** "Called" means a simple command in the shell parse
   tree, so `internal/contract` depends on `mvdan.cc/sh/v3/syntax` (ADR
   0026). `internal/contract/shell.go` is the only file that imports it;
-  every check sees the package's own `Command` and `Word`. Its other
-  third-party imports are ones `vibe` already had: `gopkg.in/yaml.v3`,
-  and `github.com/tailscale/hujson` for Renovate's JSON5 files.
+  every check sees the package's own `shellCommand` and `shellWord`. Its
+  other third-party imports are ones `vibe` already had:
+  `gopkg.in/yaml.v3`, and `github.com/tailscale/hujson` for Renovate's
+  JSON5 files.
 - **Read-only, tracked files only.** Static checks read the working-tree
   content of files `git ls-files` lists and never write. Since spec 0053,
   execution checks and probes run in a *probe copy*: a fresh Git
@@ -131,39 +132,39 @@ internal/contract
   order, each with the `vibe` calls the shim recorded while that part
   ran, where `Env` cannot reach them. The report's guard exception uses
   come from A-02's and A-09's results, in run order. A check reads `Env`
-  and adds no record to it except through `Note`.
-- **One CI model, two readers** (spec 0055). The C rules, D-03 and
-  R-01 read the repository's CI through one provider-neutral model
+  and adds no record to it except through `note`.
+- **One CI model, two readers** (spec 0055). The C rules, D-03 and R-01
+  read the repository's CI through one provider-neutral model
   (`ci_model.go`): the CI provider read, its jobs with their commands
   and scripts, the includes not followed, and for each *pipeline kind*
-  (merge request, push to the default branch) the jobs that run and
-  why the others do not. `Env.CI()` picks the provider once per audit:
+  (merge request, push to the default branch) the jobs that run and why
+  the others do not. `env.ciModel()` picks the provider once per audit:
   GitHub Actions when tracked workflows exist, otherwise GitLab CI when
-  `.gitlab-ci.yml` is tracked. Each reader fills the whole model when
-  it reads the CI (spec 0067): the runs of both pipeline kinds, each
-  job's runner platforms, and the references C-02 checks (GitHub
-  `uses:`, GitLab images and includes). The GitHub reader
-  (`githubCI` in `ci_model.go`) wraps the existing workflow parsing and
-  decides its runs with the trigger walk (`workflow_triggers.go`). The
-  GitLab reader (`gitlab_ci.go`) resolves `.gitlab-ci.yml` statically:
-  anchors, local includes, `default:`, `extends:`, `!reference` and
-  child pipelines the parent waits for. `gitlab_rules.go` evaluates
-  `workflow:rules`, `rules:` and `only`/`except` over a closed list of
-  conditions. `CI.Run` is a lookup for both providers. C-01, C-02,
-  C-04, C-05 and D-03 each have one implementation (`checks_ci.go`)
-  that reads only the model, and no C check compares the provider. The
-  words of a finding that differ by provider ("pull requests" or "merge
-  request pipelines", the trigger hint, some messages and fixes) come
-  from the provider's wording (`ci_wording.go`), which the reader sets,
-  so each provider keeps its text. C-03 reads the GitHub workflows
-  (`CI.Workflows`), which only the GitHub reader fills; the registry
-  makes it not applicable on GitLab CI. A new provider needs a reader
-  and a wording; those five rules need no change. Both readers live in
-  `internal/contract` and add no
-  import: they use `gopkg.in/yaml.v3`, the package's shell parser and
-  `internal/guardrule`, which the package already imported, so the
-  dependency direction above is unchanged. The report model carries the provider
-  read, which the CLI prints as `CI provider read:` and `ci_provider`.
+  `.gitlab-ci.yml` is tracked. Each reader fills the whole model when it
+  reads the CI (spec 0067): the runs of both pipeline kinds, each job's
+  runner platforms, and the references C-02 checks (GitHub `uses:`,
+  GitLab images and includes). The GitHub reader (`githubCI` in
+  `ci_model.go`) wraps the existing workflow parsing and decides its
+  runs with the trigger walk (`workflow_triggers.go`). The GitLab reader
+  (`gitlab_ci.go`) resolves `.gitlab-ci.yml` statically: anchors, local
+  includes, `default:`, `extends:`, `!reference` and child pipelines the
+  parent waits for. `gitlab_rules.go` evaluates `workflow:rules`,
+  `rules:` and `only`/`except` over a closed list of conditions. The
+  model's `Run` is a lookup for both providers. C-01, C-02, C-04, C-05
+  and D-03 each have one implementation (`checks_ci.go`) that reads only
+  the model, and no C check compares the provider. The words of a
+  finding that differ by provider ("pull requests" or "merge request
+  pipelines", the trigger hint, some messages and fixes) come from the
+  provider's wording (`ci_wording.go`), which the reader sets, so each
+  provider keeps its text. C-03 reads the GitHub workflows (the model's
+  `Workflows`), which only the GitHub reader fills; the registry makes
+  it not applicable on GitLab CI. A new provider needs a reader and a
+  wording; those five rules need no change. Both readers live in
+  `internal/contract` and add no import: they use `gopkg.in/yaml.v3`,
+  the package's shell parser and `internal/guardrule`, which the package
+  already imported, so the dependency direction above is unchanged. The
+  report model carries the provider read, which the CLI prints as
+  `CI provider read:` and `ci_provider`.
 
 ### The reference guard
 
