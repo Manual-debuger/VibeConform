@@ -89,8 +89,12 @@ func TestGuardProbeExceptionReadingByContract(t *testing.T) {
 	t.Run("an exception for another simple command of a compound case does not count under 2.0.0", func(t *testing.T) {
 		t.Parallel()
 		rep := audit(t, guardFixture(t, withContract(t, compound, contract.Contract2)), []string{"A-02"}, bin)
+		// The fix names the simple command the rule refuses, which the
+		// exception must prefix, not the generic "or list an exception".
 		assertPart(t, rep, "A-02", contract.Probe, contract.ResultFail,
-			`corpus case "rm -rf at end of command" (Bash "cd /tmp && rm -rf") should be refused (guard rule rm-rf)`)
+			`corpus case "rm -rf at end of command" (Bash "cd /tmp && rm -rf") should be refused (guard rule rm-rf)`,
+			`Fix: make the guard refuse it (exit 2), or list an exception for rm-rf whose match prefixes "rm -rf", `+
+				`the simple command the rule refuses; the exception rm-rf "cd /tmp" in .claude/hooks/policy.json prefixes another one`)
 		if got := casesNamed(t, rep); !slices.Equal(got, []string{"rm -rf at end of command"}) {
 			t.Errorf("A-02 names %q, want only rm -rf at end of command", got)
 		}
@@ -114,8 +118,11 @@ func TestGuardProbeExceptionReadingByContract(t *testing.T) {
 	t.Run("no exception counts for a fixed case under 2.0.0", func(t *testing.T) {
 		t.Parallel()
 		rep := audit(t, guardFixture(t, withContract(t, fixed, contract.Contract2)), []string{"A-02"}, bin)
+		// No exception can lift a fixed case, so the fix offers none.
 		assertPart(t, rep, "A-02", contract.Probe, contract.ResultFail,
-			`corpus case "A-08 (#106): Write the marker, no unlock" (Write ".git/vibe-unlock") should be refused (guard rule guardrail-settings)`)
+			`corpus case "A-08 (#106): Write the marker, no unlock" (Write ".git/vibe-unlock") should be refused (guard rule guardrail-settings)`,
+			`Fix: make the guard refuse it (exit 2); no exception counts for this case, which is fixed: `+
+				`the self-unlock commands and the edits of the unlock marker`)
 		if got := casesNamed(t, rep); !slices.Equal(got, markerCases) {
 			t.Errorf("A-02 names %q, want %q", got, markerCases)
 		}

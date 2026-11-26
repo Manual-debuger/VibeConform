@@ -21,8 +21,8 @@ import (
 // makes the audit fail a repository whose guard honours a valid
 // exception. Under 2.0.0 the two readings are equal (spec 0072, "The
 // audit's reading under 2.0.0"): the audit counts an exception for a case
-// (GuardCase.ExceptionMatches) exactly when vibe-guard lifts the case by
-// it, except on the cases readingDifferences lists.
+// (GuardCase.ExceptionMatchesRefused) exactly when vibe-guard lifts the
+// case by it, except on the cases readingDifferences lists.
 
 // readingDifferences are the deny cases on which vibe-guard does not lift
 // the case by an exception that the audit's 2.0.0 reading counts, and
@@ -68,7 +68,7 @@ type readingsTally struct {
 // A failure under 1.x is a lift the audit does not accept. The fix
 // belongs in Exception.Matches, a contract PATCH under spec 0051. A
 // failure under 2.0.0 is a difference between the readings: the corpus's
-// fixed or refuses is wrong, or GuardCase.ExceptionMatches is.
+// fixed or refuses is wrong, or GuardCase.ExceptionMatchesRefused is.
 func TestTwoReadingsOfAnException(t *testing.T) {
 	var tally readingsTally
 	t.Run("corpus", func(t *testing.T) {
@@ -145,7 +145,7 @@ func compareReadings(t *testing.T, c contract.GuardCase, e gr.Exception, root, s
 			"(Exception.Matches) does not accept; widen Exception.Matches (spec 0070, \"The two readings of an exception\")",
 			e.Rule, e.Match)
 	}
-	counts := c.ExceptionMatches(e, root, contract.Contract2)
+	counts := c.ExceptionMatchesRefused(e, root)
 	if d, listed := readingDifferences[c.Name]; listed && counts && !lifted {
 		if refusedBy := "vibe-guard: refused by rule " + d.rule + ":"; !strings.HasPrefix(stderr, refusedBy) {
 			t.Errorf("exception {rule %q, match %q}: a listed difference (%s), but the guard's refusal is %q, not by rule %s",
@@ -156,7 +156,7 @@ func compareReadings(t *testing.T, c contract.GuardCase, e gr.Exception, root, s
 	}
 	if counts != lifted {
 		t.Errorf("vibe-guard lifts the case by exception {rule %q, match %q}: %v; the audit's 2.0.0 reading "+
-			"(GuardCase.ExceptionMatches) counts it: %v; they must agree (spec 0072, \"The audit's reading under 2.0.0\")",
+			"(GuardCase.ExceptionMatchesRefused) counts it: %v; they must agree (spec 0072, \"The audit's reading under 2.0.0\")",
 			e.Rule, e.Match, lifted, counts)
 	}
 }

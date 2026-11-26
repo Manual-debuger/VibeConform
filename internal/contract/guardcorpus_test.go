@@ -46,52 +46,22 @@ func TestGuardCorpusIsValid(t *testing.T) {
 // every deny case of a command that decomposes into more than one simple
 // command names in refuses the simple commands its rule refuses, each
 // written as one of the case's simple commands; a case of one simple
-// command, and an edit, has no refuses.
+// command, and an edit, has no refuses. The corpus is checked so when it
+// loads (TestParseGuardCorpusRejects); this test checks that the
+// embedded corpus loads and has such cases.
 func TestGuardCorpusNamesTheRefusedCommands(t *testing.T) {
 	compound := 0
 	for _, c := range GuardCorpus() {
-		tgt := c.Target()
-		if c.Want != WantDeny || !guardrule.IsCommandTool(tgt.Tool) {
-			if len(c.Refuses) > 0 {
-				t.Errorf("%s: refuses %q on an allow case or an edit", c.Name, c.Refuses)
-			}
-			continue
+		if err := checkRefuses(c); err != nil {
+			t.Errorf("%s: %v", c.Name, err)
 		}
-		simple := simpleCommands(t, tgt)
-		if len(simple) == 1 {
-			if len(c.Refuses) > 0 {
-				t.Errorf("%s: refuses %q on a case of one simple command", c.Name, c.Refuses)
-			}
-			continue
-		}
-		compound++
-		if len(c.Refuses) == 0 {
-			t.Errorf("%s: a compound case %q has no refuses", c.Name, simple)
-		}
-		for _, r := range c.Refuses {
-			if !slices.Contains(simple, r) {
-				t.Errorf("%s: refuses %q, which is not one of its simple commands %q", c.Name, r, simple)
-			}
+		if len(c.Refuses) > 0 {
+			compound++
 		}
 	}
 	if compound == 0 {
 		t.Error("the corpus has no compound deny case")
 	}
-}
-
-// simpleCommands are the simple commands of a command target, by the
-// guardrule decomposition, each as its words.
-func simpleCommands(t *testing.T, tgt guardrule.Target) []string {
-	t.Helper()
-	cmds, err := guardrule.Commands(guardrule.ShellFor(tgt.Tool), tgt.Command)
-	if err != nil {
-		t.Fatalf("%q: %v", tgt.Command, err)
-	}
-	simple := make([]string, len(cmds))
-	for i, cmd := range cmds {
-		simple[i] = cmd.String()
-	}
-	return simple
 }
 
 // The counts spec 0053 records for the corpus are the corpus's counts.

@@ -61,17 +61,28 @@ func ParseTarget(tool string, input json.RawMessage) (Target, error) {
 // Matches reports whether the exception matches the target: for a path
 // rule, its glob matches the path made relative to root (RelPath); for a
 // command rule, its words are a prefix of the words of some simple
-// command of the target's command (MatchesCommand). With refused, only
-// the simple commands whose words (Command.String) are one of refused
-// count: the simple commands the rule refused, which is how a guard
-// reads an exception (spec 0072, "The audit's reading under 2.0.0").
-// Without, every simple command counts. A command that does not parse
-// matches no exception. refused does not change a path rule's match.
+// command of the target's command (MatchesCommand). A command that does
+// not parse matches no exception.
 //
-// This is the reading the audit's A-02 needs: contract 1.x passes no
-// refused, 2.0.0 the case's. A guard, which knows the simple command a
-// rule refused, calls MatchesCommand on that command.
-func (e Exception) Matches(t Target, root string, refused ...string) bool {
+// This is the reading the audit's A-02 needs under contract 1.x. A
+// guard, which knows the simple command a rule refused, calls
+// MatchesCommand on that command.
+func (e Exception) Matches(t Target, root string) bool {
+	return e.matches(t, root, func(Command) bool { return true })
+}
+
+// MatchesRefused is Matches with only the simple commands a rule refused
+// counted, each given as its words (Command.String): how a guard reads an
+// exception, and the audit's reading under contract 2.0.0 (spec 0072,
+// "The audit's reading under 2.0.0"). With no refused, every simple
+// command counts, as for a command that is one simple command. refused
+// does not change a path rule's match.
+func (e Exception) MatchesRefused(t Target, root string, refused []string) bool {
+	return e.matches(t, root, func(c Command) bool { return len(refused) == 0 || slices.Contains(refused, c.String()) })
+}
+
+// matches is Matches with only the simple commands that counted accepts.
+func (e Exception) matches(t Target, root string, counted func(Command) bool) bool {
 	if IsPathRule(e.Rule) {
 		return t.Path != "" && IsEditTool(t.Tool) && e.MatchesPath(t.Path, root)
 	}
@@ -83,15 +94,7 @@ func (e Exception) Matches(t Target, root string, refused ...string) bool {
 	if err != nil {
 		return false
 	}
-	for _, c := range cmds {
-		if len(refused) > 0 && !slices.Contains(refused, c.String()) {
-			continue
-		}
-		if e.MatchesCommand(c) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(cmds, func(c Command) bool { return counted(c) && e.MatchesCommand(c) })
 }
 
 // MatchesPath reports whether the exception's glob matches p, made

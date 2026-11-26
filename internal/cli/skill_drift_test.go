@@ -172,10 +172,10 @@ func TestSkillDriftFixtures(t *testing.T) {
 			return replaceIn(t, "reference/agents/settings.json", "vibe-guard relock 2>/dev/null; ", "")
 		}, "Stop"},
 		{"reference vibe.yaml declares an older contract", func(t *testing.T) func(fstest.MapFS) {
-			return replaceIn(t, "reference/vibe-yaml/monorepo.yaml", "contract: "+contract.Initial, "contract: 1.0.0")
+			return replaceIn(t, "reference/vibe-yaml/monorepo.yaml", "contract: "+contract.Latest, "contract: 1.0.0")
 		}, "reference/vibe-yaml/monorepo.yaml"},
 		{"SKILL.md names an older contract", func(t *testing.T) func(fstest.MapFS) {
-			return replaceIn(t, "SKILL.md", "under contract "+contract.Initial, "under contract 1.0.0")
+			return replaceIn(t, "SKILL.md", "under contract "+contract.Latest, "under contract 1.0.0")
 		}, "SKILL.md"},
 		{"a reference lint config checks the skill's directories", func(t *testing.T) func(fstest.MapFS) {
 			return replaceIn(t, "reference/lint/python/ruff.toml", `, ".agents/skills/vibeconform-setup"`, "")

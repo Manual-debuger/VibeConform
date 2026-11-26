@@ -72,9 +72,11 @@ func byPathHook(cmd string) contracttest.Edit {
 	return contracttest.WithFile(".husky/pre-commit", cmd+"\n")
 }
 
-// The calls of vibe by path that 2.0.0 counts. C:\tools\vibe.exe is
-// single-quoted: POSIX quote removal drops an unquoted backslash.
-var vibeByPath = []string{`"$dir/vibe" verify`, `./bin/vibe verify`, `'C:\tools\vibe.exe' verify`, `${RUNNER_TEMP}/bin/vibe verify`}
+// The calls of vibe by path that 2.0.0 counts. The last path element is
+// read from the word as written, so an unquoted backslash separates
+// elements too, although POSIX quote removal drops it.
+var vibeByPath = []string{`"$dir/vibe" verify`, `./bin/vibe verify`, `'C:\tools\vibe.exe' verify`, `C:\tools\vibe.exe verify`,
+	`${RUNNER_TEMP}/bin/vibe verify`}
 
 // Words that are not a call of vibe under either contract.
 var notVibe = []string{`"$dir/vibe-guard" hook`, `"$bin" verify`, `./bin/VIBE.EXE verify`, `"$dir/vibe$suffix" verify`, `./vibe/run verify`}
@@ -99,6 +101,10 @@ func TestRuleR01VibeByPath(t *testing.T) {
 	}
 	cases = append(cases,
 		byPathCase{name: "vibe by name", edits: []contracttest.Edit{byPathStep("vibe verify")}, v1: contract.ResultFail, v2: contract.ResultFail},
+		// Quote removal makes vi\be the word vibe: a call by name, whose
+		// backslash does not separate path elements.
+		byPathCase{name: "vibe by name with an escaped letter", edits: []contracttest.Edit{byPathStep(`vi\be verify`)},
+			v1: contract.ResultFail, v2: contract.ResultFail},
 		// vibe --version by path tests an installed binary too (spec 0055).
 		byPathCase{name: "vibe --version by path in a job that calls no entrypoint",
 			edits: []contracttest.Edit{byPathStep(`"$dir/vibe" --version`)}, v1: contract.ResultPass, v2: contract.ResultPass},
@@ -122,6 +128,8 @@ func TestRuleC04VibeByPath(t *testing.T) {
           "$dir/vibe" audit`), v1: contract.ResultFail, v2: contract.ResultPass},
 		{name: "vibe.exe audit by path", edits: audit(`|
           'C:\tools\vibe.exe' audit --json`), v1: contract.ResultFail, v2: contract.ResultPass},
+		{name: "vibe.exe audit by an unquoted path", edits: audit(`|
+          C:\tools\vibe.exe audit --json`), v1: contract.ResultFail, v2: contract.ResultPass},
 		{name: "vibe audit by path beside verify", edits: audit(`./bin/vibe audit`, "task verify"),
 			v1: contract.ResultFail, v2: contract.ResultFail, findings2: []string{"job audit", "`task verify`"}},
 		{name: "vibe-guard audit by path", edits: audit(`./bin/vibe-guard audit`), v1: contract.ResultFail, v2: contract.ResultFail},

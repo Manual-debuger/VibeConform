@@ -194,8 +194,8 @@ func TestExceptionMatchesRefused(t *testing.T) {
 			guardrule.Target{Tool: "Write", Path: "/repo/.env"}, []string{"x"}, true},
 	}
 	for _, c := range cases {
-		if got := c.ex.Matches(c.t, root, c.refused...); got != c.want {
-			t.Errorf("%s: Matches = %v", c.name, got)
+		if got := c.ex.MatchesRefused(c.t, root, c.refused); got != c.want {
+			t.Errorf("%s: MatchesRefused = %v", c.name, got)
 		}
 	}
 }

@@ -14,13 +14,10 @@ const (
 	Contract1 = "1.2.0"
 	// Contract2 is the 2.x contract: a declared 2.0.z is audited as it.
 	Contract2 = "2.0.0"
-	// Latest is the newest contract this vibe implements, which
-	// vibe --version shows.
+	// Latest is the newest contract this vibe implements. vibe --version
+	// shows it, and a new configuration declares it: vibe init writes it,
+	// and the setup skill names it (spec 0072).
 	Latest = Contract2
-	// Initial is the contract a new configuration declares: vibe init
-	// writes it, and the setup skill names it. A new repository starts on
-	// the latest contract (spec 0072).
-	Initial = Contract2
 )
 
 // implemented lists the contracts this vibe implements, oldest first.

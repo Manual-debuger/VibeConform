@@ -93,9 +93,9 @@ func checkA04(env *Env) PartResult {
 		"(policy.local.json keeps version 1)"
 	switch raw, ok := p.top["version"]; {
 	case !ok:
-		fail("has no version; contract "+env.auditedContract()+" needs version 2", versionFix)
+		fail("has no version; contract "+env.auditedVersion()+" needs version 2", versionFix)
 	case strings.TrimSpace(string(raw)) != "2":
-		fail(fmt.Sprintf("has version %s; contract %s needs version 2", strings.TrimSpace(string(raw)), env.auditedContract()), versionFix)
+		fail(fmt.Sprintf("has version %s; contract %s needs version 2", strings.TrimSpace(string(raw)), env.auditedVersion()), versionFix)
 	}
 
 	list, err := p.exceptions()
@@ -216,26 +216,52 @@ func guardListings(env *Env) ([]GuardException, []LocalAdjustment) {
 	return guardExceptions(env), localAdjustments(env)
 }
 
+// policyEntry is one entry of policy.json's exceptions: as written, and
+// its fields when it is a JSON object.
+type policyEntry struct {
+	GuardException
+	raw    json.RawMessage
+	object bool
+}
+
+// policyEntries decodes policy.json data: its top-level object and the
+// entries of its exceptions, in file order.
+func policyEntries(data []byte) (map[string]json.RawMessage, []policyEntry, error) {
+	top, err := jsonObject(data)
+	if err != nil {
+		return nil, nil, err
+	}
+	list, err := (&guardPolicy{top: top}).exceptions()
+	if err != nil {
+		return nil, nil, err
+	}
+	entries := make([]policyEntry, len(list))
+	for i, raw := range list {
+		entries[i].raw = raw
+		var ex map[string]any
+		if json.Unmarshal(raw, &ex) == nil && ex != nil {
+			entries[i].object = true
+			entries[i].GuardException = GuardException{
+				Rule: stringField(ex, "rule"), Match: stringField(ex, "match"), Reason: stringField(ex, "reason")}
+		}
+	}
+	return top, entries, nil
+}
+
 func guardExceptions(env *Env) []GuardException {
 	data, err := env.readFile(guardPolicyFile)
 	if err != nil {
 		return nil
 	}
-	top, err := jsonObject(data)
-	if err != nil {
-		return nil
-	}
-	list, err := (&guardPolicy{top: top}).exceptions()
+	_, entries, err := policyEntries(data)
 	if err != nil {
 		return nil
 	}
 	var out []GuardException
-	for _, raw := range list {
-		var ex map[string]any
-		if json.Unmarshal(raw, &ex) != nil || ex == nil {
-			continue
+	for _, en := range entries {
+		if en.object {
+			out = append(out, en.GuardException)
 		}
-		out = append(out, GuardException{Rule: stringField(ex, "rule"), Match: stringField(ex, "match"), Reason: stringField(ex, "reason")})
 	}
 	return out
 }

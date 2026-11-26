@@ -905,7 +905,7 @@ var contractVersionPattern = regexp.MustCompile(`\bcontract:? ([0-9]+\.[0-9]+\.[
 
 // checkContractVersion: SKILL.md, reference/rules.md and the reference
 // vibe.yaml files name the contract version a new configuration
-// declares (contract.Initial), and no other. migrate.md and upgrade.md
+// declares (contract.Latest), and no other. migrate.md and upgrade.md
 // may name other versions.
 func (c *skillChecker) checkContractVersion() {
 	for _, f := range c.files {
@@ -916,11 +916,11 @@ func (c *skillChecker) checkContractVersion() {
 		// A vibe.yaml with no contract: is not version 2, which
 		// checkReferenceConfigs reports.
 		if len(matches) == 0 && f.path == "SKILL.md" {
-			c.problem(f.path, "names no contract version; want %s", contract.Initial)
+			c.problem(f.path, "names no contract version; want %s", contract.Latest)
 		}
 		for _, m := range matches {
-			if m[1] != contract.Initial {
-				c.problem(f.path, "names contract %s; vibe implements %s", m[1], contract.Initial)
+			if m[1] != contract.Latest {
+				c.problem(f.path, "names contract %s; vibe implements %s", m[1], contract.Latest)
 			}
 		}
 	}

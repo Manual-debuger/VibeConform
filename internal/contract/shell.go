@@ -26,16 +26,24 @@ type shellWord struct {
 	// Literal is false when the word holds an expansion. Such a word
 	// equals no other word: its value is only known when it runs.
 	Literal bool
+	// Written is the word as written, with its quotes removed but every
+	// backslash kept and each expansion replaced by expansionMark. It is
+	// "" for a word that was not parsed from shell source.
+	Written string
 }
 
-// Tail is the word's literal text after its last expansion: the whole
-// word when it is literal, and "" when it ends in an expansion. Only the
-// tail is known before the word runs (spec 0072, "R-01 and C-04").
-func (w shellWord) Tail() string {
-	if w.Literal {
-		return w.Text
+// LastElement is the word's last path element, read from the word as
+// written: its text after the last / or \, an unquoted backslash too,
+// although quote removal drops that one. known is false when the element
+// holds an expansion: it is then only known when the word runs (spec
+// 0072, "R-01 and C-04").
+func (w shellWord) LastElement() (elem string, known bool) {
+	src := w.Written
+	if src == "" {
+		src = w.Text
 	}
-	return w.Text[strings.LastIndex(w.Text, expansionMark)+len(expansionMark):]
+	elem = src[strings.LastIndexAny(src, `/\`)+1:]
+	return elem, !strings.Contains(elem, expansionMark)
 }
 
 // expansionMark stands for an expansion inside shellWord.Text. It is the
@@ -246,34 +254,39 @@ func commandOf(call *syntax.CallExpr) shellCommand {
 // wordOf performs quote removal on a word. Any part other than literal
 // text and quotes is an expansion.
 func wordOf(w *syntax.Word) shellWord {
-	var b strings.Builder
+	var b, written strings.Builder
 	literal := true
+	expansion := func() {
+		literal = false
+		b.WriteString(expansionMark)
+		written.WriteString(expansionMark)
+	}
 	for _, part := range w.Parts {
 		switch p := part.(type) {
 		case *syntax.Lit:
 			b.WriteString(guardrule.Unescape(p.Value, false))
+			written.WriteString(p.Value)
 		case *syntax.SglQuoted:
 			if p.Dollar {
-				literal = false
-				b.WriteString(expansionMark)
+				expansion()
 				continue
 			}
 			b.WriteString(p.Value)
+			written.WriteString(p.Value)
 		case *syntax.DblQuoted:
 			for _, q := range p.Parts {
 				if l, ok := q.(*syntax.Lit); ok {
 					b.WriteString(guardrule.Unescape(l.Value, true))
+					written.WriteString(l.Value)
 					continue
 				}
-				literal = false
-				b.WriteString(expansionMark)
+				expansion()
 			}
 		default:
-			literal = false
-			b.WriteString(expansionMark)
+			expansion()
 		}
 	}
-	return shellWord{Text: b.String(), Literal: literal}
+	return shellWord{Text: b.String(), Literal: literal, Written: written.String()}
 }
 
 // githubExpression matches a GitHub Actions expression, ${{ … }}.

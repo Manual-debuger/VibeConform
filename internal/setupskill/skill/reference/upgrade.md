@@ -120,6 +120,7 @@ move.
 - **R-01, `vibe` by path.** A command calls `vibe` when the last path
   element of its first word is `vibe` or `vibe.exe`, as in
   `"$dir/vibe" verify`, `./bin/vibe verify` or
-  `C:\tools\vibe.exe verify`. Replace each such call with the entrypoint
+  `C:\tools\vibe.exe verify`, quoted or not: `/` and `\` both separate
+  path elements. Replace each such call with the entrypoint
   command it stands for, as for a call by name. The audit job of C-04
   and `vibe --version` in a job that calls no entrypoint stay exempt.

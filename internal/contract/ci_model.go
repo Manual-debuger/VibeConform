@@ -314,7 +314,7 @@ func (e *Env) readCI() *ciState {
 		return &ciState{res: undecided(Finding{
 			File: ws.OtherCI[0],
 			Message: fmt.Sprintf("contract %s reads GitHub Actions and GitLab CI only, and this repository's CI is %s",
-				e.auditedContract(), joinWords(ws.OtherCI, " and ")),
+				e.auditedVersion(), joinWords(ws.OtherCI, " and ")),
 			Fix: "run CI in GitHub Actions under .github/workflows/ or in GitLab CI (.gitlab-ci.yml), or wait for a vibe that reads this provider",
 		})}
 	}

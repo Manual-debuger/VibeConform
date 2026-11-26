@@ -24,7 +24,7 @@ func newInitCmd(seams cliSeams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init [--skill]",
 		Short: "Write a vibe.yaml version 2, or the setup skill",
-		Long: "vibe init writes a vibe.yaml version 2 at the repository root: contract " + contract.Initial + ",\n" +
+		Long: "vibe init writes a vibe.yaml version 2 at the repository root: contract " + contract.Latest + ",\n" +
 			"platforms linux and windows, agent claude, the components it finds in the\n" +
 			"tracked files (" + contract.ManifestPhrase() + "),\n" +
 			"and the four required entrypoints as comments to fill in. Until they\n" +
@@ -181,7 +181,7 @@ func renderConfig(components []contract.Component) []byte {
 	var b strings.Builder
 	b.WriteString("# vibe.yaml version 2, written by vibe init. vibe audit reads it and\n")
 	b.WriteString("# checks the repository against the VibeConform contract.\n")
-	fmt.Fprintf(&b, "contract: %s\n", contract.Initial)
+	fmt.Fprintf(&b, "contract: %s\n", contract.Latest)
 	b.WriteString("platforms: [linux, windows]\n")
 	b.WriteString("agents: [claude]\n")
 	if len(components) > 0 {

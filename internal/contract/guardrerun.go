@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/Manual-debuger/VibeConform/internal/guardrule"
@@ -34,36 +35,61 @@ type rerunSet struct {
 }
 
 // rerunWithoutExceptions reruns, by the index of runs, every deny case
-// that hooks ran and let through and that an exception matches under the
-// 2.0.0 reading. Cases that remove the same exceptions run together, with
-// feedCases's grouping; the sets run one after another, because
-// policy.json is one file. Afterwards the original policy.json is back in
-// the probe copy, also on an error; restoreErr says when it could not be
-// written back.
-func rerunWithoutExceptions(s *probeSession, hooks []settingsHook, runs []caseRun, exceptions []guardrule.Exception,
-	rule string) (reruns map[int]*caseRerun, restoreErr error) {
-	sets := rerunSets(s, runs, exceptions)
+// that the hooks ran and let through and that an exception matches.
+// Cases that remove the same exceptions run together, with feedCases's
+// grouping; the sets run one after another, because policy.json is one
+// file. Afterwards the original policy.json is back in the probe copy,
+// also on an error; when it cannot be written back, both verdicts are
+// undecided.
+func (t *corpusTally) rerunWithoutExceptions(runs []caseRun) map[int]*caseRerun {
+	sets := t.rerunSets(runs)
 	if len(sets) == 0 {
-		return nil, nil
+		return nil
 	}
-	reruns = map[int]*caseRerun{}
+	reruns := map[int]*caseRerun{}
 	fail := func(set *rerunSet, why string) {
 		for _, i := range set.idx {
 			reruns[i] = &caseRerun{removed: set.removed, err: why}
 		}
 	}
-	p := filepath.Join(s.Root(), filepath.FromSlash(guardPolicyFile))
+	run := func(set *rerunSet) {
+		cases := make([]GuardCase, len(set.idx))
+		for j, i := range set.idx {
+			cases[j] = runs[i].c
+		}
+		without := "without " + exceptionsText(set.removed)
+		out, err := feedCases(t.s, t.hooks, cases, "the PreToolUse hooks during "+t.rule+" "+without,
+			func(c GuardCase) string { return t.rule + " with " + describeGuardCase(c) + " " + without }, runOpts{})
+		if err != nil {
+			fail(set, "cannot write the unlock marker: "+err.Error())
+			return
+		}
+		for j, i := range set.idx {
+			reruns[i] = &caseRerun{removed: set.removed, run: out[j]}
+		}
+	}
+	p := filepath.Join(t.s.Root(), filepath.FromSlash(guardPolicyFile))
+	if err := rewritePolicyPerSet(p, sets, run, fail); err != nil {
+		t.undecidedCase(Finding{Message: "cannot decide: cannot restore " + guardPolicyFile + " in the probe copy: " + err.Error()})
+	}
+	return reruns
+}
+
+// rewritePolicyPerSet writes, for each set in turn, the policy.json at p
+// without the set's exceptions, and calls run while it is written. A set
+// whose policy cannot be read or written is not run: fail gets why.
+// Afterwards the original file is back, also when a run fails or removes
+// it; restoreErr says when it could not be written back.
+func rewritePolicyPerSet(p string, sets []*rerunSet, run func(*rerunSet), fail func(set *rerunSet, why string)) (restoreErr error) {
 	original, err := os.ReadFile(p) // #nosec G304 -- a path inside the probe copy
 	if err != nil {
 		for _, set := range sets {
 			fail(set, "cannot read "+guardPolicyFile+" in the probe copy: "+err.Error())
 		}
-		return reruns, nil
+		return nil
 	}
 	defer func() {
-		if err := os.WriteFile(p, original, 0o600); err != nil { // #nosec G703 -- a path inside the probe copy
-			restoreErr = err
-		}
+		restoreErr = os.WriteFile(p, original, 0o600) // #nosec G703 -- a path inside the probe copy
 	}()
 	for _, set := range sets {
 		policy, err := withoutExceptions(original, set.removed)
@@ -74,34 +100,21 @@ func rerunWithoutExceptions(s *probeSession, hooks []settingsHook, runs []caseRu
 			fail(set, "cannot remove the exception from "+guardPolicyFile+" in the probe copy: "+err.Error())
 			continue
 		}
-		cases := make([]GuardCase, len(set.idx))
-		for j, i := range set.idx {
-			cases[j] = runs[i].c
-		}
-		without := "without " + exceptionsText(set.removed)
-		out, err := feedCases(s, hooks, cases, "the PreToolUse hooks during "+rule+" "+without,
-			func(c GuardCase) string { return rule + " with " + describeGuardCase(c) + " " + without }, runOpts{})
-		if err != nil {
-			fail(set, "cannot write the unlock marker: "+err.Error())
-			continue
-		}
-		for j, i := range set.idx {
-			reruns[i] = &caseRerun{removed: set.removed, run: out[j]}
-		}
+		run(set)
 	}
-	return reruns, nil
+	return nil
 }
 
 // rerunSets groups the deny cases to rerun by the exceptions they
 // remove, in the order first seen.
-func rerunSets(s *probeSession, runs []caseRun, exceptions []guardrule.Exception) []*rerunSet {
+func (t *corpusTally) rerunSets(runs []caseRun) []*rerunSet {
 	var sets []*rerunSet
 	byKey := map[string]*rerunSet{}
 	for i, run := range runs {
 		if !run.letThrough() {
 			continue
 		}
-		ex := exceptionsFor(exceptions, run.c, s, Contract2)
+		ex := t.exceptionsFor(run.c)
 		if len(ex) == 0 {
 			continue
 		}
@@ -127,21 +140,18 @@ func (r caseRun) letThrough() bool {
 // exceptions that name a removed exception's rule and match. Every other
 // entry stays.
 func withoutExceptions(data []byte, removed []guardrule.Exception) ([]byte, error) {
-	top, err := jsonObject(data)
-	if err != nil {
-		return nil, err
-	}
-	list, err := (&guardPolicy{top: top}).exceptions()
+	top, entries, err := policyEntries(data)
 	if err != nil {
 		return nil, err
 	}
 	kept := []json.RawMessage{}
-	for _, raw := range list {
-		var ex map[string]any
-		if json.Unmarshal(raw, &ex) == nil && ex != nil && removes(removed, stringField(ex, "rule"), stringField(ex, "match")) {
+	for _, en := range entries {
+		if en.object && slices.ContainsFunc(removed, func(ex guardrule.Exception) bool {
+			return ex.Rule == en.Rule && ex.Match == en.Match
+		}) {
 			continue
 		}
-		kept = append(kept, raw)
+		kept = append(kept, en.raw)
 	}
 	if top["exceptions"], err = json.Marshal(kept); err != nil {
 		return nil, err
@@ -151,15 +161,6 @@ func withoutExceptions(data []byte, removed []guardrule.Exception) ([]byte, erro
 		return nil, err
 	}
 	return append(out, '\n'), nil
-}
-
-func removes(removed []guardrule.Exception, rule, match string) bool {
-	for _, ex := range removed {
-		if ex.Rule == rule && ex.Match == match {
-			return true
-		}
-	}
-	return false
 }
 
 // exceptionsText names exceptions for a finding: `the exception rm-rf
@@ -173,25 +174,25 @@ func exceptionsText(exceptions []guardrule.Exception) string {
 }
 
 // rerunCase judges a deny case an exception let through, under 2.0.0, by
-// its rerun without the exceptions that match it.
-func (t *corpusTally) rerunCase(run caseRun, ex []guardrule.Exception, rr *caseRerun) {
+// rerun, its run without the exceptions that match it.
+func (t *corpusTally) rerunCase(run caseRun, ex []guardrule.Exception, rerun *caseRerun) {
 	c := run.c
-	if rr == nil {
-		rr = &caseRerun{removed: ex, err: "the case did not run again"}
+	if rerun == nil {
+		rerun = &caseRerun{removed: ex, err: "the case did not run again"}
 	}
-	without := run.what() + " without " + exceptionsText(rr.removed)
+	without := run.what() + " without " + exceptionsText(rerun.removed)
 	switch {
-	case rr.err != "":
-		t.undecidedCase(Finding{File: claudeSettingsFile, Message: "cannot decide: " + without + ": " + rr.err})
-	case rr.run.refused():
+	case rerun.err != "":
+		t.undecidedCase(Finding{File: claudeSettingsFile, Message: "cannot decide: " + without + ": " + rerun.err})
+	case rerun.run.refused():
 		t.uses = append(t.uses, GuardExceptionUse{Rule: ex[0].Rule, Match: ex[0].Match, Case: c.Name})
-	case rr.run.undecided() != nil:
+	case rerun.run.undecided() != nil:
 		t.undecidedCase(Finding{File: claudeSettingsFile,
-			Message: "cannot decide: " + without + ": " + rr.run.undecided().describe()})
+			Message: "cannot decide: " + without + ": " + rerun.run.undecided().describe()})
 	default:
 		t.failCase(Finding{File: claudeSettingsFile,
 			Message: fmt.Sprintf("%s should be refused (guard rule %s) without %s; %s",
-				run.what(), c.Rule, exceptionsText(rr.removed), rr.run.exits()),
+				run.what(), c.Rule, exceptionsText(rerun.removed), rerun.run.exits()),
 			Fix: rerunFix})
 	}
 }

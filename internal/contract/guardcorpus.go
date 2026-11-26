@@ -82,21 +82,20 @@ func (c GuardCase) Target() guardrule.Target {
 	return t
 }
 
-// ExceptionMatches reports whether ex matches the case under the reading
-// of the audited contract, Contract1 or Contract2, with root as the
-// project root. Under Contract1 a command exception may prefix any simple
-// command of the case. Under Contract2 it must prefix one the case's rule
-// refuses (Refuses, or the case's one simple command), and no exception
-// matches a fixed case (spec 0072, "The audit's reading under 2.0.0").
-// The exception's rule must be the case's in both.
-func (c GuardCase) ExceptionMatches(ex guardrule.Exception, root, audited string) bool {
-	if ex.Rule != c.Rule {
-		return false
-	}
-	if audited == Contract1 {
-		return ex.Matches(c.Target(), root)
-	}
-	return !c.Fixed && ex.Matches(c.Target(), root, c.Refuses...)
+// ExceptionMatches reports whether ex matches the case under contract
+// 1.x, with root as the project root: its rule is the case's, and a
+// command exception may prefix any simple command of the case.
+func (c GuardCase) ExceptionMatches(ex guardrule.Exception, root string) bool {
+	return ex.Rule == c.Rule && ex.Matches(c.Target(), root)
+}
+
+// ExceptionMatchesRefused reports whether ex matches the case under
+// contract 2.0.0, with root as the project root: its rule is the case's,
+// the case is not fixed, and a command exception prefixes a simple
+// command the case's rule refuses (Refuses, or the case's one simple
+// command) (spec 0072, "The audit's reading under 2.0.0").
+func (c GuardCase) ExceptionMatchesRefused(ex guardrule.Exception, root string) bool {
+	return ex.Rule == c.Rule && !c.Fixed && ex.MatchesRefused(c.Target(), root, c.Refuses)
 }
 
 var guardCorpus = sync.OnceValue(func() []GuardCase {
@@ -211,18 +210,14 @@ func checkRefuses(c GuardCase) error {
 		}
 		return nil
 	}
-	cmds, err := guardrule.Commands(guardrule.ShellFor(t.Tool), t.Command)
+	simple, err := simpleCommands(t)
 	if err != nil {
 		return err
 	}
-	simple := make([]string, len(cmds))
-	for i, cmd := range cmds {
-		simple[i] = cmd.String()
-	}
 	switch {
-	case len(cmds) > 1 && len(c.Refuses) == 0:
-		return fmt.Errorf("the command has %d simple commands %q; refuses must name those its rule refuses", len(cmds), simple)
-	case len(cmds) <= 1 && len(c.Refuses) > 0:
+	case len(simple) > 1 && len(c.Refuses) == 0:
+		return fmt.Errorf("the command has %d simple commands %q; refuses must name those its rule refuses", len(simple), simple)
+	case len(simple) <= 1 && len(c.Refuses) > 0:
 		return errors.New("the command is one simple command; refuses is only for a compound command")
 	}
 	for i, r := range c.Refuses {
@@ -234,4 +229,19 @@ func checkRefuses(c GuardCase) error {
 		}
 	}
 	return nil
+}
+
+// simpleCommands are the simple commands of a command target, by the
+// guard's decomposition (guardrule.Commands), each as its words
+// (guardrule.Command.String): what a case's refuses names.
+func simpleCommands(t guardrule.Target) ([]string, error) {
+	cmds, err := guardrule.Commands(guardrule.ShellFor(t.Tool), t.Command)
+	if err != nil {
+		return nil, err
+	}
+	simple := make([]string, len(cmds))
+	for i, cmd := range cmds {
+		simple[i] = cmd.String()
+	}
+	return simple, nil
 }

@@ -175,9 +175,10 @@ type configParser struct {
 	audited string
 }
 
-// rulesOf names the contract whose rules a waiver or require names: the
-// audited one, or the latest when the declared version is unusable.
-func (p *configParser) rulesOf() string {
+// rulesVersion is the contract version whose rules a waiver or require
+// names: the audited one, or the latest when the declared version is
+// unusable.
+func (p *configParser) rulesVersion() string {
 	if p.audited == "" {
 		return Latest
 	}
@@ -258,10 +259,10 @@ func (p *configParser) mapping(m *yaml.Node, prefix string, seen map[string]bool
 
 func (p *configParser) contract(v *yaml.Node) error {
 	if !isString(v) {
-		return p.fail("contract", "must be a contract version X.Y.Z, such as %s", Initial)
+		return p.fail("contract", "must be a contract version X.Y.Z, such as %s", Latest)
 	}
 	if _, _, ok := parseVersion(v.Value); !ok {
-		return p.fail("contract", "%q is not a contract version X.Y.Z, such as %s", v.Value, Initial)
+		return p.fail("contract", "%q is not a contract version X.Y.Z, such as %s", v.Value, Latest)
 	}
 	// Parse already refused an unsupported version.
 	p.cfg.Contract = Versions{Declared: v.Value, Audited: p.audited}
@@ -484,7 +485,7 @@ func (p *configParser) waivers(v *yaml.Node) error { //nolint:gocognit,gocyclo /
 func (p *configParser) waiverRule(at string, v *yaml.Node, w *Waiver) error {
 	r, ok := LookupRule(v.Value)
 	if !isString(v) || !ok {
-		return p.fail(at, "%s is not a rule of contract %s", describe(v), p.rulesOf())
+		return p.fail(at, "%s is not a rule of contract %s", describe(v), p.rulesVersion())
 	}
 	if r.Level != Should {
 		return p.fail(at, "%s is a %s rule; only SHOULD rules can be waived", r.ID, r.Level)
@@ -511,7 +512,7 @@ func (p *configParser) require(v *yaml.Node) error {
 		at := fmt.Sprintf("require[%d]", i)
 		r, ok := LookupRule(item.Value)
 		if !isString(item) || !ok {
-			return p.fail(at, "%s is not a rule of contract %s", describe(item), p.rulesOf())
+			return p.fail(at, "%s is not a rule of contract %s", describe(item), p.rulesVersion())
 		}
 		if r.Level != Should {
 			return p.fail(at, "%s is a %s rule; it is always required", r.ID, r.Level)
