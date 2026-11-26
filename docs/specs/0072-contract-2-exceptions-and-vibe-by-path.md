@@ -1,6 +1,6 @@
 # Spec 0072: Contract 2.0.0: an exception counts only when the guard needs it, and R-01 sees `vibe` by path
 
-Status: draft (2026-11-26). Issue #230, for #227 and #120 (Part B). A MAJOR
+Status: approved (2026-11-26). Issue #230, for #227 and #120 (Part B). A MAJOR
 contract release under spec 0051, "Versioning". #50 (Codex in the A
 rules) is not part of it: it waits for stable Codex hooks (ADR 0011)
 and becomes a later MAJOR.
