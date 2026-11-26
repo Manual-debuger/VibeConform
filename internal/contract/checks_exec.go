@@ -38,7 +38,7 @@ func mergeRuns(results ...PartResult) PartResult {
 
 // checkV03: with the format defect planted in each component, fmt-check
 // leaves only the planted file in git status, unchanged.
-func checkV03(env *Env, _ Needed) PartResult {
+func checkV03(env *Env) PartResult {
 	if f := needEntrypoint(env, EntrypointFmtCheck); f != nil {
 		return Fail(*f)
 	}
@@ -96,7 +96,7 @@ func v03Component(env *Env, s *probeSession, comp Component) PartResult {
 
 // checkA07Execution: every SessionStart hook that matches startup exits
 // 0 in the reset copy and leaves git status empty.
-func checkA07Execution(env *Env, _ Needed) PartResult {
+func checkA07Execution(env *Env) PartResult {
 	if !env.Repo.HasFile(claudeSettingsFile) {
 		// The static part fails for it.
 		return Pass()
@@ -143,8 +143,8 @@ func a07Hook(s *probeSession, command string, limit time.Duration) PartResult {
 // checkR01Execution: with vibe replaced by the shim, the baseline verify
 // passes and the A-02 deny cases are still refused. The findings list
 // every call of vibe the shim recorded in any run of the audit: setup's,
-// those of every other part (needed), and those of R-01's own runs.
-func checkR01Execution(env *Env, needed Needed) PartResult {
+// those of every earlier part, and those of R-01's own runs.
+func checkR01Execution(env *Env, earlier Earlier) PartResult {
 	if f := needEntrypoint(env, EntrypointVerify); f != nil {
 		return Fail(*f)
 	}
@@ -166,8 +166,8 @@ func checkR01Execution(env *Env, needed Needed) PartResult {
 		verify = Pass()
 	}
 
-	res := mergeRuns(verify, r01GuardHalf(env, needed))
-	for _, c := range append(needed.vibeCalls(), run.ShimCalls...) {
+	res := mergeRuns(verify, r01GuardHalf(env, earlier))
+	for _, c := range append(earlier.vibeCalls(), run.ShimCalls...) {
 		res.Findings = append(res.Findings, Finding{
 			File:    c.File,
 			Message: fmt.Sprintf("%s ran %q, and vibe was not available", c.Run, c.String()),
@@ -180,13 +180,13 @@ func checkR01Execution(env *Env, needed Needed) PartResult {
 // r01GuardHalf is R-01's second half: the A-02 deny cases are still
 // refused with the shim in place. A-02's probe (#103) runs every case
 // with the shim on PATH and returns its deny-case verdict; this half
-// reads it from R-01's need on A-02. Without Claude Code there is no
+// reads it from the earlier results. Without Claude Code there is no
 // guard to check.
-func r01GuardHalf(env *Env, needed Needed) PartResult {
+func r01GuardHalf(env *Env, earlier Earlier) PartResult {
 	if ok, _ := needsClaude(env.Config); !ok {
 		return Pass()
 	}
-	if g, ok := needed.guardDeny(); ok {
+	if g, ok := earlier.guardDeny(); ok {
 		if g.Result == ResultPass {
 			return Pass()
 		}
@@ -202,7 +202,7 @@ var d01CheckText = "per component, by the lockfile found. " + lockfileCheckText(
 
 // checkD01: each component's lockfiles match its manifest, and a
 // component with dependencies has a lockfile.
-func checkD01(env *Env, _ Needed) PartResult {
+func checkD01(env *Env) PartResult {
 	var results []PartResult
 	for _, comp := range env.Config.Components {
 		results = append(results, d01Component(env, comp))

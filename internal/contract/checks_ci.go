@@ -36,7 +36,7 @@ func ciRead(env *Env) (ci *CI, res PartResult, ok bool) {
 // (CI.Workflows), which only the GitHub reader fills: on GitLab CI the
 // rule is not applicable, which the registry decides before it runs
 // (notOnGitLab).
-func checkC03(env *Env, _ Needed) PartResult {
+func checkC03(env *Env) PartResult {
 	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
@@ -97,7 +97,7 @@ func scalarOr(n *yaml.Node, alt string) string {
 // checkC01: the jobs that run for merge (pull) requests, and the jobs
 // that run on pushes to the default branch, each call every verify
 // command. A skipped job that calls an uncalled command is explained.
-func checkC01(env *Env, _ Needed) PartResult {
+func checkC01(env *Env) PartResult {
 	verify, missing := env.Entrypoint(EntrypointVerify)
 	if missing != nil {
 		return Fail(*missing)
@@ -164,7 +164,7 @@ var pinnedRef = regexp.MustCompile(`@[0-9a-fA-F]{40}$`)
 // (pinned by digest), the includes the audit does not follow (a
 // template: include cannot be pinned) and the @latest words of every
 // script. Every job counts, whatever its triggers or rules.
-func checkC02(env *Env, _ Needed) PartResult {
+func checkC02(env *Env) PartResult {
 	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
@@ -262,7 +262,7 @@ func latestWords(jobs []*CIJob) []Finding {
 // checkC04: a job that runs for merge (pull) requests (reusable
 // workflows and child pipelines followed) has a simple command that
 // starts with the words vibe audit, and calls no verify command.
-func checkC04(env *Env, _ Needed) PartResult {
+func checkC04(env *Env) PartResult {
 	verify, missing := env.Entrypoint(EntrypointVerify)
 	if missing != nil {
 		return Fail(*missing)
@@ -335,7 +335,7 @@ func runsAuditCommand(cmds []Command) bool {
 // runner and by one that runs on a Windows runner, after matrix
 // expansion, among every job. The rule is not applicable without windows
 // in platforms; the registry decides that before it runs.
-func checkC05(env *Env, _ Needed) PartResult {
+func checkC05(env *Env) PartResult {
 	verify, missing := env.Entrypoint(EntrypointVerify)
 	if missing != nil {
 		return Fail(*missing)
@@ -425,7 +425,7 @@ var scanners = [][]string{
 // checkD03: some job's script (GitLab after_script included) runs a
 // recognized scanner, or the pipeline includes GitLab's
 // Dependency-Scanning template or dependency-scanning component.
-func checkD03(env *Env, _ Needed) PartResult {
+func checkD03(env *Env) PartResult {
 	ci, res, ok := ciRead(env)
 	if !ok {
 		return res
@@ -480,7 +480,7 @@ func includesDependencyScanning(ci *CI) bool {
 // entrypoint (spec 0055). On GitLab CI every job's before_script, script
 // and after_script are read. Without CI only the entrypoints and hook
 // commands are read; a CI file that does not parse fails it.
-func checkR01(env *Env, _ Needed) PartResult {
+func checkR01(env *Env) PartResult {
 	calls := entrypointVibeCalls(env)
 	hookCalls, res := hookVibeCalls(env)
 	calls = append(calls, hookCalls...)

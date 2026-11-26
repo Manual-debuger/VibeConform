@@ -265,7 +265,7 @@ func guardFix(env *Env, rule string) string {
 // also carries the exceptions' uses for the report and its deny-case
 // verdict for R-01, which is its whole verdict when it decided before it
 // fed a case.
-func checkA02(env *Env, _ Needed) PartResult {
+func checkA02(env *Env) PartResult {
 	all, deny, ok := feedCorpus(env, env.probe, "A-02", corpusFor(""))
 	if !ok {
 		deny = all
@@ -278,7 +278,7 @@ func checkA02(env *Env, _ Needed) PartResult {
 // every deny case is refused or let through by a policy.json exception,
 // and every allow case is allowed. The exceptions' uses join A-02's in
 // the report.
-func checkA09(env *Env, _ Needed) PartResult {
+func checkA09(env *Env) PartResult {
 	all, _, _ := feedCorpus(env, env.probe, ProbeA09, corpusFor(ProbeA09))
 	return all
 }
@@ -496,7 +496,7 @@ func systemPath(env []string) string {
 
 // checkA03: every deny case is refused in each situation of
 // a03Situations. Exceptions do not count.
-func checkA03(env *Env, _ Needed) PartResult {
+func checkA03(env *Env) PartResult {
 	s := env.probe
 	hooks, res, ok := preToolUseHooks(env)
 	if !ok {

@@ -142,7 +142,7 @@ func TestRuleR01Execution(t *testing.T) {
 	}
 	t.Parallel()
 	// Without Claude Code A-02 is not applicable and R-01 has no A-02
-	// half; R-01 still needs A-02 in the rule list (spec 0064).
+	// half; the stand-in rule list still holds A-02 (spec 0064).
 	noAgents := section{"agents", "agents: []\n"}
 	t.Run("verify without vibe passes", func(t *testing.T) {
 		t.Parallel()

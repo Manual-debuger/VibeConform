@@ -13,7 +13,7 @@ import (
 
 // checkH01: a recognized hook manager's configuration is committed, and
 // it parses.
-func checkH01(env *Env, _ Needed) PartResult {
+func checkH01(env *Env) PartResult {
 	ms := env.hookManagers()
 	if len(ms) == 0 {
 		return Fail(noHookManager())
@@ -31,7 +31,7 @@ func checkH01(env *Env, _ Needed) PartResult {
 // checkH02: the pre-commit hook calls fmt-check or fmt; the pre-push hook
 // calls verify-fast or verify. The hooks of every recognized manager
 // count together. With no recognized manager it cannot be decided.
-func checkH02(env *Env, _ Needed) PartResult {
+func checkH02(env *Env) PartResult {
 	ms := env.hookManagers()
 	if len(ms) == 0 {
 		f := noHookManager()
@@ -107,7 +107,7 @@ var guardedTools = []string{"Bash", "PowerShell", "Write", "Edit", "MultiEdit"}
 
 // checkA01: for each of Bash, PowerShell, Write, Edit and MultiEdit, a
 // PreToolUse entry with a command hook matches it.
-func checkA01(env *Env, _ Needed) PartResult {
+func checkA01(env *Env) PartResult {
 	s, res, ok := env.readClaudeSettings("add a PreToolUse hook with matcher " +
 		strings.Join(guardedTools, "|") + " that runs the guard")
 	if !ok {
@@ -134,7 +134,7 @@ func checkA01(env *Env, _ Needed) PartResult {
 }
 
 // checkA05 (static part): a Stop hook calls verify-fast.
-func checkA05(env *Env, _ Needed) PartResult {
+func checkA05(env *Env) PartResult {
 	verifyFast, missing := env.Entrypoint(EntrypointVerifyFast)
 	if missing != nil {
 		return Fail(*missing)
@@ -160,7 +160,7 @@ func checkA05(env *Env, _ Needed) PartResult {
 
 // checkA06: a PostToolUse entry that matches both Write and Edit calls
 // fmt.
-func checkA06(env *Env, _ Needed) PartResult {
+func checkA06(env *Env) PartResult {
 	format, missing := env.Entrypoint(EntrypointFmt)
 	if missing != nil {
 		return Fail(*missing)
@@ -184,7 +184,7 @@ func checkA06(env *Env, _ Needed) PartResult {
 
 // checkA07 (static part): a SessionStart entry with a command hook
 // exists.
-func checkA07(env *Env, _ Needed) PartResult {
+func checkA07(env *Env) PartResult {
 	const fix = "add a SessionStart hook that runs a command which prints facts for the agent and changes no file"
 	s, res, ok := env.readClaudeSettings(fix)
 	if !ok {

@@ -8,15 +8,16 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
-// The runner orders the execution and probe parts by the needs they
-// declare (spec 0064). These tests run contract.Audit over stand-in
-// rules in Options.Rules and read the order in which the stand-ins were
-// called and what each one saw.
+// The runner runs the execution and probe parts in rule-list order, and
+// the one last part after all of them (spec 0071). These tests run
+// contract.Audit over stand-in rules in Options.Rules and read the order
+// in which the stand-ins were called and what the last part saw.
 
 // runnerFixture is a Git repository holding only a go.mod and a
 // vibe.yaml with no agents, so A-02 is not applicable; and its parsed
@@ -46,21 +47,32 @@ type runner struct {
 	called []string
 }
 
-// part is a stand-in part that records its call and runs check, or
-// fails with "from <id>" when check is nil.
-func (r *runner) part(id string, kind contract.PartKind, check func(contract.Needed) contract.PartResult, needs ...contract.Need) contract.Part {
-	return contract.Part{Kind: kind, Needs: needs, Run: func(_ *contract.Env, needed contract.Needed) contract.PartResult {
+// part is a stand-in part with Run that records its call and fails with
+// "from <id>".
+func (r *runner) part(id string, kind contract.PartKind) contract.Part {
+	return contract.Part{Kind: kind, Run: func(*contract.Env) contract.PartResult {
 		r.called = append(r.called, partName(id, kind))
-		if check == nil {
-			return contract.Fail(contract.Finding{Message: "from " + id})
-		}
-		return check(needed)
+		return contract.Fail(contract.Finding{Message: "from " + id})
 	}}
 }
 
-// rule is a stand-in rule of one part.
-func (r *runner) rule(id string, kind contract.PartKind, check func(contract.Needed) contract.PartResult, needs ...contract.Need) contract.Rule {
-	return contract.Rule{ID: id, Parts: []contract.Part{r.part(id, kind, check, needs...)}}
+// last is a stand-in last part that records its call and runs check on
+// the earlier results.
+func (r *runner) last(id string, kind contract.PartKind, check func(contract.Earlier) contract.PartResult) contract.Part {
+	return contract.Part{Kind: kind, RunLast: func(_ *contract.Env, earlier contract.Earlier) contract.PartResult {
+		r.called = append(r.called, partName(id, kind))
+		return check(earlier)
+	}}
+}
+
+// rule is a stand-in rule of one part with Run.
+func (r *runner) rule(id string, kind contract.PartKind) contract.Rule {
+	return contract.Rule{ID: id, Parts: []contract.Part{r.part(id, kind)}}
+}
+
+// lastRule is a stand-in rule of one last part.
+func (r *runner) lastRule(id string, kind contract.PartKind, check func(contract.Earlier) contract.PartResult) contract.Rule {
+	return contract.Rule{ID: id, Parts: []contract.Part{r.last(id, kind, check)}}
 }
 
 func runAudit(t *testing.T, cfg *contract.Config, repo *contract.Repo, static bool, rules ...contract.Rule) *contract.Report {
@@ -75,15 +87,15 @@ func assertCalled(t *testing.T, r *runner, want ...string) {
 	}
 }
 
-// seen is a stand-in check that reports what its view holds for each
-// part named, as one finding per part: "<id>/<kind>: <result> <first
-// finding>" or "<id>/<kind>: absent".
-func seen(parts ...string) func(contract.Needed) contract.PartResult {
-	return func(needed contract.Needed) contract.PartResult {
+// seen is a stand-in last check that reports what the earlier results
+// hold for each part named, as one finding per part: "<id>/<kind>:
+// <result> <first finding>" or "<id>/<kind>: absent".
+func seen(parts ...string) func(contract.Earlier) contract.PartResult {
+	return func(earlier contract.Earlier) contract.PartResult {
 		var out []contract.Finding
 		for _, p := range parts {
 			id, kind, _ := strings.Cut(p, "/")
-			got, ok := needed.Result(id, contract.PartKind(kind))
+			got, ok := earlier.Result(id, contract.PartKind(kind))
 			switch {
 			case !ok:
 				out = append(out, contract.Finding{Message: p + ": absent"})
@@ -107,48 +119,37 @@ func executionFindings(t *testing.T, rep *contract.Report, id string) []string {
 	return out
 }
 
-func TestPartRunsAfterThePartItNeeds(t *testing.T) {
-	cfg, repo := runnerFixture(t)
-	r := &runner{}
-	rep := runAudit(t, cfg, repo, false,
-		r.rule("T-02", contract.Execution, seen("T-01/probe"), contract.NeedPart("T-01", contract.Probe)),
-		r.rule("T-01", contract.Probe, nil),
-	)
-	assertCalled(t, r, "T-01/probe", "T-02/execution")
-	if got, want := executionFindings(t, rep, "T-02"), []string{"T-01/probe: fail from T-01"}; !slices.Equal(got, want) {
-		t.Errorf("T-02 saw %q, want %q", got, want)
-	}
-}
-
-func TestPartsWithoutNeedsRunInRuleListOrder(t *testing.T) {
+func TestPartsRunInRuleListOrder(t *testing.T) {
 	cfg, repo := runnerFixture(t)
 	r := &runner{}
 	two := contract.Rule{ID: "T-02", Parts: []contract.Part{
-		r.part("T-02", contract.Execution, nil),
-		r.part("T-02", contract.Probe, nil),
+		r.part("T-02", contract.Execution),
+		r.part("T-02", contract.Probe),
 	}}
-	runAudit(t, cfg, repo, false, r.rule("T-03", contract.Probe, nil), two, r.rule("T-01", contract.Execution, nil))
+	runAudit(t, cfg, repo, false, r.rule("T-03", contract.Probe), two, r.rule("T-01", contract.Execution))
 	assertCalled(t, r, "T-03/probe", "T-02/execution", "T-02/probe", "T-01/execution")
 }
 
-func TestPartThatNeedsEveryOtherPartRunsLastAndSeesThemAll(t *testing.T) {
+// The last part runs after every other execution and probe part, even
+// when its rule comes first, and sees all their results.
+func TestLastPartRunsLastAndSeesEveryEarlierResult(t *testing.T) {
 	cfg, repo := runnerFixture(t)
 	r := &runner{}
 	rep := runAudit(t, cfg, repo, false,
-		r.rule("T-01", contract.Execution, seen("T-02/probe", "T-03/execution"), contract.NeedEveryOther()),
-		r.rule("T-02", contract.Probe, nil),
-		r.rule("T-03", contract.Execution, nil),
+		r.lastRule("T-01", contract.Execution, seen("T-02/probe", "T-03/execution", "T-01/execution")),
+		r.rule("T-02", contract.Probe),
+		r.rule("T-03", contract.Execution),
 	)
 	assertCalled(t, r, "T-02/probe", "T-03/execution", "T-01/execution")
-	want := []string{"T-02/probe: fail from T-02", "T-03/execution: fail from T-03"}
+	want := []string{"T-02/probe: fail from T-02", "T-03/execution: fail from T-03", "T-01/execution: absent"}
 	if got := executionFindings(t, rep, "T-01"); !slices.Equal(got, want) {
 		t.Errorf("T-01 saw %q, want %q", got, want)
 	}
 }
 
-// A-02 is not applicable without Claude Code (spec 0053), so a part that
-// needs its probe runs without it, as R-01 does.
-func TestNeededPartOfANotApplicableRuleIsAbsent(t *testing.T) {
+// A-02 is not applicable without Claude Code (spec 0053), so the last
+// part runs without its probe's result, as R-01 does.
+func TestPartOfANotApplicableRuleIsAbsentFromEarlier(t *testing.T) {
 	cfg, repo := runnerFixture(t)
 	r := &runner{}
 	a02, ok := contract.LookupRule("A-02")
@@ -156,14 +157,32 @@ func TestNeededPartOfANotApplicableRuleIsAbsent(t *testing.T) {
 		t.Fatal("no A-02 in the registry")
 	}
 	for j := range a02.Parts {
-		a02.Parts[j] = r.part("A-02", a02.Parts[j].Kind, nil)
+		a02.Parts[j] = r.part("A-02", a02.Parts[j].Kind)
 	}
 	rep := runAudit(t, cfg, repo, false,
-		r.rule("T-01", contract.Execution, seen("A-02/probe"), contract.NeedPart("A-02", contract.Probe)),
+		r.lastRule("T-01", contract.Execution, seen("A-02/probe")),
 		a02,
 	)
 	assertCalled(t, r, "T-01/execution")
 	if got, want := executionFindings(t, rep, "T-01"), []string{"A-02/probe: absent"}; !slices.Equal(got, want) {
+		t.Errorf("T-01 saw %q, want %q", got, want)
+	}
+}
+
+// A waived rule's parts do not run, so the last part does not see them.
+func TestPartOfAWaivedRuleIsAbsentFromEarlier(t *testing.T) {
+	cfg, repo := runnerFixture(t)
+	cfg.Waivers = append(cfg.Waivers, contract.Waiver{Rule: "T-02", Reason: "stand-in", Until: time.Now().AddDate(1, 0, 0)})
+	r := &runner{}
+	waived := r.rule("T-02", contract.Probe)
+	waived.Level = contract.Should
+	rep := runAudit(t, cfg, repo, false,
+		r.lastRule("T-01", contract.Execution, seen("T-02/probe", "T-03/probe")),
+		waived,
+		r.rule("T-03", contract.Probe),
+	)
+	assertCalled(t, r, "T-03/probe", "T-01/execution")
+	if got, want := executionFindings(t, rep, "T-01"), []string{"T-02/probe: absent", "T-03/probe: fail from T-03"}; !slices.Equal(got, want) {
 		t.Errorf("T-01 saw %q, want %q", got, want)
 	}
 }
@@ -192,112 +211,88 @@ func assertContains(t *testing.T, text string, parts ...string) {
 	}
 }
 
-func TestInvalidNeedsPanicBeforeTheProbeCopy(t *testing.T) {
+// pass is a stand-in last check that decides nothing.
+func pass(contract.Earlier) contract.PartResult { return contract.Pass() }
+
+// invalidRuleLists are rule lists the runner refuses, each with the text
+// its panic must hold.
+var invalidRuleLists = []struct {
+	name  string
+	rules func(r *runner) []contract.Rule
+	want  []string
+}{
+	{
+		name: "two last parts",
+		rules: func(r *runner) []contract.Rule {
+			return []contract.Rule{
+				r.lastRule("T-01", contract.Execution, pass),
+				r.rule("T-02", contract.Probe),
+				r.lastRule("T-03", contract.Probe, pass),
+			}
+		},
+		want: []string{"T-01/execution", "T-03/probe", "last part"},
+	},
+	{
+		name: "a static last part",
+		rules: func(r *runner) []contract.Rule {
+			return []contract.Rule{r.rule("T-02", contract.Probe), r.lastRule("T-01", contract.Static, pass)}
+		},
+		want: []string{"T-01/static", "static", "last part"},
+	},
+	{
+		name: "a part with both Run and RunLast",
+		rules: func(r *runner) []contract.Rule {
+			both := r.last("T-01", contract.Execution, pass)
+			both.Run = r.part("T-01", contract.Execution).Run
+			return []contract.Rule{r.rule("T-02", contract.Probe), {ID: "T-01", Parts: []contract.Part{both}}}
+		},
+		want: []string{"T-01/execution", "both Run and RunLast"},
+	},
+	{
+		name: "a part with neither Run nor RunLast",
+		rules: func(r *runner) []contract.Rule {
+			return []contract.Rule{r.rule("T-02", contract.Probe), {ID: "T-01", Parts: []contract.Part{{Kind: contract.Static}}}}
+		},
+		want: []string{"T-01/static", "neither Run nor RunLast"},
+	},
+}
+
+func TestInvalidRuleListPanicsBeforeTheProbeCopy(t *testing.T) {
 	cfg, repo := runnerFixture(t)
-	const notInList = "which is not in the rule list"
-	for _, tc := range []struct {
-		name  string
-		rules func(r *runner) []contract.Rule
-		want  []string
-		// not is text the message must not hold.
-		not []string
-	}{
-		{
-			name: "a need on a part not in the rule list",
-			rules: func(r *runner) []contract.Rule {
-				return []contract.Rule{r.rule("T-01", contract.Execution, nil, contract.NeedPart("T-02", contract.Probe))}
-			},
-			want: []string{"contract: T-01/execution needs T-02/probe, which is not in the rule list"},
-		},
-		{
-			name: "a need on a kind the rule does not have",
-			rules: func(r *runner) []contract.Rule {
-				return []contract.Rule{
-					r.rule("T-01", contract.Execution, nil, contract.NeedPart("T-02", contract.Probe)),
-					r.rule("T-02", contract.Execution, nil),
-				}
-			},
-			want: []string{"contract: T-01/execution needs T-02/probe, which is not in the rule list"},
-		},
-		{
-			name: "two parts that each need every other part",
-			rules: func(r *runner) []contract.Rule {
-				return []contract.Rule{
-					r.rule("T-01", contract.Execution, nil, contract.NeedEveryOther()),
-					r.rule("T-02", contract.Probe, nil, contract.NeedEveryOther()),
-				}
-			},
-			want: []string{"T-01/execution", "T-02/probe", "every other execution and probe part", "cycle"},
-		},
-		{
-			name: "two parts that need each other",
-			rules: func(r *runner) []contract.Rule {
-				return []contract.Rule{
-					r.rule("T-01", contract.Execution, nil, contract.NeedPart("T-02", contract.Probe)),
-					r.rule("T-02", contract.Probe, nil, contract.NeedPart("T-01", contract.Execution)),
-				}
-			},
-			want: []string{"cycle", "T-01/execution needs T-02/probe", "T-02/probe needs T-01/execution"},
-		},
-		{
-			name: "a static part with a need",
-			rules: func(r *runner) []contract.Rule {
-				return []contract.Rule{
-					r.rule("T-01", contract.Static, nil, contract.NeedPart("T-02", contract.Probe)),
-					r.rule("T-02", contract.Probe, nil),
-				}
-			},
-			want: []string{"contract: T-01/static needs T-02/probe", "static"},
-			not:  []string{notInList},
-		},
-		{
-			name: "a static part with a need on a part not in the rule list",
-			rules: func(r *runner) []contract.Rule {
-				return []contract.Rule{r.rule("T-01", contract.Static, nil, contract.NeedPart("T-02", contract.Probe))}
-			},
-			want: []string{"contract: T-01/static needs T-02/probe", "a static part declares no needs"},
-			not:  []string{notInList},
-		},
-		{
-			name: "a need on a static part in the rule list",
-			rules: func(r *runner) []contract.Rule {
-				return []contract.Rule{
-					r.rule("T-01", contract.Execution, nil, contract.NeedPart("T-02", contract.Static)),
-					r.rule("T-02", contract.Static, nil),
-				}
-			},
-			want: []string{"contract: T-01/execution needs T-02/static", "a static part"},
-			not:  []string{notInList},
-		},
-	} {
+	for _, tc := range invalidRuleLists {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &runner{}
-			text := panicText(t, func() { runAudit(t, cfg, repo, false, tc.rules(r)...) })
-			assertContains(t, text, tc.want...)
-			for _, n := range tc.not {
-				if strings.Contains(text, n) {
-					t.Errorf("%q says %q", text, n)
-				}
-			}
+			probe, stderr := keepingCopy(t)
+			text := panicText(t, func() {
+				contract.Audit(context.Background(), cfg, repo, contract.Options{Rules: tc.rules(r), Probe: probe})
+			})
+			assertContains(t, text, append([]string{"contract: "}, tc.want...)...)
 			assertCalled(t, r)
+			if kept := stderr.String(); kept != "" {
+				t.Errorf("the audit built a probe copy before it panicked: %q", kept)
+			}
 		})
 	}
 }
 
-func TestStaticAuditValidatesNeedsAndRunsNoPart(t *testing.T) {
+func TestStaticAuditValidatesTheRuleListAndRunsNoPart(t *testing.T) {
 	cfg, repo := runnerFixture(t)
-	r := &runner{}
-	text := panicText(t, func() {
-		runAudit(t, cfg, repo, true, r.rule("T-01", contract.Execution, nil, contract.NeedPart("T-02", contract.Probe)))
-	})
-	assertContains(t, text, "T-01/execution needs T-02/probe")
+	for _, tc := range invalidRuleLists {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &runner{}
+			text := panicText(t, func() { runAudit(t, cfg, repo, true, tc.rules(r)...) })
+			assertContains(t, text, tc.want...)
+			assertCalled(t, r)
+		})
+	}
 
 	rules := func(r *runner) []contract.Rule {
 		return []contract.Rule{
-			r.rule("T-01", contract.Execution, nil, contract.NeedPart("T-02", contract.Probe)),
-			r.rule("T-02", contract.Probe, nil),
+			r.lastRule("T-01", contract.Execution, pass),
+			r.rule("T-02", contract.Probe),
 		}
 	}
+	r := &runner{}
 	rep, kept := auditKeepingCopy(t, cfg, repo, true, rules(r))
 	assertCalled(t, r)
 	for _, p := range []struct {
@@ -324,6 +319,16 @@ func TestStaticAuditValidatesNeedsAndRunsNoPart(t *testing.T) {
 // on Stderr: the kept copy's path, or nothing when it built no copy.
 func auditKeepingCopy(t *testing.T, cfg *contract.Config, repo *contract.Repo, static bool, rules []contract.Rule) (*contract.Report, string) {
 	t.Helper()
+	probe, stderr := keepingCopy(t)
+	rep := contract.Audit(context.Background(), cfg, repo, contract.Options{Rules: rules, Static: static, Probe: probe})
+	return rep, stderr.String()
+}
+
+// keepingCopy returns probe options that keep the probe copy, in a
+// temporary directory of the test's own, and say so on the returned
+// Stderr; it stays empty when the audit builds no copy.
+func keepingCopy(t *testing.T) (contract.ProbeOptions, *strings.Builder) {
+	t.Helper()
 	tmp := t.TempDir()
 	if runtime.GOOS == "windows" {
 		t.Setenv("TMP", tmp)
@@ -331,23 +336,6 @@ func auditKeepingCopy(t *testing.T, cfg *contract.Config, repo *contract.Repo, s
 	} else {
 		t.Setenv("TMPDIR", tmp)
 	}
-	var stderr strings.Builder
-	rep := contract.Audit(context.Background(), cfg, repo, contract.Options{
-		Rules: rules, Static: static, Probe: contract.ProbeOptions{KeepCopy: true, Stderr: &stderr},
-	})
-	return rep, stderr.String()
-}
-
-func TestPartSeesOnlyItsDeclaredNeeds(t *testing.T) {
-	cfg, repo := runnerFixture(t)
-	r := &runner{}
-	rep := runAudit(t, cfg, repo, false,
-		r.rule("T-01", contract.Probe, nil),
-		r.rule("T-02", contract.Probe, nil),
-		r.rule("T-03", contract.Execution, seen("T-01/probe", "T-02/probe", "T-03/execution"), contract.NeedPart("T-02", contract.Probe)),
-	)
-	want := []string{"T-01/probe: absent", "T-02/probe: fail from T-02", "T-03/execution: absent"}
-	if got := executionFindings(t, rep, "T-03"); !slices.Equal(got, want) {
-		t.Errorf("T-03 saw %q, want %q", got, want)
-	}
+	stderr := &strings.Builder{}
+	return contract.ProbeOptions{KeepCopy: true, Stderr: stderr}, stderr
 }

@@ -96,20 +96,24 @@ const (
 )
 
 // CheckFunc decides one part of a rule against a repository. It reads
-// env and the results of the parts it declared it needs, and returns
-// what it decided (spec 0064).
-type CheckFunc func(env *Env, needed Needed) PartResult
+// env and returns what it decided (spec 0064).
+type CheckFunc func(env *Env) PartResult
 
-// Part is one part of a rule's check.
+// LastFunc decides the last part: it reads env and the results of every
+// execution and probe part that ran before it (spec 0071).
+type LastFunc func(env *Env, earlier Earlier) PartResult
+
+// Part is one part of a rule's check. It sets exactly one of Run and
+// RunLast.
 type Part struct {
 	Kind PartKind
 	// Check is the part's check as spec 0051 states it.
 	Check string
-	// Run decides the part. Every part of contract 1.0.0 has one.
+	// Run decides every part but the last part.
 	Run CheckFunc
-	// Needs are the parts an execution or probe part runs after; its Run
-	// receives their results (spec 0064). Static parts declare none.
-	Needs []Need
+	// RunLast decides the last part: the one execution or probe part
+	// that runs after every other execution and probe part (spec 0071).
+	RunLast LastFunc
 }
 
 // Rule is one rule of contract 1.0.0 (spec 0051, "Rules"). The report
@@ -190,10 +194,16 @@ func static(check string, run CheckFunc) Part {
 	return Part{Kind: Static, Check: check, Run: run}
 }
 
-// executionRun is an execution part this vibe implements. It runs after
-// the parts it needs (spec 0064).
-func executionRun(check string, run CheckFunc, needs ...Need) Part {
-	return Part{Kind: Execution, Check: check, Run: run, Needs: needs}
+// executionRun is an execution part this vibe implements.
+func executionRun(check string, run CheckFunc) Part {
+	return Part{Kind: Execution, Check: check, Run: run}
+}
+
+// executionLast is the last part: an execution part that runs after
+// every other execution and probe part and gets their results (spec
+// 0071).
+func executionLast(check string, run LastFunc) Part {
+	return Part{Kind: Execution, Check: check, RunLast: run}
 }
 
 // probeRun is a probe part this vibe implements.
@@ -552,9 +562,9 @@ var rules = []Rule{
 			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 "+
 				"and `vibe --version` in a CI job that calls no entrypoint.", checkR01),
 			// R-01 reads A-02's deny verdict and the vibe calls of every
-			// other part, so it runs last.
-			executionRun("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
-				"are still refused.", checkR01Execution, NeedPart("A-02", Probe), NeedEveryOther()),
+			// other part, so it is the last part.
+			executionLast("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
+				"are still refused.", checkR01Execution),
 		},
 	},
 	{

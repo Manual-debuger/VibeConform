@@ -64,12 +64,19 @@ func StandIn(rules []contract.Rule, result contract.Result, ids ...string) []con
 			continue
 		}
 		parts := slices.Clone(out[i].Parts)
+		standIn := func(*contract.Env) contract.PartResult {
+			return contract.PartResult{Result: result, Findings: []contract.Finding{
+				{File: "stand-in.txt", Message: "stand-in " + string(result), Fix: "none"},
+			}}
+		}
 		for j := range parts {
-			parts[j].Run = func(*contract.Env, contract.Needed) contract.PartResult {
-				return contract.PartResult{Result: result, Findings: []contract.Finding{
-					{File: "stand-in.txt", Message: "stand-in " + string(result), Fix: "none"},
-				}}
+			// The last part stays the last part, so the run order does
+			// not change.
+			if parts[j].RunLast != nil {
+				parts[j].RunLast = func(env *contract.Env, _ contract.Earlier) contract.PartResult { return standIn(env) }
+				continue
 			}
+			parts[j].Run = standIn
 		}
 		out[i].Parts = parts
 	}

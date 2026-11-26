@@ -42,7 +42,8 @@ type PartResult struct {
 	Result   Result
 	Findings []Finding
 	// deny is A-02's verdict on its deny cases, which R-01's execution
-	// part reads from its need on A-02 (spec 0064). Only A-02 sets it.
+	// part, the last part, reads from the earlier results (spec 0071).
+	// Only A-02 sets it.
 	deny *PartResult
 	// guardUses are the corpus cases guard exceptions let through (A-02,
 	// A-09). The report lists them in run order.

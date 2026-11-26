@@ -13,7 +13,7 @@ import (
 // probe copy.
 
 // checkV01Execution: the baseline verify exits 0 in the reset copy.
-func checkV01Execution(env *Env, _ Needed) PartResult {
+func checkV01Execution(env *Env) PartResult {
 	if f := needEntrypoint(env, EntrypointVerify); f != nil {
 		return Fail(*f)
 	}
@@ -35,20 +35,20 @@ func checkV01Execution(env *Env, _ Needed) PartResult {
 
 // checkV01Probe: with each planted defect in each component, verify
 // exits non-zero. A component without tests fails.
-func checkV01Probe(env *Env, _ Needed) PartResult {
+func checkV01Probe(env *Env) PartResult {
 	return defectProbe{rule: "V-01", entrypoint: EntrypointVerify, noTestsFail: true}.run(env)
 }
 
 // checkV02Probe: with each planted defect in each component, verify-fast
 // exits non-zero.
-func checkV02Probe(env *Env, _ Needed) PartResult {
+func checkV02Probe(env *Env) PartResult {
 	return defectProbe{rule: "V-02", entrypoint: EntrypointVerifyFast}.run(env)
 }
 
 // checkV05Probe: with the type-error defect planted in each Python
 // component, verify exits non-zero (spec 0061). Other components are
 // skipped: their type errors are compile errors, which V-01 shows.
-func checkV05Probe(env *Env, _ Needed) PartResult {
+func checkV05Probe(env *Env) PartResult {
 	return defectProbe{rule: "V-05", entrypoint: EntrypointVerify,
 		components: func(env *Env) []Component { return pythonComponents(env.Config) }}.run(env)
 }
@@ -75,7 +75,7 @@ func hasPythonComponent(cfg *Config) (bool, string) {
 // checkV06Probe: with the complexity defect in each component, verify
 // exits non-zero (spec 0061). A component without tests leaves it
 // undecided.
-func checkV06Probe(env *Env, _ Needed) PartResult {
+func checkV06Probe(env *Env) PartResult {
 	return defectProbe{rule: "V-06", entrypoint: EntrypointVerify}.run(env)
 }
 
@@ -83,14 +83,14 @@ func checkV06Probe(env *Env, _ Needed) PartResult {
 // verify exits non-zero (spec 0061). A secret does not depend on the
 // language, so one component is enough: the first in configuration order
 // that has tests.
-func checkV07Probe(env *Env, _ Needed) PartResult {
+func checkV07Probe(env *Env) PartResult {
 	return defectProbe{rule: "V-07", entrypoint: EntrypointVerify, firstWithTests: true}.run(env)
 }
 
 // checkV08Probe: with V-01's static-analysis defect under the language's
 // blanket suppressions planted in each component, verify exits non-zero.
 // A component without tests leaves it undecided (spec 0061).
-func checkV08Probe(env *Env, _ Needed) PartResult {
+func checkV08Probe(env *Env) PartResult {
 	return defectProbe{rule: "V-08", entrypoint: EntrypointVerify}.run(env)
 }
 
@@ -280,7 +280,7 @@ func dedupe(results []PartResult) []PartResult {
 // checkA05Probe: with the failing-test defect of the first component
 // that has tests planted, some Stop hook exits 2 for stop_hook_active
 // false, and every Stop hook exits 0 for stop_hook_active true.
-func checkA05Probe(env *Env, _ Needed) PartResult {
+func checkA05Probe(env *Env) PartResult {
 	fix := "add a Stop hook that runs " + quoteCommands(env.EntrypointSource(EntrypointVerifyFast)) +
 		" and exits 2 when it fails, unless stop_hook_active is true"
 	settings, res, ok := env.readClaudeSettings(fix)
