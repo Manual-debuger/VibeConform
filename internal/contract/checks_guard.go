@@ -307,9 +307,17 @@ func feedCorpus(env *Env, s *probeSession, rule string, cases []GuardCase) (resu
 		return d, d, true
 	}
 	t := &corpusTally{env: env, s: s, exceptions: policyExceptions(env), unmatched: map[string][]string{}}
-	for _, run := range runs {
+	var reruns map[int]*caseRerun
+	if env.auditedContract() == Contract2 {
+		var restoreErr error
+		reruns, restoreErr = rerunWithoutExceptions(s, hooks, runs, t.exceptions, rule)
+		if restoreErr != nil {
+			t.undecidedCase(Finding{Message: "cannot decide: cannot restore " + guardPolicyFile + " in the probe copy: " + restoreErr.Error()})
+		}
+	}
+	for i, run := range runs {
 		if run.c.Want == WantDeny {
-			t.denyCase(run)
+			t.denyCase(run, reruns[i])
 		} else {
 			t.allowCase(run)
 		}
@@ -334,21 +342,24 @@ type corpusTally struct {
 }
 
 // denyCase judges a deny case: refused, let through by an exception, run
-// by no hook, or let through.
-func (t *corpusTally) denyCase(run caseRun) {
+// by no hook, or let through. Under 2.0.0 an exception counts only when
+// the case's rerun without it (rr) is refused, and a case no hook ran is
+// not one an exception let through.
+func (t *corpusTally) denyCase(run caseRun, rr *caseRerun) {
 	c := run.c
 	if run.refused() {
 		return
 	}
 	if u := run.undecided(); u != nil {
-		f := Finding{File: claudeSettingsFile, Message: "cannot decide: " + run.what() + ": " + u.describe()}
-		t.all.undecided(f)
-		t.deny.undecided(f)
+		t.undecidedCase(Finding{File: claudeSettingsFile, Message: "cannot decide: " + run.what() + ": " + u.describe()})
 		return
 	}
+	v2 := t.env.auditedContract() == Contract2
 	ex := exceptionsFor(t.exceptions, c, t.s, t.env.auditedContract())
 	switch {
-	case len(ex) > 0:
+	case len(ex) > 0 && v2 && len(run.runs) > 0:
+		t.rerunCase(run, ex, rr)
+	case len(ex) > 0 && !v2:
 		t.uses = append(t.uses, GuardExceptionUse{Rule: ex[0].Rule, Match: ex[0].Match, Case: c.Name})
 	case len(run.runs) == 0:
 		tool := c.Payload.ToolName
@@ -357,12 +368,22 @@ func (t *corpusTally) denyCase(run caseRun) {
 		}
 		t.unmatched[tool] = append(t.unmatched[tool], fmt.Sprintf("%q", c.Name))
 	default:
-		f := Finding{File: claudeSettingsFile,
+		t.failCase(Finding{File: claudeSettingsFile,
 			Message: fmt.Sprintf("%s should be refused (guard rule %s); %s", run.what(), c.Rule, run.exits()),
-			Fix:     guardFix(t.env, c.Rule)}
-		t.all.fail(f)
-		t.deny.fail(f)
+			Fix:     guardFix(t.env, c.Rule)})
 	}
+}
+
+// failCase fails both verdicts with a deny case's finding.
+func (t *corpusTally) failCase(f Finding) {
+	t.all.fail(f)
+	t.deny.fail(f)
+}
+
+// undecidedCase makes both verdicts undecided with a deny case's finding.
+func (t *corpusTally) undecidedCase(f Finding) {
+	t.all.undecided(f)
+	t.deny.undecided(f)
 }
 
 // allowCase judges an allow case: a refusal fails it.
