@@ -12,7 +12,8 @@ func newAuditCmd(seams cliSeams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "audit",
 		Short: "Read-only audit of the repository against the contract",
-		Long: "Read-only check of the repository against contract " + contract.Implemented + ".\n\n" +
+		Long: "Read-only check of the repository against contract " + contract.Contract1 + " or " + contract.Contract2 + ",\n" +
+			"whichever MAJOR its vibe.yaml declares.\n\n" +
 			"It reads vibe.yaml version 2 (a top-level contract key). A version 1 file\n" +
 			"(a top-level standard key) belongs to the template-sync system, which vibe\n" +
 			"no longer has: vibe audit then names the migration guide and exits 1.",

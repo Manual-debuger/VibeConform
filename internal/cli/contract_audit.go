@@ -124,7 +124,7 @@ func runExplain(cmd *cobra.Command, f auditFlags) error {
 	rule, ok := contract.LookupRule(f.explain)
 	if !ok {
 		return fmt.Errorf("--explain: %q is not a rule of contract %s; rules: %s",
-			f.explain, contract.Implemented, strings.Join(contract.RuleIDs(), " "))
+			f.explain, contract.Latest, strings.Join(contract.RuleIDs(), " "))
 	}
 	if err := writeExplain(cmd.OutOrStdout(), rule); err != nil {
 		return fmt.Errorf("--explain: %w", err)

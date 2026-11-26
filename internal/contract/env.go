@@ -56,6 +56,14 @@ func (e *Env) readFile(name string) ([]byte, error) {
 	return data, err
 }
 
+// auditedContract is the contract version the audit applies, Contract1 or
+// Contract2: the one the declared version is audited as. A check whose
+// reading differs between contracts reads it here (spec 0072, "Contract
+// versions").
+func (e *Env) auditedContract() string {
+	return e.config.Contract.Audited
+}
+
 // note records a fact the audit assumed, such as the default branch, for
 // the report.
 func (e *Env) note(format string, args ...any) {

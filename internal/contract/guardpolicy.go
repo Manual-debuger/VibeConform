@@ -93,9 +93,9 @@ func checkA04(env *Env) PartResult {
 		"(policy.local.json keeps version 1)"
 	switch raw, ok := p.top["version"]; {
 	case !ok:
-		fail("has no version; contract "+Implemented+" needs version 2", versionFix)
+		fail("has no version; contract "+env.auditedContract()+" needs version 2", versionFix)
 	case strings.TrimSpace(string(raw)) != "2":
-		fail(fmt.Sprintf("has version %s; contract %s needs version 2", strings.TrimSpace(string(raw)), Implemented), versionFix)
+		fail(fmt.Sprintf("has version %s; contract %s needs version 2", strings.TrimSpace(string(raw)), env.auditedContract()), versionFix)
 	}
 
 	list, err := p.exceptions()

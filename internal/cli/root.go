@@ -56,16 +56,16 @@ func newRootCmd(version string, seams cliSeams) *cobra.Command {
 		Use:   "vibe",
 		Short: "VibeConform: audit a repository against the VibeConform contract",
 		Long: "VibeConform (vibe) audits a repository against the VibeConform contract\n" +
-			"(contract " + contract.Implemented + "). The repository declares its entrypoints, components,\n" +
+			"(contracts " + contract.Contract1 + " and " + contract.Contract2 + "). The repository declares its entrypoints, components,\n" +
 			"platforms and agents in vibe.yaml version 2 and owns every file; vibe audit\n" +
 			"reads them and reports, rule by rule, whether the repository conforms.",
 		SilenceUsage:  true,
 		SilenceErrors: false,
 		Version:       version,
 	}
-	// vibe --version names the contract version vibe implements (spec
-	// 0054); the setup skill's upgrade flow reads it.
-	root.SetVersionTemplate("vibe version {{.Version}} (contract " + contract.Implemented + ")\n")
+	// vibe --version names the latest contract version vibe implements
+	// (spec 0054; spec 0072); the setup skill's upgrade flow reads it.
+	root.SetVersionTemplate("vibe version {{.Version}} (contract " + contract.Latest + ")\n")
 
 	root.AddCommand(
 		newInitCmd(seams),
