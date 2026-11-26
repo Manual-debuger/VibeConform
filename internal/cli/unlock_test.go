@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
+	"github.com/Manual-debuger/VibeConform/internal/testkit"
 )
 
 // unlockResult is what one vibe unlock run printed and returned.
@@ -29,13 +29,6 @@ func runVibeUnlock(t *testing.T, args ...string) unlockResult {
 	root.SetArgs(append([]string{"unlock"}, args...))
 	err := root.Execute()
 	return unlockResult{stdout: out.String(), stderr: errOut.String(), err: err}
-}
-
-func gitInit(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	contracttest.Git(t, dir, "init", "-q")
-	return dir
 }
 
 // readMarker reads the unlock marker's expiry from gitDir.
@@ -73,7 +66,7 @@ func assertExpiryIn(t *testing.T, at time.Time, before time.Time, d time.Duratio
 // directory, and prints the expiry and that the next Stop locks again.
 func TestUnlockDefaultsToFifteenMinutes(t *testing.T) {
 	t.Parallel()
-	dir := gitInit(t)
+	dir := testkit.InitRepo(t).Dir
 	before := time.Now()
 	r := runVibeUnlock(t, "--repo-root", dir)
 	if r.err != nil {
@@ -95,7 +88,7 @@ func TestUnlockDefaultsToFifteenMinutes(t *testing.T) {
 // unlock replaces the first.
 func TestUnlockMinutesAndReplace(t *testing.T) {
 	t.Parallel()
-	dir := gitInit(t)
+	dir := testkit.InitRepo(t).Dir
 	if r := runVibeUnlock(t, "--repo-root", dir, "--minutes", "240"); r.err != nil {
 		t.Fatalf("vibe unlock: %v", r.err)
 	}
@@ -112,7 +105,7 @@ func TestUnlockMinutesOutOfRange(t *testing.T) {
 	t.Parallel()
 	for _, n := range []string{"0", "241", "-5", "x"} {
 		t.Run(n, func(t *testing.T) {
-			dir := gitInit(t)
+			dir := testkit.InitRepo(t).Dir
 			r := runVibeUnlock(t, "--repo-root", dir, "--minutes", n)
 			if r.err == nil {
 				t.Fatalf("vibe unlock --minutes %s succeeded", n)
@@ -129,10 +122,10 @@ func TestUnlockMinutesOutOfRange(t *testing.T) {
 // worktree shares.
 func TestUnlockLinkedWorktreeSharesCommonDir(t *testing.T) {
 	t.Parallel()
-	dir := gitInit(t)
-	contracttest.Git(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init")
+	repo := testkit.InitWithCommit(t)
+	dir := repo.Dir
 	wt := filepath.Join(t.TempDir(), "wt")
-	contracttest.Git(t, dir, "worktree", "add", "-q", wt)
+	repo.Git(t, "worktree", "add", "-q", wt)
 	before := time.Now()
 	if r := runVibeUnlock(t, "--repo-root", wt); r.err != nil {
 		t.Fatalf("vibe unlock: %v\n%s", r.err, r.stderr)
@@ -146,7 +139,7 @@ func TestUnlockLinkedWorktreeSharesCommonDir(t *testing.T) {
 // UTC, to the second.
 func TestUnlockFixedClockWritesExactExpiry(t *testing.T) {
 	t.Parallel()
-	dir := gitInit(t)
+	dir := testkit.InitRepo(t).Dir
 	now := time.Date(2026, 3, 4, 13, 20, 5, 900_000_000, time.FixedZone("UTC+2", 2*60*60))
 	root := newRootCmd("test", cliSeams{now: func() time.Time { return now }})
 	var out, errOut bytes.Buffer
@@ -199,9 +192,10 @@ func assertNoMarker(t *testing.T, gitDir string) {
 // which is where vibe-guard reads it (spec 0069).
 func TestUnlockSeparateGitDir(t *testing.T) {
 	t.Parallel()
-	wt := filepath.Join(t.TempDir(), "wt")
+	repo := testkit.NewRepo(t, "wt")
+	wt := repo.Dir
 	gitDir := filepath.Join(t.TempDir(), "repo.git")
-	contracttest.Git(t, t.TempDir(), "init", "-q", "--separate-git-dir", gitDir, wt)
+	repo.Git(t, "init", "-q", "--separate-git-dir", gitDir)
 	before := time.Now()
 	if r := runVibeUnlock(t, "--repo-root", wt); r.err != nil {
 		t.Fatalf("vibe unlock: %v\n%s", r.err, r.stderr)
@@ -213,7 +207,7 @@ func TestUnlockSeparateGitDir(t *testing.T) {
 // walked up to the Git top, and the marker goes into its Git directory.
 func TestUnlockProjectBelowGitTop(t *testing.T) {
 	t.Parallel()
-	top := gitInit(t)
+	top := testkit.InitRepo(t).Dir
 	proj := filepath.Join(top, "proj")
 	if err := os.MkdirAll(proj, 0o750); err != nil {
 		t.Fatal(err)
@@ -233,7 +227,7 @@ func TestUnlockProjectBelowGitTop(t *testing.T) {
 func TestUnlockIgnoresGitEnvironment(t *testing.T) {
 	for _, name := range []string{"GIT_DIR", "GIT_COMMON_DIR"} {
 		t.Run(name, func(t *testing.T) {
-			dir, other := gitInit(t), gitInit(t)
+			dir, other := testkit.InitRepo(t).Dir, testkit.InitRepo(t).Dir
 			t.Setenv(name, filepath.Join(other, ".git"))
 			before := time.Now()
 			if r := runVibeUnlock(t, "--repo-root", dir); r.err != nil {
@@ -250,8 +244,9 @@ func TestUnlockIgnoresGitEnvironment(t *testing.T) {
 // directory there. vibe unlock fails, writes nothing and says that
 // GIT_DIR is not read. Not parallel: it sets the environment.
 func TestUnlockWorkTreeWithoutDotGit(t *testing.T) {
-	bare := filepath.Join(t.TempDir(), "dotfiles.git")
-	contracttest.Git(t, t.TempDir(), "init", "-q", "--bare", bare)
+	repo := testkit.NewRepo(t, "dotfiles.git")
+	repo.Git(t, "init", "-q", "--bare")
+	bare := repo.Dir
 	work := t.TempDir()
 	t.Setenv("GIT_DIR", bare)
 	t.Setenv("GIT_WORK_TREE", work)
@@ -272,7 +267,7 @@ func TestUnlockWorkTreeWithoutDotGit(t *testing.T) {
 // reading files, as vibe-guard does, so it works without git on PATH.
 // Not parallel: it sets the environment.
 func TestUnlockRunsNoGit(t *testing.T) {
-	dir := gitInit(t)
+	dir := testkit.InitRepo(t).Dir
 	t.Setenv("PATH", t.TempDir())
 	before := time.Now()
 	if r := runVibeUnlock(t, "--repo-root", dir); r.err != nil {

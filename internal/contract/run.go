@@ -5,10 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -175,17 +172,17 @@ func execute(ctx context.Context, p process) (exitCode int, output []byte, undec
 	}
 }
 
-// envGet returns the value of name in env. On Windows names are not case
-// sensitive. The last setting wins.
-func envGet(env []string, name string) (string, bool) {
-	val, found := "", false
+// envGet returns the value of name in env, "" when it is not set. On
+// Windows names are not case sensitive. The last setting wins.
+func envGet(env []string, name string) string {
+	val := ""
 	for _, kv := range env {
 		k, v, ok := strings.Cut(kv, "=")
 		if ok && envNameEqual(k, name) {
-			val, found = v, true
+			val = v
 		}
 	}
-	return val, found
+	return val
 }
 
 // envSet returns env with name set to value, every other setting of name
@@ -224,61 +221,4 @@ func envNameEqual(a, b string) bool {
 var gitRepoVariables = []string{
 	"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",
 	"GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-}
-
-// lookPath finds a program the way a shell would on the run's PATH, with
-// PATHEXT on Windows. A name with a path separator is taken relative to
-// dir. It returns "" when nothing is found.
-func lookPath(name string, env []string, dir string) string { //nolint:gocognit // baseline: pre-existing complexity
-	exts := []string{""}
-	if runtime.GOOS == "windows" {
-		pathext, _ := envGet(env, "PATHEXT")
-		if pathext == "" {
-			pathext = ".COM;.EXE;.BAT;.CMD"
-		}
-		if filepath.Ext(name) == "" {
-			exts = nil
-		}
-		for _, e := range strings.Split(pathext, ";") {
-			if e != "" {
-				exts = append(exts, strings.ToLower(e))
-			}
-		}
-	}
-	try := func(base string) string {
-		for _, e := range exts {
-			if p := base + e; isExecutable(p) {
-				return p
-			}
-		}
-		return ""
-	}
-	if strings.ContainsAny(name, `/\`) {
-		p := name
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(dir, filepath.FromSlash(name))
-		}
-		return try(p)
-	}
-	path, _ := envGet(env, "PATH")
-	for _, d := range filepath.SplitList(path) {
-		if d == "" {
-			continue
-		}
-		if p := try(filepath.Join(d, name)); p != "" {
-			return p
-		}
-	}
-	return ""
-}
-
-func isExecutable(p string) bool {
-	info, err := os.Stat(p)
-	if err != nil || info.IsDir() {
-		return false
-	}
-	if runtime.GOOS == "windows" {
-		return true
-	}
-	return info.Mode()&0o111 != 0 || errors.Is(err, fs.ErrPermission)
 }

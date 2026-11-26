@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -14,35 +13,16 @@ import (
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/guard"
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
-// findBash returns the bash Claude Code runs hooks in: bash on PATH, or
-// on Windows the bash next to Git's sh (the bash.exe PATH finds first
-// may be WSL's). Without one the test is skipped, unless
-// VIBE_TEST_REQUIRE_TOOLS names bash.
+// findBash returns the bash Claude Code runs hooks in, found as the
+// audit finds it (guardrule.ResolveBash): bash on PATH, or on Windows
+// Git Bash (the bash.exe PATH finds first may be WSL's). Without one the
+// test is skipped, unless VIBE_TEST_REQUIRE_TOOLS names bash.
 func findBash(t *testing.T) string {
 	t.Helper()
-	bash, err := exec.LookPath("bash")
-	if runtime.GOOS == "windows" {
-		bash, err = "", errors.New("no Git Bash: no CLAUDE_CODE_GIT_BASH_PATH, and no Git sh or git on PATH")
-		var candidates []string
-		if p := os.Getenv("CLAUDE_CODE_GIT_BASH_PATH"); p != "" {
-			candidates = append(candidates, p)
-		}
-		if sh, shErr := exec.LookPath("sh"); shErr == nil {
-			candidates = append(candidates, filepath.Join(filepath.Dir(sh), "bash.exe"))
-		}
-		if git, gitErr := exec.LookPath("git"); gitErr == nil {
-			// <Git>\cmd\git.exe or <Git>\bin\git.exe; bash is <Git>\bin\bash.exe.
-			candidates = append(candidates, filepath.Join(filepath.Dir(filepath.Dir(git)), "bin", "bash.exe"))
-		}
-		for _, c := range candidates {
-			if _, statErr := os.Stat(c); statErr == nil {
-				bash, err = c, nil
-				break
-			}
-		}
-	}
+	bash, err := guardrule.ResolveBash(os.Environ())
 	if err != nil {
 		if slices.Contains(strings.Split(os.Getenv("VIBE_TEST_REQUIRE_TOOLS"), ","), "bash") {
 			t.Fatalf("VIBE_TEST_REQUIRE_TOOLS names bash, but none was found: %v", err)

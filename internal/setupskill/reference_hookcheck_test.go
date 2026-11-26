@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/Manual-debuger/VibeConform/internal/setupskill"
+	"github.com/Manual-debuger/VibeConform/internal/testkit"
 )
 
 // The reference hook:check (spec 0056 Desired Behavior 1, spec 0057
@@ -90,19 +91,11 @@ func newHookCheckRepo(t *testing.T, taskfile []byte, withGit bool) hookCheckRepo
 		t.Fatalf("hook:check runs no \"task -s ... 1>&2\":\n%v", cmds[0])
 	}
 
-	parent := t.TempDir()
-	repo := hookCheckRepo{dir: filepath.Join(parent, "my repo"), stubs: strings.Fields(m[1])}
-	if err := os.Mkdir(repo.dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
 	// No user or system git config (a global excludes file would change
 	// what is ignored), and no repository above the temp directory. Each
 	// git call is a process start, slow on Windows, so the setup is three.
-	global := filepath.Join(parent, "gitconfig")
-	if err := os.WriteFile(global, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	repo.env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+global, "GIT_CEILING_DIRECTORIES="+parent)
+	git := testkit.NewRepo(t, "my repo")
+	repo := hookCheckRepo{dir: git.Dir, stubs: strings.Fields(m[1]), env: git.Env}
 
 	tasks := map[string]any{"hook:check": doc.Tasks["hook:check"]}
 	for _, name := range repo.stubs {
@@ -137,18 +130,9 @@ func newHookCheckRepo(t *testing.T, taskfile []byte, withGit bool) hookCheckRepo
 	if !withGit {
 		return repo
 	}
-	for _, args := range [][]string{
-		{"init", "-q", "-b", "main"},
-		{"add", "Taskfile.yml", ".gitignore", "a b.go", "sub dir/tracked.go"},
-		{"-c", "user.email=test@example.com", "-c", "user.name=test", "commit", "-q", "-m", "init"},
-	} {
-		// #nosec G204 -- fixed arguments
-		cmd := exec.Command("git", args...)
-		cmd.Dir, cmd.Env = repo.dir, repo.env
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
+	git.Init(t)
+	git.Git(t, "add", "Taskfile.yml", ".gitignore", "a b.go", "sub dir/tracked.go")
+	git.Git(t, "commit", "-q", "-m", "init")
 	return repo
 }
 

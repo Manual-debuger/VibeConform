@@ -7,14 +7,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 	"github.com/Manual-debuger/VibeConform/internal/setupskill"
+	"github.com/Manual-debuger/VibeConform/internal/testkit"
 )
 
 func TestMain(m *testing.M) {
@@ -71,8 +72,8 @@ func newHookRepo(t *testing.T) hookRepo {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parent := t.TempDir()
-	r := hookRepo{root: filepath.Join(parent, "my repo"), scratch: filepath.Join(parent, "scratch")}
+	repo := testkit.NewRepo(t, "my repo")
+	r := hookRepo{root: repo.Dir, scratch: filepath.Join(filepath.Dir(repo.Dir), "scratch")}
 	if err := os.MkdirAll(r.scratch, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -95,21 +96,12 @@ func newHookRepo(t *testing.T) hookRepo {
 	r.write(t, "services/worker/app/__init__.py", "")
 	r.write(t, "docs/README.md", "# Docs\n")
 
-	// No user or system git config, and no repository above the fixture.
-	global := filepath.Join(parent, "gitconfig")
-	if err := os.WriteFile(global, []byte("[user]\n\temail = test@example.com\n\tname = test\n[core]\n\tautocrlf = false\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "CLAUDE_PROJECT_DIR=") {
-			r.env = append(r.env, kv)
-		}
-	}
-	r.env = append(r.env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+global, "GIT_CEILING_DIRECTORIES="+parent,
-		"CLAUDE_PROJECT_DIR="+r.root)
-	r.git(t, "init", "-q", "-b", "main")
-	r.git(t, "add", "-A")
-	r.git(t, "commit", "-q", "-m", "init")
+	// No user or system git config, and no repository above the fixture
+	// (testkit).
+	r.env = slices.DeleteFunc(slices.Clone(repo.Env), func(kv string) bool { return strings.HasPrefix(kv, "CLAUDE_PROJECT_DIR=") })
+	r.env = append(r.env, "CLAUDE_PROJECT_DIR="+r.root)
+	repo.Init(t)
+	repo.Commit(t)
 	return r
 }
 
@@ -171,16 +163,6 @@ func (r hookRepo) write(t *testing.T, rel, content string) {
 	}
 	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func (r hookRepo) git(t *testing.T, args ...string) {
-	t.Helper()
-	// #nosec G204 -- fixed arguments
-	cmd := exec.Command("git", args...)
-	cmd.Dir, cmd.Env = r.root, r.env
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
 
@@ -252,37 +234,17 @@ func (r hookRepo) runInput(t *testing.T, bash, dir, command, stdin string, env [
 	return res, errOut.String()
 }
 
-// hookShell is the bash a hook runs in here: Git Bash on Windows, as
-// Claude Code uses it there, found next to git when the bash on PATH is
-// WSL's. It skips without bash or Task, unless VIBE_HOOKS_E2E or CI is
-// set: in CI a skip would hide the Windows run spec 0058 asks for.
+// hookShell is the bash a hook runs in here, found as the audit finds it
+// (guardrule.ResolveBash): Git Bash on Windows, as Claude Code uses it
+// there, not the WSL bash that may come first on PATH. It skips without
+// bash or Task, unless VIBE_HOOKS_E2E or CI is set: in CI a skip would
+// hide the Windows run spec 0058 asks for.
 func hookShell(t *testing.T) string {
 	t.Helper()
-	missing := func(name string, err error) { t.Helper(); missingTool(t, name, err) }
 	taskBinary(t)
-	if runtime.GOOS == "windows" {
-		// Git for Windows keeps <root>\bin\bash.exe, and git.exe in
-		// <root>\cmd, <root>\bin or <root>\mingw64\bin: which one is on
-		// PATH depends on the shell the test starts from.
-		git, err := exec.LookPath("git")
-		if err != nil {
-			missing("git", err)
-		}
-		for dir := filepath.Dir(filepath.Dir(git)); ; dir = filepath.Dir(dir) {
-			bash := filepath.Join(dir, "bin", "bash.exe")
-			if _, err := os.Stat(bash); err == nil {
-				return bash
-			}
-			if filepath.Dir(dir) == dir {
-				break
-			}
-		}
-		missing("Git Bash", errors.New("no bin/bash.exe above "+git))
-		return ""
-	}
-	bash, err := exec.LookPath("bash")
+	bash, err := guardrule.ResolveBash(os.Environ())
 	if err != nil {
-		missing("bash", err)
+		missingTool(t, "bash", err)
 	}
 	return bash
 }
