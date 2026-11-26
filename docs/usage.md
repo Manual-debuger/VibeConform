@@ -1830,7 +1830,10 @@ repository is an ordinary file, edited directly.
 - `.golangci.yml` enables `gocyclo` (15) and `gocognit` (20). The
   functions that were over those limits when they were enabled carry
   `//nolint:gocognit,gocyclo // baseline: pre-existing complexity` (only
-  the linters that report them); new code meets the limits.
+  the linters that report them); new code meets the limits. `task lint`
+  fails when the count of those comments is higher than the ceiling in
+  `internal/baselines/main.go` (spec 0073), so the count only goes
+  down: a change that removes one lowers the ceiling too.
 - `Taskfile.local.yml` holds this repository's own tasks (`task build`
   and others), included optionally by `Taskfile.yml`.
 
