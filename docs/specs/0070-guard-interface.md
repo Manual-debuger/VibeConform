@@ -397,6 +397,11 @@ and its tests are slow enough that the quick runs skip the corpus.
 - The two-readings test proves only that the guard's reading is inside
   the audit's on the corpus. It does not prove the audit is tight; that
   is the MAJOR item.
+- **The MAJOR item is spec 0072** (contract 2.0.0, without #50). Under
+  2.0.0 the audit both narrows its reading to the guard's and reruns
+  the case without the exception, the two steps this spec weighed. The
+  two-readings test now checks both directions under 2.0.0, and keeps
+  this spec's one-direction check for 1.x.
 - **Assumption, not verified:** no test outside the guard's package
   depends on the guard's tests being subprocess tests. CI's
   network-disabled job runs a prebuilt test binary with

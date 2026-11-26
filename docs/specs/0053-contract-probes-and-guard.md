@@ -717,6 +717,22 @@ After this phase, `vibe audit` without `--static` reaches a verdict.
   an exception that matches another simple command of a compound case,
   or names a fixed rule, counts for A-02. Narrowing that is MAJOR:
   #227, with #50 and #120.
+- **Under contract 2.0.0 the audit's reading equals `vibe-guard`'s**
+  (spec 0072, "The audit's reading under 2.0.0"). The corpus names the
+  simple command a compound case's rule refuses (`refuses`) and marks
+  the cases no exception can lift (`fixed`), so the audit no longer
+  needs to guess. A command exception counts only when it prefixes a
+  `refuses` command, and no exception counts for a fixed case. The
+  audit also reruns a case an exception let through without that
+  exception, and the exception counts only when the guard then refuses
+  it. `TestTwoReadingsOfAnException` checks both directions under
+  2.0.0: the guard lifts a case by an exception exactly when the 2.0.0
+  reading counts it. It lists three cases where they still differ,
+  each with its reason: on each, the exception lifts the case's rule
+  and another built-in rule refuses the same call (PowerShell's `rm`
+  read as the `rm` program too, and a write under `.claude/hooks/`).
+  Under 1.x the reading above stays, and the test still checks that it
+  is at least as wide as the guard's.
 
 ### `vibe-guard` (#105)
 

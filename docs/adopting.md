@@ -32,7 +32,7 @@ names, so you can install as you go.
 ```sh
 go install github.com/Manual-debuger/VibeConform/cmd/vibe@<version>
 go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@<version>
-vibe --version    # vibe version <version> (contract 1.2.0)
+vibe --version    # vibe version <version> (contract 2.0.0)
 ```
 
 Without Go, download the release archives and check them against
