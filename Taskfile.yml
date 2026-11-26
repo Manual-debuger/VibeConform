@@ -53,10 +53,15 @@ tasks:
 
   # golangci-lint only: its govet runs the analyzers "go vet ./..." runs
   # by default (spec 0063), so go vet would check the same code twice.
+  # Then the baseline ceiling (spec 0073): the count of
+  # "baseline: pre-existing complexity" suppressions may not go up; the
+  # ceiling is in internal/baselines/main.go.
   lint:
-    desc: Run golangci-lint (its govet covers go vet).
+    desc: Run golangci-lint (its govet covers go vet) and the complexity
+      baseline ceiling.
     cmds:
       - golangci-lint run
+      - go run ./internal/baselines
 
   typecheck:
     desc: Type-check by building all packages (Go has no separate typechecker).

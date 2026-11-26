@@ -402,40 +402,40 @@ convention.**
 
 ## Acceptance Criteria
 
-- [ ] `Rule` and `Exception` have no exported fields. Constructors
+- [x] `Rule` and `Exception` have no exported fields. Constructors
       refuse every invalid state, and `ParsePolicy` uses them with
       unchanged messages.
-- [ ] A command match is parsed once per shell and a glob is compiled
+- [x] A command match is parsed once per shell and a glob is compiled
       once per rule or exception. A test shows the count of parses.
-- [ ] `Rule.MatchesCommand` has no compile-at-match branch. The zero
+- [x] `Rule.MatchesCommand` has no compile-at-match branch. The zero
       `Rule` and the zero `Exception` match nothing.
-- [ ] `psWriter`'s kind, a `Target`'s kind and a `Rule`'s kind are typed
+- [x] `psWriter`'s kind, a `Target`'s kind and a `Rule`'s kind are typed
       values.
-- [ ] Shell-write detection is in `writes.go`, and wrapper unwrapping
+- [x] Shell-write detection is in `writes.go`, and wrapper unwrapping
       stays in `wrappers.go`.
-- [ ] A contract rule's check text is derived from its parts, and the
+- [x] A contract rule's check text is derived from its parts, and the
       report and `--explain` golden files are unchanged.
-- [ ] `task lint` fails when the count of complexity baselines is
+- [x] `task lint` fails when the count of complexity baselines is
       higher than the recorded ceiling. The ceiling is lower than 64.
-- [ ] `{{VIBE_RELEASE_PAGE}}` is a documented placeholder computed by
+- [x] `{{VIBE_RELEASE_PAGE}}` is a documented placeholder computed by
       the same function as `ReferencePreToolUse`'s link. The rendered
       skill is byte-identical to `main`'s for a tag and for `latest`.
-- [ ] `setupskill.FS` builds once, and `Dirs` cannot be changed by a
+- [x] `setupskill.FS` builds once, and `Dirs` cannot be changed by a
       caller.
-- [ ] One `ResolveBash`, in `internal/guardrule`, is used by the audit,
+- [x] One `ResolveBash`, in `internal/guardrule`, is used by the audit,
       `vibe doctor` and every test that needs bash.
-- [ ] Every "git in an isolated temporary repository" helper is in
+- [x] Every "git in an isolated temporary repository" helper is in
       `internal/testkit`, and depguard keeps it out of non-test files.
-- [ ] The drift checker reads the placement manifest, vibe-guard's
+- [x] The drift checker reads the placement manifest, vibe-guard's
       command table and the contract's path list. It reads no string
       literals and parses no help text, and it reports nothing new for
       the skill.
-- [ ] The guard corpus file is unchanged, and every existing test
+- [x] The guard corpus file is unchanged, and every existing test
       passes, except for the moved tests.
-- [ ] `docs/architecture/overview.md` and spec 0069 describe the
+- [x] `docs/architecture/overview.md` and spec 0069 describe the
       changes.
-- [ ] `task verify` passes.
-- [ ] `task audit` says `Verdict: conformant`.
+- [x] `task verify` passes.
+- [x] `task audit` says `Verdict: conformant`.
 - [ ] #166 and #167 are closed by the PR.
 
 ## Further Notes

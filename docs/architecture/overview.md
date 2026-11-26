@@ -128,6 +128,13 @@ internal/contract
   CLI's tests hand a fixture's known file list in through a repository
   seam (`contract.NewRepo`), so a rule-table case starts no git (spec
   0056).
+- **Check text from parts** (spec 0073). A rule's check text,
+  `Rule.Check()`, is derived: each part's `Lead` ("Static: ",
+  "Probe: ", "Static, " and so on, as spec 0051 writes it) and its
+  `Check`, joined in order; an empty lead continues the part before it.
+  `--explain` prints a part's `Check` without its lead. `registry_test.go`
+  compares each rule's derived text with spec 0051's row and spec
+  0061's text.
 - **One last part** (spec 0071, which replaced spec 0064's needs). The
   runner decides the static parts first. Then, in the probe copy, it
   runs the execution and probe parts that have `Run`, in registry order
@@ -204,7 +211,10 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   `Exception` have unexported fields and are built only by `NewRule` and
   `NewException`, which refuse an invalid one and parse a command match
   once per shell and compile a glob once; `ParsePolicy` builds through
-  them, spec 0073), the policy file
+  them, spec 0073), the kinds as typed values (a rule's `RuleKind`,
+  `CommandRule` or `PathRule`, with one pattern; a `Target`'s
+  `TargetKind`, built by `NewCommandTarget` and `NewPathTarget`; a
+  PowerShell writer's kind; spec 0073), the policy file
   paths, the unlock marker's name and format (`vibe unlock` writes it,
   `vibe-guard` reads it, the audit plants it), the finder of the Git top
   and the common Git directory that holds the marker (`FindRepo`, which
@@ -276,7 +286,9 @@ cmd/vibe → internal/cli ──→ internal/setupskill ──→ internal/guard
 - **Embedded bytes.** `.gitattributes` forces LF for
   `internal/setupskill/skill/`, and a test fails on any carriage return
   in an embedded file, so a CRLF working copy cannot change what a build
-  ships.
+  ships. `FS()` builds the skill's file system once, and `Dirs()`
+  returns a new slice on each call, so no caller can change the
+  package's state (spec 0073).
 - **Reference files.** The skill's reference implementations
   (`skill/reference/`) are single files per stack, maintained here; they
   began as copies of the template-sync system's templates, which spec
@@ -364,6 +376,7 @@ internal/
   setupskill/               # the embedded vibeconform-setup skill, vibe init --skill, and the tests that run its reference hooks; imports only guard (spec 0054)
   doctor/                   # vibe doctor's checks; imports only contract, for the configuration and hook reader, and guardrule, for bash resolution (spec 0059, 0073)
   testkit/                  # the tests' isolated temporary Git repository; imported by test files only, imports nothing from this module (spec 0073)
+  baselines/                # the complexity baseline ceiling task lint runs, a main package; imports nothing from this module (spec 0073)
 ```
 
 - **`vibe init`** (spec 0059) gets the components from
@@ -424,6 +437,15 @@ point for local and CI verification (`task fmt`, `task lint`, `task test`,
 invoke these tasks rather than duplicating command lists, and `vibe.yaml`
 declares them as the entrypoints. An adopting repository may use any
 runner; the contract only asks that its entrypoints exist and behave.
+
+`task lint` runs `golangci-lint`, then the complexity baseline ceiling
+(`internal/baselines`, spec 0073): it counts the `//nolint:… //
+baseline: pre-existing complexity` comments in the repository's Go
+files and fails when the count is higher than the ceiling recorded in
+`internal/baselines/main.go`, so that a new function over the
+`gocyclo` or `gocognit` limit is simplified, not given a baseline. A
+change that removes a baseline lowers the ceiling in the same commit;
+below the ceiling the check passes and names the new one.
 
 `task verify` and `task verify:fast` depend only on native language
 tooling, never on `vibe` (spec 0017; contract rule R-01 for adopters).
