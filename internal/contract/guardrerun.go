@@ -118,7 +118,7 @@ func (t *corpusTally) rerunSets(runs []caseRun) []*rerunSet {
 		if len(ex) == 0 {
 			continue
 		}
-		key := fmt.Sprintf("%q", ex)
+		key := exceptionsKey(ex)
 		set := byKey[key]
 		if set == nil {
 			set = &rerunSet{removed: ex}
@@ -147,7 +147,7 @@ func withoutExceptions(data []byte, removed []guardrule.Exception) ([]byte, erro
 	kept := []json.RawMessage{}
 	for _, en := range entries {
 		if en.object && slices.ContainsFunc(removed, func(ex guardrule.Exception) bool {
-			return ex.Rule == en.Rule && ex.Match == en.Match
+			return ex.Rule() == en.Rule && ex.Match() == en.Match
 		}) {
 			continue
 		}
@@ -163,12 +163,22 @@ func withoutExceptions(data []byte, removed []guardrule.Exception) ([]byte, erro
 	return append(out, '\n'), nil
 }
 
+// exceptionsKey is the same text for the same exceptions in the same
+// order: their rules, matches and reasons.
+func exceptionsKey(exceptions []guardrule.Exception) string {
+	var b strings.Builder
+	for _, ex := range exceptions {
+		fmt.Fprintf(&b, "%q %q %q;", ex.Rule(), ex.Match(), ex.Reason())
+	}
+	return b.String()
+}
+
 // exceptionsText names exceptions for a finding: `the exception rm-rf
 // "rm -r -f build" in .claude/hooks/policy.json`.
 func exceptionsText(exceptions []guardrule.Exception) string {
 	var names []string
 	for _, ex := range exceptions {
-		names = append(names, fmt.Sprintf("%s %q", ex.Rule, ex.Match))
+		names = append(names, fmt.Sprintf("%s %q", ex.Rule(), ex.Match()))
 	}
 	return plural(len(names), "the exception ", "the exceptions ") + strings.Join(names, ", ") + " in " + guardPolicyFile
 }
@@ -185,7 +195,7 @@ func (t *corpusTally) rerunCase(run caseRun, ex []guardrule.Exception, rerun *ca
 	case rerun.err != "":
 		t.undecidedCase(Finding{File: claudeSettingsFile, Message: "cannot decide: " + without + ": " + rerun.err})
 	case rerun.run.refused():
-		t.uses = append(t.uses, GuardExceptionUse{Rule: ex[0].Rule, Match: ex[0].Match, Case: c.Name})
+		t.uses = append(t.uses, GuardExceptionUse{Rule: ex[0].Rule(), Match: ex[0].Match(), Case: c.Name})
 	case rerun.run.undecided() != nil:
 		t.undecidedCase(Finding{File: claudeSettingsFile,
 			Message: "cannot decide: " + without + ": " + rerun.run.undecided().describe()})

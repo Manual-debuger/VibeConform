@@ -117,46 +117,46 @@ func TestExceptionMatches(t *testing.T) {
 		want bool
 	}{
 		{"path glob inside the root",
-			guardrule.Exception{Rule: "secret-file", Match: "**/.env.example"},
+			exception(t, "secret-file", "**/.env.example"),
 			guardrule.Target{Tool: "Write", Path: "/repo/config/.env.example"}, true},
 		{"path glob does not match another file",
-			guardrule.Exception{Rule: "secret-file", Match: "**/.env.example"},
+			exception(t, "secret-file", "**/.env.example"),
 			guardrule.Target{Tool: "Write", Path: "/repo/.env"}, false},
 		{"a path rule does not match a command",
-			guardrule.Exception{Rule: "secret-file", Match: "*"},
+			exception(t, "secret-file", "*"),
 			guardrule.Target{Tool: "Bash", Command: "echo > .env"}, false},
 		{"command prefix",
-			guardrule.Exception{Rule: "git-clean-fd", Match: "git clean -fdx build/"},
+			exception(t, "git-clean-fd", "git clean -fdx build/"),
 			guardrule.Target{Tool: "Bash", Command: "git clean -fdx build/"}, true},
 		{"command prefix with more words",
-			guardrule.Exception{Rule: "git-clean-fd", Match: "git clean -fdx"},
+			exception(t, "git-clean-fd", "git clean -fdx"),
 			guardrule.Target{Tool: "Bash", Command: "git clean -fdx build/"}, true},
 		{"a longer match is no prefix",
-			guardrule.Exception{Rule: "git-clean-fd", Match: "git clean -fdx build/"},
+			exception(t, "git-clean-fd", "git clean -fdx build/"),
 			guardrule.Target{Tool: "Bash", Command: "git clean -fdx"}, false},
 		{"a word is compared whole",
-			guardrule.Exception{Rule: "git-clean-fd", Match: "git clean -fdx build"},
+			exception(t, "git-clean-fd", "git clean -fdx build"),
 			guardrule.Target{Tool: "Bash", Command: "git clean -fdx build/"}, false},
 		{"in a list, behind a wrapper and quoted",
-			guardrule.Exception{Rule: "git-clean-fd", Match: "git clean -fdx build/"},
+			exception(t, "git-clean-fd", "git clean -fdx build/"),
 			guardrule.Target{Tool: "Bash", Command: `cd x && sudo "git" clean '-fdx' build/`}, true},
 		{"the program by its path",
-			guardrule.Exception{Rule: "rm-rf", Match: "rm -rf build"},
+			exception(t, "rm-rf", "rm -rf build"),
 			guardrule.Target{Tool: "Bash", Command: "/bin/rm -rf build"}, true},
 		{"an expansion never matches",
-			guardrule.Exception{Rule: "rm-rf", Match: "rm -rf build"},
+			exception(t, "rm-rf", "rm -rf build"),
 			guardrule.Target{Tool: "Bash", Command: "rm -rf $d"}, false},
 		{"a command that does not parse matches nothing",
-			guardrule.Exception{Rule: "rm-rf", Match: "rm -rf build"},
+			exception(t, "rm-rf", "rm -rf build"),
 			guardrule.Target{Tool: "Bash", Command: "rm -rf build '"}, false},
 		{"PowerShell without case and by alias",
-			guardrule.Exception{Rule: "remove-item-recurse-force", Match: "Remove-Item build"},
+			exception(t, "remove-item-recurse-force", "Remove-Item build"),
 			guardrule.Target{Tool: "PowerShell", Command: "ri BUILD -r -fo"}, true},
 		{"PowerShell parameters are compared as words",
-			guardrule.Exception{Rule: "remove-item-recurse-force", Match: "Remove-Item -Recurse"},
+			exception(t, "remove-item-recurse-force", "Remove-Item -Recurse"),
 			guardrule.Target{Tool: "PowerShell", Command: "Remove-Item -Rec x"}, false},
 		{"a command rule does not match a file edit",
-			guardrule.Exception{Rule: "rm-rf", Match: "rm"},
+			exception(t, "rm-rf", "rm"),
 			guardrule.Target{Tool: "Write", Path: "rm"}, false},
 	}
 	for _, c := range cases {
@@ -178,19 +178,19 @@ func TestExceptionMatchesRefused(t *testing.T) {
 		want    bool
 	}{
 		{"another simple command of the case",
-			guardrule.Exception{Rule: "rm-rf", Match: "cd /tmp"},
+			exception(t, "rm-rf", "cd /tmp"),
 			guardrule.Target{Tool: "Bash", Command: "cd /tmp && rm -rf"}, []string{"rm -rf"}, false},
 		{"the refused simple command",
-			guardrule.Exception{Rule: "rm-rf", Match: "rm -rf"},
+			exception(t, "rm-rf", "rm -rf"),
 			guardrule.Target{Tool: "Bash", Command: "cd /tmp && rm -rf"}, []string{"rm -rf"}, true},
 		{"a nested refused simple command",
-			guardrule.Exception{Rule: "rm-rf", Match: "rm -rf build"},
+			exception(t, "rm-rf", "rm -rf build"),
 			guardrule.Target{Tool: "Bash", Command: "bash -c 'rm -rf build'"}, []string{"rm -rf build"}, true},
 		{"the shell that runs the refused simple command",
-			guardrule.Exception{Rule: "rm-rf", Match: "bash -c"},
+			exception(t, "rm-rf", "bash -c"),
 			guardrule.Target{Tool: "Bash", Command: "bash -c 'rm -rf build'"}, []string{"rm -rf build"}, false},
 		{"refused does not change a path match",
-			guardrule.Exception{Rule: "secret-file", Match: ".env"},
+			exception(t, "secret-file", ".env"),
 			guardrule.Target{Tool: "Write", Path: "/repo/.env"}, []string{"x"}, true},
 	}
 	for _, c := range cases {
@@ -247,23 +247,136 @@ func TestRuleMatches(t *testing.T) {
 	}
 }
 
-// A rule built outside ParsePolicy can carry an args that does not
-// compile. It fails closed: a command with the rule's prefix matches, so
-// a deny rule refuses and an ask rule asks (spec 0069, bug 4).
-func TestRuleWithUncompilableArgsFailsClosed(t *testing.T) {
-	r := guardrule.Rule{ID: "kubectl-bad", Level: "deny", Command: "kubectl", Args: "(["}
-	cmds, err := guardrule.Commands(guardrule.ShellBash, "kubectl get pods")
+// A rule with an args that does not compile cannot be built, so no deny
+// rule can fail open on it (spec 0069, bug 4; spec 0073 replaces its
+// fail-closed match with this refusal).
+func TestRuleWithUncompilableArgsCannotBeBuilt(t *testing.T) {
+	r, err := guardrule.NewRule(guardrule.RuleSpec{ID: "kubectl-bad", Level: guardrule.Deny, Reason: "x",
+		Kind: guardrule.CommandRule, Pattern: "kubectl", Args: "(["})
+	var fe *guardrule.FieldError
+	if !errors.As(err, &fe) || fe.Field != "args" {
+		t.Fatalf("NewRule = %+v, %v; want an args error", r, err)
+	}
+}
+
+// The zero Rule and the zero Exception match no command and no path.
+func TestZeroRuleAndExceptionMatchNothing(t *testing.T) {
+	cmds, err := guardrule.Commands(guardrule.ShellBash, "rm -rf build")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !r.MatchesCommand(cmds[0]) {
-		t.Error("a command with the prefix: MatchesCommand = false, want true")
+	var r guardrule.Rule
+	if r.MatchesCommand(cmds[0]) || r.MatchesPath("/repo/x", "/repo") || r.MatchesPath("", "") {
+		t.Error("the zero Rule matches")
 	}
-	other, err := guardrule.Commands(guardrule.ShellBash, "helm list")
+	var e guardrule.Exception
+	if e.MatchesCommand(cmds[0]) || e.MatchesPath("/repo/x", "/repo") || e.MatchesPath("", "") ||
+		e.Matches(guardrule.Target{Tool: "Bash", Command: "rm -rf build"}, "/repo") ||
+		e.Matches(guardrule.Target{Tool: "Write", Path: "/repo/x"}, "/repo") {
+		t.Error("the zero Exception matches")
+	}
+}
+
+// A match that parses only as PowerShell matches a PowerShell command
+// and not a Bash command with the same words.
+func TestPowerShellOnlyMatch(t *testing.T) {
+	const match = "Remove-Item \"a`\"b\""
+	if _, err := guardrule.Commands(guardrule.ShellBash, match); err == nil {
+		t.Fatalf("%s parses as Bash; the test needs a match that does not", match)
+	}
+	e := exception(t, "remove-item-recurse-force", match)
+	if !e.Matches(guardrule.Target{Tool: "PowerShell", Command: "Remove-Item \"a`\"b\" -Recurse -Force"}, "/repo") {
+		t.Error("the match does not match the PowerShell command")
+	}
+	if e.Matches(guardrule.Target{Tool: "Bash", Command: `Remove-Item 'a"b' -Recurse -Force`}, "/repo") {
+		t.Error("the match matches a Bash command")
+	}
+	r, err := guardrule.NewRule(guardrule.RuleSpec{ID: "r", Level: guardrule.Deny, Reason: "x", Kind: guardrule.CommandRule, Pattern: match})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.MatchesCommand(other[0]) {
-		t.Error("a command without the prefix: MatchesCommand = true, want false")
+	ps, _ := guardrule.Commands(guardrule.ShellPowerShell, "Remove-Item \"a`\"b\" -Recurse")
+	bash, _ := guardrule.Commands(guardrule.ShellBash, `Remove-Item 'a"b' -Recurse`)
+	if !r.MatchesCommand(ps[0]) || r.MatchesCommand(bash[0]) {
+		t.Error("a PowerShell-only rule: want a match in PowerShell only")
 	}
+}
+
+// A policy's command matches are parsed once per shell, and its globs
+// compiled once, when the policy is read; matching parses and compiles
+// nothing again (spec 0073).
+func TestMatchesAreParsedOnce(t *testing.T) {
+	const n, m = 3, 4 // command exceptions; simple commands of the command
+	parses, compiles := guardrule.MatchParses(), guardrule.GlobCompiles()
+	p, err := guardrule.ParsePolicy([]byte(`{"version": 2,
+		"rules": [
+			{"id": "tf", "level": "deny", "reason": "x", "command": "terraform destroy", "args": "^-auto"},
+			{"id": "lock", "level": "deny", "reason": "x", "path": "**/go.sum"}
+		],
+		"exceptions": [
+			{"rule": "rm-rf", "match": "rm -rf build", "reason": "x"},
+			{"rule": "git-clean-fd", "match": "git clean -fdx", "reason": "x"},
+			{"rule": "git-push-force", "match": "git push --force origin feat/", "reason": "x"},
+			{"rule": "secret-file", "match": "**/.env.example", "reason": "x"}
+		]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := guardrule.MatchParses()-parses, int64(2*(n+1)); got != want {
+		t.Errorf("reading the policy parsed %d matches, want %d (each command match once per shell)", got, want)
+	}
+	if got := guardrule.GlobCompiles() - compiles; got != 2 {
+		t.Errorf("reading the policy compiled %d globs, want 2", got)
+	}
+	parses, compiles = guardrule.MatchParses(), guardrule.GlobCompiles()
+	command := "rm -rf build && git clean -fdx && git push --force origin feat/x && terraform destroy -auto-approve"
+	cmds, err := guardrule.Commands(guardrule.ShellBash, command)
+	if err != nil || len(cmds) != m {
+		t.Fatalf("%d simple commands, %v; want %d", len(cmds), err, m)
+	}
+	for _, e := range p.Exceptions {
+		e.Matches(guardrule.Target{Tool: "Bash", Command: command}, "/repo")
+		e.MatchesRefused(guardrule.Target{Tool: "Bash", Command: command}, "/repo", []string{"rm -rf build"})
+		e.Matches(guardrule.Target{Tool: "Write", Path: "/repo/a/.env.example"}, "/repo")
+		for _, c := range cmds {
+			e.MatchesCommand(c)
+		}
+	}
+	for _, r := range p.Rules {
+		r.MatchesPath("/repo/a/go.sum", "/repo")
+		for _, c := range cmds {
+			r.MatchesCommand(c)
+		}
+	}
+	if got := guardrule.MatchParses() - parses; got != 0 {
+		t.Errorf("matching parsed %d matches again", got)
+	}
+	if got := guardrule.GlobCompiles() - compiles; got != 0 {
+		t.Errorf("matching compiled %d globs again", got)
+	}
+}
+
+// MatchGlob compiles a pattern it has seen once.
+func TestMatchGlobCachesItsPattern(t *testing.T) {
+	const pattern = "cache-test/**/x.*"
+	guardrule.MatchGlob(pattern, "cache-test/x.go")
+	compiles := guardrule.GlobCompiles()
+	for range 5 {
+		if !guardrule.MatchGlob(pattern, "cache-test/a/x.go") {
+			t.Fatal("MatchGlob does not match")
+		}
+	}
+	if got := guardrule.GlobCompiles() - compiles; got != 0 {
+		t.Errorf("MatchGlob compiled the same pattern %d more times", got)
+	}
+}
+
+// exception builds an exception the constructor accepts.
+func exception(t *testing.T, rule, match string) guardrule.Exception {
+	t.Helper()
+	e, err := guardrule.NewException(rule, match, "x")
+	if err != nil {
+		t.Fatalf("NewException(%q, %q): %v", rule, match, err)
+	}
+	return e
 }

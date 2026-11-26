@@ -19,8 +19,8 @@ func TestRerunRestoresPolicyWhenARerunFails(t *testing.T) {
 	const original = `{"version": 2, "exceptions": [` + "\n" +
 		`  {"rule": "rm-rf", "match": "rm -r -f build", "reason": "a"},` + "\n" +
 		`  {"rule": "git-skip-hooks", "match": "git commit --no-verify", "reason": "b"}]}` + "\n"
-	rmBuild := guardrule.Exception{Rule: "rm-rf", Match: "rm -r -f build"}
-	noVerify := guardrule.Exception{Rule: "git-skip-hooks", Match: "git commit --no-verify"}
+	rmBuild := mustException(t, "rm-rf", "rm -r -f build")
+	noVerify := mustException(t, "git-skip-hooks", "git commit --no-verify")
 	sets := []*rerunSet{{removed: []guardrule.Exception{rmBuild}}, {removed: []guardrule.Exception{noVerify}}}
 
 	p := filepath.Join(t.TempDir(), "policy.json")
@@ -72,7 +72,7 @@ func TestRerunRestoresPolicyWhenARerunFails(t *testing.T) {
 func TestRerunPolicyThatCannotBeRead(t *testing.T) {
 	t.Parallel()
 	p := filepath.Join(t.TempDir(), "policy.json")
-	sets := []*rerunSet{{removed: []guardrule.Exception{{Rule: "rm-rf", Match: "rm -rf"}}}}
+	sets := []*rerunSet{{removed: []guardrule.Exception{mustException(t, "rm-rf", "rm -rf")}}}
 	failed := map[*rerunSet]string{}
 	restoreErr := rewritePolicyPerSet(p, sets, func(*rerunSet) { t.Error("a set ran") },
 		func(set *rerunSet, why string) { failed[set] = why })
@@ -85,4 +85,14 @@ func TestRerunPolicyThatCannotBeRead(t *testing.T) {
 	if _, err := os.Stat(p); !os.IsNotExist(err) {
 		t.Errorf("policy.json exists after the reruns: %v", err)
 	}
+}
+
+// mustException builds an exception that guardrule.NewException accepts.
+func mustException(t *testing.T, rule, match string) guardrule.Exception {
+	t.Helper()
+	ex, err := guardrule.NewException(rule, match, "x")
+	if err != nil {
+		t.Fatalf("NewException(%q, %q): %v", rule, match, err)
+	}
+	return ex
 }

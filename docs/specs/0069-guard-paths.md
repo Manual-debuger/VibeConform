@@ -91,7 +91,8 @@ is refused under `payload-error`. Once edit paths are read against the
   writes the marker where the guard reads it, or fails with a message
   that says why.
 - A repository rule whose `args` cannot be compiled matches: the guard
-  fails closed.
+  fails closed. (Spec 0073 makes such a rule impossible to build; see
+  "Repository rules fail closed".)
 - A `cwd` that is present and is not a string is a payload error.
 
 ## User Stories
@@ -231,12 +232,17 @@ is refused under `payload-error`. Once edit paths are read against the
 
 ### Repository rules fail closed
 
-- When a command rule has `args` and no compiled expression, matching
-  compiles it. If that fails, the rule matches: a deny rule refuses and
-  an ask rule asks. Rules from `ParsePolicy` are unchanged, since
-  `ParsePolicy` rejects a bad `args`.
+- *Amended by spec 0073:* a command rule whose `args` does not compile
+  cannot be built. `guardrule.NewRule` refuses it, and `ParsePolicy`
+  builds every rule through `NewRule`, so no rule can fail open on its
+  `args`. The fail-closed branch at match time is gone, and its
+  regression test is now a test that the constructor refuses the rule.
+  The first form of this decision was: when a command rule has `args`
+  and no compiled expression, matching compiles it; if that fails, the
+  rule matches, so a deny rule refuses and an ask rule asks.
 - Exceptions already fail closed (a match that does not parse lifts
-  nothing) and do not change.
+  nothing) and do not change. Since spec 0073, `guardrule.NewException`
+  refuses such an exception, and an exception it refuses lifts nothing.
 
 ### The payload's `cwd`
 

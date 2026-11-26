@@ -1,6 +1,10 @@
 package guardrule_test
 
 import (
+	"cmp"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -57,11 +61,164 @@ func TestParsePolicyAccepts(t *testing.T) {
 	if p.Version != 2 || p.Mode != guardrule.Observe || len(p.Rules) != 3 || len(p.Exceptions) != 2 {
 		t.Fatalf("policy = %+v", p)
 	}
-	if r := p.Rules[1]; r.ID != "ask-kubectl" || r.Level != guardrule.Ask || r.Command != "kubectl" || r.Args != "^--context=prod" {
-		t.Errorf("rule = %+v", r)
+	rule := func(r guardrule.Rule) string {
+		return fmt.Sprintf("%s %s %s %s %q %s %q", r.ID(), r.Level(), r.Kind(), r.Pattern(), r.Args(), r.Reason(), r.Tools())
 	}
-	if e := p.Exceptions[0]; e.Rule != "git-clean-fd" || e.Match != "git clean -fdx build/" || e.Reason != "build output" {
+	if got, want := rule(p.Rules[1]), `ask-kubectl ask command kubectl "^--context=prod" prod ["Bash"]`; got != want {
+		t.Errorf("rule = %s, want %s", got, want)
+	}
+	if got, want := rule(p.Rules[2]), `no-lockfile-edit deny path **/go.sum "" use the package manager ["Write" "Edit"]`; got != want {
+		t.Errorf("rule = %s, want %s", got, want)
+	}
+	if e := p.Exceptions[0]; e.Rule() != "git-clean-fd" || e.Match() != "git clean -fdx build/" || e.Reason() != "build output" {
 		t.Errorf("exception = %+v", e)
+	}
+}
+
+// The rule and exception constructors refuse every invalid state that
+// ParsePolicy refuses, with the message ParsePolicy gives after the key
+// (spec 0073, "Rules and exceptions are built valid").
+func TestConstructorsRefuseWithParsePolicysMessage(t *testing.T) {
+	cmd := func(s guardrule.RuleSpec) guardrule.RuleSpec {
+		s.ID, s.Level, s.Reason = cmp.Or(s.ID, "r"), cmp.Or(s.Level, guardrule.Deny), cmp.Or(s.Reason, "x")
+		if s.Kind == 0 {
+			s.Kind, s.Pattern = guardrule.CommandRule, cmp.Or(s.Pattern, "x")
+		}
+		return s
+	}
+	const okRule = `"id": "r", "level": "deny", "reason": "x", `
+	rules := []struct {
+		name  string
+		spec  guardrule.RuleSpec
+		json  string // the rule's fields in policy.json
+		field string
+		msg   string
+	}{
+		{"a contract id", cmd(guardrule.RuleSpec{ID: "rm-rf"}), `"id": "rm-rf", "level": "deny", "reason": "x", "command": "x"`,
+			"id", `"rm-rf" is a built-in guard rule ID; a repository rule needs its own`},
+		{"an internal id", cmd(guardrule.RuleSpec{ID: "parse-error"}), `"id": "parse-error", "level": "deny", "reason": "x", "command": "x"`,
+			"id", `"parse-error" is a built-in guard rule ID; a repository rule needs its own`},
+		{"a bad level", cmd(guardrule.RuleSpec{Level: "block"}), `"id": "r", "level": "block", "reason": "x", "command": "x"`,
+			"level", `is "block"; it must be "deny" or "ask"`},
+		{"neither command nor path", guardrule.RuleSpec{ID: "r", Level: guardrule.Deny, Reason: "x"}, okRule[:len(okRule)-2],
+			"", "must have exactly one of command and path"},
+		{"a command with two commands", cmd(guardrule.RuleSpec{Pattern: "a; b"}), okRule + `"command": "a; b"`,
+			"command", "does not parse as a command: is not one simple command"},
+		{"a command with an expansion", cmd(guardrule.RuleSpec{Pattern: "rm $x"}), okRule + `"command": "rm $x"`,
+			"command", "does not parse as a command: holds an expansion; a match is compared word for word"},
+		{"args on a path rule", guardrule.RuleSpec{ID: "r", Level: guardrule.Deny, Reason: "x", Kind: guardrule.PathRule, Pattern: "x", Args: "y"},
+			okRule + `"path": "x", "args": "y"`, "args", "is only allowed with command"},
+		{"a bad regexp", cmd(guardrule.RuleSpec{Args: "("}), okRule + `"command": "x", "args": "("`,
+			"args", "is not a regular expression: error parsing regexp: missing closing ): `(`"},
+		{"an unknown tool", cmd(guardrule.RuleSpec{Tools: []string{"bash"}}), okRule + `"command": "x", "tools": ["bash"]`,
+			"tools", `names "bash", which is not one of Bash, PowerShell, Write, Edit, MultiEdit, NotebookEdit`},
+		{"a command rule for a file-edit tool", cmd(guardrule.RuleSpec{Tools: []string{"Write"}}), okRule + `"command": "x", "tools": ["Write"]`,
+			"tools", `names "Write", which runs no command, on a command rule`},
+		{"a path rule for a command tool", guardrule.RuleSpec{ID: "r", Level: guardrule.Deny, Reason: "x", Kind: guardrule.PathRule, Pattern: "x", Tools: []string{"Bash"}},
+			okRule + `"path": "x", "tools": ["Bash"]`, "tools", `names "Bash", which edits no file, on a path rule`},
+	}
+	for _, c := range rules {
+		t.Run("rule with "+c.name, func(t *testing.T) {
+			r, err := guardrule.NewRule(c.spec)
+			var fe *guardrule.FieldError
+			if !errors.As(err, &fe) || fe.Field != c.field || fe.Msg != c.msg {
+				t.Errorf("NewRule = %+v, %v; want %s %q", r, err, c.field, c.msg)
+			}
+			key := strings.TrimSuffix("rules[0]."+c.field, ".")
+			wantParse := "policy.json: " + key + " " + c.msg
+			if _, err := guardrule.ParsePolicy([]byte(`{"version": 2, "rules": [{` + c.json + `}]}`)); err == nil || err.Error() != wantParse {
+				t.Errorf("ParsePolicy error = %v, want %q", err, wantParse)
+			}
+		})
+	}
+	exceptions := []struct {
+		name, rule, match, field, msg string
+	}{
+		{"an unknown rule", "rm-r", "rm -rf x", "rule", `"rm-r" is not a guard rule ID; it must be one of ` + strings.Join(guardrule.IDs, ", ")},
+		{"a repository rule", "r", "x", "rule", `"r" is not a guard rule ID; it must be one of ` + strings.Join(guardrule.IDs, ", ")},
+		{"a match that does not parse", "rm-rf", "rm 'x", "match", "does not parse as a command: does not parse as Bash: 1:4: reached EOF without closing quote `'`"},
+		{"a match with an expansion", "rm-rf", "rm -rf $x", "match", "does not parse as a command: holds an expansion; a match is compared word for word"},
+	}
+	for _, c := range exceptions {
+		t.Run("exception with "+c.name, func(t *testing.T) {
+			e, err := guardrule.NewException(c.rule, c.match, "x")
+			var fe *guardrule.FieldError
+			if !errors.As(err, &fe) || fe.Field != c.field || fe.Msg != c.msg {
+				t.Errorf("NewException = %+v, %v; want %s %q", e, err, c.field, c.msg)
+			}
+			ex, _ := json.Marshal(map[string]string{"rule": c.rule, "match": c.match, "reason": "x"})
+			wantParse := "policy.json: exceptions[0]." + c.field + " " + c.msg
+			if _, err := guardrule.ParsePolicy([]byte(`{"version": 2, "exceptions": [` + string(ex) + `]}`)); err == nil || err.Error() != wantParse {
+				t.Errorf("ParsePolicy error = %v, want %q", err, wantParse)
+			}
+		})
+	}
+}
+
+// A rule or an exception with several faults is refused for the first
+// in the order policy.json's keys are read, whether the JSON or the
+// constructor finds it.
+func TestParsePolicyNamesTheFirstFault(t *testing.T) {
+	cases := []struct{ entry, want string }{
+		{`"rules": [{"id": "r", "level": "block", "command": "x"}]`, `rules[0].level is "block"; it must be "deny" or "ask"`},
+		{`"rules": [{"id": "rm-rf", "level": 1, "reason": "x", "command": "x"}]`, `rules[0].id "rm-rf" is a built-in guard rule ID; a repository rule needs its own`},
+		{`"rules": [{"id": "r", "level": 1, "reason": "x", "command": "x"}]`, `rules[0].level is 1; it must be a string`},
+		{`"rules": [{"id": "r", "level": "deny", "reason": "x", "path": "x", "args": ""}]`, `rules[0].args is only allowed with command`},
+		{`"rules": [{"id": "r", "level": "deny", "reason": "x", "command": "a; b", "args": 1}]`, `rules[0].command does not parse as a command: is not one simple command`},
+		{`"rules": [{"id": "r", "level": "deny", "reason": "x", "command": "x", "args": "(", "tools": "Bash"}]`, "rules[0].args is not a regular expression: error parsing regexp: missing closing ): `(`"},
+		{`"rules": [{"id": "r", "level": "deny", "reason": "x", "command": "x", "args": 1, "tools": ["Write"]}]`, `rules[0].args is 1; it must be a string`},
+		{`"rules": [{"id": "r", "level": "deny", "command": "x", "path": "y"}]`, `rules[0].reason is missing`},
+		{`"rules": [{"id": "r", "level": "deny", "reason": "x", "command": "x", "path": 1}]`, `rules[0] must have exactly one of command and path`},
+		{`"exceptions": [{"rule": "rm-r"}]`, `exceptions[0].rule "rm-r" is not a guard rule ID; it must be one of ` + strings.Join(guardrule.IDs, ", ")},
+		{`"exceptions": [{"rule": "rm-rf", "match": "rm $x"}]`, `exceptions[0].match does not parse as a command: holds an expansion; a match is compared word for word`},
+		{`"exceptions": [{"match": "rm $x"}]`, `exceptions[0].rule is missing`},
+	}
+	for _, c := range cases {
+		_, err := guardrule.ParsePolicy([]byte(`{"version": 2, ` + c.entry + `}`))
+		if want := "policy.json: " + c.want; err == nil || err.Error() != want {
+			t.Errorf("%s: error %v, want %q", c.entry, err, want)
+		}
+	}
+}
+
+// A rule and an exception the constructors accept are what ParsePolicy
+// builds from the same values.
+func TestConstructorsAccept(t *testing.T) {
+	r, err := guardrule.NewRule(guardrule.RuleSpec{ID: "kubectl-prod", Level: guardrule.Ask, Reason: "prod",
+		Kind: guardrule.CommandRule, Pattern: "kubectl", Args: "^--context=prod$"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmds, err := guardrule.Commands(guardrule.ShellBash, "kubectl get pods --context=prod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.MatchesCommand(cmds[0]) || !r.AppliesTo("PowerShell") || r.AppliesTo("Write") {
+		t.Errorf("NewRule built %+v", r)
+	}
+	e, err := guardrule.NewException("secret-file", "**/.env.example", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !e.MatchesPath("/repo/a/.env.example", "/repo") {
+		t.Errorf("NewException built %+v", e)
+	}
+}
+
+// A path exception's empty match and a rule's empty fields are refused,
+// as ParsePolicy refuses them.
+func TestConstructorsRefuseEmptyValues(t *testing.T) {
+	if _, err := guardrule.NewException("secret-file", " ", "x"); err == nil || err.Error() != "match is empty" {
+		t.Errorf("NewException with an empty match: %v", err)
+	}
+	if _, err := guardrule.NewRule(guardrule.RuleSpec{Level: guardrule.Deny, Reason: "x", Kind: guardrule.PathRule, Pattern: "x"}); err == nil || err.Error() != "id is empty" {
+		t.Errorf("NewRule without an ID: %v", err)
+	}
+	if _, err := guardrule.NewRule(guardrule.RuleSpec{ID: "r", Level: guardrule.Deny, Kind: guardrule.PathRule, Pattern: "x"}); err == nil || err.Error() != "reason is empty" {
+		t.Errorf("NewRule without a reason: %v", err)
+	}
+	if _, err := guardrule.NewRule(guardrule.RuleSpec{ID: "r", Level: guardrule.Deny, Reason: "x", Kind: guardrule.PathRule}); err == nil || err.Error() != "path is empty" {
+		t.Errorf("NewRule without a path: %v", err)
 	}
 }
 

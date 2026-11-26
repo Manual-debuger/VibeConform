@@ -200,7 +200,11 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
 
 - **`internal/guardrule`** holds what the audit and the guard must agree
   on: the contract guard rule IDs and the guard-internal ones,
-  `policy.json` version 2 parsing, exception matching, the policy file
+  `policy.json` version 2 parsing, exception matching (a `Rule` and an
+  `Exception` have unexported fields and are built only by `NewRule` and
+  `NewException`, which refuse an invalid one and parse a command match
+  once per shell and compile a glob once; `ParsePolicy` builds through
+  them, spec 0073), the policy file
   paths, the unlock marker's name and format (`vibe unlock` writes it,
   `vibe-guard` reads it, the audit plants it), the finder of the Git top
   and the common Git directory that holds the marker (`FindRepo`, which

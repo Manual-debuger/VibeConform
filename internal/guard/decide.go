@@ -185,11 +185,11 @@ func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit // basel
 			return d
 		}
 		for _, r := range g.policy.Rules {
-			if r.Command == "" || !r.AppliesTo(t.Tool) || !r.MatchesCommand(*c) {
+			if r.Kind() != gr.CommandRule || !r.AppliesTo(t.Tool) || !r.MatchesCommand(*c) {
 				continue
 			}
-			f := Finding{Rule: r.ID, Why: r.Reason, Command: c}
-			if r.Level == gr.Deny {
+			f := Finding{Rule: r.ID(), Why: r.Reason(), Command: c}
+			if r.Level() == gr.Deny {
 				d.Outcome, d.Finding = Deny, &f
 				return d
 			}
@@ -213,11 +213,11 @@ func (g *Guard) decidePath(t gr.Target) Decision {
 	}
 	var ask *Finding
 	for _, r := range g.policy.Rules {
-		if r.Path == "" || !r.AppliesTo(t.Tool) || !r.MatchesPath(p, g.repo.Root) {
+		if r.Kind() != gr.PathRule || !r.AppliesTo(t.Tool) || !r.MatchesPath(p, g.repo.Root) {
 			continue
 		}
-		f := Finding{Rule: r.ID, Why: r.Reason, Path: t.Path}
-		if r.Level == gr.Deny {
+		f := Finding{Rule: r.ID(), Why: r.Reason(), Path: t.Path}
+		if r.Level() == gr.Deny {
 			d.Outcome, d.Finding = Deny, &f
 			return d
 		}
@@ -328,7 +328,7 @@ func isGitBashDrive(p string) bool {
 // exception returns the first exception for rule that matches.
 func (g *Guard) exception(rule string, matches func(gr.Exception) bool) *gr.Exception {
 	for i, e := range g.policy.Exceptions {
-		if e.Rule == rule && matches(e) {
+		if e.Rule() == rule && matches(e) {
 			return &g.policy.Exceptions[i]
 		}
 	}
