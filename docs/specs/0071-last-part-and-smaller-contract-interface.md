@@ -214,9 +214,11 @@ Assumptions, each checked during implementation:
   unexported with them.
 - Exceptions: methods that satisfy an interface of the standard library
   or of a dependency (`Error`, `Unwrap`, `String`, `Write`) stay as they
-  are. Methods on types that are already unexported (the probe session,
-  the run outcome) stay as they are, because they are not on the
-  package interface.
+  are. Fields and methods of unexported types (the probe session, the
+  run outcome, and the types that this change unexports, such as the CI
+  model) stay as they are, because they are not on the package
+  interface. (Amended 2026-11-26 during implementation: the approved
+  text named only methods of types that were already unexported.)
 - The method: unexport, then build and run the tests. What a caller
   needs stays exported. The pull request lists the identifiers that
   became unexported and the code that was deleted because it became
@@ -279,7 +281,7 @@ Assumptions, each checked during implementation:
 - Running parts concurrently.
 - Renaming exported identifiers that callers use, or changing any
   report text.
-- Unexporting methods of types that are already unexported.
+- Unexporting fields and methods of unexported types.
 
 ## Acceptance Criteria
 
