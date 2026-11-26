@@ -29,7 +29,7 @@ func TestAuditExplainEveryRule(t *testing.T) {
 			flat := strings.Join(strings.Fields(r.stdout), " ")
 			for _, want := range []string{
 				string(rule.Level), string(rule.Category) + ", " + rule.Category.Name(),
-				rule.Source, rule.Rationale(), rule.Check,
+				rule.Source, rule.Rationale(), rule.Check(),
 			} {
 				if !strings.Contains(flat, strings.Join(strings.Fields(want), " ")) {
 					t.Errorf("--explain %s does not show %q:\n%s", rule.ID, want, r.stdout)
