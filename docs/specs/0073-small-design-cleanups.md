@@ -1,6 +1,6 @@
 # Spec 0073: Small design cleanups from the 2026-11-15 review
 
-Status: draft (2026-11-26). Issue #166, the last open item of the design
+Status: draft (2026-11-26). Issue #238. Implements #166, the last open item of the design
 review #167. A refactor of `internal/guardrule`, `internal/contract`,
 `internal/setupskill` and the tests. No contract change: the contract
 versions, the guard corpus, every rule's result, finding and fix, and
