@@ -42,6 +42,58 @@ func TestGuardCorpusIsValid(t *testing.T) {
 	}
 }
 
+// TestGuardCorpusNamesTheRefusedCommands (spec 0072, "Guard corpus"):
+// every deny case of a command that decomposes into more than one simple
+// command names in refuses the simple commands its rule refuses, each
+// written as one of the case's simple commands; a case of one simple
+// command, and an edit, has no refuses.
+func TestGuardCorpusNamesTheRefusedCommands(t *testing.T) {
+	compound := 0
+	for _, c := range GuardCorpus() {
+		tgt := c.Target()
+		if c.Want != WantDeny || !guardrule.IsCommandTool(tgt.Tool) {
+			if len(c.Refuses) > 0 {
+				t.Errorf("%s: refuses %q on an allow case or an edit", c.Name, c.Refuses)
+			}
+			continue
+		}
+		simple := simpleCommands(t, tgt)
+		if len(simple) == 1 {
+			if len(c.Refuses) > 0 {
+				t.Errorf("%s: refuses %q on a case of one simple command", c.Name, c.Refuses)
+			}
+			continue
+		}
+		compound++
+		if len(c.Refuses) == 0 {
+			t.Errorf("%s: a compound case %q has no refuses", c.Name, simple)
+		}
+		for _, r := range c.Refuses {
+			if !slices.Contains(simple, r) {
+				t.Errorf("%s: refuses %q, which is not one of its simple commands %q", c.Name, r, simple)
+			}
+		}
+	}
+	if compound == 0 {
+		t.Error("the corpus has no compound deny case")
+	}
+}
+
+// simpleCommands are the simple commands of a command target, by the
+// guardrule decomposition, each as its words.
+func simpleCommands(t *testing.T, tgt guardrule.Target) []string {
+	t.Helper()
+	cmds, err := guardrule.Commands(guardrule.ShellFor(tgt.Tool), tgt.Command)
+	if err != nil {
+		t.Fatalf("%q: %v", tgt.Command, err)
+	}
+	simple := make([]string, len(cmds))
+	for i, cmd := range cmds {
+		simple[i] = cmd.String()
+	}
+	return simple
+}
+
 // The counts spec 0053 records for the corpus are the corpus's counts.
 func TestGuardCorpusCountsAreInSpec0053(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "specs", "0053-contract-probes-and-guard.md"))
@@ -114,6 +166,19 @@ func TestParseGuardCorpusRejects(t *testing.T) {
 			bash("rm -rf x") + `}]}`, "git-skip-hooks"},
 		{"git-skip-hooks outside A-09", `{"cases": [{"name": "a", "want": "deny", "rule": "git-skip-hooks", "payload": ` +
 			bash("git commit -n") + `}]}`, "A-09"},
+		{"fixed on an allow case", `{"cases": [{"name": "a", "want": "allow", "fixed": true, "payload": ` + bash("ls") + `}]}`, "fixed"},
+		{"refuses on an allow case", `{"cases": [{"name": "a", "want": "allow", "refuses": ["ls"], "payload": ` +
+			bash("cd x && ls") + `}]}`, "refuses"},
+		{"refuses on a file edit", `{"cases": [{"name": "a", "want": "deny", "rule": "secret-file", "refuses": [".env"], "payload": ` +
+			write + `}]}`, "refuses"},
+		{"a compound case without refuses", `{"cases": [{"name": "a", "want": "deny", "rule": "rm-rf", "payload": ` +
+			bash("cd /tmp && rm -rf x") + `}]}`, "refuses"},
+		{"refuses on a case of one simple command", `{"cases": [{"name": "a", "want": "deny", "rule": "rm-rf", "refuses": ["rm -rf x"], "payload": ` +
+			bash("rm -rf x") + `}]}`, "refuses"},
+		{"refuses names no simple command of the case", `{"cases": [{"name": "a", "want": "deny", "rule": "rm-rf", "refuses": ["rm -rf y"], "payload": ` +
+			bash("cd /tmp && rm -rf x") + `}]}`, `"rm -rf y"`},
+		{"refuses names a command twice", `{"cases": [{"name": "a", "want": "deny", "rule": "rm-rf", "refuses": ["rm -rf x", "rm -rf x"], "payload": ` +
+			bash("cd /tmp && rm -rf x") + `}]}`, `"rm -rf x"`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -140,6 +205,26 @@ func TestParseGuardCorpusGuardrailSettingsOnCommands(t *testing.T) {
 		 "payload": {"tool_name": "PowerShell", "tool_input": {"command": "vibe unlock"}}}]}`))
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestParseGuardCorpusReadsFixedAndRefuses: a deny case carries fixed
+// and refuses (spec 0072, "Guard corpus"); a case without them has
+// neither.
+func TestParseGuardCorpusReadsFixedAndRefuses(t *testing.T) {
+	cases, err := parseGuardCorpus([]byte(`{"cases": [
+		{"name": "a", "want": "deny", "rule": "guardrail-settings", "fixed": true, "refuses": ["vibe unlock"],
+		 "payload": {"tool_name": "Bash", "tool_input": {"command": "cd /tmp && vibe unlock"}}},
+		{"name": "b", "want": "deny", "rule": "rm-rf",
+		 "payload": {"tool_name": "Bash", "tool_input": {"command": "rm -rf x"}}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cases[0].Fixed || !slices.Equal(cases[0].Refuses, []string{"vibe unlock"}) {
+		t.Errorf("case a: fixed %v, refuses %q", cases[0].Fixed, cases[0].Refuses)
+	}
+	if cases[1].Fixed || cases[1].Refuses != nil {
+		t.Errorf("case b: fixed %v, refuses %q", cases[1].Fixed, cases[1].Refuses)
 	}
 }
 

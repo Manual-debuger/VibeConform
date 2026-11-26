@@ -51,6 +51,15 @@ type GuardCase struct {
 	// Probe is the contract rule whose probe alone reads the case, one of
 	// corpusProbes, or "" for the cases of A-02, A-03, A-08 and R-01.
 	Probe string `json:"probe,omitempty"`
+	// Fixed marks a deny case that no exception can lift: the self-unlock
+	// commands and the edits of the unlock marker (spec 0072, "Guard
+	// corpus").
+	Fixed bool `json:"fixed,omitempty"`
+	// Refuses are the simple commands of a deny case that its rule
+	// refuses, each written as the simple command's words
+	// (guardrule.Command.String). A command case that decomposes into more
+	// than one simple command has them; any other case has none.
+	Refuses []string `json:"refuses,omitempty"`
 }
 
 // ProbeA09 marks the cases of A-09: commands that skip Git hooks.
@@ -146,8 +155,13 @@ func checkGuardCase(c GuardCase, seen map[string]bool) error { //nolint:gocyclo 
 		return err
 	}
 	if c.Want == WantAllow {
-		if c.Rule != "" {
+		switch {
+		case c.Rule != "":
 			return fmt.Errorf("an allow case has rule %q", c.Rule)
+		case c.Fixed:
+			return errors.New("an allow case is fixed; only a deny case can be")
+		case len(c.Refuses) > 0:
+			return errors.New("an allow case has refuses; only a deny case can")
 		}
 		return nil
 	}
@@ -165,6 +179,42 @@ func checkGuardCase(c GuardCase, seen map[string]bool) error { //nolint:gocyclo 
 		// A file edit of the settings, or a command that unlocks (A-08).
 	case guardrule.IsPathRule(c.Rule) != guardrule.IsEditTool(tool):
 		return fmt.Errorf("rule %s does not apply to %s calls", c.Rule, tool)
+	}
+	return checkRefuses(c)
+}
+
+// checkRefuses checks a deny case's refuses: present on a command case
+// of more than one simple command, absent otherwise, and each one of the
+// case's simple commands, once.
+func checkRefuses(c GuardCase) error {
+	t := c.Target()
+	if !guardrule.IsCommandTool(t.Tool) {
+		if len(c.Refuses) > 0 {
+			return fmt.Errorf("a %s case has refuses; only a command case can", t.Tool)
+		}
+		return nil
+	}
+	cmds, err := guardrule.Commands(guardrule.ShellFor(t.Tool), t.Command)
+	if err != nil {
+		return err
+	}
+	simple := make([]string, len(cmds))
+	for i, cmd := range cmds {
+		simple[i] = cmd.String()
+	}
+	switch {
+	case len(cmds) > 1 && len(c.Refuses) == 0:
+		return fmt.Errorf("the command has %d simple commands %q; refuses must name those its rule refuses", len(cmds), simple)
+	case len(cmds) <= 1 && len(c.Refuses) > 0:
+		return errors.New("the command is one simple command; refuses is only for a compound command")
+	}
+	for i, r := range c.Refuses {
+		switch {
+		case !slices.Contains(simple, r):
+			return fmt.Errorf("refuses %q is not one of the simple commands %q", r, simple)
+		case slices.Contains(c.Refuses[:i], r):
+			return fmt.Errorf("refuses names %q twice", r)
+		}
 	}
 	return nil
 }
