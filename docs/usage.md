@@ -288,9 +288,11 @@ vibe init --skill --repo-root ./some/other/repo
   `.claude/skills/` is not a guardrail path, so an agent may run it.
 - It prints each path it removed (`removed <path>`) and wrote
   (`wrote <path>`).
-- The skill's only placeholder is the `vibe` version. `init --skill`
-  replaces it with the version the `vibe-guard` install hint uses: this
-  `vibe`'s release version, or `latest` for a source build.
+- The skill has two placeholders. `init --skill` replaces the `vibe`
+  version with the version the `vibe-guard` install hint uses: this
+  `vibe`'s release version, or `latest` for a source build. It replaces
+  the release page with that version's page on GitHub, or the releases
+  page for `latest`, as the install hint does.
 - `--skill` takes no arguments.
 
 ### `vibe --version`
