@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"sync"
 	"sync/atomic"
 )
 
@@ -325,31 +324,14 @@ func cutPrefixFold(s, prefix string, fold bool) (string, bool) {
 // itself). Matching is case sensitive.
 //
 // A caller with a Rule or an Exception uses its compiled glob. MatchGlob
-// is for callers without one: it keeps the globs it compiles, up to
-// globCacheSize of them, because the guard calls it with the same few
-// patterns.
+// is for a caller without one, and compiles pattern on each call.
 func MatchGlob(pattern, p string) bool {
-	if re, ok := globCache.Load(pattern); ok {
-		return re.(*regexp.Regexp).MatchString(p)
-	}
-	re := compileGlob(pattern)
-	if globCacheLen.Load() < globCacheSize {
-		if _, loaded := globCache.LoadOrStore(pattern, re); !loaded {
-			globCacheLen.Add(1)
-		}
-	}
-	return re.MatchString(p)
+	return compileGlob(pattern).MatchString(p)
 }
 
-const globCacheSize = 256
-
-var (
-	globCache    sync.Map // pattern → *regexp.Regexp
-	globCacheLen atomic.Int64
-	// globCompiles counts the globs compiled, for the test that a glob is
-	// compiled once per rule or exception.
-	globCompiles atomic.Int64
-)
+// globCompiles counts the globs compiled, for the test that a glob is
+// compiled once per rule or exception.
+var globCompiles atomic.Int64
 
 // compileGlob compiles pattern as MatchGlob reads it.
 func compileGlob(pattern string) *regexp.Regexp {

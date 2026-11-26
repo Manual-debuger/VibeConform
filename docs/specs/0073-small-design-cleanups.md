@@ -192,8 +192,13 @@ convention.**
   parses in only one shell does not match a command of the other shell,
   as today.
 - At construction, a path glob is compiled once and kept. `MatchGlob`
-  stays for callers that have no rule. It uses a small cache of compiled
-  globs, because the guard calls it with the same few patterns.
+  stays for callers that have no rule, and compiles its pattern on each
+  call.
+- *Amended 2026-11-26:* the first form of this decision gave
+  `MatchGlob` a small cache of compiled globs, because the guard called
+  it with the same few patterns. After the change every guard and audit
+  caller matches through a rule's or an exception's compiled glob, and
+  only tests call `MatchGlob`, so the cache went away.
 - The fail-closed branch of `Rule.MatchesCommand` (spec 0069) goes away,
   because an uncompilable `args` cannot be built. Spec 0069's regression
   test changes to: the constructor refuses that rule. This is no weaker,

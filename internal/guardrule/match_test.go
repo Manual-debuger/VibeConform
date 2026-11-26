@@ -382,21 +382,6 @@ func TestMatchesAreParsedOnce(t *testing.T) {
 	}
 }
 
-// MatchGlob compiles a pattern it has seen once.
-func TestMatchGlobCachesItsPattern(t *testing.T) {
-	const pattern = "cache-test/**/x.*"
-	guardrule.MatchGlob(pattern, "cache-test/x.go")
-	compiles := guardrule.GlobCompiles()
-	for range 5 {
-		if !guardrule.MatchGlob(pattern, "cache-test/a/x.go") {
-			t.Fatal("MatchGlob does not match")
-		}
-	}
-	if got := guardrule.GlobCompiles() - compiles; got != 0 {
-		t.Errorf("MatchGlob compiled the same pattern %d more times", got)
-	}
-}
-
 // exception builds an exception the constructor accepts.
 func exception(t *testing.T, rule, match string) guardrule.Exception {
 	t.Helper()
