@@ -167,9 +167,9 @@ func exceptionsBuiltFor(t *testing.T, c contract.GuardCase, root string) []built
 	t.Helper()
 	tgt := c.Target()
 	var cmds []gr.Command
-	if gr.IsCommandTool(tgt.Tool) {
+	if tgt.Kind() == gr.CommandTarget {
 		var err error
-		if cmds, err = gr.Commands(gr.ShellFor(tgt.Tool), tgt.Command); err != nil {
+		if cmds, err = gr.Commands(gr.ShellFor(tgt.Tool()), tgt.Text()); err != nil {
 			t.Fatalf("a deny case for rule %s does not parse: %v", c.Rule, err)
 		}
 	}
@@ -184,8 +184,8 @@ func exceptionsBuiltFor(t *testing.T, c contract.GuardCase, root string) []built
 		return commandExceptions(t, cmds, exceptionFor)
 	}
 	var out []builtException
-	if gr.IsEditTool(tgt.Tool) {
-		out = append(out, builtException{Exception: exceptionFor(gr.RelPath(root, tgt.Path))})
+	if tgt.Kind() == gr.PathTarget {
+		out = append(out, builtException{Exception: exceptionFor(gr.RelPath(root, tgt.Text()))})
 	}
 	for _, cmd := range cmds {
 		for _, w := range cmd.Writes {

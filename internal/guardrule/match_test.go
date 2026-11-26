@@ -14,12 +14,12 @@ func TestParseTarget(t *testing.T) {
 		want        guardrule.Target
 		err         bool
 	}{
-		{"Bash", `{"command": "ls", "description": "rm -rf"}`, guardrule.Target{Tool: "Bash", Command: "ls"}, false},
-		{"PowerShell", `{"command": "Get-Date"}`, guardrule.Target{Tool: "PowerShell", Command: "Get-Date"}, false},
-		{"Write", `{"file_path": "/r/.env", "content": "rm -rf x"}`, guardrule.Target{Tool: "Write", Path: "/r/.env"}, false},
-		{"MultiEdit", `{"file_path": "a", "edits": []}`, guardrule.Target{Tool: "MultiEdit", Path: "a"}, false},
-		{"NotebookEdit", `{"notebook_path": "n.ipynb"}`, guardrule.Target{Tool: "NotebookEdit", Path: "n.ipynb"}, false},
-		{"Read", `{"file_path": ".env"}`, guardrule.Target{Tool: "Read"}, false},
+		{"Bash", `{"command": "ls", "description": "rm -rf"}`, guardrule.NewCommandTarget("Bash", "ls"), false},
+		{"PowerShell", `{"command": "Get-Date"}`, guardrule.NewCommandTarget("PowerShell", "Get-Date"), false},
+		{"Write", `{"file_path": "/r/.env", "content": "rm -rf x"}`, guardrule.NewPathTarget("Write", "/r/.env"), false},
+		{"MultiEdit", `{"file_path": "a", "edits": []}`, guardrule.NewPathTarget("MultiEdit", "a"), false},
+		{"NotebookEdit", `{"notebook_path": "n.ipynb"}`, guardrule.NewPathTarget("NotebookEdit", "n.ipynb"), false},
+		{"Read", `{"file_path": ".env"}`, guardrule.OtherTarget("Read"), false},
 		{"Bash", `{"script": "git clean -fd"}`, guardrule.Target{}, true},
 		{"Bash", `{"command": 1}`, guardrule.Target{}, true},
 		{"Edit", `[]`, guardrule.Target{}, true},
@@ -32,6 +32,32 @@ func TestParseTarget(t *testing.T) {
 		if c.err != errors.As(err, &pe) || got != c.want {
 			t.Errorf("ParseTarget(%s, %s) = %+v, %v", c.tool, c.input, got, err)
 		}
+	}
+}
+
+// A target says what it is by its kind, not by its tool (spec 0073,
+// "Typed state"): its one text is the command or the path.
+func TestTargetKind(t *testing.T) {
+	cases := []struct {
+		tool, input string
+		kind        guardrule.TargetKind
+		text        string
+	}{
+		{"Bash", `{"command": "ls"}`, guardrule.CommandTarget, "ls"},
+		{"PowerShell", `{"command": ""}`, guardrule.CommandTarget, ""},
+		{"Edit", `{"file_path": "a.go"}`, guardrule.PathTarget, "a.go"},
+		{"NotebookEdit", `{"notebook_path": "n.ipynb"}`, guardrule.PathTarget, "n.ipynb"},
+		{"Read", `{"file_path": "a.go"}`, guardrule.NoTarget, ""},
+	}
+	for _, c := range cases {
+		got, err := guardrule.ParseTarget(c.tool, json.RawMessage(c.input))
+		if err != nil || got.Tool() != c.tool || got.Kind() != c.kind || got.Text() != c.text {
+			t.Errorf("ParseTarget(%s, %s) = (%s, %v, %q), %v; want (%s, %v, %q)",
+				c.tool, c.input, got.Tool(), got.Kind(), got.Text(), err, c.tool, c.kind, c.text)
+		}
+	}
+	if (guardrule.Target{}).Kind() != guardrule.NoTarget {
+		t.Error("the zero Target has a kind")
 	}
 }
 
@@ -118,46 +144,46 @@ func TestExceptionMatches(t *testing.T) {
 	}{
 		{"path glob inside the root",
 			exception(t, "secret-file", "**/.env.example"),
-			guardrule.Target{Tool: "Write", Path: "/repo/config/.env.example"}, true},
+			guardrule.NewPathTarget("Write", "/repo/config/.env.example"), true},
 		{"path glob does not match another file",
 			exception(t, "secret-file", "**/.env.example"),
-			guardrule.Target{Tool: "Write", Path: "/repo/.env"}, false},
+			guardrule.NewPathTarget("Write", "/repo/.env"), false},
 		{"a path rule does not match a command",
 			exception(t, "secret-file", "*"),
-			guardrule.Target{Tool: "Bash", Command: "echo > .env"}, false},
+			guardrule.NewCommandTarget("Bash", "echo > .env"), false},
 		{"command prefix",
 			exception(t, "git-clean-fd", "git clean -fdx build/"),
-			guardrule.Target{Tool: "Bash", Command: "git clean -fdx build/"}, true},
+			guardrule.NewCommandTarget("Bash", "git clean -fdx build/"), true},
 		{"command prefix with more words",
 			exception(t, "git-clean-fd", "git clean -fdx"),
-			guardrule.Target{Tool: "Bash", Command: "git clean -fdx build/"}, true},
+			guardrule.NewCommandTarget("Bash", "git clean -fdx build/"), true},
 		{"a longer match is no prefix",
 			exception(t, "git-clean-fd", "git clean -fdx build/"),
-			guardrule.Target{Tool: "Bash", Command: "git clean -fdx"}, false},
+			guardrule.NewCommandTarget("Bash", "git clean -fdx"), false},
 		{"a word is compared whole",
 			exception(t, "git-clean-fd", "git clean -fdx build"),
-			guardrule.Target{Tool: "Bash", Command: "git clean -fdx build/"}, false},
+			guardrule.NewCommandTarget("Bash", "git clean -fdx build/"), false},
 		{"in a list, behind a wrapper and quoted",
 			exception(t, "git-clean-fd", "git clean -fdx build/"),
-			guardrule.Target{Tool: "Bash", Command: `cd x && sudo "git" clean '-fdx' build/`}, true},
+			guardrule.NewCommandTarget("Bash", `cd x && sudo "git" clean '-fdx' build/`), true},
 		{"the program by its path",
 			exception(t, "rm-rf", "rm -rf build"),
-			guardrule.Target{Tool: "Bash", Command: "/bin/rm -rf build"}, true},
+			guardrule.NewCommandTarget("Bash", "/bin/rm -rf build"), true},
 		{"an expansion never matches",
 			exception(t, "rm-rf", "rm -rf build"),
-			guardrule.Target{Tool: "Bash", Command: "rm -rf $d"}, false},
+			guardrule.NewCommandTarget("Bash", "rm -rf $d"), false},
 		{"a command that does not parse matches nothing",
 			exception(t, "rm-rf", "rm -rf build"),
-			guardrule.Target{Tool: "Bash", Command: "rm -rf build '"}, false},
+			guardrule.NewCommandTarget("Bash", "rm -rf build '"), false},
 		{"PowerShell without case and by alias",
 			exception(t, "remove-item-recurse-force", "Remove-Item build"),
-			guardrule.Target{Tool: "PowerShell", Command: "ri BUILD -r -fo"}, true},
+			guardrule.NewCommandTarget("PowerShell", "ri BUILD -r -fo"), true},
 		{"PowerShell parameters are compared as words",
 			exception(t, "remove-item-recurse-force", "Remove-Item -Recurse"),
-			guardrule.Target{Tool: "PowerShell", Command: "Remove-Item -Rec x"}, false},
+			guardrule.NewCommandTarget("PowerShell", "Remove-Item -Rec x"), false},
 		{"a command rule does not match a file edit",
 			exception(t, "rm-rf", "rm"),
-			guardrule.Target{Tool: "Write", Path: "rm"}, false},
+			guardrule.NewPathTarget("Write", "rm"), false},
 	}
 	for _, c := range cases {
 		if got := c.ex.Matches(c.t, root); got != c.want {
@@ -179,19 +205,19 @@ func TestExceptionMatchesRefused(t *testing.T) {
 	}{
 		{"another simple command of the case",
 			exception(t, "rm-rf", "cd /tmp"),
-			guardrule.Target{Tool: "Bash", Command: "cd /tmp && rm -rf"}, []string{"rm -rf"}, false},
+			guardrule.NewCommandTarget("Bash", "cd /tmp && rm -rf"), []string{"rm -rf"}, false},
 		{"the refused simple command",
 			exception(t, "rm-rf", "rm -rf"),
-			guardrule.Target{Tool: "Bash", Command: "cd /tmp && rm -rf"}, []string{"rm -rf"}, true},
+			guardrule.NewCommandTarget("Bash", "cd /tmp && rm -rf"), []string{"rm -rf"}, true},
 		{"a nested refused simple command",
 			exception(t, "rm-rf", "rm -rf build"),
-			guardrule.Target{Tool: "Bash", Command: "bash -c 'rm -rf build'"}, []string{"rm -rf build"}, true},
+			guardrule.NewCommandTarget("Bash", "bash -c 'rm -rf build'"), []string{"rm -rf build"}, true},
 		{"the shell that runs the refused simple command",
 			exception(t, "rm-rf", "bash -c"),
-			guardrule.Target{Tool: "Bash", Command: "bash -c 'rm -rf build'"}, []string{"rm -rf build"}, false},
+			guardrule.NewCommandTarget("Bash", "bash -c 'rm -rf build'"), []string{"rm -rf build"}, false},
 		{"refused does not change a path match",
 			exception(t, "secret-file", ".env"),
-			guardrule.Target{Tool: "Write", Path: "/repo/.env"}, []string{"x"}, true},
+			guardrule.NewPathTarget("Write", "/repo/.env"), []string{"x"}, true},
 	}
 	for _, c := range cases {
 		if got := c.ex.MatchesRefused(c.t, root, c.refused); got != c.want {
@@ -271,8 +297,8 @@ func TestZeroRuleAndExceptionMatchNothing(t *testing.T) {
 	}
 	var e guardrule.Exception
 	if e.MatchesCommand(cmds[0]) || e.MatchesPath("/repo/x", "/repo") || e.MatchesPath("", "") ||
-		e.Matches(guardrule.Target{Tool: "Bash", Command: "rm -rf build"}, "/repo") ||
-		e.Matches(guardrule.Target{Tool: "Write", Path: "/repo/x"}, "/repo") {
+		e.Matches(guardrule.NewCommandTarget("Bash", "rm -rf build"), "/repo") ||
+		e.Matches(guardrule.NewPathTarget("Write", "/repo/x"), "/repo") {
 		t.Error("the zero Exception matches")
 	}
 }
@@ -285,10 +311,10 @@ func TestPowerShellOnlyMatch(t *testing.T) {
 		t.Fatalf("%s parses as Bash; the test needs a match that does not", match)
 	}
 	e := exception(t, "remove-item-recurse-force", match)
-	if !e.Matches(guardrule.Target{Tool: "PowerShell", Command: "Remove-Item \"a`\"b\" -Recurse -Force"}, "/repo") {
+	if !e.Matches(guardrule.NewCommandTarget("PowerShell", "Remove-Item \"a`\"b\" -Recurse -Force"), "/repo") {
 		t.Error("the match does not match the PowerShell command")
 	}
-	if e.Matches(guardrule.Target{Tool: "Bash", Command: `Remove-Item 'a"b' -Recurse -Force`}, "/repo") {
+	if e.Matches(guardrule.NewCommandTarget("Bash", `Remove-Item 'a"b' -Recurse -Force`), "/repo") {
 		t.Error("the match matches a Bash command")
 	}
 	r, err := guardrule.NewRule(guardrule.RuleSpec{ID: "r", Level: guardrule.Deny, Reason: "x", Kind: guardrule.CommandRule, Pattern: match})
@@ -335,9 +361,9 @@ func TestMatchesAreParsedOnce(t *testing.T) {
 		t.Fatalf("%d simple commands, %v; want %d", len(cmds), err, m)
 	}
 	for _, e := range p.Exceptions {
-		e.Matches(guardrule.Target{Tool: "Bash", Command: command}, "/repo")
-		e.MatchesRefused(guardrule.Target{Tool: "Bash", Command: command}, "/repo", []string{"rm -rf build"})
-		e.Matches(guardrule.Target{Tool: "Write", Path: "/repo/a/.env.example"}, "/repo")
+		e.Matches(guardrule.NewCommandTarget("Bash", command), "/repo")
+		e.MatchesRefused(guardrule.NewCommandTarget("Bash", command), "/repo", []string{"rm -rf build"})
+		e.Matches(guardrule.NewPathTarget("Write", "/repo/a/.env.example"), "/repo")
 		for _, c := range cmds {
 			e.MatchesCommand(c)
 		}

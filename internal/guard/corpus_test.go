@@ -49,11 +49,7 @@ func corpusRepo(t *testing.T, c contract.GuardCase, now time.Time) repo {
 // explainArgs are the explain arguments for the case's call.
 func explainArgs(c contract.GuardCase) []string {
 	tgt := c.Target()
-	arg := tgt.Command
-	if gr.IsEditTool(tgt.Tool) {
-		arg = tgt.Path
-	}
-	return []string{"--tool", tgt.Tool, arg}
+	return []string{"--tool", tgt.Tool(), tgt.Text()}
 }
 
 // TestCorpus runs the whole contract guard corpus through "vibe-guard
@@ -124,14 +120,14 @@ func TestCorpusFixedAndRefuses(t *testing.T) {
 func corpusRefusals(t *testing.T, g *guard.Guard, c contract.GuardCase) (refused []string, fixed bool) {
 	t.Helper()
 	tgt := c.Target()
-	if gr.IsEditTool(tgt.Tool) {
-		ok, fixed := g.RuleRefusesEdit(c.Rule, tgt.Path)
+	if tgt.Kind() == gr.PathTarget {
+		ok, fixed := g.RuleRefusesEdit(c.Rule, tgt.Text())
 		if !ok {
-			t.Fatalf("rule %s does not refuse the edit of %s", c.Rule, tgt.Path)
+			t.Fatalf("rule %s does not refuse the edit of %s", c.Rule, tgt.Text())
 		}
 		return nil, fixed
 	}
-	cmds, err := gr.Commands(gr.ShellFor(tgt.Tool), tgt.Command)
+	cmds, err := gr.Commands(gr.ShellFor(tgt.Tool()), tgt.Text())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +138,7 @@ func corpusRefusals(t *testing.T, g *guard.Guard, c contract.GuardCase) (refused
 		}
 	}
 	if len(refused) == 0 {
-		t.Fatalf("rule %s refuses no simple command of %q", c.Rule, tgt.Command)
+		t.Fatalf("rule %s refuses no simple command of %q", c.Rule, tgt.Text())
 	}
 	if len(cmds) == 1 {
 		return nil, fixed

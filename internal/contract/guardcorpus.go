@@ -204,9 +204,9 @@ func checkGuardCase(c GuardCase, seen map[string]bool) error { //nolint:gocyclo 
 // case's simple commands, once.
 func checkRefuses(c GuardCase) error {
 	t := c.Target()
-	if !guardrule.IsCommandTool(t.Tool) {
+	if t.Kind() != guardrule.CommandTarget {
 		if len(c.Refuses) > 0 {
-			return fmt.Errorf("a %s case has refuses; only a command case can", t.Tool)
+			return fmt.Errorf("a %s case has refuses; only a command case can", t.Tool())
 		}
 		return nil
 	}
@@ -235,7 +235,7 @@ func checkRefuses(c GuardCase) error {
 // guard's decomposition (guardrule.Commands), each as its words
 // (guardrule.Command.String): what a case's refuses names.
 func simpleCommands(t guardrule.Target) ([]string, error) {
-	cmds, err := guardrule.Commands(guardrule.ShellFor(t.Tool), t.Command)
+	cmds, err := guardrule.Commands(guardrule.ShellFor(t.Tool()), t.Text())
 	if err != nil {
 		return nil, err
 	}
