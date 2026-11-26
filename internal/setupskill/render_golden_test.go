@@ -41,23 +41,30 @@ func TestRenderGolden(t *testing.T) {
 			}
 			got := renderDigest(files)
 			golden := filepath.Join("testdata", "render", tc.name+".golden")
-			if *updateRenderGoldens {
-				if err := os.MkdirAll(filepath.Dir(golden), 0o750); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(golden, got, 0o600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			want, err := os.ReadFile(golden)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(got, want) {
+			if want := readGolden(t, golden, got); !bytes.Equal(got, want) {
 				t.Errorf("Render(%q) differs from %s:\ngot\n%s\nwant\n%s", tc.vibeVersion, golden, got, want)
 			}
 		})
 	}
+}
+
+// readGolden returns the golden file's content, after writing got to it
+// when -update is given.
+func readGolden(t *testing.T, golden string, got []byte) []byte {
+	t.Helper()
+	if *updateRenderGoldens {
+		if err := os.MkdirAll(filepath.Dir(golden), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(golden, got, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return want
 }
 
 // renderDigest is one line per file, "<sha256>  <path>", sorted by path.
