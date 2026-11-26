@@ -29,7 +29,7 @@ func TestGuardCorpusIsValid(t *testing.T) {
 		if c.Want == WantDeny && !guardrule.IsContractID(c.Rule) {
 			t.Errorf("%s: deny case has rule %q", c.Name, c.Rule)
 		}
-		if c.Unlock != UnlockNone && c.Unlock != UnlockValid && c.Unlock != UnlockExpired {
+		if c.Unlock != unlockNone && c.Unlock != UnlockValid && c.Unlock != UnlockExpired {
 			t.Errorf("%s: unlock %q", c.Name, c.Unlock)
 		}
 		// Every command parses, so that a shell-parsing guard can decide
@@ -151,7 +151,7 @@ func TestParseGuardCorpusDefaultsUnlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cases[0].Unlock != UnlockExpired || cases[1].Unlock != UnlockNone {
+	if cases[0].Unlock != UnlockExpired || cases[1].Unlock != unlockNone {
 		t.Errorf("unlocks = %q, %q", cases[0].Unlock, cases[1].Unlock)
 	}
 	if got := cases[0].Target(); got != (guardrule.Target{Tool: "Write", Path: ".claude/settings.json"}) {

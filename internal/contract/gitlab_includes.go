@@ -11,7 +11,7 @@ import (
 // C-02's decision for the GitLab includes the audit does not follow
 // (spec 0055, "The rules on GitLab CI"). checkC02 (checks_ci.go) reads
 // every provider's references through the CI model; only the GitLab
-// reader fills CI.Includes.
+// reader fills ciModel.Includes.
 
 // fullSHA is a full 40-character commit SHA.
 var fullSHA = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
@@ -19,14 +19,14 @@ var fullSHA = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 // unpinnedInclude returns the finding about an include the audit does not
 // follow, and true, when the include is not pinned. It returns false for
 // a pinned include and for one with nothing to pin.
-func unpinnedInclude(inc CIInclude) (Finding, bool) {
+func unpinnedInclude(inc ciInclude) (Finding, bool) {
 	at := func(format string, args ...any) string {
 		return fmt.Sprintf("line %d: include ", inc.Line) + fmt.Sprintf(format, args...)
 	}
 	value := func(key string) string { return scalarOr(mapValue(inc.Node, key), "") }
 	what := inc.Target()
 	switch inc.Kind {
-	case IncludeProject:
+	case includeProject:
 		ref := value("ref")
 		if fullSHA.MatchString(ref) {
 			return Finding{}, false
@@ -37,7 +37,7 @@ func unpinnedInclude(inc CIInclude) (Finding, bool) {
 		return Finding{File: inc.File,
 			Message: at("project %s is not pinned to a commit SHA: ref is %s", what, ref),
 			Fix:     "set ref: to a full 40-character commit SHA, with the version in a comment (ref: <sha> # v1.2.3)"}, true
-	case IncludeComponent:
+	case includeComponent:
 		c := what
 		if i := strings.LastIndex(c, "@"); i >= 0 && fullSHA.MatchString(c[i+1:]) {
 			return Finding{}, false
@@ -45,7 +45,7 @@ func unpinnedInclude(inc CIInclude) (Finding, bool) {
 		return Finding{File: inc.File,
 			Message: at("component %s is not pinned to a commit SHA", c),
 			Fix:     "pin the component to a full 40-character commit SHA, with the version in a comment (component: <path>@<sha> # 1.2.0)"}, true
-	case IncludeRemote:
+	case includeRemote:
 		url := inc.Node.Value
 		if inc.Node.Kind == yaml.MappingNode {
 			url = what
@@ -56,7 +56,7 @@ func unpinnedInclude(inc CIInclude) (Finding, bool) {
 		return Finding{File: inc.File,
 			Message: at("remote %s has no integrity:", url),
 			Fix:     "add integrity: sha256-<base64 of the file's SHA-256 digest>, or copy the file into the repository and include it with local:"}, true
-	case IncludeTemplate:
+	case includeTemplate:
 		return Finding{File: inc.File,
 			Message: at("template %s cannot be pinned: GitLab serves the version of the instance", what),
 			Fix:     "copy the template into the repository and include it with local:, or include the matching CI/CD component pinned to a commit SHA"}, true

@@ -16,7 +16,7 @@ import (
 // runs.
 
 // The two events the GitHub reader decides runs for: pull_request
-// (KindMergeRequest) and push (KindDefaultPush).
+// (kindMergeRequest) and push (kindDefaultPush).
 const (
 	eventPullRequest = "pull_request"
 	eventPush        = "push"
@@ -33,7 +33,7 @@ var fallbackBranches = []string{"main", "master"}
 // eventNode returns a workflow's trigger for event: (filters, true) when
 // the workflow is triggered by it. filters is nil for an event with no
 // filters (on: push, on: [push], or push: with no value).
-func eventNode(wf *Workflow, event string) (*yaml.Node, bool) {
+func eventNode(wf *workflow, event string) (*yaml.Node, bool) {
 	on := wf.On
 	if on == nil {
 		return nil, false
@@ -66,7 +66,7 @@ func eventNode(wf *Workflow, event string) (*yaml.Node, bool) {
 // filter without a branch filter, a branch filter that admits branch,
 // and (for pull_request) a types filter, if any, that keeps opened,
 // synchronize and reopened.
-func triggeredFor(wf *Workflow, event, branch string) bool { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
+func triggeredFor(wf *workflow, event, branch string) bool { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
 	filters, ok := eventNode(wf, event)
 	if !ok {
 		return false
@@ -189,13 +189,13 @@ func globMatch(pattern, s string) bool {
 }
 
 // githubDefaultBranch is the branch the GitHub reader decides the runs
-// for (CI.DefaultBranch), from the workflows that parsed: the target of
+// for (ciModel.DefaultBranch), from the workflows that parsed: the target of
 // refs/remotes/origin/HEAD (read once, by OpenRepo), or else main or
 // master: the one more of the workflows' pull_request and push triggers
 // count for, main on a tie. assumed is true in that case, and the reader
 // has the report say which it assumed.
-func githubDefaultBranch(env *Env, parsed []*Workflow) (branch string, assumed bool) {
-	if b := env.Repo.originHead; b != "" {
+func githubDefaultBranch(env *Env, parsed []*workflow) (branch string, assumed bool) {
+	if b := env.repo.originHead; b != "" {
 		return b, false
 	}
 	branch, best := fallbackBranches[0], -1
@@ -210,12 +210,12 @@ func githubDefaultBranch(env *Env, parsed []*Workflow) (branch string, assumed b
 // noteAssumedBranch tells the report which default branch the CI rules
 // assumed.
 func noteAssumedBranch(env *Env, branch string) {
-	env.Note("the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is %s", branch)
+	env.note("the clone has no refs/remotes/origin/HEAD, so the CI rules assume the default branch is %s", branch)
 }
 
 // countTriggered counts the workflow triggers (pull_request or push) that
 // count for branch.
-func countTriggered(parsed []*Workflow, branch string) int {
+func countTriggered(parsed []*workflow, branch string) int {
 	n := 0
 	for _, wf := range parsed {
 		for _, ev := range []string{eventPullRequest, eventPush} {
@@ -227,25 +227,25 @@ func countTriggered(parsed []*Workflow, branch string) int {
 	return n
 }
 
-// ciJob is a job with the workflow file that defines it.
-type ciJob struct {
-	wf  *Workflow
-	job *Job
+// fileJob is a job with the workflow file that defines it.
+type fileJob struct {
+	wf  *workflow
+	job *workflowJob
 }
 
 // jobsRun returns the jobs a workflow runs: its own, with each job that
 // uses a local reusable workflow (./.github/workflows/…) replaced by the
 // jobs of that workflow, followed recursively. A remote reusable workflow
 // is not followed; its job has no steps and calls nothing.
-func jobsRun(parsed []*Workflow, wf *Workflow) []ciJob {
-	byFile := map[string]*Workflow{}
+func jobsRun(parsed []*workflow, wf *workflow) []fileJob {
+	byFile := map[string]*workflow{}
 	for _, w := range parsed {
 		byFile[w.File] = w
 	}
 	seen := map[string]bool{}
-	var out []ciJob
-	var walk func(w *Workflow)
-	walk = func(w *Workflow) {
+	var out []fileJob
+	var walk func(w *workflow)
+	walk = func(w *workflow) {
 		if seen[w.File] {
 			return
 		}
@@ -257,7 +257,7 @@ func jobsRun(parsed []*Workflow, wf *Workflow) []ciJob {
 				}
 				continue
 			}
-			out = append(out, ciJob{w, j})
+			out = append(out, fileJob{w, j})
 		}
 	}
 	walk(wf)
@@ -278,9 +278,9 @@ func localWorkflow(uses string) (string, bool) {
 // jobsTriggered returns, once each, the jobs run by the workflows that
 // count for event on branch, reusable workflows followed with the
 // caller's triggers.
-func jobsTriggered(parsed []*Workflow, event, branch string) []ciJob {
-	seen := map[*Job]bool{}
-	var out []ciJob
+func jobsTriggered(parsed []*workflow, event, branch string) []fileJob {
+	seen := map[*workflowJob]bool{}
+	var out []fileJob
 	for _, wf := range parsed {
 		if !triggeredFor(wf, event, branch) {
 			continue

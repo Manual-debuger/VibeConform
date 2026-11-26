@@ -17,7 +17,7 @@ var errNoManifest = errors.New("no manifest")
 func hasDependencies(env *Env, comp Component) (manifest string, deps bool, err error) {
 	lang := comp.language()
 	manifest = joinRel(comp.Path, lang.manifest)
-	data, err := env.ReadFile(manifest)
+	data, err := env.readFile(manifest)
 	if errors.Is(err, fs.ErrNotExist) {
 		return manifest, false, errNoManifest
 	}

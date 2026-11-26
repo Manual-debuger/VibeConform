@@ -158,13 +158,13 @@ var maxParallelCases = min(runtime.NumCPU(), 8)
 // concurrently; the states run one after another, because the marker is
 // one file. The R-01 shim's calls during these runs are recorded
 // afterwards, under who.
-func feedCases(s *probeSession, hooks []settingsHook, cases []GuardCase, who string, label func(GuardCase) string, o RunOpts) ([]caseRun, error) {
+func feedCases(s *probeSession, hooks []settingsHook, cases []GuardCase, who string, label func(GuardCase) string, o runOpts) ([]caseRun, error) {
 	runs := make([]caseRun, len(cases))
 	defer func() {
 		out := runOutcome{Label: who, File: claudeSettingsFile}
 		s.recordShimCalls(&out)
 	}()
-	for _, state := range []string{UnlockNone, UnlockExpired, UnlockValid} {
+	for _, state := range []string{unlockNone, UnlockExpired, UnlockValid} {
 		var idx []int
 		for i, c := range cases {
 			if c.Unlock == state {
@@ -197,7 +197,7 @@ func feedCases(s *probeSession, hooks []settingsHook, cases []GuardCase, who str
 
 // feedCase runs one case through every hook that matches its tool, one
 // hook after another. It may run concurrently with other cases.
-func feedCase(s *probeSession, hooks []settingsHook, c GuardCase, label string, o RunOpts) caseRun {
+func feedCase(s *probeSession, hooks []settingsHook, c GuardCase, label string, o runOpts) caseRun {
 	run := caseRun{c: c}
 	var payload []byte
 	for _, h := range hooks {
@@ -253,7 +253,7 @@ func policyExceptions(env *Env) []guardrule.Exception {
 // guardFix is the fix for a deny case the guard lets through.
 func guardFix(env *Env, rule string) string {
 	fix := "make the guard refuse it (exit 2), or list an exception for " + rule + " in " + guardPolicyFile
-	if env.Repo.HasFile(localPolicyFile) {
+	if env.repo.HasFile(localPolicyFile) {
 		fix += "; exceptions in the tracked " + localPolicyFile + " do not count"
 	}
 	return fix
@@ -295,15 +295,15 @@ func feedCorpus(env *Env, s *probeSession, rule string, cases []GuardCase) (resu
 	}
 	if len(hooks) > 0 {
 		if ok, why := s.HasBash(); !ok {
-			return Undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + why}), PartResult{}, false
+			return undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + why}), PartResult{}, false
 		}
 	}
-	defer func() { _ = s.setUnlock(UnlockNone) }()
+	defer func() { _ = s.setUnlock(unlockNone) }()
 
 	runs, err := feedCases(s, hooks, cases, "the PreToolUse hooks during "+rule,
-		func(c GuardCase) string { return rule + " with " + describeGuardCase(c) }, RunOpts{})
+		func(c GuardCase) string { return rule + " with " + describeGuardCase(c) }, runOpts{})
 	if err != nil {
-		d := Undecided(Finding{Message: "cannot decide: cannot write the unlock marker: " + err.Error()})
+		d := undecided(Finding{Message: "cannot decide: cannot write the unlock marker: " + err.Error()})
 		return d, d, true
 	}
 	t := &corpusTally{env: env, s: s, exceptions: policyExceptions(env), unmatched: map[string][]string{}}
@@ -435,7 +435,7 @@ func (v *verdicts) result() PartResult {
 		if n := len(v.undecides) - 1; n > 0 {
 			f.Message += fmt.Sprintf(" (and %d more %s)", n, plural(n, "case", "cases"))
 		}
-		return Undecided(f)
+		return undecided(f)
 	}
 	return Pass()
 }
@@ -446,7 +446,7 @@ type a03Situation struct {
 	what string
 	fix  string
 	// prepare changes the copy (or the run) and returns how to undo it.
-	prepare func(s *probeSession) (RunOpts, func() error, error)
+	prepare func(s *probeSession) (runOpts, func() error, error)
 }
 
 var a03Situations = []a03Situation{
@@ -454,22 +454,22 @@ var a03Situations = []a03Situation{
 		what: "with PATH reduced to the operating system's directories",
 		fix: "make each PreToolUse hook exit 2 when its guard program is not on PATH, such as " +
 			"`command -v vibe-guard >/dev/null 2>&1 || exit 2` before it runs",
-		prepare: func(s *probeSession) (RunOpts, func() error, error) {
-			return RunOpts{Env: envSet(s.runEnv, "PATH", systemPath(s.runEnv))}, func() error { return nil }, nil
+		prepare: func(s *probeSession) (runOpts, func() error, error) {
+			return runOpts{Env: envSet(s.runEnv, "PATH", systemPath(s.runEnv))}, func() error { return nil }, nil
 		},
 	},
 	{
 		what: "with " + guardPolicyFile + " replaced by `{`",
 		fix:  "make the guard refuse every call (exit 2) when " + guardPolicyFile + " does not parse",
-		prepare: func(s *probeSession) (RunOpts, func() error, error) {
+		prepare: func(s *probeSession) (runOpts, func() error, error) {
 			p := filepath.Join(s.Root(), filepath.FromSlash(guardPolicyFile))
 			if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-				return RunOpts{}, nil, err
+				return runOpts{}, nil, err
 			}
 			if err := os.WriteFile(p, []byte("{"), 0o600); err != nil {
-				return RunOpts{}, nil, err
+				return runOpts{}, nil, err
 			}
-			return RunOpts{}, s.Reset, nil
+			return runOpts{}, s.Reset, nil
 		},
 	},
 }
@@ -504,10 +504,10 @@ func checkA03(env *Env) PartResult {
 	}
 	if len(hooks) > 0 {
 		if ok, why := s.HasBash(); !ok {
-			return Undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + why})
+			return undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + why})
 		}
 	}
-	defer func() { _ = s.setUnlock(UnlockNone) }()
+	defer func() { _ = s.setUnlock(unlockNone) }()
 
 	v := &verdicts{}
 	for _, sit := range a03Situations {

@@ -24,13 +24,13 @@ type Versions struct {
 // audit: another MAJOR, or a newer MINOR. There is no verdict (spec 0051,
 // "Versioning").
 type UnsupportedVersionError struct {
-	File     string
-	Declared string
+	file     string
+	declared string
 }
 
 func (e *UnsupportedVersionError) Error() string {
 	return fmt.Sprintf("%s: contract: cannot decide; upgrade vibe: this vibe implements contract %s, "+
-		"and the configuration declares %s", e.File, Implemented, e.Declared)
+		"and the configuration declares %s", e.file, Implemented, e.declared)
 }
 
 var versionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)

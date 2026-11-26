@@ -15,15 +15,15 @@ import (
 // undecidedRun is the finding for a run that could not run or end by
 // itself.
 func undecidedRun(out runOutcome) PartResult {
-	return Undecided(Finding{File: out.File, Message: "cannot decide: " + out.describe()})
+	return undecided(Finding{File: out.File, Message: "cannot decide: " + out.describe()})
 }
 
-// mergeRuns combines the results of several runs of one part, as Merge
+// mergeRuns combines the results of several runs of one part, as merge
 // does. When one fails, only the failures' findings are kept: the part
 // fails whatever the undecided runs would have shown, and each failure
 // names its file and fix.
 func mergeRuns(results ...PartResult) PartResult {
-	out := Merge(results...)
+	out := merge(results...)
 	if out.Result != ResultFail {
 		return out
 	}
@@ -39,12 +39,12 @@ func mergeRuns(results ...PartResult) PartResult {
 // checkV03: with the format defect planted in each component, fmt-check
 // leaves only the planted file in git status, unchanged.
 func checkV03(env *Env) PartResult {
-	if f := needEntrypoint(env, EntrypointFmtCheck); f != nil {
+	if f := needEntrypoint(env, entrypointFmtCheck); f != nil {
 		return Fail(*f)
 	}
 	s := env.probe
 	var results []PartResult
-	for _, comp := range env.Config.Components {
+	for _, comp := range env.config.Components {
 		results = append(results, v03Component(env, s, comp))
 	}
 	return mergeRuns(results...)
@@ -52,16 +52,16 @@ func checkV03(env *Env) PartResult {
 
 func v03Component(env *Env, s *probeSession, comp Component) PartResult {
 	if err := s.Reset(); err != nil {
-		return Undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
+		return undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
 	}
 	d, err := defectFor(env, comp, defectFormat)
 	if err != nil {
-		return Undecided(Finding{Message: "cannot decide: nowhere to plant the format defect: " + err.Error()})
+		return undecided(Finding{Message: "cannot decide: nowhere to plant the format defect: " + err.Error()})
 	}
 	if err := s.Plant(d.Path, d.Content); err != nil {
-		return Undecided(Finding{Message: "cannot decide: cannot plant " + d.Path + ": " + err.Error()})
+		return undecided(Finding{Message: "cannot decide: cannot plant " + d.Path + ": " + err.Error()})
 	}
-	run := s.RunEntrypoint(env, EntrypointFmtCheck, "fmt-check with the format defect in "+comp.Path)
+	run := s.RunEntrypoint(env, entrypointFmtCheck, "fmt-check with the format defect in "+comp.Path)
 	if run.Missing != nil {
 		return Fail(*run.Missing)
 	}
@@ -70,7 +70,7 @@ func v03Component(env *Env, s *probeSession, comp Component) PartResult {
 	}
 	status, err := s.Status()
 	if err != nil {
-		return Undecided(Finding{Message: "cannot decide: " + err.Error()})
+		return undecided(Finding{Message: "cannot decide: " + err.Error()})
 	}
 	var problems []string
 	for _, e := range status {
@@ -87,7 +87,7 @@ func v03Component(env *Env, s *probeSession, comp Component) PartResult {
 		return Pass()
 	}
 	return Fail(Finding{
-		File: env.Config.File,
+		File: env.config.file,
 		Message: fmt.Sprintf("fmt-check (%s) wrote files in component %s; git status lists: %s",
 			run.Command, comp.Path, strings.Join(problems, ", ")),
 		Fix: "make entrypoints.fmt-check only check formatting, such as gofmt -l or prettier --check; the command that rewrites files belongs in entrypoints.fmt",
@@ -97,7 +97,7 @@ func v03Component(env *Env, s *probeSession, comp Component) PartResult {
 // checkA07Execution: every SessionStart hook that matches startup exits
 // 0 in the reset copy and leaves git status empty.
 func checkA07Execution(env *Env) PartResult {
-	if !env.Repo.HasFile(claudeSettingsFile) {
+	if !env.repo.HasFile(claudeSettingsFile) {
 		// The static part fails for it.
 		return Pass()
 	}
@@ -117,10 +117,10 @@ func checkA07Execution(env *Env) PartResult {
 
 func a07Hook(s *probeSession, command string, limit time.Duration) PartResult {
 	if err := s.Reset(); err != nil {
-		return Undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
+		return undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
 	}
 	payload := s.HookPayload(eventSessionStart, map[string]any{"source": "startup"})
-	out := s.RunHook("the SessionStart hook", command, limit, payload, RunOpts{})
+	out := s.RunHook("the SessionStart hook", command, limit, payload, runOpts{})
 	if !out.Ran() {
 		return undecidedRun(out)
 	}
@@ -130,7 +130,7 @@ func a07Hook(s *probeSession, command string, limit time.Duration) PartResult {
 	}
 	status, err := s.Status()
 	if err != nil {
-		return Undecided(Finding{Message: "cannot decide: " + err.Error()})
+		return undecided(Finding{Message: "cannot decide: " + err.Error()})
 	}
 	if len(status) > 0 {
 		return Fail(Finding{File: claudeSettingsFile,
@@ -145,21 +145,21 @@ func a07Hook(s *probeSession, command string, limit time.Duration) PartResult {
 // every call of vibe the shim recorded in any run of the audit: setup's,
 // those of every earlier part, and those of R-01's own runs.
 func checkR01Execution(env *Env, earlier Earlier) PartResult {
-	if f := needEntrypoint(env, EntrypointVerify); f != nil {
+	if f := needEntrypoint(env, entrypointVerify); f != nil {
 		return Fail(*f)
 	}
 	s := env.probe
 	var verify PartResult
-	run, err := s.Baseline(env, EntrypointVerify)
+	run, err := s.Baseline(env, entrypointVerify)
 	switch {
 	case err != nil:
-		verify = Undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
+		verify = undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
 	case run.Missing != nil:
 		verify = Fail(*run.Missing)
 	case !run.Ran():
 		verify = undecidedRun(run.runOutcome)
 	case run.ExitCode != 0:
-		verify = Fail(Finding{File: env.Config.File,
+		verify = Fail(Finding{File: env.config.file,
 			Message: "with vibe not available, " + run.describe(),
 			Fix:     "make entrypoints.verify work without vibe; only the audit job may run vibe"})
 	default:
@@ -183,7 +183,7 @@ func checkR01Execution(env *Env, earlier Earlier) PartResult {
 // reads it from the earlier results. Without Claude Code there is no
 // guard to check.
 func r01GuardHalf(env *Env, earlier Earlier) PartResult {
-	if ok, _ := needsClaude(env.Config); !ok {
+	if ok, _ := needsClaude(env.config); !ok {
 		return Pass()
 	}
 	if g, ok := earlier.guardDeny(); ok {
@@ -192,7 +192,7 @@ func r01GuardHalf(env *Env, earlier Earlier) PartResult {
 		}
 		return g
 	}
-	return Undecided(Finding{Message: "cannot decide whether the A-02 deny cases are refused without vibe: A-02's probe did not run"})
+	return undecided(Finding{Message: "cannot decide whether the A-02 deny cases are refused without vibe: A-02's probe did not run"})
 }
 
 // d01CheckText is D-01's check text, for the rule and its part. Its
@@ -204,7 +204,7 @@ var d01CheckText = "per component, by the lockfile found. " + lockfileCheckText(
 // component with dependencies has a lockfile.
 func checkD01(env *Env) PartResult {
 	var results []PartResult
-	for _, comp := range env.Config.Components {
+	for _, comp := range env.config.Components {
 		results = append(results, d01Component(env, comp))
 	}
 	return mergeRuns(results...)
@@ -216,12 +216,12 @@ func d01Component(env *Env, comp Component) PartResult {
 	found := false
 	for _, lf := range allLockfiles() {
 		file := joinRel(comp.Path, lf.file)
-		if !env.Repo.HasFile(file) {
+		if !env.repo.HasFile(file) {
 			continue
 		}
 		found = true
 		if err := s.Reset(); err != nil {
-			return Undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
+			return undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
 		}
 		results = append(results, d01Lockfile(s, comp, file, lf))
 	}
@@ -234,7 +234,7 @@ func d01Component(env *Env, comp Component) PartResult {
 	case errors.Is(err, errNoManifest):
 		return Pass()
 	case err != nil:
-		return Fail(ParseFailure(manifest, err))
+		return Fail(parseFailure(manifest, err))
 	case deps:
 		names := comp.language().lockfileNames()
 		return Fail(Finding{File: manifest,
@@ -249,7 +249,7 @@ func d01Component(env *Env, comp Component) PartResult {
 func d01Lockfile(s *probeSession, comp Component, file string, lf lockfile) PartResult {
 	for _, argv := range lf.check {
 		label := strings.Join(argv, " ") + " in " + comp.Path
-		out := s.RunProgram(label, file, argv, RunOpts{Dir: comp.Path})
+		out := s.RunProgram(label, file, argv, runOpts{Dir: comp.Path})
 		if !out.Ran() {
 			return undecidedRun(out)
 		}

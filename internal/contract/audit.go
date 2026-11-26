@@ -10,9 +10,9 @@ type Options struct {
 	// Static runs only the static parts: every execution and probe part
 	// is not run, and the audit reaches no verdict (spec 0052, Q18).
 	Static bool
-	// Now decides whether waivers have expired. The zero value means the
+	// now decides whether waivers have expired. The zero value means the
 	// current time.
-	Now time.Time
+	now time.Time
 	// Rules replaces the registry. Nil means Rules(). Tests use it to
 	// stand in for parts.
 	Rules []Rule
@@ -25,7 +25,7 @@ type Options struct {
 // and probe parts run in a probe copy, which is deleted before Audit
 // returns (spec 0053).
 func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
-	now := opts.Now
+	now := opts.now
 	if now.IsZero() {
 		now = time.Now()
 	}
@@ -66,7 +66,7 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 	for _, r := range ran {
 		rep.GuardExceptionUses = append(rep.GuardExceptionUses, r.result.guardUses...)
 	}
-	if ci, _, ok := env.CI(); ok {
+	if ci, _, ok := env.ciModel(); ok {
 		rep.CIProvider = ci.Provider
 	}
 	rep.Notes = env.notes
@@ -79,17 +79,17 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 // of the execution and probe parts left to run in the probe copy; the
 // rule's result is set once they ran.
 func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, staticOnly bool) (RuleResult, []int) {
-	rr := RuleResult{Rule: rule, Required: env.Config.Requires(rule.ID)}
+	rr := RuleResult{Rule: rule, Required: env.config.requires(rule.ID)}
 	if w, ok := waivers[rule.ID]; ok {
 		rr.Waiver = &WaiverStatus{Reason: w.Reason, Until: w.Until, Expired: !now.Before(waiverEnd(w))}
 	}
 
-	if ok, why := rule.Applies(env); !ok {
+	if ok, why := rule.appliesTo(env); !ok {
 		rr.NotApplicable = why
 		if rr.Waiver != nil {
 			rr.Waiver.Unused = true
 		}
-		return settle(rr, ResultNotApplicable, Finding{File: env.Config.File, Message: "not applicable: " + why}), nil
+		return settle(rr, ResultNotApplicable, Finding{File: env.config.file, Message: "not applicable: " + why}), nil
 	}
 	if rr.Waiver != nil && !rr.Waiver.Expired {
 		return settle(rr, ResultWaived), nil

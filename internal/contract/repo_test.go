@@ -30,11 +30,11 @@ func TestNewRepoHoldsTheListedFiles(t *testing.T) {
 	if got, want := strings.Join(r.Files(), " "), "a/x.txt b.txt"; got != want {
 		t.Errorf("Files() = %q, want %q", got, want)
 	}
-	if r.Root() != root {
-		t.Errorf("Root() = %q, want %q", r.Root(), root)
+	if r.rootDir() != root {
+		t.Errorf("Root() = %q, want %q", r.rootDir(), root)
 	}
-	if !r.HasDir("a") || r.HasDir("c") {
-		t.Errorf("HasDir(a) = %v, HasDir(c) = %v, want true, false", r.HasDir("a"), r.HasDir("c"))
+	if !r.hasDir("a") || r.hasDir("c") {
+		t.Errorf("HasDir(a) = %v, HasDir(c) = %v, want true, false", r.hasDir("a"), r.hasDir("c"))
 	}
 	if data, err := r.ReadFile("a/x.txt"); err != nil || string(data) != "a/x.txt" {
 		t.Errorf("ReadFile(a/x.txt) = %q, %v", data, err)
@@ -60,7 +60,7 @@ func TestOpenRepoCanceledNamesGitAndContext(t *testing.T) {
 			t.Errorf("OpenRepo error %q does not name %q", err, want)
 		}
 	}
-	if errors.Is(err, ErrNotWorkTree) {
+	if errors.Is(err, errNotWorkTree) {
 		t.Errorf("a canceled run reads as not a work tree: %v", err)
 	}
 }

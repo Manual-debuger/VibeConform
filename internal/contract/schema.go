@@ -15,11 +15,11 @@ type Schema int
 // The schemas vibe audit tells apart (spec 0052, "Dispatch on the
 // configuration").
 const (
-	// SchemaUnknown is returned with an error: the file is neither.
-	SchemaUnknown Schema = iota
-	// SchemaV1 has a top-level standard key: the removed template-sync
+	// schemaUnknown is returned with an error: the file is neither.
+	schemaUnknown Schema = iota
+	// schemaV1 has a top-level standard key: the removed template-sync
 	// system's file, which vibe refuses with the migration pointer.
-	SchemaV1
+	schemaV1
 	// SchemaV2 has a top-level contract key and runs the contract audit.
 	SchemaV2
 )
@@ -33,15 +33,15 @@ type ConfigError struct {
 	// Path is the field path, such as entrypoints.verify[2] or
 	// waivers[0].until; empty for the file as a whole.
 	Path string
-	// Reason says why the field is invalid.
-	Reason string
+	// reason says why the field is invalid.
+	reason string
 }
 
 func (e *ConfigError) Error() string {
 	if e.Path == "" {
-		return e.File + ": " + e.Reason
+		return e.File + ": " + e.reason
 	}
-	return e.File + ": " + e.Path + ": " + e.Reason
+	return e.File + ": " + e.Path + ": " + e.reason
 }
 
 // DetectSchema reads only the top-level keys of a configuration file and
@@ -50,7 +50,7 @@ func (e *ConfigError) Error() string {
 func DetectSchema(file string, data []byte) (Schema, error) {
 	top, err := decodeTop(file, data)
 	if err != nil {
-		return SchemaUnknown, err
+		return schemaUnknown, err
 	}
 	var hasContract, hasStandard bool
 	if top != nil {
@@ -65,14 +65,14 @@ func DetectSchema(file string, data []byte) (Schema, error) {
 	}
 	switch {
 	case hasContract && hasStandard:
-		return SchemaUnknown, &ConfigError{File: file, Reason: "has both contract (version 2) and standard (version 1); " +
+		return schemaUnknown, &ConfigError{File: file, reason: "has both contract (version 2) and standard (version 1); " +
 			"keep contract for the contract audit or standard for the old audit"}
 	case hasContract:
 		return SchemaV2, nil
 	case hasStandard:
-		return SchemaV1, nil
+		return schemaV1, nil
 	default:
-		return SchemaUnknown, &ConfigError{File: file, Reason: "has neither contract (version 2) nor standard (version 1); " +
+		return schemaUnknown, &ConfigError{File: file, reason: "has neither contract (version 2) nor standard (version 1); " +
 			"declare the contract version, such as contract: 1.0.0"}
 	}
 }
@@ -86,11 +86,11 @@ func decodeTop(file string, data []byte) (*yaml.Node, error) {
 		if errors.Is(err, io.EOF) {
 			return nil, nil
 		}
-		return nil, &ConfigError{File: file, Reason: fmt.Sprintf("not valid YAML: %v", err)}
+		return nil, &ConfigError{File: file, reason: fmt.Sprintf("not valid YAML: %v", err)}
 	}
 	var extra yaml.Node
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
-		return nil, &ConfigError{File: file, Reason: "holds more than one YAML document; keep one"}
+		return nil, &ConfigError{File: file, reason: "holds more than one YAML document; keep one"}
 	}
 	if len(doc.Content) == 0 {
 		return nil, nil
@@ -100,7 +100,7 @@ func decodeTop(file string, data []byte) (*yaml.Node, error) {
 		return nil, nil
 	}
 	if top.Kind != yaml.MappingNode {
-		return nil, &ConfigError{File: file, Reason: "must be a map of fields, such as contract: 1.0.0"}
+		return nil, &ConfigError{File: file, reason: "must be a map of fields, such as contract: 1.0.0"}
 	}
 	return top, nil
 }

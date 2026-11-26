@@ -66,7 +66,7 @@ func TestContractAuditOutsideWorkTree(t *testing.T) {
 
 // A git failure inside a work tree is a tool error that says what git
 // said, not "not inside a Git work tree" (regression: a broken
-// .git/config, like a dubious-ownership refusal, read as ErrNotWorkTree).
+// .git/config, like a dubious-ownership refusal, read as not a work tree).
 func TestContractAuditGitFailureIsNotNotWorkTree(t *testing.T) {
 	t.Parallel()
 	dir := contracttest.GitFixture(t, contracttest.Baseline)

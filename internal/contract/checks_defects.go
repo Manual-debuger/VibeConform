@@ -14,10 +14,10 @@ import (
 
 // checkV01Execution: the baseline verify exits 0 in the reset copy.
 func checkV01Execution(env *Env) PartResult {
-	if f := needEntrypoint(env, EntrypointVerify); f != nil {
+	if f := needEntrypoint(env, entrypointVerify); f != nil {
 		return Fail(*f)
 	}
-	run, err := env.probe.Baseline(env, EntrypointVerify)
+	run, err := env.probe.Baseline(env, entrypointVerify)
 	switch {
 	case err != nil:
 		return cannotReset(err)
@@ -26,7 +26,7 @@ func checkV01Execution(env *Env) PartResult {
 	case !run.Ran():
 		return undecidedRun(run.runOutcome)
 	case run.ExitCode != 0:
-		return Fail(Finding{File: env.Config.File,
+		return Fail(Finding{File: env.config.file,
 			Message: "in the probe copy, " + run.describe(),
 			Fix:     "make entrypoints.verify pass on a clean checkout of the repository"})
 	}
@@ -36,21 +36,21 @@ func checkV01Execution(env *Env) PartResult {
 // checkV01Probe: with each planted defect in each component, verify
 // exits non-zero. A component without tests fails.
 func checkV01Probe(env *Env) PartResult {
-	return defectProbe{rule: "V-01", entrypoint: EntrypointVerify, noTestsFail: true}.run(env)
+	return defectProbe{rule: "V-01", entrypoint: entrypointVerify, noTestsFail: true}.run(env)
 }
 
 // checkV02Probe: with each planted defect in each component, verify-fast
 // exits non-zero.
 func checkV02Probe(env *Env) PartResult {
-	return defectProbe{rule: "V-02", entrypoint: EntrypointVerifyFast}.run(env)
+	return defectProbe{rule: "V-02", entrypoint: entrypointVerifyFast}.run(env)
 }
 
 // checkV05Probe: with the type-error defect planted in each Python
 // component, verify exits non-zero (spec 0061). Other components are
 // skipped: their type errors are compile errors, which V-01 shows.
 func checkV05Probe(env *Env) PartResult {
-	return defectProbe{rule: "V-05", entrypoint: EntrypointVerify,
-		components: func(env *Env) []Component { return pythonComponents(env.Config) }}.run(env)
+	return defectProbe{rule: "V-05", entrypoint: entrypointVerify,
+		components: func(env *Env) []Component { return pythonComponents(env.config) }}.run(env)
 }
 
 // pythonComponents lists the Python components in configuration order.
@@ -76,7 +76,7 @@ func hasPythonComponent(cfg *Config) (bool, string) {
 // exits non-zero (spec 0061). A component without tests leaves it
 // undecided.
 func checkV06Probe(env *Env) PartResult {
-	return defectProbe{rule: "V-06", entrypoint: EntrypointVerify}.run(env)
+	return defectProbe{rule: "V-06", entrypoint: entrypointVerify}.run(env)
 }
 
 // checkV07Probe: with the secret defect planted once per repository,
@@ -84,14 +84,14 @@ func checkV06Probe(env *Env) PartResult {
 // language, so one component is enough: the first in configuration order
 // that has tests.
 func checkV07Probe(env *Env) PartResult {
-	return defectProbe{rule: "V-07", entrypoint: EntrypointVerify, firstWithTests: true}.run(env)
+	return defectProbe{rule: "V-07", entrypoint: entrypointVerify, firstWithTests: true}.run(env)
 }
 
 // checkV08Probe: with V-01's static-analysis defect under the language's
 // blanket suppressions planted in each component, verify exits non-zero.
 // A component without tests leaves it undecided (spec 0061).
 func checkV08Probe(env *Env) PartResult {
-	return defectProbe{rule: "V-08", entrypoint: EntrypointVerify}.run(env)
+	return defectProbe{rule: "V-08", entrypoint: entrypointVerify}.run(env)
 }
 
 // defectProbe is one rule's planted-defect probe: in which components it
@@ -125,12 +125,12 @@ func (p defectProbe) run(env *Env) PartResult {
 	if f := needEntrypoint(env, p.entrypoint); f != nil {
 		return Fail(*f)
 	}
-	comps := env.Config.Components
+	comps := env.config.Components
 	if p.components != nil {
 		comps = p.components(env)
 	}
 	if len(comps) == 0 {
-		return Undecided(Finding{Message: "cannot decide: no component to plant a defect in"})
+		return undecided(Finding{Message: "cannot decide: no component to plant a defect in"})
 	}
 	var results []PartResult
 	var baseline *PartResult
@@ -165,10 +165,10 @@ func (p defectProbe) run(env *Env) PartResult {
 func noTests(env *Env, comp Component, fail bool) PartResult {
 	msg := errNoTests{comp.Path}.Error()
 	if fail {
-		return Fail(Finding{File: env.Config.File, Message: msg,
+		return Fail(Finding{File: env.config.file, Message: msg,
 			Fix: "add a test file to component " + comp.Path + " (" + comp.language().testFilePattern() + "), so that verify can be shown to run its tests"})
 	}
-	return Undecided(Finding{Message: "cannot decide: " + msg + ", so there is nowhere to plant a defect"})
+	return undecided(Finding{Message: "cannot decide: " + msg + ", so there is nowhere to plant a defect"})
 }
 
 // baselinePasses is the precondition of a defect probe: the entrypoint
@@ -183,7 +183,7 @@ func baselinePasses(env *Env, name string) PartResult {
 	case !run.Ran():
 		return undecidedRun(run.runOutcome)
 	case run.ExitCode != 0:
-		return Undecided(Finding{File: env.Config.File,
+		return undecided(Finding{File: env.config.file,
 			Message: fmt.Sprintf("cannot decide: %s fails without a planted defect, so a defect that makes it fail proves nothing: %s", name, run.describe()),
 			Fix:     "make entrypoints." + name + " pass on a clean checkout of the repository"})
 	}
@@ -197,18 +197,18 @@ func (p defectProbe) component(env *Env, comp Component) PartResult {
 	s, name := env.probe, p.entrypoint
 	var missedKinds []defectKind
 	var planted []string
-	var undecided []PartResult
+	var undecidedParts []PartResult
 	for _, kind := range ruleDefectKinds[p.rule] {
 		if err := s.Reset(); err != nil {
 			return cannotReset(err)
 		}
 		d, err := defectFor(env, comp, kind)
 		if err != nil {
-			undecided = append(undecided, Undecided(Finding{Message: fmt.Sprintf("cannot decide: nowhere to plant the %s defect: %s", kind, err)}))
+			undecidedParts = append(undecidedParts, undecided(Finding{Message: fmt.Sprintf("cannot decide: nowhere to plant the %s defect: %s", kind, err)}))
 			continue
 		}
 		if err := s.Plant(d.Path, d.Content); err != nil {
-			undecided = append(undecided, Undecided(Finding{Message: "cannot decide: cannot plant " + d.Path + ": " + err.Error()}))
+			undecidedParts = append(undecidedParts, undecided(Finding{Message: "cannot decide: cannot plant " + d.Path + ": " + err.Error()}))
 			continue
 		}
 		run := s.RunEntrypoint(env, name, fmt.Sprintf("%s with the %s defect in %s", name, kind, comp.Path))
@@ -216,7 +216,7 @@ func (p defectProbe) component(env *Env, comp Component) PartResult {
 		case run.Missing != nil:
 			return Fail(*run.Missing)
 		case !run.Ran():
-			undecided = append(undecided, undecidedRun(run.runOutcome))
+			undecidedParts = append(undecidedParts, undecidedRun(run.runOutcome))
 		case run.ExitCode == 0:
 			missedKinds = append(missedKinds, kind)
 			planted = append(planted, d.Path)
@@ -224,13 +224,13 @@ func (p defectProbe) component(env *Env, comp Component) PartResult {
 	}
 	res := Pass()
 	if len(missedKinds) > 0 {
-		res = Fail(Finding{File: env.Config.File,
+		res = Fail(Finding{File: env.config.file,
 			Message: fmt.Sprintf("%s (%s) exits 0 in component %s with a planted defect (%s); the defect kinds that did not make it fail: %s",
-				name, strings.Join(env.EntrypointSource(name), "; "), comp.Path, strings.Join(planted, ", "), joinKinds(missedKinds)),
+				name, strings.Join(env.entrypointSource(name), "; "), comp.Path, strings.Join(planted, ", "), joinKinds(missedKinds)),
 			Fix: fmt.Sprintf("make entrypoints.%s run %s; vibe audit --explain %s shows the planted files",
 				name, kindCatchers(missedKinds), p.rule)})
 	}
-	return mergeRuns(append([]PartResult{res}, undecided...)...)
+	return mergeRuns(append([]PartResult{res}, undecidedParts...)...)
 }
 
 // joinKinds lists defect kinds, comma separated.
@@ -254,7 +254,7 @@ func kindCatchers(kinds []defectKind) string {
 }
 
 func cannotReset(err error) PartResult {
-	return Undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
+	return undecided(Finding{Message: "cannot decide: cannot reset the probe copy: " + err.Error()})
 }
 
 // dedupe drops repeated identical findings, such as one baseline failure
@@ -281,7 +281,7 @@ func dedupe(results []PartResult) []PartResult {
 // that has tests planted, some Stop hook exits 2 for stop_hook_active
 // false, and every Stop hook exits 0 for stop_hook_active true.
 func checkA05Probe(env *Env) PartResult {
-	fix := "add a Stop hook that runs " + quoteCommands(env.EntrypointSource(EntrypointVerifyFast)) +
+	fix := "add a Stop hook that runs " + quoteCommands(env.entrypointSource(entrypointVerifyFast)) +
 		" and exits 2 when it fails, unless stop_hook_active is true"
 	settings, res, ok := env.readClaudeSettings(fix)
 	if !ok {
@@ -297,7 +297,7 @@ func checkA05Probe(env *Env) PartResult {
 	}
 	s := env.probe
 	if ok, why := s.HasBash(); !ok {
-		return Undecided(Finding{Message: "cannot decide: " + why})
+		return undecided(Finding{Message: "cannot decide: " + why})
 	}
 
 	run := func(h settingsHook, active bool) runOutcome {
@@ -309,7 +309,7 @@ func checkA05Probe(env *Env) PartResult {
 		}
 		payload := s.HookPayload(eventStop, map[string]any{"stop_hook_active": active})
 		label := fmt.Sprintf("the Stop hook with the test defect in %s, stop_hook_active %t", comp.Path, active)
-		return s.RunHook(label, h.command, h.limit, payload, RunOpts{})
+		return s.RunHook(label, h.command, h.limit, payload, runOpts{})
 	}
 
 	// Some hook blocks the turn while it is not yet continued.
@@ -356,7 +356,7 @@ func checkA05Probe(env *Env) PartResult {
 // a05Defect is the failing-test defect of the first component, by path,
 // that has tests.
 func a05Defect(env *Env) (plantedDefect, Component, PartResult, bool) {
-	comps := slices.Clone(env.Config.Components)
+	comps := slices.Clone(env.config.Components)
 	slices.SortStableFunc(comps, func(a, b Component) int { return cmp.Compare(a.Path, b.Path) })
 	for _, comp := range comps {
 		d, err := defectFor(env, comp, defectTest)
@@ -365,9 +365,9 @@ func a05Defect(env *Env) (plantedDefect, Component, PartResult, bool) {
 		case errors.As(err, &nt):
 			continue
 		case err != nil:
-			return d, comp, Undecided(Finding{Message: "cannot decide: nowhere to plant the test defect: " + err.Error()}), false
+			return d, comp, undecided(Finding{Message: "cannot decide: nowhere to plant the test defect: " + err.Error()}), false
 		}
 		return d, comp, PartResult{}, true
 	}
-	return plantedDefect{}, Component{}, Undecided(Finding{Message: "cannot decide: no component has tests, so there is nowhere to plant the test defect"}), false
+	return plantedDefect{}, Component{}, undecided(Finding{Message: "cannot decide: no component has tests, so there is nowhere to plant the test defect"}), false
 }

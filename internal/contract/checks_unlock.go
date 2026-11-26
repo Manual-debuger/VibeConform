@@ -55,17 +55,17 @@ func checkA08(env *Env) PartResult {
 	hooks, stops := settings.commandHooks(eventPreToolUse), settings.commandHooks(eventStop)
 	if len(hooks)+len(stops) > 0 {
 		if ok, why := s.HasBash(); !ok {
-			return Undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + why})
+			return undecided(Finding{File: claudeSettingsFile, Message: "cannot decide: " + why})
 		}
 	}
-	defer func() { _ = s.setUnlock(UnlockNone) }()
+	defer func() { _ = s.setUnlock(unlockNone) }()
 
 	v := &verdicts{}
 	a08Cases := a08Cases()
 	runs, err := feedCases(s, hooks, a08Cases, "the PreToolUse hooks during A-08",
-		func(c GuardCase) string { return "A-08 with " + describeGuardCase(c) }, RunOpts{})
+		func(c GuardCase) string { return "A-08 with " + describeGuardCase(c) }, runOpts{})
 	if err != nil {
-		return Undecided(Finding{Message: "cannot decide: cannot write the unlock marker: " + err.Error()})
+		return undecided(Finding{Message: "cannot decide: cannot write the unlock marker: " + err.Error()})
 	}
 	exceptions := policyExceptions(env)
 	for _, run := range runs {
@@ -119,7 +119,7 @@ func a08Stop(s *probeSession, stops []settingsHook, v *verdicts) {
 	var exits []string
 	var undecided *runOutcome
 	for _, h := range stops {
-		out := s.RunHook("A-08 Stop hook with a valid unlock marker", h.command, h.limit, payload, RunOpts{})
+		out := s.RunHook("A-08 Stop hook with a valid unlock marker", h.command, h.limit, payload, runOpts{})
 		if !out.Ran() {
 			if undecided == nil {
 				undecided = &out

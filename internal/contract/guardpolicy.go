@@ -40,7 +40,7 @@ func (e *Env) readGuardPolicy() (p *guardPolicy, result PartResult, ok bool) {
 	}
 	top, err := jsonObject(data)
 	if err != nil {
-		return nil, Fail(ParseFailure(guardPolicyFile, err)), false
+		return nil, Fail(parseFailure(guardPolicyFile, err)), false
 	}
 	return &guardPolicy{top: top}, Pass(), true
 }
@@ -153,7 +153,7 @@ func (e *Env) vibeGuardLoadError() string {
 	}
 	why := ""
 	if e.runsVibeGuard() {
-		if data, err := e.ReadFile(guardPolicyFile); err == nil {
+		if data, err := e.readFile(guardPolicyFile); err == nil {
 			if _, err := guardrule.ParsePolicy(data); err != nil {
 				why = err.Error()
 			}
@@ -187,7 +187,7 @@ func (s *claudeSettings) runsVibeGuard() bool {
 
 // isVibeGuardHook reports whether c is `vibe-guard hook`: its first word
 // has the base name vibe-guard, .exe dropped, and its second word is hook.
-func isVibeGuardHook(c Command) bool {
+func isVibeGuardHook(c shellCommand) bool {
 	if len(c.Words) < 2 || !c.Words[0].Literal || !c.Words[1].Literal || c.Words[1].Text != "hook" {
 		return false
 	}
@@ -217,7 +217,7 @@ func guardListings(env *Env) ([]GuardException, []LocalAdjustment) {
 }
 
 func guardExceptions(env *Env) []GuardException {
-	data, err := env.ReadFile(guardPolicyFile)
+	data, err := env.readFile(guardPolicyFile)
 	if err != nil {
 		return nil
 	}
@@ -244,7 +244,7 @@ func guardExceptions(env *Env) []GuardException {
 // its extra rules, in file order. Its version is not judged. A file that
 // does not parse lists nothing and adds a note to the report.
 func localAdjustments(env *Env) []LocalAdjustment {
-	data, err := env.ReadFile(localPolicyFile)
+	data, err := env.readFile(localPolicyFile)
 	if err != nil {
 		return nil
 	}
@@ -257,7 +257,7 @@ func localAdjustments(env *Env) []LocalAdjustment {
 		err = json.Unmarshal(data, &local)
 	}
 	if err != nil {
-		env.Note("%s does not parse (%v), so its guardrail adjustments are not listed", localPolicyFile, err)
+		env.note("%s does not parse (%v), so its guardrail adjustments are not listed", localPolicyFile, err)
 		return nil
 	}
 	var out []LocalAdjustment

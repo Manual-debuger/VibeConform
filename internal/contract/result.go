@@ -58,16 +58,16 @@ func Fail(findings ...Finding) PartResult {
 	return PartResult{Result: ResultFail, Findings: findings}
 }
 
-// Undecided is a part the audit cannot decide, with the reason.
-func Undecided(findings ...Finding) PartResult {
+// undecided is a part the audit cannot decide, with the reason.
+func undecided(findings ...Finding) PartResult {
 	return PartResult{Result: ResultUndecided, Findings: findings}
 }
 
-// Merge combines the parts of one check that each decide a half of it,
+// merge combines the parts of one check that each decide a half of it,
 // such as R-02's AGENTS.md and CLAUDE.md halves: a failure in either
 // fails it, otherwise an undecided half leaves it undecided. Findings
 // are kept in order.
-func Merge(results ...PartResult) PartResult {
+func merge(results ...PartResult) PartResult {
 	out := Pass()
 	for _, r := range results {
 		out.Findings = append(out.Findings, r.Findings...)
@@ -81,11 +81,11 @@ func Merge(results ...PartResult) PartResult {
 	return out
 }
 
-// ParseFailure is the finding for a file a rule needs that does not
+// parseFailure is the finding for a file a rule needs that does not
 // parse. It fails every rule that needs the file (spec 0052, "What
 // static checks read"): a tool that reads it would not get the property
 // either.
-func ParseFailure(file string, err error) Finding {
+func parseFailure(file string, err error) Finding {
 	return Finding{
 		File:    file,
 		Message: fmt.Sprintf("does not parse: %v", err),
@@ -127,9 +127,9 @@ type RuleResult struct {
 	Required bool
 }
 
-// Binding reports whether the rule's result counts in the verdict: a MUST
+// binding reports whether the rule's result counts in the verdict: a MUST
 // rule or a required SHOULD rule.
-func (r RuleResult) Binding() bool {
+func (r RuleResult) binding() bool {
 	return r.Rule.Level == Must || r.Required
 }
 
@@ -245,7 +245,7 @@ func (r *Report) decide() {
 		case ResultNotRun:
 			notRun++
 		}
-		if !rr.Binding() {
+		if !rr.binding() {
 			continue
 		}
 		switch rr.Result {

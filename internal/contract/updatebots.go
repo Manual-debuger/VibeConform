@@ -116,11 +116,11 @@ func checkD02(env *Env) PartResult { //nolint:gocognit,gocyclo // baseline: pre-
 		}
 	}
 	if len(problems) > 0 {
-		return Merge(problems...)
+		return merge(problems...)
 	}
 
 	var findings []Finding
-	for i := range env.Config.Components {
+	for i := range env.config.Components {
 		if f, all := uncoveredByAll(bots, func(b *updateBot) (Finding, bool) { f, ok := b.Uncovered[i]; return f, ok }); all {
 			findings = append(findings, f)
 		}
@@ -158,7 +158,7 @@ func uncoveredByAll[T any](bots []*updateBot, uncovered func(*updateBot) (T, boo
 func dependabot(env *Env) *updateBot {
 	var file string
 	for _, f := range dependabotFiles {
-		if env.Repo.HasFile(f) {
+		if env.repo.HasFile(f) {
 			file = f
 			break
 		}
@@ -169,11 +169,11 @@ func dependabot(env *Env) *updateBot {
 	b := &updateBot{File: file, Uncovered: map[int]Finding{}}
 	updates, err := dependabotUpdates(env, file)
 	if err != nil {
-		res := Fail(ParseFailure(file, err))
+		res := Fail(parseFailure(file, err))
 		b.Problem = &res
 		return b
 	}
-	for i, c := range env.Config.Components {
+	for i, c := range env.config.Components {
 		ecosystems := c.language().dependabotEcosystems
 		if !slices.ContainsFunc(updates, func(u dependabotUpdate) bool { return u.covers(ecosystems, c.Path) }) {
 			b.Uncovered[i] = Finding{
@@ -303,14 +303,14 @@ func globSegments(pattern, segs []string) bool {
 // nothing.
 func workflowAutomerge(env *Env) []Finding {
 	var out []Finding
-	for _, wf := range env.Workflows().Files {
+	for _, wf := range env.githubWorkflows().Files {
 		if wf.Err != nil {
 			continue
 		}
 		for _, j := range wf.Jobs {
 			for _, s := range j.Steps {
 				for _, c := range s.Run.Commands {
-					if c.HasPrefix("gh", "pr", "merge") && slices.ContainsFunc(c.Words, func(w Word) bool {
+					if c.HasPrefix("gh", "pr", "merge") && slices.ContainsFunc(c.Words, func(w shellWord) bool {
 						return w.Literal && w.Text == "--auto"
 					}) {
 						out = append(out, Finding{
@@ -332,7 +332,7 @@ func workflowAutomerge(env *Env) []Finding {
 // tracked and does not parse, so its renovate key cannot be read.
 func renovate(env *Env) (b *updateBot, pkgProblem *PartResult) {
 	for _, rf := range renovateFiles {
-		if !env.Repo.HasFile(rf.file) {
+		if !env.repo.HasFile(rf.file) {
 			continue
 		}
 		b := &updateBot{File: rf.file, Uncovered: map[int]Finding{}}
@@ -346,13 +346,13 @@ func renovate(env *Env) (b *updateBot, pkgProblem *PartResult) {
 	}
 
 	const pkg = "package.json"
-	data, err := env.ReadFile(pkg)
+	data, err := env.readFile(pkg)
 	if err != nil {
 		return nil, nil
 	}
 	var top map[string]any
 	if err := json.Unmarshal(data, &top); err != nil {
-		res := Fail(ParseFailure(pkg, err))
+		res := Fail(parseFailure(pkg, err))
 		return nil, &res
 	}
 	cfg, ok := top["renovate"].(map[string]any)
@@ -365,15 +365,15 @@ func renovate(env *Env) (b *updateBot, pkgProblem *PartResult) {
 }
 
 func readRenovateFile(env *Env, rf renovateFile) (map[string]any, *PartResult) {
-	data, err := env.ReadFile(rf.file)
+	data, err := env.readFile(rf.file)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		res := Undecided(Finding{File: rf.file, Message: fmt.Sprintf("cannot be read: %v", err), Fix: "make the file readable"})
+		res := undecided(Finding{File: rf.file, Message: fmt.Sprintf("cannot be read: %v", err), Fix: "make the file readable"})
 		return nil, &res
 	}
 	if rf.jwcc {
 		std, err := hujson.Standardize(data)
 		if err != nil {
-			res := Undecided(Finding{
+			res := undecided(Finding{
 				File:    rf.file,
 				Message: fmt.Sprintf("cannot be read as JSON with comments and trailing commas (%v); the audit does not read other JSON5", err),
 				Fix:     "write it without JSON5-only syntax such as unquoted keys or single quotes",
@@ -387,7 +387,7 @@ func readRenovateFile(env *Env, rf renovateFile) (map[string]any, *PartResult) {
 		if err == nil {
 			err = errors.New("the top level must be a JSON object")
 		}
-		res := Fail(ParseFailure(rf.file, err))
+		res := Fail(parseFailure(rf.file, err))
 		return nil, &res
 	}
 	return cfg, nil
@@ -409,7 +409,7 @@ func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) { //nolint:gocogn
 				enabled = append(enabled, s)
 			}
 		}
-		for i, c := range env.Config.Components {
+		for i, c := range env.config.Components {
 			managers := c.language().renovateManagers
 			if !slices.ContainsFunc(managers, func(m string) bool { return slices.Contains(enabled, m) }) {
 				b.Uncovered[i] = Finding{
@@ -435,7 +435,7 @@ func judgeRenovate(env *Env, b *updateBot, cfg map[string]any) { //nolint:gocogn
 					Fix:     "add gitlabci to enabledManagers",
 				})
 			}
-			i := slices.IndexFunc(ci.Includes, func(in CIInclude) bool { return in.Kind == IncludeProject })
+			i := slices.IndexFunc(ci.Includes, func(in ciInclude) bool { return in.Kind == includeProject })
 			if i >= 0 && !slices.Contains(enabled, gitlabIncludeManager) {
 				in := ci.Includes[i]
 				b.CI = append(b.CI, Finding{

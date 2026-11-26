@@ -16,8 +16,8 @@ import (
 // and husky scripts are parsed as POSIX shell with mvdan.cc/sh (ADR
 // 0026).
 
-// Word is one shell word after quote removal.
-type Word struct {
+// shellWord is one shell word after quote removal.
+type shellWord struct {
 	// Text is the word after quote removal. Each expansion (parameter,
 	// command substitution, arithmetic, ...) is replaced by expansionMark,
 	// so a word with an expansion never ends in a literal suffix it does
@@ -28,21 +28,21 @@ type Word struct {
 	Literal bool
 }
 
-// expansionMark stands for an expansion inside Word.Text. It is the
+// expansionMark stands for an expansion inside shellWord.Text. It is the
 // guard's mark, so a word reads the same in both.
 const expansionMark = guardrule.ExpansionMark
 
-// Command is one simple command: its words after quote removal, with
+// shellCommand is one simple command: its words after quote removal, with
 // leading assignments and redirections dropped.
-type Command struct {
-	Words []Word
+type shellCommand struct {
+	Words []shellWord
 	// Line is the command's line in the parsed source, from 1.
 	Line int
 }
 
 // String writes the command's words separated by spaces, with each
 // expansion shown as $….
-func (c Command) String() string {
+func (c shellCommand) String() string {
 	parts := make([]string, len(c.Words))
 	for i, w := range c.Words {
 		parts[i] = guardrule.ShowExpansions(w.Text)
@@ -52,7 +52,7 @@ func (c Command) String() string {
 
 // Calls reports whether c calls target: their words are equal, word for
 // word, and every word is literal (spec 0051, "called").
-func (c Command) Calls(target Command) bool {
+func (c shellCommand) Calls(target shellCommand) bool {
 	if len(c.Words) != len(target.Words) || len(c.Words) == 0 {
 		return false
 	}
@@ -68,7 +68,7 @@ func (c Command) Calls(target Command) bool {
 // HasPrefix reports whether c's first words are literally words, such as
 // HasPrefix("vibe", "audit") for C-04 or HasPrefix("npm", "audit") for
 // D-03.
-func (c Command) HasPrefix(words ...string) bool {
+func (c shellCommand) HasPrefix(words ...string) bool {
 	if len(words) == 0 || len(c.Words) < len(words) {
 		return false
 	}
@@ -80,28 +80,28 @@ func (c Command) HasPrefix(words ...string) bool {
 	return true
 }
 
-// Called reports whether an entrypoint is called in a set of places: each
+// called reports whether an entrypoint is called in a set of places: each
 // of its commands is called by some command in cmds (spec 0051, "For a
 // list entrypoint, called means every command in the list is called, in
 // any steps or jobs").
-func Called(entrypoint, cmds []Command) bool {
-	return len(entrypoint) > 0 && len(Uncalled(entrypoint, cmds)) == 0
+func called(entrypoint, cmds []shellCommand) bool {
+	return len(entrypoint) > 0 && len(uncalled(entrypoint, cmds)) == 0
 }
 
-// Uncalled returns the entrypoint's commands that no command in cmds
+// uncalled returns the entrypoint's commands that no command in cmds
 // calls.
-func Uncalled(entrypoint, cmds []Command) []Command {
-	var out []Command
+func uncalled(entrypoint, cmds []shellCommand) []shellCommand {
+	var out []shellCommand
 	for _, want := range entrypoint {
-		if !CallsAny(cmds, want) {
+		if !callsAny(cmds, want) {
 			out = append(out, want)
 		}
 	}
 	return out
 }
 
-// CallsAny reports whether some command in cmds calls target.
-func CallsAny(cmds []Command, target Command) bool {
+// callsAny reports whether some command in cmds calls target.
+func callsAny(cmds []shellCommand, target shellCommand) bool {
 	for _, c := range cmds {
 		if c.Calls(target) {
 			return true
@@ -110,17 +110,17 @@ func CallsAny(cmds []Command, target Command) bool {
 	return false
 }
 
-// ParseCommands parses src as POSIX shell and returns every simple
+// parseCommands parses src as POSIX shell and returns every simple
 // command in it, wherever it sits in the parse tree: in lists, pipelines,
 // conditionals, loops, subshells, functions and command substitutions.
 // A string passed to sh -c or bash -c stays a word and is not parsed
 // again. An assignment with no command is not a command.
-func ParseCommands(src string) ([]Command, error) {
+func parseCommands(src string) ([]shellCommand, error) {
 	f, err := parseShell(src)
 	if err != nil {
 		return nil, err
 	}
-	var out []Command
+	var out []shellCommand
 	syntax.Walk(f, func(n syntax.Node) bool {
 		if call, ok := n.(*syntax.CallExpr); ok && len(call.Args) > 0 {
 			out = append(out, commandOf(call))
@@ -135,28 +135,28 @@ func ParseCommands(src string) ([]Command, error) {
 // compound command. That is the shape an entrypoint command must have,
 // since a command of any other shape can never be called (spec 0052,
 // "Entrypoints"). The error says what src is instead.
-func ParseSimpleCommand(src string) (Command, error) {
+func ParseSimpleCommand(src string) (shellCommand, error) {
 	f, err := parseShell(src)
 	if err != nil {
-		return Command{}, fmt.Errorf("does not parse as POSIX shell: %w", err)
+		return shellCommand{}, fmt.Errorf("does not parse as POSIX shell: %w", err)
 	}
 	if len(f.Stmts) == 0 {
-		return Command{}, errors.New("is empty")
+		return shellCommand{}, errors.New("is empty")
 	}
 	if len(f.Stmts) > 1 {
-		return Command{}, errors.New("is a sequence of commands, not one simple command")
+		return shellCommand{}, errors.New("is a sequence of commands, not one simple command")
 	}
 	st := f.Stmts[0]
 	call, ok := st.Cmd.(*syntax.CallExpr)
 	switch {
 	case !ok:
-		return Command{}, fmt.Errorf("is %s, not one simple command", describeCommand(st.Cmd))
+		return shellCommand{}, fmt.Errorf("is %s, not one simple command", describeCommand(st.Cmd))
 	case st.Negated || st.Background:
-		return Command{}, errors.New("uses an operator (! or &), so it is not one simple command")
+		return shellCommand{}, errors.New("uses an operator (! or &), so it is not one simple command")
 	case len(st.Redirs) > 0:
-		return Command{}, errors.New("has a redirection, so it is not one simple command")
+		return shellCommand{}, errors.New("has a redirection, so it is not one simple command")
 	case len(call.Args) == 0:
-		return Command{}, errors.New("only assigns variables and runs no command")
+		return shellCommand{}, errors.New("only assigns variables and runs no command")
 	}
 	return commandOf(call), nil
 }
@@ -177,7 +177,7 @@ func commandAssignments(src string) (assigns []string, why string) {
 		if a.Append || a.Array != nil || a.Index != nil || a.Name == nil {
 			return nil, fmt.Sprintf("the assignment to %s is not NAME=value", assignName(a))
 		}
-		val := Word{Literal: true}
+		val := shellWord{Literal: true}
 		if a.Value != nil {
 			val = wordOf(a.Value)
 		}
@@ -226,8 +226,8 @@ func parseShell(src string) (*syntax.File, error) {
 	return syntax.NewParser(syntax.Variant(syntax.LangPOSIX)).Parse(strings.NewReader(src), "")
 }
 
-func commandOf(call *syntax.CallExpr) Command {
-	c := Command{Line: int(call.Args[0].Pos().Line())}
+func commandOf(call *syntax.CallExpr) shellCommand {
+	c := shellCommand{Line: int(call.Args[0].Pos().Line())}
 	for _, w := range call.Args {
 		c.Words = append(c.Words, wordOf(w))
 	}
@@ -236,7 +236,7 @@ func commandOf(call *syntax.CallExpr) Command {
 
 // wordOf performs quote removal on a word. Any part other than literal
 // text and quotes is an expansion.
-func wordOf(w *syntax.Word) Word {
+func wordOf(w *syntax.Word) shellWord {
 	var b strings.Builder
 	literal := true
 	for _, part := range w.Parts {
@@ -264,7 +264,7 @@ func wordOf(w *syntax.Word) Word {
 			b.WriteString(expansionMark)
 		}
 	}
-	return Word{Text: b.String(), Literal: literal}
+	return shellWord{Text: b.String(), Literal: literal}
 }
 
 // githubExpression matches a GitHub Actions expression, ${{ … }}.
@@ -275,13 +275,13 @@ var githubExpression = regexp.MustCompile(`(?s)\$\{\{.*?\}\}`)
 // entrypoint word, and it does not end in @latest.
 const githubPlaceholder = "${VIBE_GITHUB_EXPRESSION}"
 
-// Script is a GitHub Actions run: step as the static checks see it.
-type Script struct {
+// shellScript is a GitHub Actions run: step as the static checks see it.
+type shellScript struct {
 	// Source is the step's run: text as written.
 	Source string
 	// Commands is every simple command of the step. It is empty when the
 	// step does not parse: such a step calls nothing.
-	Commands []Command
+	Commands []shellCommand
 	// Err is the parse error, or nil.
 	Err error
 	// Fields is the step split on whitespace, after GitHub expressions
@@ -290,33 +290,33 @@ type Script struct {
 	Fields []string
 }
 
-// ParseRunStep parses a run: step. Each ${{ … }} is replaced with a
+// parseRunStep parses a run: step. Each ${{ … }} is replaced with a
 // placeholder first. A step that does not parse is kept with its error:
 // it calls nothing, and C-02 reads its whitespace-separated words.
-func ParseRunStep(src string) Script {
+func parseRunStep(src string) shellScript {
 	s := githubExpression.ReplaceAllLiteralString(src, githubPlaceholder)
-	cmds, err := ParseCommands(s)
+	cmds, err := parseCommands(s)
 	if err != nil {
-		return Script{Source: src, Err: err, Fields: strings.Fields(s)}
+		return shellScript{Source: src, Err: err, Fields: strings.Fields(s)}
 	}
-	return Script{Source: src, Commands: cmds}
+	return shellScript{Source: src, Commands: cmds}
 }
 
-// ParseShellScript parses one GitLab script line (a before_script, script
+// parseShellScript parses one GitLab script line (a before_script, script
 // or after_script item) as POSIX shell, kept like a run: step that does
 // not parse when it does not. GitLab's $VAR and ${VAR} are already shell
 // expansions, so nothing is replaced first.
-func ParseShellScript(src string) Script {
-	cmds, err := ParseCommands(src)
+func parseShellScript(src string) shellScript {
+	cmds, err := parseCommands(src)
 	if err != nil {
-		return Script{Source: src, Err: err, Fields: strings.Fields(src)}
+		return shellScript{Source: src, Err: err, Fields: strings.Fields(src)}
 	}
-	return Script{Source: src, Commands: cmds}
+	return shellScript{Source: src, Commands: cmds}
 }
 
 // Words returns every word of the step's simple commands, or the step's
 // whitespace-separated fields when it does not parse.
-func (s Script) Words() []string {
+func (s shellScript) Words() []string {
 	if s.Err != nil {
 		return s.Fields
 	}

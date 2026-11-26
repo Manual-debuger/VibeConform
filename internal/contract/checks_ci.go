@@ -12,7 +12,7 @@ import (
 
 // The static checks that read CI: C-01 to C-05, D-03 and R-01's static
 // part (spec 0052, "Recognition rules"; spec 0055 for GitLab CI). Each
-// starts from ciRead, which applies env.CI() and turns every CI file that
+// starts from ciRead, which applies env.ciModel() and turns every CI file that
 // does not parse or resolve into a failure of the rule; the rule then
 // reads the rest. The readers fill the model (ci_model.go): GitHub
 // triggers and the default branch are in workflow_triggers.go, runners
@@ -23,8 +23,8 @@ import (
 // rule's result is res: no CI the audit reads. When ok is true, res holds
 // a failure for each file that does not parse (or passes), and the rule
 // merges its own result into it.
-func ciRead(env *Env) (ci *CI, res PartResult, ok bool) {
-	ci, res, ok = env.CI()
+func ciRead(env *Env) (ci *ciModel, res PartResult, ok bool) {
+	ci, res, ok = env.ciModel()
 	if !ok {
 		return nil, res, false
 	}
@@ -33,7 +33,7 @@ func ciRead(env *Env) (ci *CI, res PartResult, ok bool) {
 
 // checkC03: every workflow has top-level permissions of read-all, {} or a
 // map whose every value is read or none. It reads the GitHub workflows
-// (CI.Workflows), which only the GitHub reader fills: on GitLab CI the
+// (ciModel.Workflows), which only the GitHub reader fills: on GitLab CI the
 // rule is not applicable, which the registry decides before it runs
 // (notOnGitLab).
 func checkC03(env *Env) PartResult {
@@ -75,7 +75,7 @@ func checkC03(env *Env) PartResult {
 				Fix:     fix})
 		}
 	}
-	return Merge(res, failIf(findings))
+	return merge(res, failIf(findings))
 }
 
 // failIf fails with findings, or passes when there are none.
@@ -98,7 +98,7 @@ func scalarOr(n *yaml.Node, alt string) string {
 // that run on pushes to the default branch, each call every verify
 // command. A skipped job that calls an uncalled command is explained.
 func checkC01(env *Env) PartResult {
-	verify, missing := env.Entrypoint(EntrypointVerify)
+	verify, missing := env.entrypointCommands(entrypointVerify)
 	if missing != nil {
 		return Fail(*missing)
 	}
@@ -108,13 +108,13 @@ func checkC01(env *Env) PartResult {
 	}
 	w := ci.wording
 	var findings []Finding
-	for _, kind := range []PipelineKind{KindMergeRequest, KindDefaultPush} {
+	for _, kind := range []pipelineKind{kindMergeRequest, kindDefaultPush} {
 		what := w.kind(kind, ci.DefaultBranch)
 		run := ci.Run(kind)
-		explained := map[*CIJob]bool{}
-		explain := func(c Command) {
+		explained := map[*ciJob]bool{}
+		explain := func(c shellCommand) {
 			for _, s := range run.Skipped {
-				if !explained[s.Job] && CallsAny(s.Job.Commands, c) {
+				if !explained[s.Job] && callsAny(s.Job.Commands, c) {
 					explained[s.Job] = true
 					findings = append(findings, skipFinding(s, what))
 				}
@@ -129,25 +129,25 @@ func checkC01(env *Env) PartResult {
 			}
 			continue
 		}
-		for _, c := range Uncalled(verify, commandsOfJobs(run.Jobs)) {
+		for _, c := range uncalled(verify, commandsOfJobs(run.Jobs)) {
 			findings = append(findings, Finding{File: ci.Dir,
 				Message: w.notCalled(what, c),
 				Fix:     w.notCalledFix(what, c)})
 			explain(c)
 		}
 	}
-	return Merge(res, failIf(findings))
+	return merge(res, failIf(findings))
 }
 
 // skipFinding explains why a job that would count for what did not.
-func skipFinding(s CISkip, what string) Finding {
+func skipFinding(s ciSkip, what string) Finding {
 	return Finding{File: s.File,
 		Message: fmt.Sprintf("line %d: %s does not count for %s: %s", s.Line, s.Job.where(), what, s.Why),
 		Fix:     s.Fix}
 }
 
 // quoteCommandList quotes an entrypoint's commands for a message.
-func quoteCommandList(cmds []Command) string {
+func quoteCommandList(cmds []shellCommand) string {
 	q := make([]string, len(cmds))
 	for i, c := range cmds {
 		q[i] = "`" + c.String() + "`"
@@ -177,12 +177,12 @@ func checkC02(env *Env) PartResult {
 		}
 	}
 	findings = append(findings, latestWords(ci.Jobs)...)
-	return Merge(res, failIf(findings))
+	return merge(res, failIf(findings))
 }
 
 // unpinnedUses are C-02's findings for the uses: references that are
 // neither a local ./ path nor pinned to a full commit SHA.
-func unpinnedUses(jobs []*CIJob) []Finding {
+func unpinnedUses(jobs []*ciJob) []Finding {
 	const fix = "pin it to a full 40-character commit SHA, with the version in a comment (uses: owner/repo@<sha> # v1.2.3)"
 	var findings []Finding
 	for _, j := range jobs {
@@ -203,9 +203,9 @@ var pinnedDigest = regexp.MustCompile(`@sha256:[0-9a-fA-F]{64}$`)
 
 // unpinnedImages are C-02's findings for the images not pinned by digest:
 // one for each image entry, which names every job that uses it.
-func unpinnedImages(jobs []*CIJob) []Finding {
+func unpinnedImages(jobs []*ciJob) []Finding {
 	type image struct {
-		img  CIImage
+		img  ciImage
 		jobs []string
 	}
 	var images []*image
@@ -238,7 +238,7 @@ func unpinnedImages(jobs []*CIJob) []Finding {
 
 // latestWords are C-02's findings for the script words that end in
 // @latest: one for each file, line and word.
-func latestWords(jobs []*CIJob) []Finding {
+func latestWords(jobs []*ciJob) []Finding {
 	var findings []Finding
 	seen := map[string]bool{}
 	for _, j := range jobs {
@@ -263,7 +263,7 @@ func latestWords(jobs []*CIJob) []Finding {
 // workflows and child pipelines followed) has a simple command that
 // starts with the words vibe audit, and calls no verify command.
 func checkC04(env *Env) PartResult {
-	verify, missing := env.Entrypoint(EntrypointVerify)
+	verify, missing := env.entrypointCommands(entrypointVerify)
 	if missing != nil {
 		return Fail(*missing)
 	}
@@ -271,7 +271,7 @@ func checkC04(env *Env) PartResult {
 	if !ok {
 		return res
 	}
-	run := ci.Run(KindMergeRequest)
+	run := ci.Run(kindMergeRequest)
 	if len(ciAuditJobs(run, verify)) > 0 {
 		return res
 	}
@@ -282,7 +282,7 @@ func checkC04(env *Env) PartResult {
 			continue
 		}
 		for _, c := range verify {
-			if CallsAny(j.Commands, c) {
+			if callsAny(j.Commands, c) {
 				findings = append(findings, Finding{File: j.File,
 					Message: fmt.Sprintf("%s runs vibe audit and also calls the verify command `%s`", j.where(), c),
 					Fix:     "run vibe audit in a job of its own that does not call verify"})
@@ -299,21 +299,21 @@ func checkC04(env *Env) PartResult {
 			Message: w.noAuditJob + w.hint,
 			Fix:     w.noAuditJobFix})
 	}
-	return Merge(res, Fail(findings...))
+	return merge(res, Fail(findings...))
 }
 
 // ciAuditJobs returns the jobs of a run that satisfy C-04: they run vibe
 // audit (a simple command that counts as calling, starting with the words
 // vibe audit) and call no verify command. R-01's CI part exempts them.
-func ciAuditJobs(run *CIRun, verify []Command) []*CIJob {
-	var out []*CIJob
+func ciAuditJobs(run *ciRun, verify []shellCommand) []*ciJob {
+	var out []*ciJob
 	for _, j := range run.Jobs {
 		if !runsAuditCommand(j.Commands) {
 			continue
 		}
 		calls := false
 		for _, c := range verify {
-			calls = calls || CallsAny(j.Commands, c)
+			calls = calls || callsAny(j.Commands, c)
 		}
 		if !calls {
 			out = append(out, j)
@@ -322,7 +322,7 @@ func ciAuditJobs(run *CIRun, verify []Command) []*CIJob {
 	return out
 }
 
-func runsAuditCommand(cmds []Command) bool {
+func runsAuditCommand(cmds []shellCommand) bool {
 	for _, c := range cmds {
 		if c.HasPrefix("vibe", "audit") {
 			return true
@@ -336,7 +336,7 @@ func runsAuditCommand(cmds []Command) bool {
 // expansion, among every job. The rule is not applicable without windows
 // in platforms; the registry decides that before it runs.
 func checkC05(env *Env) PartResult {
-	verify, missing := env.Entrypoint(EntrypointVerify)
+	verify, missing := env.entrypointCommands(entrypointVerify)
 	if missing != nil {
 		return Fail(*missing)
 	}
@@ -355,7 +355,7 @@ func checkC05(env *Env) PartResult {
 			continue
 		}
 		var lacking []string
-		for _, p := range []string{PlatformLinux, PlatformWindows} {
+		for _, p := range []string{platformLinux, platformWindows} {
 			if !slices.Contains(r.platforms, p) {
 				lacking = append(lacking, platformName(p))
 			}
@@ -371,7 +371,7 @@ func checkC05(env *Env) PartResult {
 		findings = append(findings, Finding{File: r.file, Message: msg,
 			Fix: w.lackingPlatformFix(c, joinWords(lacking, " and "))})
 	}
-	return Merge(res, failIf(findings))
+	return merge(res, failIf(findings))
 }
 
 // commandRunners are the runners of the jobs that call one command.
@@ -386,10 +386,10 @@ type commandRunners struct {
 }
 
 // runnersOf returns the runners of every job that calls c.
-func runnersOf(ci *CI, c Command) commandRunners {
+func runnersOf(ci *ciModel, c shellCommand) commandRunners {
 	var r commandRunners
 	for _, j := range ci.Jobs {
-		if !CallsAny(j.Commands, c) {
+		if !callsAny(j.Commands, c) {
 			continue
 		}
 		if len(r.where) == 0 {
@@ -408,9 +408,9 @@ func runnersOf(ci *CI, c Command) commandRunners {
 
 func platformName(p string) string {
 	switch p {
-	case PlatformLinux:
+	case platformLinux:
 		return "Linux"
-	case PlatformWindows:
+	case platformWindows:
 		return "Windows"
 	}
 	return "macOS"
@@ -433,11 +433,11 @@ func checkD03(env *Env) PartResult {
 	if runsScanner(ci) || includesDependencyScanning(ci) {
 		return res
 	}
-	return Merge(res, Fail(Finding{File: ci.Dir, Message: ci.wording.noScanner, Fix: ci.wording.noScannerFix}))
+	return merge(res, Fail(Finding{File: ci.Dir, Message: ci.wording.noScanner, Fix: ci.wording.noScannerFix}))
 }
 
 // runsScanner reports whether a script of a job runs a recognized scanner.
-func runsScanner(ci *CI) bool {
+func runsScanner(ci *ciModel) bool {
 	for _, j := range ci.Jobs {
 		for _, s := range j.Scripts {
 			for _, c := range s.Commands {
@@ -456,15 +456,15 @@ var dependencyScanningTemplate = regexp.MustCompile(`^(Jobs|Security)/Dependency
 // includesDependencyScanning reports whether the pipeline includes
 // GitLab's Dependency-Scanning template or its dependency-scanning
 // component.
-func includesDependencyScanning(ci *CI) bool {
+func includesDependencyScanning(ci *ciModel) bool {
 	for _, inc := range ci.Includes {
 		v := inc.Target()
 		switch inc.Kind {
-		case IncludeTemplate:
+		case includeTemplate:
 			if dependencyScanningTemplate.MatchString(v) {
 				return true
 			}
-		case IncludeComponent:
+		case includeComponent:
 			path, _, _ := strings.Cut(v, "@")
 			if slices.Contains(strings.Split(path, "/"), "dependency-scanning") {
 				return true
@@ -485,11 +485,11 @@ func checkR01(env *Env) PartResult {
 	hookCalls, res := hookVibeCalls(env)
 	calls = append(calls, hookCalls...)
 	if ci, ciRes, ok := ciRead(env); ok {
-		res = Merge(res, ciRes)
+		res = merge(res, ciRes)
 		// With verify missing (V-04 fails), any vibe audit job that runs
 		// for pull (merge) requests is the audit job.
-		verify, _ := env.Entrypoint(EntrypointVerify)
-		calls = append(calls, ciVibeCalls(env, ci, ciAuditJobs(ci.Run(KindMergeRequest), verify))...)
+		verify, _ := env.entrypointCommands(entrypointVerify)
+		calls = append(calls, ciVibeCalls(env, ci, ciAuditJobs(ci.Run(kindMergeRequest), verify))...)
 	}
 	var findings []Finding
 	for _, c := range calls {
@@ -497,5 +497,5 @@ func checkR01(env *Env) PartResult {
 			Message: fmt.Sprintf("%s: `%s` calls vibe, so it does not work without vibe", c.where, c.cmd),
 			Fix:     "call the underlying tools directly instead of vibe; only the C-04 audit job (vibe audit, no verify) may call vibe"})
 	}
-	return Merge(res, failIf(findings))
+	return merge(res, failIf(findings))
 }
