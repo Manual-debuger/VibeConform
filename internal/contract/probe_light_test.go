@@ -4,11 +4,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
 // One light test per execution and probe part through contract.Audit
@@ -77,8 +77,8 @@ func TestProbeIgnoresAnInvalidGitBashPath(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not on PATH")
 	}
-	if _, err := exec.LookPath("bash"); err != nil && runtime.GOOS != "windows" {
-		t.Skip("bash is not on PATH")
+	if _, err := guardrule.ResolveBash(os.Environ()); err != nil {
+		t.Skipf("no bash: %v", err)
 	}
 	dir := probeFixture(t, probeSessionStartHooks("startup", "exit 0"))
 	env := append(contracttest.ProbeEnvWithPath(os.Getenv("PATH")),

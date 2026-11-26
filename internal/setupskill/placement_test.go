@@ -15,7 +15,10 @@ import (
 // the skill, Place gives the place that the drift checker's
 // referenceTarget gave on main before spec 0073 moved it here, or "not
 // used". testdata/placements.tsv was recorded from that function at
-// 2757b85: one line per used file, "stack provider ref place".
+// 2757b85: one line per used file, "stack provider ref place", in the
+// order of its loop over referenceStacks, referenceProviders and
+// referenceFiles. The same loop at e280d94, main before spec 0073, gives
+// a byte-identical table.
 func TestPlaceGivesTheRecordedPlaces(t *testing.T) {
 	want := recordedPlaces(t)
 	if got := setupskill.Stacks(); !slices.Equal(got, []string{"go", "python", "typescript", "monorepo"}) {

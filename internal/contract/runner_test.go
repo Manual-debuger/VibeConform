@@ -3,6 +3,7 @@ package contract_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"slices"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
+	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
 
 // The runner runs the execution and probe parts in rule-list order, and
@@ -198,8 +200,8 @@ func TestLastPartSeesSetupCalls(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not on PATH")
 	}
-	if _, err := exec.LookPath("bash"); err != nil {
-		t.Skip("bash is not on PATH")
+	if _, err := guardrule.ResolveBash(os.Environ()); err != nil {
+		t.Skipf("no bash: %v", err)
 	}
 	dir := contracttest.GitFixture(t, t.TempDir(),
 		contracttest.WithFile("vibe.yaml", "contract: 1.2.0\nplatforms: [linux]\nagents: []\n"+
