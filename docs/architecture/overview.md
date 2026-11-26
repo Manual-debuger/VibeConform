@@ -138,7 +138,7 @@ internal/contract
   (`ci_model.go`): the CI provider read, its jobs with their commands
   and scripts, the includes not followed, and for each *pipeline kind*
   (merge request, push to the default branch) the jobs that run and why
-  the others do not. `env.ciModel()` picks the provider once per audit:
+  the others do not. `env.pickCI()` picks the provider once per audit:
   GitHub Actions when tracked workflows exist, otherwise GitLab CI when
   `.gitlab-ci.yml` is tracked. Each reader fills the whole model when it
   reads the CI (spec 0067): the runs of both pipeline kinds, each job's
