@@ -37,12 +37,6 @@ type Env struct {
 	Now func() time.Time
 }
 
-const usage = `usage:
-  vibe-guard hook                                  decide the PreToolUse payload on stdin
-  vibe-guard explain [--tool <tool>] '<command or path>'
-  vibe-guard relock                                delete the unlock marker
-  vibe-guard version`
-
 // Main runs vibe-guard with args (without the program name) and returns
 // the exit code.
 func Main(args []string, env Env, version string) int {
@@ -50,23 +44,23 @@ func Main(args []string, env Env, version string) int {
 		say(env.Stderr, usage)
 		return exitUsage
 	}
-	switch args[0] {
-	case "hook":
+	switch lookupCommand(args[0]) {
+	case cmdHook:
 		if len(args) != 1 {
 			break
 		}
 		return hook(env)
-	case "explain":
+	case cmdExplain:
 		return explain(args[1:], env)
-	case "relock":
+	case cmdRelock:
 		if len(args) != 1 {
 			break
 		}
 		return relock(env)
-	case "version", "--version":
+	case cmdVersion:
 		say(env.Stdout, "vibe-guard "+version)
 		return 0
-	case "help", "-h", "--help":
+	case cmdHelp:
 		say(env.Stdout, usage)
 		return 0
 	}

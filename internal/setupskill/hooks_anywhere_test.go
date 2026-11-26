@@ -35,15 +35,6 @@ func TestMain(m *testing.M) {
 // the root's tasks from the root, a component, a component's subdirectory
 // and a plain subdirectory alike.
 
-// monorepoComponents are the components of the reference monorepo: the
-// directory, the id the root Taskfile includes it under, and the
-// reference Taskfile it is built from.
-var monorepoComponents = []struct{ dir, id, taskfile string }{
-	{"services/api", "api", "reference/taskrunner/monorepo/go.Taskfile.yml"},
-	{"apps/web", "web", "reference/taskrunner/monorepo/typescript.Taskfile.yml"},
-	{"services/worker", "worker", "reference/taskrunner/monorepo/python.Taskfile.yml"},
-}
-
 // hookDirs are the directories, relative to the root, the hooks run from.
 var hookDirs = []string{".", "services/api", "services/api/internal/calc", "docs"}
 
@@ -87,8 +78,8 @@ func newHookRepo(t *testing.T) hookRepo {
 
 	r.write(t, "Taskfile.yml", withoutGitleaks(t, files["reference/taskrunner/monorepo/Taskfile.yml"]))
 	r.write(t, ".claude/settings.json", string(files["reference/agents/settings.json"]))
-	for _, c := range monorepoComponents {
-		r.write(t, c.dir+"/Taskfile.yml", r.stubbed(t, c.id, files[c.taskfile]))
+	for _, c := range setupskill.MonorepoComponents() {
+		r.write(t, c.Dir+"/Taskfile.yml", r.stubbed(t, c.ID, files[c.Taskfile()]))
 	}
 	r.write(t, "services/api/main.go", "package main\n\nfunc main() {}\n")
 	r.write(t, "services/api/internal/calc/calc.go", "package calc\n")
@@ -273,8 +264,8 @@ func taskBinary(t *testing.T) string {
 // each returns "<id>:<task>" for every component.
 func each(task string) []string {
 	var out []string
-	for _, c := range monorepoComponents {
-		out = append(out, c.id+":"+task)
+	for _, c := range setupskill.MonorepoComponents() {
+		out = append(out, c.ID+":"+task)
 	}
 	return out
 }

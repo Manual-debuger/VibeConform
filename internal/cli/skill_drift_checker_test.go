@@ -1,13 +1,9 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"io/fs"
 	"os"
 	pathpkg "path"
@@ -18,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -153,9 +148,6 @@ func uniqueMatches(re *regexp.Regexp, s string) []string {
 // a path or word character.
 var skillPathPattern = regexp.MustCompile(`(?:^|[^A-Za-z0-9_./-])(reference/[A-Za-z0-9_./<>-]*)`)
 
-// referenceStacks are the values of <stack> in a skill path.
-var referenceStacks = []string{"go", "python", "typescript", "monorepo"}
-
 // checkSkillPaths: every path into the skill exists, for every stack when
 // it names <stack>. A path ending in / is a directory.
 func (c *skillChecker) checkSkillPaths(f skillFile) {
@@ -169,7 +161,7 @@ func (c *skillChecker) checkSkillPaths(f skillFile) {
 		paths := []string{p}
 		if strings.Contains(p, "<stack>") {
 			paths = nil
-			for _, s := range referenceStacks {
+			for _, s := range setupskill.Stacks() {
 				paths = append(paths, strings.ReplaceAll(p, "<stack>", s))
 			}
 		}
@@ -472,40 +464,21 @@ func checkVibeArgs(args []string) string { //nolint:gocognit // baseline: pre-ex
 	return ""
 }
 
-var (
-	guardCommandsOnce sync.Once
-	guardCommands     map[string]map[string]bool // command -> flag -> takes a value
-)
-
-// vibeGuardCommands is vibe-guard's real command set, read from the
-// usage its help command prints.
+// vibeGuardCommands is vibe-guard's command set, from the command table
+// that internal/guard exports: command or alias -> flag -> whether it
+// takes a value.
 func vibeGuardCommands() map[string]map[string]bool {
-	guardCommandsOnce.Do(func() {
-		var out bytes.Buffer
-		guard.Main([]string{"help"}, guard.Env{
-			Stdin: strings.NewReader(""), Stdout: &out, Stderr: &out,
-			Getenv: func(string) string { return "" }, Now: time.Now,
-		}, "test")
-		guardCommands = map[string]map[string]bool{}
-		for _, line := range strings.Split(out.String(), "\n") {
-			words := strings.Fields(line)
-			if len(words) < 2 || words[0] != "vibe-guard" {
-				continue
-			}
-			flags := map[string]bool{}
-			for i := 2; i < len(words); i++ {
-				w := strings.Trim(words[i], "[]")
-				if strings.HasPrefix(w, "--") {
-					flags[w] = i+1 < len(words) && strings.HasPrefix(words[i+1], "<")
-				}
-			}
-			guardCommands[words[1]] = flags
+	out := map[string]map[string]bool{}
+	for _, c := range guard.Commands() {
+		flags := map[string]bool{}
+		for _, f := range c.Flags {
+			flags[f.Name] = f.TakesValue()
 		}
-		// The aliases guard.Main accepts beside its usage.
-		guardCommands["--version"] = map[string]bool{}
-		guardCommands["help"] = map[string]bool{}
-	})
-	return guardCommands
+		for _, name := range append([]string{c.Name}, c.Aliases...) {
+			out[name] = flags
+		}
+	}
+	return out
 }
 
 // checkVibeGuardArgs checks vibe-guard's arguments against its command
@@ -572,7 +545,8 @@ func (c *skillChecker) checkRepoFile(file, span string) {
 		return
 	}
 	isDir := strings.HasSuffix(span, "/")
-	if !isDir && !slices.Contains(repoFileExtensions, pathpkg.Ext(span)) {
+	// A bare extension, such as .md, names a kind of file, not a file.
+	if !isDir && (!slices.Contains(repoFileExtensions, pathpkg.Ext(span)) || pathpkg.Ext(span) == span) {
 		return
 	}
 	if slices.Contains(removedOrAvoided, span) {
@@ -593,18 +567,17 @@ var (
 	knownRepoFilesList []string
 )
 
-// knownRepoFiles are the repository paths the contract reads (the string
-// literals of internal/contract and internal/guardrule) and the paths
-// the reference implementations and vibe init --skill create.
+// knownRepoFiles are the repository paths the contract reads
+// (contract.RepoPaths), the guard's files (internal/guardrule), and the
+// paths the reference implementations and vibe init --skill create
+// (setupskill.Place, setupskill.Dirs).
 func knownRepoFiles() []string {
 	knownRepoFilesOnce.Do(func() {
-		for _, dir := range []string{"../contract", "../guardrule"} {
-			knownRepoFilesList = append(knownRepoFilesList, goStringLiterals(dir)...)
-		}
-		for _, stack := range referenceStacks {
-			for _, provider := range referenceProviders {
+		knownRepoFilesList = append(contract.RepoPaths(), guardrule.PolicyFile, guardrule.LocalPolicyFile)
+		for _, stack := range setupskill.Stacks() {
+			for _, provider := range setupskill.Providers() {
 				for _, ref := range referenceFiles(setupskill.FS()) {
-					if p, ok := referenceTarget(stack, provider, ref); ok {
+					if p, ok := setupskill.Place(stack, provider, ref); ok {
 						knownRepoFilesList = append(knownRepoFilesList, p)
 					}
 				}
@@ -618,34 +591,6 @@ func knownRepoFiles() []string {
 	return knownRepoFilesList
 }
 
-// goStringLiterals returns the string literals of the non-test Go files in
-// dir.
-func goStringLiterals(dir string) []string {
-	paths, err := filepath.Glob(filepath.Join(dir, "*.go"))
-	if err != nil {
-		panic(err)
-	}
-	var out []string
-	for _, p := range paths {
-		if strings.HasSuffix(p, "_test.go") {
-			continue
-		}
-		f, err := parser.ParseFile(token.NewFileSet(), p, nil, 0)
-		if err != nil {
-			panic(err)
-		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING {
-				if s, err := strconv.Unquote(lit.Value); err == nil {
-					out = append(out, s)
-				}
-			}
-			return true
-		})
-	}
-	return out
-}
-
 // referenceFiles lists the files under reference/ in skill.
 func referenceFiles(skill fs.FS) []string {
 	var out []string
@@ -656,87 +601,6 @@ func referenceFiles(skill fs.FS) []string {
 		return nil
 	})
 	return out
-}
-
-// monorepoComponents are the components of reference/vibe-yaml/monorepo.yaml,
-// by language.
-var monorepoComponents = map[string]string{
-	"go":         "services/api",
-	"typescript": "apps/web",
-	"python":     "services/worker",
-}
-
-// The CI providers a reference repository uses (spec 0055): GitHub
-// Actions with Dependabot, or GitLab CI with Renovate.
-const (
-	providerGitHub = "github"
-	providerGitLab = "gitlab"
-)
-
-var referenceProviders = []string{providerGitHub, providerGitLab}
-
-// gitlabReferences are the reference files only a GitLab repository uses,
-// with their places in it.
-var gitlabReferences = map[string]string{
-	".gitlab-ci.yml": ".gitlab-ci.yml",
-	"renovate.json":  "renovate.json",
-}
-
-// referenceTarget is where a repository of stack on provider places the
-// reference file ref (a skill path), or false when it does not use it.
-// A GitHub repository takes the workflows and dependabot.yml; a GitLab
-// repository takes .gitlab-ci.yml, renovate.json and the pull request
-// template as a merge request template.
-func referenceTarget(stack, provider, ref string) (string, bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
-	parts := strings.Split(strings.TrimPrefix(ref, "reference/"), "/")
-	if parts[0] == "ci" {
-		name := parts[len(parts)-1]
-		target, gitlabOnly := gitlabReferences[name]
-		switch {
-		case len(parts) == 2 && name == "pull_request_template.md" && provider == providerGitLab:
-			return ".gitlab/merge_request_templates/Default.md", true
-		case gitlabOnly && provider != providerGitLab:
-			return "", false
-		case gitlabOnly:
-			return target, len(parts) == 2 || parts[1] == stack
-		case len(parts) == 3 && provider == providerGitLab:
-			return "", false
-		}
-	}
-	switch {
-	case len(parts) == 2 && parts[0] == "vibe-yaml":
-		return "vibe.yaml", parts[1] == stack+".yaml"
-	case len(parts) == 2 && parts[0] == "agents":
-		switch parts[1] {
-		case "settings.json":
-			return ".claude/settings.json", true
-		case "policy.json":
-			return guardrule.PolicyFile, true
-		}
-		return parts[1], true
-	case len(parts) == 2 && parts[0] == "ci":
-		return ".github/" + parts[1], true
-	case len(parts) == 3 && parts[0] == "ci" && parts[1] == stack:
-		if parts[2] == "dependabot.yml" {
-			return ".github/dependabot.yml", true
-		}
-		return ".github/workflows/" + parts[2], true
-	case len(parts) == 3 && parts[0] == "hooks" && parts[1] == stack:
-		return parts[2], true
-	case len(parts) == 3 && parts[0] == "taskrunner" && parts[1] == stack:
-		if lang, ok := strings.CutSuffix(parts[2], ".Taskfile.yml"); ok && stack == "monorepo" {
-			dir, ok := monorepoComponents[lang]
-			return dir + "/Taskfile.yml", ok
-		}
-		return parts[2], true
-	case len(parts) == 3 && parts[0] == "lint":
-		if stack == "monorepo" {
-			dir, ok := monorepoComponents[parts[1]]
-			return dir + "/" + parts[2], ok
-		}
-		return parts[2], parts[1] == stack
-	}
-	return "", false
 }
 
 // checkRulesGuidance: reference/rules.md has a heading for every rule of
