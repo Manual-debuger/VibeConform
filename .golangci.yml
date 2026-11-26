@@ -111,8 +111,9 @@ linters:
         # internal/contract/contracttest is the contract audit's test seam
         # (ADR 0028, spec 0065). Test files import it; no other file does,
         # so it never reaches a binary. It imports no package of this
-        # module except internal/contract, in the same lax mode as the
-        # doctor rule.
+        # module except internal/contract and internal/testkit, whose
+        # isolated git builds its Git fixtures (spec 0073), in the same
+        # lax mode as the doctor rule.
         contracttest-importers:
           files:
             - "$all"
@@ -128,17 +129,20 @@ linters:
             - "!$test"
           allow:
             - github.com/Manual-debuger/VibeConform/internal/contract$
+            - github.com/Manual-debuger/VibeConform/internal/testkit$
           deny:
             - pkg: github.com/Manual-debuger/VibeConform
-              desc: contracttest imports no package of this module except internal/contract
+              desc: contracttest imports no package of this module except internal/contract and internal/testkit
         # internal/testkit holds the tests' isolated temporary Git
         # repository (spec 0073). As with contracttest, test files import
-        # it and no other file does, so it never reaches a binary, and it
-        # imports no package of this module.
+        # it, and so does contracttest, which is itself imported by test
+        # files only (ADR 0028); no other file does, so it never reaches a
+        # binary. It imports no package of this module.
         testkit-importers:
           files:
             - "$all"
             - "!$test"
+            - "!**/internal/contract/contracttest/**"
           deny:
             - pkg: github.com/Manual-debuger/VibeConform/internal/testkit$
               desc: testkit is a test helper; only _test.go files import it (spec 0073)

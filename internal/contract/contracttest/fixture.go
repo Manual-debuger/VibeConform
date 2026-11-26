@@ -13,7 +13,6 @@ import (
 	"encoding/hex"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -23,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/Manual-debuger/VibeConform/internal/contract"
+	"github.com/Manual-debuger/VibeConform/internal/testkit"
 )
 
 // The fixture trees. Each is an absolute path, found from this file's
@@ -130,6 +130,10 @@ func GitFixture(t testing.TB, src string, edits ...Edit) string {
 // separated.
 var listed sync.Map
 
+// gitFixtures maps the root of each Git fixture to its testkit.Repo, so
+// that Git runs git in it with the same isolation as build.
+var gitFixtures sync.Map
+
 // OpenRepo is a contract.RepoOpener for fixtures: a listed fixture gets
 // its file list, any other directory contract.OpenRepo.
 func OpenRepo(ctx context.Context, root string) (*contract.Repo, error) {
@@ -141,7 +145,8 @@ func OpenRepo(ctx context.Context, root string) (*contract.Repo, error) {
 
 func build(t testing.TB, src string, git bool, edits []Edit) string {
 	t.Helper()
-	dir := t.TempDir()
+	repo := testkit.NewRepo(t, "fixture")
+	dir := repo.Dir
 	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -177,8 +182,10 @@ func build(t testing.TB, src string, git bool, edits []Edit) string {
 		t.Cleanup(func() { listed.Delete(filepath.Clean(dir)) })
 		return dir
 	}
-	Git(t, dir, "init", "-q")
-	Git(t, dir, "-c", "core.autocrlf=false", "add", "-A")
+	gitFixtures.Store(filepath.Clean(dir), repo)
+	t.Cleanup(func() { gitFixtures.Delete(filepath.Clean(dir)) })
+	repo.Init(t)
+	repo.Git(t, "add", "-A")
 	for _, e := range edits {
 		if e.untracked {
 			applyEdit(t, dir, e)
@@ -226,15 +233,16 @@ func applyEdit(t testing.TB, dir string, e Edit) {
 	}
 }
 
-// Git runs git with args in dir, such as a Git fixture, and fails the
-// test when git fails.
+// Git runs git with args in dir, a Git fixture of this test, with the
+// isolation of internal/testkit. It fails the test when git fails or
+// when dir is not a Git fixture.
 func Git(t testing.TB, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...) // #nosec G204 -- a test's own arguments
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
+	repo, ok := gitFixtures.Load(filepath.Clean(dir))
+	if !ok {
+		t.Fatalf("contracttest.Git: %s is not a Git fixture", dir)
 	}
+	repo.(testkit.Repo).Git(t, args...)
 }
 
 // TreeHash hashes every file under dir, .git included, by path (slash

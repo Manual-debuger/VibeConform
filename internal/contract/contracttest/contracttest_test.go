@@ -97,6 +97,39 @@ func TestFixtureThatNeedsGitIsARepository(t *testing.T) {
 	}
 }
 
+// GitFixture and Git run git isolated from the person's configuration
+// (internal/testkit): neither a GIT_DIR in the environment nor the
+// person's global init.defaultBranch reaches the fixture.
+func TestGitFixtureIgnoresThePersonsGitConfiguration(t *testing.T) {
+	person := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(person, []byte("[init]\n\tdefaultBranch = person\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := filepath.Join(t.TempDir(), "elsewhere.git")
+	t.Setenv("GIT_CONFIG_GLOBAL", person)
+	t.Setenv("GIT_DIR", elsewhere)
+
+	dir := contracttest.GitFixture(t, contracttest.Baseline)
+	head := func() string {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(dir, ".git", "HEAD"))
+		if err != nil {
+			t.Fatalf("the fixture has no .git/HEAD: %v", err)
+		}
+		return strings.TrimSpace(string(data))
+	}
+	if got := head(); got != "ref: refs/heads/main" {
+		t.Errorf("the fixture's HEAD is %q, want refs/heads/main", got)
+	}
+	contracttest.Git(t, dir, "symbolic-ref", "HEAD", "refs/heads/trunk")
+	if got := head(); got != "ref: refs/heads/trunk" {
+		t.Errorf("after Git, the fixture's HEAD is %q, want refs/heads/trunk", got)
+	}
+	if _, err := os.Stat(elsewhere); err == nil {
+		t.Errorf("git wrote the person's GIT_DIR %s", elsewhere)
+	}
+}
+
 // An untracked file makes a Git repository; the file is in the working
 // tree but git does not track it.
 func TestUntrackedFileIsNotTracked(t *testing.T) {

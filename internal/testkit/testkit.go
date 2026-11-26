@@ -5,9 +5,10 @@
 // repository of its own goes through it, so that each gets the same
 // isolation.
 //
-// Only _test.go files import it, so it never reaches a binary, and it
-// imports no package of this module; two depguard rules in .golangci.yml
-// enforce both. It does not skip a test without git: each test keeps its
+// Only _test.go files and internal/contract/contracttest, which only
+// _test.go files import (ADR 0028), import it, so it never reaches a
+// binary, and it imports no package of this module; two depguard rules
+// in .golangci.yml enforce both. It does not skip a test without git: each test keeps its
 // own skip policy.
 package testkit
 

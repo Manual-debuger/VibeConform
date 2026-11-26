@@ -95,19 +95,19 @@ internal/contract
   on every report: each failed part has a finding, and each finding
   names a file and a fix. The tests of `internal/contract` and
   `internal/cli` import it. Among this module's packages it imports only
-  `internal/contract`, and only test files import it; two `depguard`
-  rules enforce both. The report goldens stay in `internal/cli/testdata`.
+  `internal/contract` and `internal/testkit`, and only test files import
+  it; two `depguard` rules enforce both. The report goldens stay in `internal/cli/testdata`.
 - **Test Git repositories** (spec 0073). `internal/testkit` is the one
   helper for a test's isolated temporary Git repository: git runs with
   the person's global and system configuration ignored, none of the
   person's `GIT_` variables and no repository above the temporary
   directory, and the helper inits a repository with one commit and
   names its common Git directory. Every test that runs git in a
-  repository of its own uses it; `contracttest`'s fixture builder keeps
-  its own git, since `contracttest` may import only `internal/contract`.
-  Only test files import `internal/testkit`, and it imports no package
-  of this module; two `depguard` rules enforce both, as for
-  `contracttest`.
+  repository of its own uses it, and so does `contracttest`'s fixture
+  builder for its Git fixtures. Only test files and `contracttest`
+  (itself imported by test files only) import `internal/testkit`, and it
+  imports no package of this module; two `depguard` rules enforce both,
+  as for `contracttest`.
 - **Shell parsing.** "Called" means a simple command in the shell parse
   tree, so `internal/contract` depends on `mvdan.cc/sh/v3/syntax` (ADR
   0026). `internal/contract/shell.go` is the only file that imports it;
