@@ -297,7 +297,7 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 	}
 	for _, f := range d.Lifted {
 		sayf(w, "lifted: rule %s by the exception {rule: %s, match: %q, reason: %q}\n",
-			f.Rule, f.Exception.Rule, f.Exception.Match, f.Exception.Reason)
+			f.Rule, f.Exception.Rule(), f.Exception.Match(), f.Exception.Reason())
 		writeMatch(w, f)
 	}
 	if d.Finding == nil && len(d.Lifted) == 0 {

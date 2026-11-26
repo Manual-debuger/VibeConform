@@ -86,7 +86,7 @@ func (c GuardCase) Target() guardrule.Target {
 // 1.x, with root as the project root: its rule is the case's, and a
 // command exception may prefix any simple command of the case.
 func (c GuardCase) ExceptionMatches(ex guardrule.Exception, root string) bool {
-	return ex.Rule == c.Rule && ex.Matches(c.Target(), root)
+	return ex.Rule() == c.Rule && ex.Matches(c.Target(), root)
 }
 
 // ExceptionMatchesRefused reports whether ex matches the case under
@@ -95,7 +95,7 @@ func (c GuardCase) ExceptionMatches(ex guardrule.Exception, root string) bool {
 // command the case's rule refuses (Refuses, or the case's one simple
 // command) (spec 0072, "The audit's reading under 2.0.0").
 func (c GuardCase) ExceptionMatchesRefused(ex guardrule.Exception, root string) bool {
-	return ex.Rule == c.Rule && !c.Fixed && ex.MatchesRefused(c.Target(), root, c.Refuses)
+	return ex.Rule() == c.Rule && !c.Fixed && ex.MatchesRefused(c.Target(), root, c.Refuses)
 }
 
 var guardCorpus = sync.OnceValue(func() []GuardCase {

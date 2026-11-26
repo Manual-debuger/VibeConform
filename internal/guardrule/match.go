@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 // Target is what a tool call acts on: the command of a command tool, or
@@ -83,7 +85,7 @@ func (e Exception) MatchesRefused(t Target, root string, refused []string) bool 
 
 // matches is Matches with only the simple commands that counted accepts.
 func (e Exception) matches(t Target, root string, counted func(Command) bool) bool {
-	if IsPathRule(e.Rule) {
+	if IsPathRule(e.rule) {
 		return t.Path != "" && IsEditTool(t.Tool) && e.MatchesPath(t.Path, root)
 	}
 	shell := ShellFor(t.Tool)
@@ -98,42 +100,35 @@ func (e Exception) matches(t Target, root string, counted func(Command) bool) bo
 }
 
 // MatchesPath reports whether the exception's glob matches p, made
-// relative to root.
+// relative to root. An exception for a command rule matches no path.
 func (e Exception) MatchesPath(p, root string) bool {
-	return MatchGlob(e.Match, RelPath(root, p))
+	return e.glob != nil && e.glob.MatchString(RelPath(root, p))
 }
 
 // MatchesCommand reports whether the exception's words are a prefix of
-// c's words. The match is parsed in c's language. Words compare after
-// quote removal; the first by Name (and, in PowerShell, by Cmdlet, so
-// "Remove-Item" matches "ri"); in PowerShell without case. Every
-// compared word of c must be literal: an exception never matches an
-// expansion.
+// c's words. The match is compared in c's language, and matches nothing
+// in a language it does not parse in. Words compare after quote removal;
+// the first by Name (and, in PowerShell, by Cmdlet, so "Remove-Item"
+// matches "ri"); in PowerShell without case. Every compared word of c
+// must be literal: an exception never matches an expansion.
 func (e Exception) MatchesCommand(c Command) bool {
-	m, err := simpleCommand(c.Shell, e.Match)
-	if err != nil {
-		return false
-	}
-	return prefixMatch(m, c, false)
+	m, ok := e.command.in(c.Shell)
+	return ok && prefixMatch(m, c, false)
 }
 
 // prefixMatch reports whether m's words are a prefix of c's. With
 // unknown, an Unknown word of c matches the rest of the prefix, and an
 // operand matches one word: the reading a deny rule uses (spec 0053,
 // "Unknown words"). Without it, every compared word must be literal.
-func prefixMatch(m, c Command, unknown bool) bool { //nolint:gocognit // baseline: pre-existing complexity
+func prefixMatch(m, c Command, unknown bool) bool {
 	if len(m.Words) == 0 || len(c.Words) == 0 {
 		return false
 	}
 	for i, mw := range m.Words {
-		if i >= len(c.Words) {
+		if i >= len(c.Words) || !mw.Literal {
 			return false
 		}
-		cw := c.Words[i]
-		if !mw.Literal {
-			return false
-		}
-		if !cw.Literal {
+		if cw := c.Words[i]; !cw.Literal {
 			if !unknown {
 				return false
 			}
@@ -142,21 +137,24 @@ func prefixMatch(m, c Command, unknown bool) bool { //nolint:gocognit // baselin
 			}
 			continue
 		}
-		if i == 0 {
-			if !sameName(m, c) {
-				return false
-			}
-			continue
-		}
-		if c.Shell == ShellPowerShell {
-			if !strings.EqualFold(mw.Text, cw.Text) {
-				return false
-			}
-		} else if mw.Text != cw.Text {
+		if !sameWord(m, c, i) {
 			return false
 		}
 	}
 	return true
+}
+
+// sameWord reports whether the literal word i of m and of c are the
+// same: the first by name, any other by text, in PowerShell without
+// case.
+func sameWord(m, c Command, i int) bool {
+	switch {
+	case i == 0:
+		return sameName(m, c)
+	case c.Shell == ShellPowerShell:
+		return strings.EqualFold(m.Words[i].Text, c.Words[i].Text)
+	}
+	return m.Words[i].Text == c.Words[i].Text
 }
 
 func sameName(m, c Command) bool {
@@ -169,8 +167,13 @@ func sameName(m, c Command) bool {
 	return m.Name() == c.Name()
 }
 
+// matchParses counts the parses of a match, for the test that a match
+// is parsed once per shell, when it is built.
+var matchParses atomic.Int64
+
 // simpleCommand parses s, in shell, as one simple command.
 func simpleCommand(shell Shell, s string) (Command, error) {
+	matchParses.Add(1)
 	cmds, err := parse(shell, s)
 	if err != nil {
 		return Command{}, err
@@ -183,54 +186,26 @@ func simpleCommand(shell Shell, s string) (Command, error) {
 	return c, nil
 }
 
-// checkMatch checks that s is one simple command, as Bash or as
-// PowerShell, with no expansion: the shape of a command match.
-func checkMatch(s string) error {
-	c, err := simpleCommand(ShellBash, s)
-	if err != nil {
-		var err2 error
-		if c, err2 = simpleCommand(ShellPowerShell, s); err2 != nil {
-			return err
-		}
-	}
-	for _, w := range c.Words {
-		if !w.Literal {
-			return errors.New("holds an expansion; a match is compared word for word")
-		}
-	}
-	return nil
-}
-
 // MatchesCommand reports whether a repository command rule matches c:
 // its words are a prefix of c's, and, with args, some later word
 // matches the regular expression. A word of c that holds an expansion
 // counts as matching, unless a known word already rules the match out
-// (spec 0053, "Unknown words"). An args that does not compile, which
-// only a rule built outside ParsePolicy can carry, fails closed: the
-// prefix alone matches (spec 0069).
+// (spec 0053, "Unknown words"). A rule's args always compiles: NewRule
+// refuses one that does not (spec 0069, as amended by spec 0073).
 func (r Rule) MatchesCommand(c Command) bool {
-	if r.Command == "" {
+	m, ok := r.command.in(c.Shell)
+	if !ok || !prefixMatch(m, c, true) {
 		return false
 	}
-	m, err := simpleCommand(c.Shell, r.Command)
-	if err != nil || !prefixMatch(m, c, true) {
-		return false
-	}
-	if r.Args == "" {
+	if r.argsRe == nil {
 		return true
-	}
-	re := r.args
-	if re == nil {
-		if re, err = regexp.Compile(r.Args); err != nil {
-			return true // fail closed: a deny rule refuses, an ask rule asks
-		}
 	}
 	for i, w := range c.Words {
 		switch {
 		case w.Unknown:
 			return true // it can become the prefix's last words and any argument
 		case i < len(m.Words):
-		case !w.Literal || re.MatchString(w.Text):
+		case !w.Literal || r.argsRe.MatchString(w.Text):
 			return true
 		}
 	}
@@ -240,7 +215,7 @@ func (r Rule) MatchesCommand(c Command) bool {
 // MatchesPath reports whether a repository path rule matches p, made
 // relative to root.
 func (r Rule) MatchesPath(p, root string) bool {
-	return r.Path != "" && MatchGlob(r.Path, RelPath(root, p))
+	return r.glob != nil && r.glob.MatchString(RelPath(root, p))
 }
 
 // RelPath is the path a glob is matched against (spec 0053): p made
@@ -299,11 +274,37 @@ func cutPrefixFold(s, prefix string, fold bool) (string, bool) {
 // ** any number of whole elements, none included ("a/**/b" matches
 // "a/b"; a trailing "dir/**" matches everything below dir, not dir
 // itself). Matching is case sensitive.
+//
+// A caller with a Rule or an Exception uses its compiled glob. MatchGlob
+// is for callers without one: it keeps the globs it compiles, up to
+// globCacheSize of them, because the guard calls it with the same few
+// patterns.
 func MatchGlob(pattern, p string) bool {
-	return globRegexp(pattern).MatchString(p)
+	if re, ok := globCache.Load(pattern); ok {
+		return re.(*regexp.Regexp).MatchString(p)
+	}
+	re := compileGlob(pattern)
+	if globCacheLen.Load() < globCacheSize {
+		if _, loaded := globCache.LoadOrStore(pattern, re); !loaded {
+			globCacheLen.Add(1)
+		}
+	}
+	return re.MatchString(p)
 }
 
-func globRegexp(pattern string) *regexp.Regexp {
+const globCacheSize = 256
+
+var (
+	globCache    sync.Map // pattern → *regexp.Regexp
+	globCacheLen atomic.Int64
+	// globCompiles counts the globs compiled, for the test that a glob is
+	// compiled once per rule or exception.
+	globCompiles atomic.Int64
+)
+
+// compileGlob compiles pattern as MatchGlob reads it.
+func compileGlob(pattern string) *regexp.Regexp {
+	globCompiles.Add(1)
 	pattern = strings.ReplaceAll(pattern, `\`, "/")
 	var b strings.Builder
 	b.WriteString("^")

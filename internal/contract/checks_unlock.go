@@ -82,7 +82,7 @@ func checkA08(env *Env) PartResult {
 			// hook may have honoured: the 1.x reading, under any contract.
 			for _, ex := range exceptionsWhere(exceptions, func(ex guardrule.Exception) bool { return c.ExceptionMatches(ex, s.Root()) }) {
 				msg += fmt.Sprintf("; the exception %s %q in %s does not count: guard exceptions do not satisfy A-08",
-					ex.Rule, ex.Match, guardPolicyFile)
+					ex.Rule(), ex.Match(), guardPolicyFile)
 			}
 			v.fail(Finding{File: claudeSettingsFile, Message: msg,
 				Fix: "make the guard refuse it (exit 2): only a valid unlock marker lets an agent change the " +
