@@ -288,14 +288,23 @@ cmd/vibe → internal/cli ──→ internal/setupskill ──→ internal/guard
   filter and its checks, the Stop gate and the green stamp (including a
   project in a subdirectory), the Go test modes, the CI pins, and the
   hooks run from any directory (spec 0058).
+- **Placement manifest** (spec 0073). `placement.go` says where a
+  repository built from the references places each reference file:
+  `Stacks`, `Providers`, `Place(stack, provider, ref)` and the
+  reference monorepo's `MonorepoComponents` (directory, language and
+  Taskfile include ID). The drift checker, the static-audit test and
+  the hooks test read it; none keeps its own copy.
 - **The drift test** (#109) is test code in `internal/cli`
   (`skill_drift_checker_test.go`), not a package: it checks the
   skill's `vibe` commands and flags against the real command tree, which
   only `internal/cli` builds, and loads the reference `vibe.yaml` files
   through `contract.Parse` in a Git work tree. One function reads a
   skill as a file system and returns every problem: rule IDs, guard rule
-  IDs, `vibe` and `vibe-guard` commands and flags (`vibe-guard`'s from its
-  help output), paths into the skill, repository files named, the
+  IDs, `vibe` and `vibe-guard` commands and flags (`vibe-guard`'s from
+  the command table `guard.Commands`, which also generates its usage),
+  paths into the skill, repository files named (against
+  `contract.RepoPaths`, the paths the rules read, guardrule's policy
+  files and the placement manifest; spec 0073), the
   reference `vibe.yaml`, `policy.json` and hook commands, a `rules.md`
   entry per rule, and `vibe unlock` in `upgrade.md`. A fenced block
   marked `text` is output, not commands. A second test assembles a

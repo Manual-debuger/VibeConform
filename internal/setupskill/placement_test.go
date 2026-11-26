@@ -17,33 +17,14 @@ import (
 // used". testdata/placements.tsv was recorded from that function at
 // 2757b85: one line per used file, "stack provider ref place".
 func TestPlaceGivesTheRecordedPlaces(t *testing.T) {
-	data, err := os.ReadFile("testdata/placements.tsv")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := map[[3]string]string{}
-	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-		f := strings.Split(line, "\t")
-		if len(f) != 4 {
-			t.Fatalf("testdata/placements.tsv: %q has %d fields, want 4", line, len(f))
-		}
-		want[[3]string{f[0], f[1], f[2]}] = f[3]
-	}
+	want := recordedPlaces(t)
 	if got := setupskill.Stacks(); !slices.Equal(got, []string{"go", "python", "typescript", "monorepo"}) {
 		t.Errorf("Stacks() = %v", got)
 	}
 	if got := setupskill.Providers(); !slices.Equal(got, []string{"github", "gitlab"}) {
 		t.Errorf("Providers() = %v", got)
 	}
-	var refs []string
-	if err := fs.WalkDir(setupskill.FS(), ".", func(p string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
-			refs = append(refs, p)
-		}
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
+	refs := skillFiles(t)
 	seen := 0
 	for _, stack := range setupskill.Stacks() {
 		for _, provider := range setupskill.Providers() {
@@ -62,6 +43,40 @@ func TestPlaceGivesTheRecordedPlaces(t *testing.T) {
 	if seen != len(want) {
 		t.Errorf("Place placed %d files; the table has %d", seen, len(want))
 	}
+}
+
+// recordedPlaces reads testdata/placements.tsv: place by stack, provider
+// and reference file.
+func recordedPlaces(t *testing.T) map[[3]string]string {
+	t.Helper()
+	data, err := os.ReadFile("testdata/placements.tsv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[[3]string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(strings.ReplaceAll(string(data), "\r\n", "\n")), "\n") {
+		f := strings.Split(line, "\t")
+		if len(f) != 4 {
+			t.Fatalf("testdata/placements.tsv: %q has %d fields, want 4", line, len(f))
+		}
+		want[[3]string{f[0], f[1], f[2]}] = f[3]
+	}
+	return want
+}
+
+// skillFiles lists every file of the skill.
+func skillFiles(t *testing.T) []string {
+	t.Helper()
+	var refs []string
+	if err := fs.WalkDir(setupskill.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			refs = append(refs, p)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return refs
 }
 
 // TestPlacePutsThePolicyWhereTheGuardReadsIt: the reference policy goes
