@@ -32,11 +32,11 @@ One kind's share of a rule's check: its static, execution or probe
 part. A part is named by its rule ID and kind, such as A-02's probe.
 _Avoid_: half, step, sub-check
 
-**Need**:
-What an execution or probe part requires to have run before it: one
-named part, or every other execution and probe part. The audit runs each
-part after its needs and gives it their results. Static parts have none.
-_Avoid_: dependency (alone), prerequisite, precondition
+**Last part**:
+The one execution or probe part that runs after every other execution
+and probe part and gets their results. R-01's execution part is the last
+part.
+_Avoid_: need, final step
 
 **Probe**:
 A check that feeds a known input, such as a guard corpus case or a planted

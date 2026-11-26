@@ -113,24 +113,25 @@ internal/contract
   CLI's tests hand a fixture's known file list in through a repository
   seam (`contract.NewRepo`), so a rule-table case starts no git (spec
   0056).
-- **Parts declare their needs** (spec 0064). An execution or probe
-  part lists the parts it needs on its `Part` (`Needs`): one named part,
-  or every other execution and probe part. Only R-01's execution part
-  declares needs, A-02's probe and every other part. The runner checks
-  the needs before it builds the probe copy and panics on a missing
-  part, a cycle or a static part with a need; a registry test keeps
-  `contract.Rules()` valid. It runs the parts in registry order, each
-  after the parts it needs, and hands each part the results of the
-  needs that ran as an argument (`Needed`); a part sees only the needs
-  it declared. Results come back through return values: a part returns
-  all of its output in its `PartResult`, and the runner keeps the
-  results of one audit in run order, each with the `vibe` calls the
-  shim recorded while that part ran, where `Env` cannot reach them.
-  The report's guard exception uses come from A-02's and A-09's
-  results, in run order. R-01 gets A-02's deny verdict and the `vibe`
-  calls of the earlier runs (setup's included) from its needs, so each
-  call is reported once. A check reads `Env` and
-  adds no record to it except through `Note`.
+- **One last part** (spec 0071, which replaced spec 0064's needs). The
+  runner decides the static parts first. Then, in the probe copy, it
+  runs the execution and probe parts that have `Run`, in registry order
+  and in part order inside a rule. Then it runs the one *last part*, the
+  part that has `RunLast`. The last part gets every earlier execution
+  and probe result, and the `vibe` calls of setup, as an argument
+  (`Earlier`). R-01's execution part is the last part: it reads A-02's
+  deny verdict and every `vibe` call from `Earlier`, so each call is
+  reported once. Before it builds the probe copy, also with `--static`,
+  the runner checks the rule list. It panics, and names the part, when
+  two parts are last parts, when a static part is the last part, or when
+  a part sets both or neither of `Run` and `RunLast`; a registry test
+  keeps `contract.Rules()` valid. Results come back through return
+  values (spec 0064): a part returns all of its output in its
+  `PartResult`, and the runner keeps the results of one audit in run
+  order, each with the `vibe` calls the shim recorded while that part
+  ran, where `Env` cannot reach them. The report's guard exception uses
+  come from A-02's and A-09's results, in run order. A check reads `Env`
+  and adds no record to it except through `Note`.
 - **One CI model, two readers** (spec 0055). The C rules, D-03 and
   R-01 read the repository's CI through one provider-neutral model
   (`ci_model.go`): the CI provider read, its jobs with their commands
