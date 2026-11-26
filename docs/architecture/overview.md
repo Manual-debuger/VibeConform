@@ -110,6 +110,9 @@ internal/contract
   repository in the system's temporary directory, holding the same
   files, reset between runs and deleted at the end. Entrypoints run
   without a shell, hooks through `bash -c`, each with a time limit.
+  Under contract 2.0.0, A-02 and A-09 rewrite `.claude/hooks/policy.json`
+  in the probe copy without the exceptions a deny case matches, run the
+  case again, and write the original back (spec 0072, "The rerun").
   `vibe audit` always lists the tracked files with git (`OpenRepo`); the
   CLI's tests hand a fixture's known file list in through a repository
   seam (`contract.NewRepo`), so a rule-table case starts no git (spec

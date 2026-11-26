@@ -701,7 +701,9 @@ jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "
 - **R-01 and `vibe` by path** (since 2.0.0, spec 0072). A simple command
   calls `vibe` when the last path element of its first word, after `/`
   or `\`, is the literal `vibe` or `vibe.exe`, compared
-  case-sensitively. The directory part may hold an expansion, so
+  case-sensitively. The last element is read from the word as written,
+  so an unquoted `\` separates elements too, although the shell's quote
+  removal drops it. The directory part may hold an expansion, so
   `"$dir/vibe" verify`, `./bin/vibe verify`, `C:\tools\vibe.exe verify`
   and `${RUNNER_TEMP}/bin/vibe verify` are calls, in an entrypoint, a
   hook command or a CI step. A last element that holds an expansion

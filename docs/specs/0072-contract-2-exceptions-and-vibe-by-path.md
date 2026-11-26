@@ -236,6 +236,14 @@ Assumptions, each checked during implementation:
   one file, so the sets run one after another.
 - The rewrite keeps every other entry of `policy.json`. The audit
   restores the original file after the reruns, also on an error.
+- A deny case that no PreToolUse hook runs is not rerun and is not one
+  an exception let through: it fails under "no PreToolUse hook matches",
+  whose finding names the exception that did not count.
+- A deny case the guard lets through and no exception counts for gets a
+  fix that fits it: for a fixed case, make the guard refuse it, since no
+  exception can; for a compound case that an exception for another of
+  its simple commands matches, the exception must prefix the simple
+  command the rule refuses, which the fix names.
 - R-01's execution part reads A-02's deny verdict, so it gets the new
   reading without a change.
 
@@ -249,8 +257,10 @@ Assumptions, each checked during implementation:
   an expansion is not a call, as today. Under 1.2.0 the first word must
   be the literal `vibe`, as today.
 - `vibe-guard` by any path is not a call of `vibe`.
-- The shell model must expose a word's literal tail after its last
-  expansion. Today it exposes only whether the whole word is literal.
+- The shell model must expose a word's last path element, read from the
+  word as written so that an unquoted `\` separates elements although
+  quote removal drops it, and whether that element holds an expansion.
+  Today it exposes only whether the whole word is literal.
 
 ### Documentation and configuration
 
