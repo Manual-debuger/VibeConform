@@ -323,33 +323,33 @@ Assumptions, each checked during implementation:
 
 ## Acceptance Criteria
 
-- [ ] A repository that declares `contract: 2.0.0` is audited as 2.0.0,
+- [x] A repository that declares `contract: 2.0.0` is audited as 2.0.0,
       and one that declares 1.x is audited as 1.2.0. Other versions
       cannot be decided.
-- [ ] Under 2.0.0, A-02 and A-09 fail a deny case that the guard lets
+- [x] Under 2.0.0, A-02 and A-09 fail a deny case that the guard lets
       through without the matching exceptions, with a finding that
       names the case and the exception.
-- [ ] Under 2.0.0, an exception that prefixes only a simple command the
+- [x] Under 2.0.0, an exception that prefixes only a simple command the
       case's rule does not refuse does not count, and no exception
       counts for a fixed case.
-- [ ] Under 2.0.0, an exception the guard needs still counts and is
+- [x] Under 2.0.0, an exception the guard needs still counts and is
       listed in the report.
-- [ ] `policy.json` in the probe copy is restored after the rerun.
-- [ ] Under 2.0.0, R-01 fails a call of `vibe` or `vibe.exe` by path in
+- [x] `policy.json` in the probe copy is restored after the rerun.
+- [x] Under 2.0.0, R-01 fails a call of `vibe` or `vibe.exe` by path in
       an entrypoint, a hook or a CI step. C-04's audit job and the
       `vibe --version` exemption recognize `vibe` by path too.
-- [ ] Under 1.2.0, no rule's result, finding or fix changes. No existing
+- [x] Under 1.2.0, no rule's result, finding or fix changes. No existing
       golden file or expected value changes.
-- [ ] The corpus marks the fixed cases and the refused commands of the
+- [x] The corpus marks the fixed cases and the refused commands of the
       compound cases. A test in `internal/guard` keeps them equal to
       `vibe-guard`'s rules.
-- [ ] `TestTwoReadingsOfAnException` checks both directions under 2.0.0.
-- [ ] Specs 0051, 0053, 0061 and 0070, `docs/usage.md`, GLOSSARY and the
+- [x] `TestTwoReadingsOfAnException` checks both directions under 2.0.0.
+- [x] Specs 0051, 0053, 0061 and 0070, `docs/usage.md`, GLOSSARY and the
       setup skill's references describe 2.0.0. The setup skill writes
       `contract: 2.0.0`.
-- [ ] This repository's `vibe.yaml` declares 2.0.0.
-- [ ] `task verify` passes.
-- [ ] `task audit` says `Verdict: conformant`.
+- [x] This repository's `vibe.yaml` declares 2.0.0.
+- [x] `task verify` passes.
+- [x] `task audit` says `Verdict: conformant`.
 
 ## Further Notes
 
