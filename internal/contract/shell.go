@@ -28,6 +28,16 @@ type shellWord struct {
 	Literal bool
 }
 
+// Tail is the word's literal text after its last expansion: the whole
+// word when it is literal, and "" when it ends in an expansion. Only the
+// tail is known before the word runs (spec 0072, "R-01 and C-04").
+func (w shellWord) Tail() string {
+	if w.Literal {
+		return w.Text
+	}
+	return w.Text[strings.LastIndex(w.Text, expansionMark)+len(expansionMark):]
+}
+
 // expansionMark stands for an expansion inside shellWord.Text. It is the
 // guard's mark, so a word reads the same in both.
 const expansionMark = guardrule.ExpansionMark
@@ -66,8 +76,7 @@ func (c shellCommand) Calls(target shellCommand) bool {
 }
 
 // HasPrefix reports whether c's first words are literally words, such as
-// HasPrefix("vibe", "audit") for C-04 or HasPrefix("npm", "audit") for
-// D-03.
+// HasPrefix("npm", "audit") for D-03.
 func (c shellCommand) HasPrefix(words ...string) bool {
 	if len(words) == 0 || len(c.Words) < len(words) {
 		return false
