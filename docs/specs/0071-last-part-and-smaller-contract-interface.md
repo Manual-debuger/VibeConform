@@ -1,6 +1,6 @@
 # Spec 0071: One last part instead of needs, and a smaller `contract` interface
 
-Status: draft (2026-11-26). A refactor of `internal/contract` from a
+Status: draft (2026-11-26). Issue #228. A refactor of `internal/contract` from a
 design review on 2026-11-26 (`main` at 8d66ee5). Supersedes spec 0064's
 needs ("A part declares its needs", "The runner orders by needs") and
 keeps the rest of spec 0064 ("Results come back through return
