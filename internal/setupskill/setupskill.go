@@ -3,12 +3,17 @@
 // repository to a passing contract audit, and the code that writes it
 // into a repository (vibe init --skill).
 //
+// The skill has two placeholders, which Render replaces in every file:
+// {{VIBE_VERSION}} (VersionPlaceholder), the vibe version that the
+// vibe-guard install hint names, and {{VIBE_RELEASE_PAGE}}
+// (ReleasePagePlaceholder), that version's release page. Render
+// changes nothing else.
+//
 // Among this repository's packages it imports only internal/guard, for
-// the version rule and the reference hook commands.
+// the version rule, the release page and the reference hook commands.
 package setupskill
 
 import (
-	"bytes"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -17,6 +22,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/Manual-debuger/VibeConform/internal/guard"
 )
@@ -24,47 +30,64 @@ import (
 // Name is the skill's name and the name of its directory.
 const Name = "vibeconform-setup"
 
-// VersionPlaceholder is the only placeholder in the skill: the vibe
-// version, replaced by Render through internal/guard's version rule.
-const VersionPlaceholder = "{{VIBE_VERSION}}"
+// The skill's placeholders. Render replaces each of them, and nothing
+// else, in every file of the skill (spec 0073):
+//
+//   - VersionPlaceholder is the vibe version that the install hint
+//     names, from internal/guard's version rule (guard.InstallVersion).
+//   - ReleasePagePlaceholder is the page that publishes that version's
+//     release archives (guard.ReleasePage): the tag's page, or the
+//     releases page for latest.
+const (
+	VersionPlaceholder     = "{{VIBE_VERSION}}"
+	ReleasePagePlaceholder = "{{VIBE_RELEASE_PAGE}}"
+)
 
-// Dirs are the directories, relative to the repository root and in slash
-// form, that Install writes: Claude Code's skill path and Codex's.
-var Dirs = []string{".claude/skills/" + Name, ".agents/skills/" + Name}
+// Dirs returns the directories, relative to the repository root and in
+// slash form, that Install writes: Claude Code's skill path and Codex's.
+// Each call returns a new slice.
+func Dirs() []string {
+	return []string{".claude/skills/" + Name, ".agents/skills/" + Name}
+}
 
 //go:embed all:skill
 var embedded embed.FS
 
-// FS is the embedded skill as it is stored, with the placeholder in
-// place: SKILL.md at its root.
-func FS() fs.FS {
+// skill is the embedded skill directory as a file system of its own.
+var skill = func() fs.FS {
 	sub, err := fs.Sub(embedded, "skill")
 	if err != nil {
 		panic(err) // the directory is embedded, so this cannot fail
 	}
 	return sub
+}()
+
+// FS is the embedded skill as it is stored, with the placeholders in
+// place: SKILL.md at its root. Every call returns the same file system.
+func FS() fs.FS {
+	return skill
 }
 
 // Render returns every file of the skill, by slash path relative to the
-// skill directory, with the placeholder replaced by the version the
-// install hint names for a vibe of version vibeVersion
-// (guard.InstallVersion).
+// skill directory, with the placeholders replaced for a vibe of version
+// vibeVersion: the version the install hint names
+// (guard.InstallVersion) and its release page (guard.ReleasePage).
 func Render(vibeVersion string) (map[string][]byte, error) {
-	version := []byte(guard.InstallVersion(vibeVersion))
-	// latest has no release of its own: a link to its tag becomes the
-	// releases page, as in guard.ReferencePreToolUse.
-	latestTag := []byte("/releases/tag/latest")
+	version := guard.InstallVersion(vibeVersion)
+	placeholders := strings.NewReplacer(
+		VersionPlaceholder, version,
+		ReleasePagePlaceholder, guard.ReleasePage(version),
+	)
 	out := map[string][]byte{}
-	err := fs.WalkDir(FS(), ".", func(p string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(skill, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		data, err := fs.ReadFile(FS(), p)
+		data, err := fs.ReadFile(skill, p)
 		if err != nil {
 			return err
 		}
-		data = bytes.ReplaceAll(data, []byte(VersionPlaceholder), version)
-		out[p] = bytes.ReplaceAll(data, latestTag, []byte("/releases"))
+		out[p] = []byte(placeholders.Replace(string(data)))
 		return nil
 	})
 	if err != nil {
@@ -80,7 +103,7 @@ type Result struct {
 	Removed []string
 }
 
-// Install writes the skill into both of Dirs under repoRoot (spec 0054,
+// Install writes the skill into both of Dirs() under repoRoot (spec 0054,
 // "vibe init --skill"). Every file is replaced with the rendered
 // version, files the skill does not have are removed, and directories
 // that removal empties are removed too. Nothing outside the two
@@ -97,7 +120,7 @@ func Install(repoRoot, vibeVersion string) (Result, error) {
 	sort.Strings(names)
 
 	var res Result
-	for _, dir := range Dirs {
+	for _, dir := range Dirs() {
 		if err := install(filepath.Join(repoRoot, filepath.FromSlash(dir)), dir, files, names, &res); err != nil {
 			return res, err
 		}

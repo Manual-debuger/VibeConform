@@ -183,6 +183,12 @@ func TestSkillDriftFixtures(t *testing.T) {
 		{"the policy SKILL.md hands to the person differs from the reference", func(t *testing.T) func(fstest.MapFS) {
 			return replaceIn(t, "SKILL.md", `    "rules": [],`, `    "tools": [],`)
 		}, "SKILL.md"},
+		{"unknown placeholder", func(*testing.T) func(fstest.MapFS) {
+			return appendTo("SKILL.md", "Install vibe from {{VIBE_CHANNEL}}.")
+		}, "{{VIBE_CHANNEL}}"},
+		{"placeholder with spaces", func(*testing.T) func(fstest.MapFS) {
+			return appendTo("reference/upgrade.md", "Install vibe {{ VIBE_VERSION }}.")
+		}, "{{ VIBE_VERSION }}"},
 		{"upgrade.md does not name vibe unlock", func(*testing.T) func(fstest.MapFS) {
 			return func(files fstest.MapFS) {
 				f := files["reference/upgrade.md"]

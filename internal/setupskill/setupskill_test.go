@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/fs"
+	"slices"
 	"strings"
 	"testing"
 
@@ -35,6 +36,29 @@ func TestNoCarriageReturn(t *testing.T) {
 	}
 	if n == 0 {
 		t.Fatal("the embedded skill has no files")
+	}
+}
+
+// TestFSIsBuiltOnce: FS returns the same file system on every call
+// (spec 0073), so the package builds it once and holds no state that a
+// call changes.
+func TestFSIsBuiltOnce(t *testing.T) {
+	if setupskill.FS() != setupskill.FS() {
+		t.Error("FS() built a new file system on the second call")
+	}
+}
+
+// TestDirsCannotBeChanged: a caller that changes the slice Dirs returns
+// does not change the directories Install writes (spec 0073).
+func TestDirsCannotBeChanged(t *testing.T) {
+	want := []string{".claude/skills/vibeconform-setup", ".agents/skills/vibeconform-setup"}
+	dirs := setupskill.Dirs()
+	if !slices.Equal(dirs, want) {
+		t.Fatalf("Dirs() = %q, want %q", dirs, want)
+	}
+	dirs[0] = "elsewhere"
+	if got := setupskill.Dirs(); !slices.Equal(got, want) {
+		t.Errorf("after a caller changed its result, Dirs() = %q, want %q", got, want)
 	}
 }
 

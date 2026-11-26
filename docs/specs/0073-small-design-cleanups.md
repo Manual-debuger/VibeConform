@@ -271,7 +271,10 @@ convention.**
   `latest`. `ReferencePreToolUse` and `Render` both call it. The
   `/releases/tag/latest` rewrite goes away.
 - The package documentation lists both placeholders. The drift checker
-  fails when the skill holds a `{{…}}` that is not one of them.
+  fails when the skill holds a `{{VIBE_…}}` that is not one of them.
+  It does not look at other `{{…}}` text, because the skill's
+  Taskfiles (`{{OS}}`) and workflows (`${{ matrix.os }}`) hold it
+  legitimately (amended 2026-11-26).
 - `FS()` computes the sub file system once.
 - `Dirs` becomes a function that returns a new slice on each call.
 
@@ -370,7 +373,7 @@ convention.**
   - `Render` gives byte-identical output to a golden file of the
     rendered skill for a tagged version and for `latest`. The golden is
     recorded from `main` before the change.
-  - The skill holds no `{{…}}` other than the two placeholders.
+  - The skill holds no `{{VIBE_…}}` other than the two placeholders.
   - `Dirs` returns a new slice: changing the result does not change the
     next call.
   - The baseline check fails on a fixture with one comment more than
