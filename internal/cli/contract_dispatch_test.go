@@ -312,6 +312,18 @@ func TestAuditExplainReadsTheContractVersion(t *testing.T) {
 		assertShows(t, r, c05Of2, "Contract: 2.1.0 (vibe.yaml declares 2.0.0)", "Not applicable: never",
 			"Static: the steps that call `verify` run on a runner of each platform in `platforms`")
 	})
+	// The guard set is MUST under 1.x and SHOULD under 2.1.0 (spec 0074).
+	t.Run("A-01's level under each contract", func(t *testing.T) {
+		t.Parallel()
+		for _, tc := range []struct{ declared, level, waivable string }{
+			{"1.2.0", "Level: MUST", "Waivable: no, a MUST rule cannot be waived"},
+			{"2.0.0", "Level: SHOULD", "Waivable: yes, through a waiver in vibe.yaml"},
+			{"2.1.0", "Level: SHOULD", "Waivable: yes, through a waiver in vibe.yaml"},
+		} {
+			r := runVibeAudit(t, "--explain", "A-01", "--repo-root", withConfig(t, "contract: "+tc.declared+"\n"))
+			assertShows(t, r, "A-01: ", tc.level, tc.waivable)
+		}
+	})
 	t.Run("--config names the file", func(t *testing.T) {
 		t.Parallel()
 		dir := withConfig(t, "contract: 2.1.0\n")

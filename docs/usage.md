@@ -560,7 +560,8 @@ or newer PATCH) is audited as 1.2.0, and every declared `2.0.n` and
 `2.1.n` as 2.1.0 (spec 0051, "Versioning"; spec 0061; spec 0072; spec
 0074). A rule's level can depend on the audited contract: the report,
 waivers and `require` read the level under it, and `--explain` prints
-the level under the latest contract. The report shows both
+the level under the contract `vibe.yaml` declares, or under the latest
+when there is no `vibe.yaml`. The report shows both
 versions when they differ. A repository that declares 1.x keeps its
 verdict after it upgrades `vibe`, and moves to 2.x when it changes
 its `contract:` line (the setup skill's `reference/upgrade.md`, section
