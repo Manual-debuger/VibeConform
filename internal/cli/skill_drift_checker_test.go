@@ -76,6 +76,7 @@ func checkSkill(skill fs.FS) []string {
 	c.checkContractVersion()
 	c.checkSkillIgnored()
 	c.checkPolicyHandOff()
+	c.checkGuardChoice()
 	sort.Strings(c.problems)
 	return c.problems
 }
@@ -613,7 +614,7 @@ func (c *skillChecker) checkRulesGuidance() {
 		return
 	}
 	for _, r := range contract.Rules() {
-		want := fmt.Sprintf("### %s (%s)", r.ID, r.Level)
+		want := fmt.Sprintf("### %s (%s)", r.ID, r.LevelAt(contract.Latest))
 		if !slices.ContainsFunc(strings.Split(f.text, "\n"), func(l string) bool { return strings.HasPrefix(l, want) }) {
 			c.problem(file, "has no %q heading, so rule %s has no guidance", want, r.ID)
 		}
@@ -875,6 +876,42 @@ func (c *skillChecker) checkPolicyHandOff() {
 	ref, ok := c.file("reference/agents/policy.json")
 	if _, err := guardrule.ParsePolicy([]byte(ref.text)); ok && err == nil && got != ref.text {
 		c.problem(f.path, "writes a .claude/hooks/policy.json that differs from reference/agents/policy.json:\n%s", got)
+	}
+}
+
+// guardQuestion is the question SKILL.md asks the person before it writes
+// any guard file (spec 0074, "Setup skill").
+const guardQuestion = "whether they want the agent guard"
+
+// checkGuardChoice: SKILL.md names the guard set as the contract package
+// lists it, and asks the person whether they want the agent guard before
+// it hands over the guard policy, so that the guard is never set up
+// without their consent. The answer "no" undoes each part of the guard:
+// the guard set in require, the PreToolUse hooks, the policy, the relock
+// in the Stop command and the vibe-guard install.
+func (c *skillChecker) checkGuardChoice() {
+	f, ok := c.file("SKILL.md")
+	if !ok {
+		return
+	}
+	set := "require: [" + strings.Join(contract.GuardSet(), ", ") + "]"
+	if !strings.Contains(f.text, set) {
+		c.problem(f.path, "does not name the guard set as `%s`", set)
+	}
+	asked := strings.Index(f.text, guardQuestion)
+	handOff := policyHandOff.FindStringIndex(f.text)
+	if asked < 0 || (handOff != nil && asked > handOff[0]) {
+		c.problem(f.path, "does not ask the person %q before it hands over .claude/hooks/policy.json", guardQuestion)
+		return
+	}
+	declined := f.text[asked:]
+	if handOff != nil {
+		declined = f.text[asked:handOff[0]]
+	}
+	for _, part := range []string{"`require`", "PreToolUse", "`policy.json`", "`vibe-guard relock`", "step 5"} {
+		if !strings.Contains(declined, part) {
+			c.problem(f.path, "does not say that declining the guard drops %s", part)
+		}
 	}
 }
 

@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"slices"
 	"time"
 )
 
@@ -26,6 +27,13 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 	list := opts.Rules
 	if list == nil {
 		list = Rules()
+	}
+	// Each rule as it reads under the audited contract: its title, check
+	// text and applicability (spec 0074). Its check functions stay, so
+	// a test's stand-ins stay too.
+	list = slices.Clone(list)
+	for i := range list {
+		list[i] = list[i].At(cfg.Contract.Audited)
 	}
 
 	env := newEnv(ctx, cfg, repo)
@@ -72,7 +80,7 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 // of the execution and probe parts left to run in the probe copy; the
 // rule's result is set once they ran.
 func auditRule(env *Env, rule Rule, waivers map[string]Waiver, now time.Time, staticOnly bool) (RuleResult, []int) {
-	rr := RuleResult{Rule: rule, Required: env.config.requires(rule.ID)}
+	rr := RuleResult{Rule: rule, Level: rule.Level, Required: env.config.requires(rule.ID)}
 	if w, ok := waivers[rule.ID]; ok {
 		rr.Waiver = &WaiverStatus{Reason: w.Reason, Until: w.Until, Expired: !now.Before(waiverEnd(w))}
 	}

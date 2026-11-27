@@ -58,7 +58,7 @@ func (e *Env) readFile(name string) ([]byte, error) {
 
 // The readings that differ between the contracts this vibe implements
 // (spec 0072). A check asks for the reading it needs; each holds under
-// 2.0.0 and not under 1.2.0.
+// 2.x (2.0.0 and 2.1.0) and not under 1.2.0.
 
 // narrowsExceptions: a command exception counts for a deny case only when
 // it prefixes a simple command the case's rule refuses, and no exception
@@ -74,6 +74,17 @@ func (e *Env) rerunsExceptions() bool { return e.auditsContract2() }
 func (e *Env) readsVibeByPath() bool { return e.auditsContract2() }
 
 func (e *Env) auditsContract2() bool { return e.auditedVersion() == Contract2 }
+
+// The readings contract 2.1.0 changed (spec 0074).
+
+// followsPlatforms: C-05 wants a runner of each platform in platforms,
+// where 1.x wants Linux and Windows.
+func (e *Env) followsPlatforms() bool { return compareVersions(e.auditedVersion(), contract21) >= 0 }
+
+// guardSetBinds: the guard set counts in the verdict, so R-01, a MUST
+// rule, holds the repository to the guard, and the rules that test the
+// guard apply without a hook. See Config.guardSetBinds.
+func (e *Env) guardSetBinds() bool { return e.config.guardSetBinds() }
 
 // auditedVersion is the contract version the audit applies, for a
 // finding that names it.

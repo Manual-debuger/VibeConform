@@ -1,4 +1,4 @@
-vibe audit: contract 1.2.0 (vibe test)
+vibe audit: contract 2.1.0 (vibe test)
 
   V  Verification entrypoints              1 pass, 1 not applicable, 6 cannot decide
   H  Local Git hooks                       2 pass
@@ -32,21 +32,20 @@ Cannot decide
         vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
   V-08  SHOULD  Blanket suppressions do not hide a defect
         vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
-  A-02  MUST    The guard refuses the baseline unless an exception says otherwise
+  A-02  SHOULD  The guard refuses the baseline unless an exception says otherwise
         .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
-  A-03  MUST    The guard fails closed
+  A-03  SHOULD  The guard fails closed
         .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-05  MUST    The agent's turn ends with `verify-fast`
         cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-07  SHOULD  Session start injects facts and changes nothing
         .claude/settings.json: cannot decide: the SessionStart hook (task -x hook:context): no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
-  A-08  MUST    An agent changes guardrail settings only after a person unlocks them
+  A-08  SHOULD  An agent changes guardrail settings only after a person unlocks them
         .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   A-09  SHOULD  The guard refuses commands that skip Git hooks
         .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
   R-01  MUST    Everything but the audit works without vibe
         vibe.yaml: cannot decide: verify (task verify): `task` is not installed on this machine
-        .claude/settings.json: cannot decide: no bash found; Claude Code runs hook commands with bash (on Windows, Git Bash next to git.exe or the one CLAUDE_CODE_GIT_BASH_PATH names)
 
 Guard exceptions
   (none)

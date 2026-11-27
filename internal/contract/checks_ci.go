@@ -324,10 +324,12 @@ func ciAuditJobs(vibe vibeRecognizer, run *ciRun, verify []shellCommand) []*ciJo
 	return out
 }
 
-// checkC05: each verify command is called by a job that runs on a Linux
-// runner and by one that runs on a Windows runner, after matrix
-// expansion, among every job. The rule is not applicable without windows
-// in platforms; the registry decides that before it runs.
+// checkC05: each verify command is called by jobs that run on a runner of
+// each platform C-05 asks for, after matrix expansion, among every job.
+// Under contract 2.x those are the platforms of platforms, in their
+// order (spec 0074). Under 1.x they are Linux and Windows, and the rule
+// is not applicable without windows in platforms; the registry decides
+// that before it runs.
 func checkC05(env *Env) PartResult {
 	verify, missing := env.entrypointCommands(entrypointVerify)
 	if missing != nil {
@@ -337,32 +339,43 @@ func checkC05(env *Env) PartResult {
 	if !ok {
 		return res
 	}
+	followsPlatforms := env.followsPlatforms()
+	want := []string{platformLinux, platformWindows}
+	if followsPlatforms {
+		want = env.config.platforms
+	}
 	w := ci.wording
 	var findings []Finding
 	for _, c := range verify {
 		r := runnersOf(ci, c)
 		if len(r.where) == 0 {
-			findings = append(findings, Finding{File: ci.Dir,
-				Message: w.uncalledOnRunner(c),
-				Fix:     w.uncalledOnRunnerFix(c)})
+			fix := w.uncalledOnLinuxWindowsFix(c)
+			if followsPlatforms {
+				fix = w.uncalledOnDeclaredFix(c, want)
+			}
+			findings = append(findings, Finding{File: ci.Dir, Message: w.uncalledOnRunner(c), Fix: fix})
 			continue
 		}
 		var lacking []string
-		for _, p := range []string{platformLinux, platformWindows} {
+		for _, p := range want {
 			if !slices.Contains(r.platforms, p) {
-				lacking = append(lacking, platformName(p))
+				lacking = append(lacking, p)
 			}
 		}
 		if len(lacking) == 0 {
 			continue
 		}
+		names := mapWords(lacking, platformName)
 		msg := fmt.Sprintf("the verify command `%s` runs on no %s runner (called in %s)",
-			c, joinWords(lacking, " or "), strings.Join(r.where, ", "))
+			c, joinWords(names, " or "), strings.Join(r.where, ", "))
 		if len(r.unknown) > 0 {
 			msg += "; runners of unknown platform: " + strings.Join(r.unknown, "; ")
 		}
-		findings = append(findings, Finding{File: r.file, Message: msg,
-			Fix: w.lackingPlatformFix(c, joinWords(lacking, " and "))})
+		fix := w.lackingLinuxWindowsFix(c, joinWords(names, " and "))
+		if followsPlatforms {
+			fix = w.lackingDeclaredFix(c, lacking, want)
+		}
+		findings = append(findings, Finding{File: r.file, Message: msg, Fix: fix})
 	}
 	return merge(res, failIf(findings))
 }
@@ -399,15 +412,9 @@ func runnersOf(ci *ciModel, c shellCommand) commandRunners {
 	return r
 }
 
-func platformName(p string) string {
-	switch p {
-	case platformLinux:
-		return "Linux"
-	case platformWindows:
-		return "Windows"
-	}
-	return "macOS"
-}
+// platformName is a platform value of platforms as findings name it, such
+// as Linux.
+func platformName(p string) string { return platformFacts[p].name }
 
 // scanners are the first words, or first two words, of the commands D-03
 // recognizes as vulnerability scanners.

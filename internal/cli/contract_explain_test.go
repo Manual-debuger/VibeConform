@@ -12,10 +12,12 @@ import (
 // --explain prints what the registry knows about one rule (spec 0052,
 // "Package and command"): ID, level, category, rule sentence, check
 // kinds, source, rationale, the check as spec 0051 states it, when the
-// rule is not applicable, and whether it can be waived.
+// rule is not applicable, and whether it can be waived. With no vibe.yaml,
+// the rule is the one under the latest contract.
 func TestAuditExplainEveryRule(t *testing.T) {
 	t.Parallel()
 	for _, rule := range contract.Rules() {
+		rule := rule.At(contract.Latest)
 		t.Run(rule.ID, func(t *testing.T) {
 			r := runVibeAudit(t, "--explain", rule.ID)
 			assertExit(t, r, 0)
@@ -28,7 +30,7 @@ func TestAuditExplainEveryRule(t *testing.T) {
 			// Long text is wrapped, so compare with the whitespace folded.
 			flat := strings.Join(strings.Fields(r.stdout), " ")
 			for _, want := range []string{
-				string(rule.Level), string(rule.Category) + ", " + rule.Category.Name(),
+				string(rule.LevelAt(contract.Latest)), string(rule.Category) + ", " + rule.Category.Name(),
 				rule.Source, rule.Rationale(), rule.Check(),
 			} {
 				if !strings.Contains(flat, strings.Join(strings.Fields(want), " ")) {
@@ -47,9 +49,9 @@ func TestAuditExplainContent(t *testing.T) {
 		want []string
 	}{
 		{"A-01", []string{
-			"Level: MUST", "Category: A, Agent guardrails", "Checks: static", "Source: spec 0021",
+			"Level: SHOULD", "Category: A, Agent guardrails", "Checks: static", "Source: spec 0021",
 			"Not applicable: when `agents` does not include `claude`",
-			"Waivable: no, a MUST rule cannot be waived",
+			"Waivable: yes, through a waiver in vibe.yaml",
 			"The A rules cover Claude Code only.",
 			"PreToolUse hooks match each of `Bash`, `PowerShell`, `Write`, `Edit` and `MultiEdit`",
 		}},
@@ -57,18 +59,18 @@ func TestAuditExplainContent(t *testing.T) {
 			"Level: MUST", "Category: R, Removability and repository hygiene", "Checks: static, execution",
 			"Source: principle 3, spec 0017", "Not applicable: never", "Waivable: no",
 			// spec 0072, "R-01 and C-04".
-			"Under contract 2.0.0, a command calls `vibe` when the last path element of its first word, after `/` or `\\`, is the literal `vibe` or `vibe.exe`",
+			"Under contract 2.x, a command calls `vibe` when the last path element of its first word, after `/` or `\\`, is the literal `vibe` or `vibe.exe`",
 			"Under contract 1.x, its first word must be the literal `vibe`.",
 		}},
 		// spec 0072, "The audit's reading under 2.0.0" and "The rerun".
 		{"A-02", []string{
-			"Under contract 2.0.0, an exception counts for a deny case only when",
+			"Under contract 2.x, an exception counts for a deny case only when",
 			"the guard refuses the case when every exception that matches it is removed from `.claude/hooks/policy.json`",
 			"A command exception must prefix the simple command the case's rule refuses, and no exception matches a fixed case",
 		}},
 		{"C-05", []string{
 			"Level: SHOULD", "Category: C, CI", "Checks: static", "Source: principle 2",
-			"Not applicable: when `platforms` does not include `windows`",
+			"Not applicable: never; the rule always applies",
 			"Waivable: yes, through a waiver in vibe.yaml",
 			"The C rules read GitHub Actions or GitLab CI (GitLab CI since 1.1.0).",
 		}},

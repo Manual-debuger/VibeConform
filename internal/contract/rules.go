@@ -122,12 +122,53 @@ type Part struct {
 	RunLast LastFunc
 }
 
+// LevelChange is a contract version that changed a rule's level, and the
+// level the rule has from that version on (spec 0074, "A rule's level
+// depends on the audited contract").
+type LevelChange struct {
+	// Since is the contract version that changed the level, such as
+	// "2.1.0".
+	Since string
+	Level Level
+}
+
+// Revision is a contract version that changed what a rule says and when
+// it applies, with the rule's text from that version on (spec 0074). It
+// replaces the rule's title, the check text of each part and its
+// applicability, all together. The parts' check functions do not change:
+// a check that differs between contract versions reads the audited
+// version itself.
+type Revision struct {
+	// Since is the contract version that made the change, such as "2.1.0".
+	Since string
+	Title string
+	// Checks are the parts' check texts, without their leads: one for each
+	// part, in part order.
+	Checks            []string
+	NotApplicableWhen string
+	// applies is the applicability from Since on; nil means the rule
+	// always applies.
+	applies func(env *Env) (bool, string)
+}
+
 // Rule is one rule of contract 1.0.0 (spec 0051, "Rules"). The report
 // and --explain read only the registry.
 type Rule struct {
-	ID       string
-	Level    Level
-	Category Category
+	ID string
+	// Level is the level the rule was added with, or, on a rule At
+	// returned, its level under that contract. A registry rule's level
+	// under a contract is LevelAt's, and a RuleResult carries the level
+	// under the audited contract.
+	Level Level
+	// LevelChanges are the contract versions that changed the rule's
+	// level, oldest first, or none when the level never changed.
+	LevelChanges []LevelChange
+	Category     Category
+	// Revisions are the contract versions that changed the rule's title,
+	// check text or applicability, oldest first; At applies them. Title,
+	// the parts' Check, NotApplicableWhen and applies hold the rule's text
+	// before the first of them. Read a rule through At.
+	Revisions []Revision
 	// Title is the rule sentence of spec 0051.
 	Title string
 	// Source names the specs, ADRs and principles the rule comes from.
@@ -155,9 +196,44 @@ func (r Rule) Check() string {
 	return strings.Join(texts, " ")
 }
 
-// Waivable reports whether a waiver may suspend the rule: only SHOULD
-// rules can be waived (spec 0051, "vibe.yaml").
-func (r Rule) Waivable() bool { return r.Level == Should }
+// At is the rule as it reads under the contract version: its level is
+// LevelAt's, and its title, the check text of its parts and its
+// applicability are those of its last revision that the version is not
+// older than. The rule it returns has no level changes and no revisions
+// left, so At of another version on it returns it unchanged.
+func (r Rule) At(contract string) Rule {
+	out := r
+	out.Level, out.LevelChanges, out.Revisions = r.LevelAt(contract), nil, nil
+	out.Parts = slices.Clone(r.Parts)
+	for _, v := range r.Revisions {
+		if compareVersions(contract, v.Since) < 0 {
+			continue
+		}
+		out.Title, out.NotApplicableWhen, out.applies = v.Title, v.NotApplicableWhen, v.applies
+		for i := range out.Parts {
+			out.Parts[i].Check = v.Checks[i]
+		}
+	}
+	return out
+}
+
+// LevelAt is the rule's level under the contract version: the level of
+// its last change that the version is not older than, or the level it was
+// added with.
+func (r Rule) LevelAt(contract string) Level {
+	level := r.Level
+	for _, c := range r.LevelChanges {
+		if compareVersions(contract, c.Since) >= 0 {
+			level = c.Level
+		}
+	}
+	return level
+}
+
+// WaivableAt reports whether a waiver may suspend the rule under the
+// contract version: only SHOULD rules can be waived (spec 0051,
+// "vibe.yaml").
+func (r Rule) WaivableAt(contract string) bool { return r.LevelAt(contract) == Should }
 
 // Rationale is why the rule exists: its sources and, where spec 0051
 // introduces the rule's category, that introduction.
@@ -261,6 +337,40 @@ func needsAgents(cfg *Config) (bool, string) {
 }
 
 const notApplicableWithoutClaude = "when `agents` does not include `claude`"
+
+// testsTheGuard is r, a rule that tests the guard (A-02, A-03, A-04,
+// A-08 and A-09), with its 2.1.0 revision: the same title and checks,
+// and not applicable when there is no guard to test (spec 0074,
+// "Applicability of the guard-testing rules").
+func testsTheGuard(r Rule) Rule {
+	checks := make([]string, len(r.Parts))
+	for i, p := range r.Parts {
+		checks[i] = p.Check
+	}
+	r.Revisions = append(r.Revisions, Revision{
+		Since: contract21, Title: r.Title, Checks: checks,
+		NotApplicableWhen: notApplicableWithoutClaude + ", or when `require` does not list the guard set and no " +
+			"PreToolUse hook in `.claude/settings.json` matches `Bash` (A-01 reports the missing guard)",
+		applies: guardToTest,
+	})
+	return r
+}
+
+// guardToTest is the applicability of the rules that test the guard from
+// 2.1.0: with `claude` in agents they apply unless require does not list
+// the guard set and no PreToolUse hook matches Bash, read as A-01 reads
+// it. Then there is no guard to test, and A-01's failure is the one
+// finding (spec 0074).
+func guardToTest(env *Env) (bool, string) {
+	if ok, why := needsClaude(env.config); !ok {
+		return false, why
+	}
+	if env.guardSetBinds() || env.hooksBash() {
+		return true, ""
+	}
+	return false, "no PreToolUse hook in " + claudeSettingsFile + " matches Bash, so there is no guard to test; " +
+		"A-01 reports the missing guard"
+}
 
 // rules is the rule table, in report order: contract 1.0.0's 16 MUST and
 // 9 SHOULD rules, whose sentences, checks and sources are spec 0051's
@@ -402,9 +512,17 @@ var rules = []Rule{
 				"expansion. Not applicable when `platforms` does not include `windows`.", checkC05),
 		},
 		applies: onConfig(needsWindows),
+		// Under 2.1.0 the rule follows platforms (spec 0074); checkC05
+		// reads the audited version.
+		Revisions: []Revision{{
+			Since: contract21,
+			Title: "Tests run on every declared platform",
+			Checks: []string{"the steps that call `verify` run on a runner of each platform in `platforms`, " +
+				"after matrix expansion."},
+		}},
 	},
 	{
-		ID: "A-01", Level: Must, Category: categoryAgents,
+		ID: "A-01", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "Shell commands and file edits pass through the guard",
 		Source:            "spec 0021",
 		NotApplicableWhen: notApplicableWithoutClaude,
@@ -413,8 +531,8 @@ var rules = []Rule{
 		},
 		applies: onConfig(needsClaude),
 	},
-	{
-		ID: "A-02", Level: Must, Category: categoryAgents,
+	testsTheGuard(Rule{
+		ID: "A-02", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard refuses the baseline unless an exception says otherwise",
 		Source:            "specs 0012, 0047",
 		NotApplicableWhen: notApplicableWithoutClaude,
@@ -424,9 +542,9 @@ var rules = []Rule{
 				"A hook \"refuses\" by exiting 2.", checkA02),
 		},
 		applies: onConfig(needsClaude),
-	},
-	{
-		ID: "A-03", Level: Must, Category: categoryAgents,
+	}),
+	testsTheGuard(Rule{
+		ID: "A-03", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard fails closed",
 		Source:            "spec 0021",
 		NotApplicableWhen: notApplicableWithoutClaude,
@@ -435,9 +553,9 @@ var rules = []Rule{
 				"system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON", checkA03),
 		},
 		applies: onConfig(needsClaude),
-	},
-	{
-		ID: "A-04", Level: Must, Category: categoryAgents,
+	}),
+	testsTheGuard(Rule{
+		ID: "A-04", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard is loosened only through listed exceptions",
 		Source:            "spec 0050, ADR 0024",
 		NotApplicableWhen: notApplicableWithoutClaude,
@@ -447,7 +565,7 @@ var rules = []Rule{
 				"the audit lists them. Tightening is not restricted.", checkA04),
 		},
 		applies: onConfig(needsClaude),
-	},
+	}),
 	{
 		ID: "A-05", Level: Must, Category: categoryAgents,
 		Title:             "The agent's turn ends with `verify-fast`",
@@ -481,8 +599,8 @@ var rules = []Rule{
 		},
 		applies: onConfig(needsClaude),
 	},
-	{
-		ID: "A-08", Level: Must, Category: categoryAgents,
+	testsTheGuard(Rule{
+		ID: "A-08", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "An agent changes guardrail settings only after a person unlocks them",
 		Source:            "ADR 0025",
 		NotApplicableWhen: notApplicableWithoutClaude,
@@ -493,8 +611,8 @@ var rules = []Rule{
 				"runs, the marker is gone.", checkA08),
 		},
 		applies: onConfig(needsClaude),
-	},
-	{
+	}),
+	testsTheGuard(Rule{
 		ID: "A-09", Level: Should, Category: categoryAgents, Since: "1.2.0",
 		Title:             "The guard refuses commands that skip Git hooks",
 		Source:            "spec 0061, ADR 0027",
@@ -505,7 +623,7 @@ var rules = []Rule{
 				checkA09),
 		},
 		applies: onConfig(needsClaude),
-	},
+	}),
 	{
 		ID: "D-01", Level: Must, Category: categoryDependencies,
 		Title:  "Lockfiles are committed and match the declared dependencies",
@@ -537,13 +655,21 @@ var rules = []Rule{
 		Title:  "Everything but the audit works without vibe",
 		Source: "principle 3, spec 0017",
 		Parts: []Part{
-			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 "+
-				"and `vibe --version` in a CI job that calls no entrypoint.", checkR01),
+			static(r01StaticCheck, checkR01),
 			// R-01 reads A-02's deny verdict and the vibe calls of every
 			// other part, so it is the last part.
 			executionLast("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
 				"are still refused.", checkR01Execution),
 		},
+		// Under 2.1.0 the guard half holds only where the guard set
+		// counts in the verdict (spec 0074, "Amendments"); r01GuardHalf
+		// reads it.
+		Revisions: []Revision{{
+			Since: contract21,
+			Title: "Everything but the audit works without vibe",
+			Checks: []string{r01StaticCheck, "with `vibe` not on `PATH`, `verify` passes in the probe copy and, " +
+				"when `require` lists the guard set, the A-02 deny cases are still refused."},
+		}},
 	},
 	{
 		ID: "R-02", Level: Should, Category: categoryRemovability,
@@ -565,12 +691,37 @@ var rules = []Rule{
 	},
 }
 
+// r01StaticCheck is the check text of R-01's static part, the same under
+// every contract.
+const r01StaticCheck = "no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 " +
+	"and `vibe --version` in a CI job that calls no entrypoint."
+
+// guardSet is the guard set: the rules that hold the agent's guard (spec
+// 0074). Under contract 1.x they are MUST; from 2.1.0 they are SHOULD,
+// and require lists all of them or none.
+var guardSet = []string{"A-01", "A-02", "A-03", "A-04", "A-08"}
+
+// guardSetLevels is the level history of each rule of the guard set.
+var guardSetLevels = []LevelChange{{Since: contract21, Level: Should}}
+
+// guardSetLevel is the level of the guard set's rules under the contract
+// version: MUST under 1.x, SHOULD from 2.1.0. It reads their level
+// history, not the registry, so that a check can call it.
+func guardSetLevel(contract string) Level {
+	return Rule{Level: Must, LevelChanges: guardSetLevels}.LevelAt(contract)
+}
+
+// GuardSet returns the guard set, A-01, A-02, A-03, A-04 and A-08, in
+// that order (spec 0074). Under contract 2.1.0 a configuration requires
+// all of it or none of it.
+func GuardSet() []string { return slices.Clone(guardSet) }
+
 // Rules returns every rule of contract 1.0.0 in report order. Each rule
-// has its own copy of its parts.
+// has its own copy of its parts, level changes and revisions.
 func Rules() []Rule {
-	out := slices.Clone(rules)
-	for i := range out {
-		out[i].Parts = slices.Clone(out[i].Parts)
+	out := make([]Rule, len(rules))
+	for i, r := range rules {
+		out[i] = copyRule(r)
 	}
 	return out
 }
@@ -581,9 +732,19 @@ func LookupRule(id string) (Rule, bool) {
 	if i < 0 {
 		return Rule{}, false
 	}
-	r := rules[i]
+	return copyRule(rules[i]), true
+}
+
+// copyRule is r with its own copy of its parts, level changes and
+// revisions.
+func copyRule(r Rule) Rule {
 	r.Parts = slices.Clone(r.Parts)
-	return r, true
+	r.LevelChanges = slices.Clone(r.LevelChanges)
+	r.Revisions = slices.Clone(r.Revisions)
+	for i := range r.Revisions {
+		r.Revisions[i].Checks = slices.Clone(r.Revisions[i].Checks)
+	}
+	return r
 }
 
 // RuleIDs returns every rule ID in report order.

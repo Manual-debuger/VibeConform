@@ -25,8 +25,9 @@ func newInitCmd(seams cliSeams) *cobra.Command {
 		Use:   "init [--skill]",
 		Short: "Write a vibe.yaml version 2, or the setup skill",
 		Long: "vibe init writes a vibe.yaml version 2 at the repository root: contract " + contract.Latest + ",\n" +
-			"platforms linux and windows, agent claude, the components it finds in the\n" +
-			"tracked files (" + contract.ManifestPhrase() + "),\n" +
+			"platforms linux and windows, agent claude, the guard set in require (remove\n" +
+			"that line to drop the guard set from the verdict), the components it finds\n" +
+			"in the tracked files (" + contract.ManifestPhrase() + "),\n" +
 			"and the four required entrypoints as comments to fill in. Until they\n" +
 			"are declared, vibe audit fails V-04. It refuses to overwrite an existing\n" +
 			"vibe.yaml, version 1 included.\n\n" +
@@ -190,6 +191,9 @@ func renderConfig(components []contract.Component) []byte {
 			fmt.Fprintf(&b, "  - path: %q\n    language: %s\n", c.Path, c.Language)
 		}
 	}
+	b.WriteString("# The guard set: the audit holds the agent's guard to its rules.\n")
+	b.WriteString("# Removing this line drops the guard set from the verdict.\n")
+	fmt.Fprintf(&b, "require: [%s]\n", strings.Join(contract.GuardSet(), ", "))
 	b.WriteString("# Declare the four entrypoints: one command each, or a list of commands.\n")
 	b.WriteString("# Until they are declared, vibe audit fails V-04. The setup skill\n")
 	b.WriteString("# (vibe init --skill) can fill them in. For example:\n")

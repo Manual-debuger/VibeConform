@@ -141,7 +141,8 @@ func a07Hook(s *probeSession, command string, limit time.Duration) PartResult {
 }
 
 // checkR01Execution: with vibe replaced by the shim, the baseline verify
-// passes and the A-02 deny cases are still refused. The findings list
+// passes and, where the guard set binds, the A-02 deny cases are still
+// refused (r01GuardHalf). The findings list
 // every call of vibe the shim recorded in any run of the audit: setup's,
 // those of every earlier part, and those of R-01's own runs.
 func checkR01Execution(env *Env, earlier Earlier) PartResult {
@@ -181,9 +182,14 @@ func checkR01Execution(env *Env, earlier Earlier) PartResult {
 // refused with the shim in place. A-02's probe (#103) runs every case
 // with the shim on PATH and returns its deny-case verdict; this half
 // reads it from the earlier results. Without Claude Code there is no
-// guard to check.
+// guard to check. Where A-02 does not count in the verdict (under 2.1.0,
+// when the guard set is not required), a MUST rule does not hold the
+// repository to the guard either (spec 0074).
 func r01GuardHalf(env *Env, earlier Earlier) PartResult {
 	if ok, _ := needsClaude(env.config); !ok {
+		return Pass()
+	}
+	if !env.guardSetBinds() {
 		return Pass()
 	}
 	if g, ok := a02Deny(earlier); ok {

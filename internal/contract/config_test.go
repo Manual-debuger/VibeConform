@@ -3,6 +3,7 @@ package contract_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -109,10 +110,11 @@ func TestContractConfigVersion(t *testing.T) {
 		{name: "not a string", config: contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: [1, 0, 0]\n"}),
 			want: []string{"vibe.yaml: contract: ", "X.Y.Z"}},
 		{name: "newer MAJOR", config: contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: 3.0.0\n"}),
-			want: []string{"vibe.yaml: contract: ", "cannot decide; upgrade vibe", "3.0.0", "1.2.0", "2.0.0"}},
-		{name: "newer MINOR of 2", config: contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: 2.1.0\n"}),
-			want: []string{"vibe.yaml: contract: ", "cannot decide; upgrade vibe", "2.1.0", "2.0.0"}},
-		{name: "contract 2.0.0 is audited", config: contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: 2.0.0\n"})},
+			want: []string{"vibe.yaml: contract: ", "cannot decide; upgrade vibe", "3.0.0", "1.2.0", "2.1.0"}},
+		{name: "newer MINOR of 2", config: contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: 2.2.0\n"}),
+			want: []string{"vibe.yaml: contract: ", "cannot decide; upgrade vibe", "2.2.0", "2.1.0"}},
+		{name: "contract 2.1.0 is audited", config: contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: 2.1.0\n"})},
+		{name: "older MINOR of 2 is audited", config: contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: 2.0.0\n"})},
 		{name: "newer PATCH of 2 is audited", config: contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: 2.0.3\n"})},
 		{name: "older MAJOR", config: contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: 0.9.0\n"}),
 			want: []string{"vibe.yaml: contract: ", "cannot decide; upgrade vibe"}},
@@ -253,6 +255,66 @@ func TestContractConfigRequire(t *testing.T) {
 		{name: "required and waived by an expired waiver", config: contracttest.ConfigWith(waiver("V-06", "2000-01-01"), require("[V-06]")),
 			want: []string{"vibe.yaml: require[0]: V-06 is both required and waived (waivers[0])"}},
 	})
+}
+
+// Under contract 2.1.0 the guard set is SHOULD, and require lists all of
+// it or none of it; require with A-09 needs the whole set. Under 1.x the
+// guard set is MUST, so require and waivers reject it (spec 0074).
+func TestContractConfigGuardSet(t *testing.T) {
+	t.Parallel()
+	v2 := contracttest.Section{Key: "contract", Body: "contract: 2.1.0\n"}
+	require := func(body string) contracttest.Section {
+		return contracttest.Section{Key: "require", Body: "require: " + body + "\n"}
+	}
+	waiver := func(rule string) contracttest.Section {
+		return contracttest.Section{Key: "waivers", Body: "waivers:\n  - rule: " + rule + "\n    reason: r\n    until: 2999-12-31\n"}
+	}
+	runConfigLoadCases(t, []configLoadCase{
+		{name: "2.1.0 whole set", config: contracttest.ConfigWith(v2, require("[A-01, A-02, A-03, A-04, A-08]"))},
+		{name: "2.1.0 whole set in another order, with A-09", config: contracttest.ConfigWith(v2, require("[V-06, A-09, A-08, A-04, A-03, A-02, A-01]"))},
+		{name: "2.0.0 whole set", config: contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: 2.0.0\n"}, require("[A-01, A-02, A-03, A-04, A-08]"))},
+		{name: "2.1.0 no guard set", config: contracttest.ConfigWith(v2, require("[V-06]"))},
+		{name: "2.1.0 part of the set", config: contracttest.ConfigWith(v2, require("[V-06, A-01, A-02]")),
+			want: []string{"vibe.yaml: require: ", "part of the guard set", "add A-03, A-04 and A-08"}},
+		{name: "2.1.0 one rule of the set", config: contracttest.ConfigWith(v2, require("[A-08]")),
+			want: []string{"vibe.yaml: require: ", "part of the guard set", "add A-01, A-02, A-03 and A-04"}},
+		{name: "2.1.0 A-09 without the set", config: contracttest.ConfigWith(v2, require("[V-06, A-09]")),
+			want: []string{"vibe.yaml: require[1]: ", "A-09 needs the guard set", "add A-01, A-02, A-03, A-04 and A-08"}},
+		{name: "2.1.0 A-09 with part of the set", config: contracttest.ConfigWith(v2, require("[A-09, A-01]")),
+			want: []string{"vibe.yaml: require: ", "part of the guard set", "add A-02, A-03, A-04 and A-08"}},
+		{name: "1.2.0 the set", config: contracttest.ConfigWith(require("[A-01, A-02, A-03, A-04, A-08]")),
+			want: []string{"vibe.yaml: require[0]: A-01 is a MUST rule; it is always required"}},
+		{name: "1.2.0 A-09 alone", config: contracttest.ConfigWith(require("[A-09]"))},
+		{name: "2.1.0 waiver of a guard rule", config: contracttest.ConfigWith(v2, waiver("A-02"))},
+		{name: "2.1.0 waiver of a required guard rule", config: contracttest.ConfigWith(v2, waiver("A-02"), require("[A-01, A-02, A-03, A-04, A-08]")),
+			want: []string{"vibe.yaml: require[1]: A-02 is both required and waived (waivers[0])"}},
+		{name: "1.2.0 waiver of a guard rule", config: contracttest.ConfigWith(waiver("A-02")),
+			want: []string{"vibe.yaml: waivers[0].rule: ", "A-02 is a MUST rule", "SHOULD"}},
+	})
+}
+
+// GuardSet is the guard set in the order spec 0074 names it.
+func TestGuardSet(t *testing.T) {
+	t.Parallel()
+	want := []string{"A-01", "A-02", "A-03", "A-04", "A-08"}
+	got := contract.GuardSet()
+	if !slices.Equal(got, want) {
+		t.Fatalf("GuardSet() = %v, want %v", got, want)
+	}
+	got[0] = "X-99"
+	if contract.GuardSet()[0] != "A-01" {
+		t.Error("GuardSet() returned the package's own slice")
+	}
+	for _, id := range want {
+		r, ok := contract.LookupRule(id)
+		if !ok {
+			t.Fatalf("%s is not a rule", id)
+		}
+		if r.LevelAt(contract.Contract1) != contract.Must || r.LevelAt(contract.Contract2) != contract.Should {
+			t.Errorf("%s level = %s under %s and %s under %s, want MUST and SHOULD", id,
+				r.LevelAt(contract.Contract1), contract.Contract1, r.LevelAt(contract.Contract2), contract.Contract2)
+		}
+	}
 }
 
 // The parser reports the first error in document order.

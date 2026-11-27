@@ -191,9 +191,12 @@ In a Go repository with `go.mod` at the root, the file is:
 ```yaml
 # vibe.yaml version 2, written by vibe init. vibe audit reads it and
 # checks the repository against the VibeConform contract.
-contract: 2.0.0
+contract: 2.1.0
 platforms: [linux, windows]
 agents: [claude]
+# The guard set: the audit holds the agent's guard to its rules.
+# Removing this line drops the guard set from the verdict.
+require: [A-01, A-02, A-03, A-04, A-08]
 # Declare the four entrypoints: one command each, or a list of commands.
 # Until they are declared, vibe audit fails V-04. The setup skill
 # (vibe init --skill) can fill them in. For example:
@@ -207,6 +210,10 @@ agents: [claude]
 - **`contract`** is the contract version this `vibe` implements.
   **`platforms`** is `[linux, windows]` and **`agents`** is `[claude]`.
   Edit them to what the repository supports; see "`vibe.yaml` version 2".
+- **`require`** lists the guard set, A-01 to A-04 and A-08 (spec 0074),
+  so the verdict counts the guard set like MUST rules. A repository
+  that does not want an agent guard deletes the line; the guard set
+  then does not decide the verdict.
 - **Components** come from the tracked files (`git ls-files`, so a new
   manifest must be added to Git first). Each directory up to three levels
   below the root with a `go.mod`, a `pyproject.toml`, or a `package.json`
@@ -301,7 +308,7 @@ Prints the `vibe` version and the latest contract version it implements:
 
 ```console
 $ vibe --version
-vibe version v… (contract 2.0.0)
+vibe version v… (contract 2.1.0)
 ```
 
 The setup skill's upgrade flow reads the contract version from it.
@@ -400,20 +407,35 @@ that still reports it passes, and a specific suppression
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--repo-root` | `.` | Repository to check. Its `vibe.yaml` is the configuration unless `--config` names another |
-| `--config <path>` | `vibe.yaml` at `--repo-root` | Configuration file to read instead. The path is relative to the current directory, not to `--repo-root`. It must be a version 2 file |
+| `--repo-root` | `.` | Repository to check. Its `vibe.yaml` is the configuration unless `--config` names another. With `--explain`, only that file's contract version is read |
+| `--config <path>` | `vibe.yaml` at `--repo-root` | Configuration file to read instead. The path is relative to the current directory, not to `--repo-root`. It must be a version 2 file. With `--explain`, only its contract version is read |
 | `--static` | off | Run only the static checks. Fast, runs nothing, and never reaches a verdict: execution and probe parts are `not run`, so the exit code is always `1` |
 | `--json` | off | Print the report as JSON on stdout, nothing else on stdout |
 | `--probe-timeout <duration>` | `30m` | Time limit of each entrypoint run in the probe copy. It must be positive |
 | `--keep-probe-copy` | off | Keep the probe copy and print its path on stderr, for debugging |
-| `--explain <ID>` | | Explain one rule, such as `C-02`, and read nothing else |
+| `--explain <ID>` | | Explain one rule, such as `C-02`, under the contract the configuration declares. It combines only with `--repo-root` and `--config` |
 
-`--explain` reads no repository and no configuration, so it works
-anywhere, and combining it with any other audit flag is an error. It
-prints what the rule registry holds: ID and rule sentence, level,
-category, check kinds, source, when the rule is not applicable, whether
-it can be waived, the rationale and the check as spec 0051 states it.
-The rationale is spec 0051's source for the rule, plus the category's
+`--explain` explains a rule as it is under the contract the
+configuration declares: a rule's title, level, check and applicability
+can change between contract versions (spec 0074). It reads only the
+`contract` field of `vibe.yaml` at `--repo-root`, or of the file
+`--config` names, and no repository. A declared version is read as the
+audit reads it: 1.x as 1.2.0, 2.0.x as 2.1.0. Without a `vibe.yaml` it
+explains the rule under the latest contract, so it works anywhere. It
+explains a rule for every configuration the audit accepts, under 1.x
+and 2.x, and refuses only a file the audit refuses too: one that is not
+valid YAML, has no `contract` or no X.Y.Z in it, is version 1, or
+declares a contract this `vibe` does not implement.
+Combining it with any audit flag other than `--repo-root` and
+`--config` is an error. It prints what the rule registry holds for that
+contract: ID and rule sentence, the contract, level, category, check
+kinds, source, when the rule is not applicable, whether it can be
+waived, the rationale and the check as spec 0051 states it. The
+`Contract:` line names the contract the rule is explained under and
+where its version comes from: `2.1.0 (vibe.yaml declares 2.0.0)`, with
+the file `--config` names in place of `vibe.yaml`, or `2.1.0, the
+latest (no vibe.yaml)`. The
+rationale is spec 0051's source for the rule, plus the category's
 introduction where spec 0051 has one (H, C and A). An unknown ID is exit
 `1` and lists the valid IDs.
 
@@ -421,6 +443,7 @@ introduction where spec 0051 has one (H, C and A). An unknown ID is exit
 $ vibe audit --explain C-02
 C-02: Toolchains and actions are pinned
 
+  Contract:        2.1.0 (vibe.yaml declares 2.1.0)
   Level:           MUST
   Category:        C, CI
   Checks:          static
@@ -453,7 +476,7 @@ fix. On a repository whose only failures are two SHOULD rules, for
 example (long lines shortened):
 
 ```
-vibe audit: contract 2.0.0 (vibe …), static checks only
+vibe audit: contract 2.1.0 (vibe …), static checks only
 
   V  Verification entrypoints              1 pass, 3 not run
   H  Local Git hooks                       2 pass
@@ -463,7 +486,7 @@ vibe audit: contract 2.0.0 (vibe …), static checks only
   R  Removability and repository hygiene   2 pass, 1 not run
 
 Failed
-  C-05  SHOULD  Tests run on Linux and Windows
+  C-05  SHOULD  Tests run on every declared platform
         .github/workflows/ci.yml: the verify command `task lint` runs on no Windows runner (…)
         Fix: run `task lint` on Windows too, such as with a matrix over os: […]
   D-03  SHOULD  CI scans for known vulnerabilities
@@ -530,7 +553,7 @@ report:
 
 ```
 Error: vibe.yaml: waivers[0].until: "2026-13-01" is not a date YYYY-MM-DD
-Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements contracts 1.2.0 and 2.0.0, and the configuration declares 1.3.0
+Error: vibe.yaml: contract: cannot decide; upgrade vibe: this vibe implements contracts 1.2.0 and 2.1.0, and the configuration declares 1.3.0
 ```
 
 A missing `vibe.yaml`, and a version 1 one (a top-level `standard:` key,
@@ -543,13 +566,17 @@ Error: vibe.yaml is version 1 (a top-level standard key), which this vibe no lon
 ```
 
 **Contract versions.** This vibe implements two contracts, 1.2.0 and
-2.0.0 (spec 0072), and `vibe init` writes 2.0.0. A declared version
-must be `X.Y.Z`. A vibe implements the latest MINOR of each MAJOR it
-audits, so every declared `1.0.n`, `1.1.n` and `1.2.n` (older or newer
-PATCH) is audited as 1.2.0, and every declared `2.0.n` as 2.0.0 (spec
-0051, "Versioning"; spec 0061; spec 0072). The report shows both
+2.1.0 (spec 0072, spec 0074), and `vibe init` writes 2.1.0. A declared
+version must be `X.Y.Z`. A vibe implements the latest MINOR of each
+MAJOR it audits, so every declared `1.0.n`, `1.1.n` and `1.2.n` (older
+or newer PATCH) is audited as 1.2.0, and every declared `2.0.n` and
+`2.1.n` as 2.1.0 (spec 0051, "Versioning"; spec 0061; spec 0072; spec
+0074). A rule's level can depend on the audited contract: the report,
+waivers and `require` read the level under it, and `--explain` prints
+the level under the contract `vibe.yaml` declares, or under the latest
+when there is no `vibe.yaml`. The report shows both
 versions when they differ. A repository that declares 1.x keeps its
-verdict after it upgrades `vibe`, and moves to 2.0.0 when it changes
+verdict after it upgrades `vibe`, and moves to 2.x when it changes
 its `contract:` line (the setup skill's `reference/upgrade.md`, section
 5). Spec 0051, "Changes", lists what each version changed:
 
@@ -573,6 +600,18 @@ its `contract:` line (the setup skill's `reference/upgrade.md`, section
   counts a call of `vibe` by path; see "The agent guard" for A-02 and
   A-09, and "Behavior to know" under "`vibe audit`" for R-01. No rule
   is added or removed, and no guard corpus case.
+- 2.1.0 (spec 0074): MINOR. A declared 2.0.x is audited as 2.1.0, and
+  the behaviours of 2.0.0 hold. The guard set (A-01, A-02, A-03, A-04
+  and A-08) is SHOULD, MUST under 1.x (ADR 0029): a repository that
+  wants a guarded agent lists it in `require` and keeps its 2.0.0
+  verdict (see "Required SHOULD rules" under "`vibe.yaml` version 2").
+  R-01's check that the A-02 deny cases are refused without `vibe`
+  counts only when the guard set is required. A 2.0.0 `vibe.yaml` with
+  A-09 in `require` and not the guard set is now a configuration error:
+  add the guard set.
+  Without the guard set in `require` and without a PreToolUse hook for
+  `Bash`, A-02, A-03, A-04, A-08 and A-09 are not applicable, and A-01
+  is the one finding.
 
 What V-08 cannot catch: it plants only the blanket forms
 `vibe audit --explain V-08` lists. A specific suppression, which names
@@ -673,10 +712,26 @@ jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "
   absent, so a local file cannot make a repository look conformant.
 - A file a rule needs that does not parse fails that rule, and the
   finding names the file and the parse error.
-- **Not applicable** in contracts 1.2.0 and 2.0.0: C-03 when the C
-  rules read GitLab CI; C-05 when `platforms` has no `windows`; every A rule when
-  `agents` has no `claude`; R-02 when `agents` is empty, and R-02's
-  `CLAUDE.md` half when `agents` has no `claude`.
+- **Not applicable** in contracts 1.2.0 and 2.1.0: C-03 when the C
+  rules read GitLab CI; every A rule when `agents` has no `claude`;
+  R-02 when `agents` is empty, and R-02's `CLAUDE.md` half when `agents`
+  has no `claude`. Under 1.2.0 only, C-05 when `platforms` has no
+  `windows`. Under 2.1.0 only, the rules that test the guard (A-02,
+  A-03, A-04, A-08 and A-09) are also not applicable when `require`
+  does not list the guard set and no PreToolUse hook in
+  `.claude/settings.json` matches `Bash`, read as A-01 reads it. There
+  is no guard to test then: A-01 fails and reports it, and the guard
+  probes do not run. A settings file that does not parse keeps them
+  applicable: the audit cannot tell that there is no guard, so it tests
+  for one, the safer reading.
+- **C-05 follows `platforms` under 2.1.0** (spec 0074). Each command of
+  `verify` must run on a runner of each platform in `platforms`, after
+  matrix expansion, and the finding names each declared platform with
+  no runner, in `platforms` order. `platforms: [linux]` is satisfied by
+  one Linux job, and `platforms: [linux, macos]` asks for a macOS
+  runner. Under 1.2.0, C-05 ("Tests run on Linux and Windows") asks for
+  a Linux and a Windows runner whatever `platforms` lists. A platform
+  you cannot test in CI yet can be waived like any SHOULD rule.
 - Commands are parsed as POSIX shell (ADR 0026). A command is "called"
   when a simple command anywhere in a hook, CI command (a GitHub `run:`
   step, a GitLab `before_script` or `script` line) or entrypoint has
@@ -803,7 +858,7 @@ here?". It reads `vibe.yaml` version 2 and the tracked
 ```console
 $ vibe doctor
 PASS        git            git version 2.53.0.windows.1; repository readable
-PASS        vibe.yaml      version 2, contract 2.0.0
+PASS        vibe.yaml      version 2, contract 2.1.0
 PASS        task           C:\Users\me\AppData\Local\Microsoft\WinGet\Links\task.exe; runs verify, verify-fast, fmt, fmt-check
 PASS        bash           C:\Program Files\Git\bin\bash.exe; runs the hook commands
 FAIL        vibe-guard     not on PATH; the PreToolUse hook that runs it fails on every tool call
@@ -880,7 +935,7 @@ first one, and the setup skill completes it. The file is the
 repository's, edited by hand. This repository's own `vibe.yaml`:
 
 ```yaml
-contract: 2.0.0
+contract: 2.1.0
 platforms: [linux, windows]
 agents: [claude, codex]
 # No components: one Go component at the root, found from go.mod.
@@ -900,9 +955,9 @@ entrypoints:
 
 | Field | Required | Meaning |
 |---|---|---|
-| `contract` | yes | The contract version, `X.Y.Z`, such as `2.0.0` |
+| `contract` | yes | The contract version, `X.Y.Z`, such as `2.1.0` |
 | `platforms` | yes | Non-empty list of distinct values from `linux`, `windows`, `macos` |
-| `agents` | yes | List of distinct values from `claude`, `codex`; may be empty (`[]`). Contracts 1.2.0 and 2.0.0 have no Codex rules |
+| `agents` | yes | List of distinct values from `claude`, `codex`; may be empty (`[]`). Contracts 1.2.0 and 2.1.0 have no Codex rules |
 | `components` | no | List of `{path, language}`; `language` is `go`, `python` or `typescript` |
 | `entrypoints` | yes | `verify`, `verify-fast`, `fmt`, `fmt-check`; `setup` is optional |
 | `waivers` | no | List of `{rule, reason, until}` |
@@ -916,6 +971,7 @@ the field path and the reason, for the first error in document order:
 ```
 Error: vibe.yaml: entrypoints.verify[2]: must be a command string
 Error: vibe.yaml: waivers[0].rule: C-02 is a MUST rule; only SHOULD rules can be waived
+Error: vibe.yaml: require: lists part of the guard set (A-01, A-02, A-03, A-04 and A-08); add A-03, A-04 and A-08, or remove the guard set from require
 Error: vibe.yaml: integrations: the version 2 schema has no integrations field; agents go in agents; editors moved into the setup skill; repository intelligence has no counterpart
 ```
 
@@ -968,15 +1024,30 @@ waivers:
   makes it count. Without `require`, the verdict counts MUST rules only.
   The first vibe release after v0.14.0-alpha.1 reads `require`; an
   earlier vibe rejects it as an unknown field.
+- **The guard set.** A-01, A-02, A-03, A-04 and A-08 hold the agent
+  guard (see "The agent guard"). Under contract 2.1.0 they are SHOULD
+  rules; under 1.x they are MUST (spec 0074, ADR 0029). To hold the
+  repository to the guard, list the whole guard set in `require`: the
+  verdict then counts it as it did when the set was MUST. `require`
+  lists all of the guard set or none of it, and `require` with A-09
+  needs the whole set. Anything else is an error that names the missing
+  IDs, at `require` for part of the set and at A-09's entry for A-09
+  without it. Under 1.x, the guard set in `require` is an error, since
+  a MUST rule is always required. Without the guard set in `require`, a
+  failing guard rule is reported and does not change the verdict, and
+  R-01 does not check the A-02 deny cases. With no PreToolUse hook for
+  `Bash` either, there is no guard to test: A-01 fails, and A-02, A-03,
+  A-04, A-08 and A-09 are not applicable. A guard rule can be waived
+  under 2.x like any SHOULD rule, unless it is required.
 
 ```yaml
-require: [V-06, V-07, A-09]
+require: [V-06, V-07, A-01, A-02, A-03, A-04, A-08, A-09]
 ```
 
 ## The setup skill
 
 `vibeconform-setup` (spec 0054) takes a repository in any of the
-contract's languages to a conformant `vibe audit` under contract 2.0.0.
+contract's languages to a conformant `vibe audit` under contract 2.1.0.
 `vibe init --skill` writes it; the repository owns it from then on.
 
 What the agent does with it, in order:
@@ -994,17 +1065,22 @@ What the agent does with it, in order:
    `.claude/settings.json` is in place; its task and script go last.
 3. **Decide the entrypoints**: keep the team's runner (Task, make, just,
    package scripts), and use Task only when there is none. Write
-   `vibe.yaml` version 2. A monorepo whose CI verifies each component in
-   its own job declares `verify` as the list of those commands.
+   `vibe.yaml` version 2, with the guard set in `require` as the
+   reference has it. A monorepo whose CI verifies each component in its
+   own job declares `verify` as the list of those commands.
 4. **Satisfy the rules** one category at a time from
    `reference/rules.md`, keeping whatever already satisfies a rule. Each
    configuration is one file; no `*.local.*` or `*.base.*`. The skill's
    own directories go into the formatter's and linters' ignores. The
-   setup action is pinned to a release, never `latest`.
-   `.claude/hooks/policy.json` comes before `.claude/settings.json`; a
+   setup action is pinned to a release, never `latest`. Before it
+   writes anything under `.claude/`, it asks you whether you want the
+   agent guard (spec 0074). On "no" it removes the guard set from
+   `require` and writes no guard hooks, no `policy.json` and no
+   `vibe-guard relock` in the Stop command, and skips step 5. With the
+   guard, `.claude/hooks/policy.json` comes before `.claude/settings.json`; a
    guard refuses the agent that file, so the skill hands you a command
    that writes it, and stops until you have run it.
-5. **Install `vibe-guard`** from the release archive with its SHA-256
+5. **Install `vibe-guard`**, with the guard and your consent, from the release archive with its SHA-256
    checked against `checksums.txt`, or with `go install`, and check that
    a non-interactive shell, as hooks use, finds it.
 6. **Audit loop**: stage the changes (the audit reads tracked files
@@ -1021,8 +1097,8 @@ The skill's files:
 | Path | Holds |
 |---|---|
 | `SKILL.md` | The process above, for the agent |
-| `reference/rules.md` | One entry per rule of contract 2.0.0: what satisfies it on GitHub Actions and on GitLab CI, which file to start from |
-| `reference/vibe-yaml/` | `vibe.yaml` version 2 for Go, Python, TypeScript and a monorepo |
+| `reference/rules.md` | One entry per rule of contract 2.1.0: what satisfies it on GitHub Actions and on GitLab CI, which file to start from |
+| `reference/vibe-yaml/` | `vibe.yaml` version 2 for Go, Python, TypeScript and a monorepo, each with the guard set in `require` |
 | `reference/taskrunner/` | Taskfiles per stack, with `verify`, `verify:fast`, `fmt`, `fmt:check` and the agent hook tasks |
 | `reference/hooks/` | `lefthook.yml` per stack |
 | `reference/ci/` | `ci.yml` (verify on Linux and Windows, a vulnerability scan), `audit.yml` (the audit job with the setup action), `dependabot.yml`, the pull request template; per stack, a `.gitlab-ci.yml` for GitLab CI, and `renovate.json`, the update bot on GitLab (spec 0055) |
@@ -1380,7 +1456,9 @@ and edits to files that conventionally hold secrets (`.env`, `*.pem`,
 +main`, `git branch -d -f`, and PowerShell's `ri -Rec -Fo` all count. The
 audit checks this by probe: it runs the guard corpus through the hook
 (see "`vibe audit`"). Any guard that passes will do; `vibe-guard`, below,
-is the reference, and the setup skill installs it.
+is the reference, and the setup skill installs it. From contract 2.1.0
+the guard is the adopter's choice: the guard set is SHOULD, and a
+repository that wants it to count lists it in `require` (see "The guard set" under "`vibe.yaml` version 2").
 
 **Commands that skip Git hooks** (A-09, SHOULD, since contract 1.2.0; guard
 rule ID `git-skip-hooks`). The guard also refuses `git commit
@@ -1469,7 +1547,7 @@ the session you actually mean to rely on.
 ### `vibe-guard`, the reference guard
 
 `vibe-guard` (spec 0053) is the guard that the guard probes of
-contracts 1.2.0 and 2.0.0 are written against. It parses commands instead of matching text, so
+contracts 1.2.0 and 2.1.0 are written against. It parses commands instead of matching text, so
 respellings such as a quoted command name, `eval`, flags after many
 operands or a variable in a flag are refused. It is a separate binary
 from `vibe`, built from the same module and released in its own
@@ -1734,7 +1812,7 @@ rely on.
 
 ### Codex: hooks suspended
 
-Contracts 1.2.0 and 2.0.0 have no Codex rules (ADR 0025), and the
+Contracts 1.2.0 and 2.1.0 have no Codex rules (ADR 0025), and the
 setup skill writes no Codex hooks. This repository keeps `.codex/config.toml` (approval
 policy and sandbox mode) and a `.codex/hooks.json` with no hooks (spec
 0024):

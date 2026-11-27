@@ -12,13 +12,20 @@ import (
 const (
 	// Contract1 is the 1.x contract: a declared 1.y.z is audited as it.
 	Contract1 = "1.2.0"
-	// Contract2 is the 2.x contract: a declared 2.0.z is audited as it.
-	Contract2 = "2.0.0"
+	// Contract2 is the 2.x contract: a declared 2.0.z or 2.1.z is audited
+	// as it (spec 0074).
+	Contract2 = "2.1.0"
 	// Latest is the newest contract this vibe implements. vibe --version
 	// shows it, and a new configuration declares it: vibe init writes it,
 	// and the setup skill names it (spec 0072).
 	Latest = Contract2
 )
+
+// contract21 is contract 2.1.0, which made the guard set SHOULD, C-05
+// follow platforms and the rules that test the guard not applicable
+// without one (spec 0074). The rule table's revisions and level changes
+// name it, and so do the checks whose reading it changed.
+const contract21 = "2.1.0"
 
 // implemented lists the contracts this vibe implements, oldest first.
 var implemented = []string{Contract1, Contract2}
@@ -51,22 +58,38 @@ func (e *UnsupportedVersionError) Error() string {
 
 var versionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
-// parseVersion checks an X.Y.Z version and returns its MAJOR and MINOR;
-// a PATCH makes no conformant repository non-conformant, so it is not
-// returned. ok is false for anything else.
-func parseVersion(v string) (major, minor int, ok bool) {
+// versionParts checks an X.Y.Z version and returns its three numbers.
+// ok is false for anything else, and for a MAJOR or MINOR too large to
+// read; a PATCH makes no conformant repository non-conformant, so one too
+// large reads as the largest int.
+func versionParts(v string) (parts [3]int, ok bool) {
 	m := versionPattern.FindStringSubmatch(v)
 	if m == nil {
-		return 0, 0, false
+		return parts, false
 	}
-	var err error
-	if major, err = strconv.Atoi(m[1]); err != nil {
-		return 0, 0, false
+	ok = true
+	for i := range parts {
+		var err error
+		// Atoi returns the largest int with its range error.
+		if parts[i], err = strconv.Atoi(m[i+1]); err != nil && i < 2 {
+			ok = false
+		}
 	}
-	if minor, err = strconv.Atoi(m[2]); err != nil {
-		return 0, 0, false
+	return parts, ok
+}
+
+// compareVersions orders two X.Y.Z versions: negative when a is older
+// than b, zero when they are equal, positive when a is newer. A version
+// that is not X.Y.Z sorts as 0.0.0; the callers pass well-formed ones.
+func compareVersions(a, b string) int {
+	pa, _ := versionParts(a)
+	pb, _ := versionParts(b)
+	for i := range pa {
+		if pa[i] != pb[i] {
+			return pa[i] - pb[i]
+		}
 	}
-	return major, minor, true
+	return 0
 }
 
 // auditedAs returns the implemented contract a well-formed declared
@@ -75,8 +98,8 @@ func parseVersion(v string) (major, minor int, ok bool) {
 // contract.
 func auditedAs(major, minor int) (audited string, ok bool) {
 	for _, v := range implemented {
-		implMajor, implMinor, _ := parseVersion(v)
-		if major == implMajor && minor <= implMinor {
+		impl, _ := versionParts(v)
+		if major == impl[0] && minor <= impl[1] {
 			return v, true
 		}
 	}

@@ -45,6 +45,15 @@ func (c *Config) requires(id string) bool {
 	return slices.Contains(c.require, id)
 }
 
+// guardSetBinds reports whether the guard set counts in the verdict: it
+// is MUST under the audited contract (1.x), or require lists it (spec
+// 0074). It is the one answer to that question. requireGuardSet makes
+// require list all of the guard set or none of it, so A-01 stands for
+// the set.
+func (c *Config) guardSetBinds() bool {
+	return guardSetLevel(c.Contract.Audited) == Must || c.requires(guardSet[0])
+}
+
 // The platforms of contract 1.0.0.
 const (
 	platformLinux   = "linux"
@@ -142,27 +151,58 @@ const v2FieldList = "contract, platforms, agents, components, entrypoints, waive
 // cannot audit is an *UnsupportedVersionError, decided before anything
 // else, since a newer contract may have fields this vibe does not know.
 func Parse(file string, data []byte, repo *Repo) (*Config, error) {
-	top, err := decodeTop(file, data)
+	p, top, err := startParse(file, data, repo)
 	if err != nil {
 		return nil, err
+	}
+	if err := p.top(top); err != nil {
+		return nil, err
+	}
+	return p.cfg, nil
+}
+
+// ParseContract reads only the contract field of a version 2
+// configuration: the version it declares and the one the audit checks it
+// against. vibe audit --explain reads it, since a rule's text and level
+// depend on nothing else (spec 0074). Its errors are Parse's for that
+// field: a *ConfigError when the file is not a map, or the field is
+// missing or not X.Y.Z, and an *UnsupportedVersionError for a version
+// this vibe cannot audit.
+func ParseContract(file string, data []byte) (Versions, error) {
+	p, top, err := startParse(file, data, nil)
+	if err != nil {
+		return Versions{}, err
+	}
+	v := field(top, "contract")
+	if v == nil {
+		return Versions{}, p.fail("contract", "is required")
+	}
+	if err := p.contract(v); err != nil {
+		return Versions{}, err
+	}
+	return p.cfg.Contract, nil
+}
+
+// startParse decodes the configuration and works out the contract its
+// declared version is audited as, before any field is read. A contract
+// version this vibe cannot audit is an *UnsupportedVersionError.
+func startParse(file string, data []byte, repo *Repo) (*configParser, *yaml.Node, error) {
+	top, err := decodeTop(file, data)
+	if err != nil {
+		return nil, nil, err
 	}
 	if top == nil {
 		top = &yaml.Node{Kind: yaml.MappingNode}
 	}
 	var audited string
 	if v := field(top, "contract"); v != nil && isString(v) {
-		if major, minor, ok := parseVersion(v.Value); ok {
-			if audited, ok = auditedAs(major, minor); !ok {
-				return nil, &UnsupportedVersionError{file: file, declared: v.Value}
+		if parts, ok := versionParts(v.Value); ok {
+			if audited, ok = auditedAs(parts[0], parts[1]); !ok {
+				return nil, nil, &UnsupportedVersionError{file: file, declared: v.Value}
 			}
 		}
 	}
-
-	p := &configParser{file: file, repo: repo, cfg: &Config{file: file}, audited: audited}
-	if err := p.top(top); err != nil {
-		return nil, err
-	}
-	return p.cfg, nil
+	return &configParser{file: file, repo: repo, cfg: &Config{file: file}, audited: audited}, top, nil
 }
 
 type configParser struct {
@@ -261,7 +301,7 @@ func (p *configParser) contract(v *yaml.Node) error {
 	if !isString(v) {
 		return p.fail("contract", "must be a contract version X.Y.Z, such as %s", Latest)
 	}
-	if _, _, ok := parseVersion(v.Value); !ok {
+	if _, ok := versionParts(v.Value); !ok {
 		return p.fail("contract", "%q is not a contract version X.Y.Z, such as %s", v.Value, Latest)
 	}
 	// Parse already refused an unsupported version.
@@ -487,8 +527,8 @@ func (p *configParser) waiverRule(at string, v *yaml.Node, w *Waiver) error {
 	if !isString(v) || !ok {
 		return p.fail(at, "%s is not a rule of contract %s", describe(v), p.rulesVersion())
 	}
-	if r.Level != Should {
-		return p.fail(at, "%s is a %s rule; only SHOULD rules can be waived", r.ID, r.Level)
+	if level := r.LevelAt(p.rulesVersion()); level != Should {
+		return p.fail(at, "%s is a %s rule; only SHOULD rules can be waived", r.ID, level)
 	}
 	for j, other := range p.cfg.Waivers {
 		if other.Rule == r.ID {
@@ -514,13 +554,41 @@ func (p *configParser) require(v *yaml.Node) error {
 		if !isString(item) || !ok {
 			return p.fail(at, "%s is not a rule of contract %s", describe(item), p.rulesVersion())
 		}
-		if r.Level != Should {
-			return p.fail(at, "%s is a %s rule; it is always required", r.ID, r.Level)
+		if level := r.LevelAt(p.rulesVersion()); level != Should {
+			return p.fail(at, "%s is a %s rule; it is always required", r.ID, level)
 		}
 		if j := slices.Index(p.cfg.require, r.ID); j >= 0 {
 			return p.fail(at, "%s is listed twice (also require[%d])", r.ID, j)
 		}
 		p.cfg.require = append(p.cfg.require, r.ID)
+	}
+	return p.requireGuardSet()
+}
+
+// requireGuardSet refuses part of the guard set, and A-09 without it,
+// where the guard set is SHOULD (spec 0074): a guard that is hooked up but
+// not tested proves nothing, and a tested guard that is not hooked up does
+// nothing. Where the guard set is MUST, require has already refused it.
+func (p *configParser) requireGuardSet() error {
+	if guardSetLevel(p.rulesVersion()) != Should {
+		return nil
+	}
+	var missing []string
+	for _, id := range guardSet {
+		if !p.cfg.requires(id) {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	if len(missing) < len(guardSet) {
+		return p.fail("require", "lists part of the guard set (%s); add %s, or remove the guard set from require",
+			joinWords(guardSet, " and "), joinWords(missing, " and "))
+	}
+	if i := slices.Index(p.cfg.require, "A-09"); i >= 0 {
+		return p.fail(fmt.Sprintf("require[%d]", i), "A-09 needs the guard set; add %s, or remove A-09",
+			joinWords(missing, " and "))
 	}
 	return nil
 }

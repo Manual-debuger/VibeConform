@@ -16,16 +16,15 @@ import (
 // each rule's sentence, check, level and source must match the spec's
 // rule table. The check is derived from the parts (spec 0073), so this
 // also holds each part's lead and check text to the spec. Every part of
-// every rule has a check function.
+// every rule has a check function. The table states the latest contract,
+// so each rule is read as it is under Latest (spec 0074); a revision
+// gives one check text for each part.
 func TestRegistryQuotesSpec0051(t *testing.T) {
 	rows := spec0051Rows(t)
-	must, from0051 := 0, 0
-	for _, r := range Rules() {
-		for _, p := range r.Parts {
-			if p.Run == nil && p.RunLast == nil {
-				t.Errorf("%s %s part has no check", r.ID, p.Kind)
-			}
-		}
+	must, mustV1, from0051 := 0, 0, 0
+	for _, reg := range Rules() {
+		checkRuleParts(t, reg)
+		r := reg.At(Latest)
 		if r.Since != "" {
 			checkSpec0061Rule(t, r)
 			continue
@@ -36,14 +35,52 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 			continue
 		}
 		from0051++
-		checkSpec0051Rule(t, r, row)
+		checkSpec0051Rule(t, reg, row)
 		if r.Level == Must {
 			must++
 		}
+		if reg.LevelAt(Contract1) == Must {
+			mustV1++
+		}
 	}
-	if must != 16 || from0051 != 25 {
-		t.Errorf("%d rules of spec 0051, %d MUST; want 25 and 16", from0051, must)
+	// Spec 0074: the five rules of the guard set are SHOULD from 2.1.0.
+	if must != 11 || mustV1 != 16 || from0051 != 25 {
+		t.Errorf("%d rules of spec 0051, %d MUST under %s and %d under %s; want 25, 11 and 16",
+			from0051, must, Latest, mustV1, Contract1)
 	}
+}
+
+// checkRuleParts checks that every part of r has a check function and
+// that each revision of r gives one check text for each part.
+func checkRuleParts(t *testing.T, r Rule) {
+	t.Helper()
+	for _, p := range r.Parts {
+		if p.Run == nil && p.RunLast == nil {
+			t.Errorf("%s %s part has no check", r.ID, p.Kind)
+		}
+	}
+	for _, v := range r.Revisions {
+		if len(v.Checks) != len(r.Parts) {
+			t.Errorf("%s revision %s has %d checks for %d parts", r.ID, v.Since, len(v.Checks), len(r.Parts))
+		}
+	}
+}
+
+// levelCell reads a Level cell of spec 0051's table: a level, such as
+// "MUST", or a level with the one it had before a contract version, such
+// as "SHOULD (MUST before 2.1.0)". It returns the level under the latest
+// contract and the rule's level history.
+func levelCell(t *testing.T, cell string) (latest Level, added Level, changes []LevelChange) {
+	t.Helper()
+	level, history, ok := strings.Cut(cell, " (")
+	if !ok {
+		return Level(cell), Level(cell), nil
+	}
+	old, since, ok := strings.Cut(strings.TrimSuffix(history, ")"), " before ")
+	if !ok || !strings.HasSuffix(history, ")") {
+		t.Fatalf("level cell %q: want \"LEVEL (OLD before X.Y.Z)\"", cell)
+	}
+	return Level(level), Level(old), []LevelChange{{Since: since, Level: Level(level)}}
 }
 
 // spec0051Rows reads spec 0051's rule table: each row's cells (ID,
@@ -72,19 +109,21 @@ func spec0051Rows(t *testing.T) map[string][]string {
 	return rows
 }
 
-// checkSpec0051Rule checks a rule of spec 0051's table against its row:
-// its sentence, check, level, source and category, and that its check
-// names the kind of each part.
-func checkSpec0051Rule(t *testing.T, r Rule, row []string) {
+// checkSpec0051Rule checks a registry rule of spec 0051's table against
+// its row: its sentence and check under Latest, its level history, its
+// source and category, and that its check names the kind of each part.
+func checkSpec0051Rule(t *testing.T, reg Rule, row []string) {
 	t.Helper()
+	r := reg.At(Latest)
 	if r.Title != row[1] {
 		t.Errorf("%s title = %q, spec says %q", r.ID, r.Title, row[1])
 	}
 	if r.Check() != row[2] {
 		t.Errorf("%s check = %q, spec says %q", r.ID, r.Check(), row[2])
 	}
-	if string(r.Level) != row[3] {
-		t.Errorf("%s level = %s, spec says %s", r.ID, r.Level, row[3])
+	latest, added, changes := levelCell(t, row[3])
+	if r.Level != latest || reg.Level != added || !slices.Equal(reg.LevelChanges, changes) {
+		t.Errorf("%s level = %s (added as %s, changes %v), spec says %s", r.ID, r.Level, reg.Level, reg.LevelChanges, row[3])
 	}
 	if r.Source != row[4] {
 		t.Errorf("%s source = %q, spec says %q", r.ID, r.Source, row[4])
@@ -92,8 +131,8 @@ func checkSpec0051Rule(t *testing.T, r Rule, row []string) {
 	if string(r.Category) != r.ID[:1] {
 		t.Errorf("%s category = %s", r.ID, r.Category)
 	}
-	if r.Waivable() != (r.Level == Should) {
-		t.Errorf("%s waivable = %v", r.ID, r.Waivable())
+	if r.WaivableAt(Latest) != (r.LevelAt(Latest) == Should) {
+		t.Errorf("%s waivable = %v", r.ID, r.WaivableAt(Latest))
 	}
 	for _, p := range r.Parts {
 		if !strings.Contains(strings.ToLower(r.Check()), string(p.Kind)) {
@@ -138,7 +177,7 @@ func checkSpec0061Rule(t *testing.T, r Rule) {
 	if !strings.Contains(spec0061Solution, "\n- **"+r.ID+"**: ") {
 		t.Errorf("%s: spec 0061's Solution does not list it", r.ID)
 	}
-	if r.Level != Should || !r.Waivable() {
+	if r.LevelAt(Latest) != Should || !r.WaivableAt(Latest) {
 		t.Errorf("%s level = %s, ADR 0027 says SHOULD", r.ID, r.Level)
 	}
 	if !strings.Contains(r.Source, "spec 0061") {

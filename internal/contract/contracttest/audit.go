@@ -84,11 +84,12 @@ func StandIn(rules []contract.Rule, result contract.Result, ids ...string) []con
 }
 
 // RuleIDs lists the IDs of the rules of a level ("" for every level)
-// except those named, in registry order.
+// except those named, in registry order. The level is the one under
+// contract 1.2.0, the contract Baseline declares.
 func RuleIDs(level contract.Level, except ...string) []string {
 	var ids []string
 	for _, r := range contract.Rules() {
-		if (level == "" || r.Level == level) && !slices.Contains(except, r.ID) {
+		if (level == "" || r.LevelAt(contract.Contract1) == level) && !slices.Contains(except, r.ID) {
 			ids = append(ids, r.ID)
 		}
 	}

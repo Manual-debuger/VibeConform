@@ -1,6 +1,6 @@
 # vibe.yaml version 2 for a monorepo. Every component is listed with its
 # path and language; the entrypoints are repository-wide.
-contract: 2.0.0
+contract: 2.1.0
 platforms: [linux, windows]
 agents: [claude]
 components:
@@ -20,3 +20,6 @@ entrypoints:
   verify-fast: task verify:fast
   fmt: task fmt
   fmt-check: task fmt:check
+# The guard set: the audit holds the agent's guard to its rules.
+# Removing this line drops the guard set from the verdict.
+require: [A-01, A-02, A-03, A-04, A-08]

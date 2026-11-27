@@ -1,4 +1,4 @@
-# The rules of contract 2.0.0
+# The rules of contract 2.1.0
 
 One entry per rule: its level, what satisfies it, and the reference file
 to start from. Keep anything that already satisfies a rule. The audit is
@@ -51,6 +51,40 @@ Each planted defect makes `verify-fast` exit non-zero. Keep the format
 check, the static analysis and the tests in it; leave out the slow,
 network or whole-repository checks. Start from
 `reference/taskrunner/<stack>/` (`verify:fast`).
+
+#### Tests that need services
+
+A test that needs Docker, a database or another service is a slow
+check. Keep it out of `verify-fast`, so that the Stop hook (A-05) does
+not start a container at the end of every agent turn, and run it in
+`verify` and CI. V-02 needs only the planted failing test, which has
+no dependencies:
+
+- pytest: give the service tests a marker (`@pytest.mark.db`) and
+  register it in `pyproject.toml` (`[tool.pytest.ini_options]`,
+  `markers = ["db: needs the database"]`). `verify-fast` runs
+  `pytest -m "not db"`, `verify` runs `pytest`. The planted test has no
+  marker, so `-m "not db"` still runs it.
+- Go: put `//go:build integration` on the first line of each service
+  test file. `go test ./...` then builds only the unit tests, and
+  `verify` adds the tag: `go test -tags integration ./...`. Give the
+  lint and type check in `verify` the tag too, or they skip those
+  files. The reference `verify:fast` runs `go test -short`, so a
+  service test can instead call `t.Skip` when `testing.Short()` is
+  true.
+
+The catch: the audit plants its test beside the component's first test
+file, in sorted path order, and runs `verify-fast` on the clean tree as
+well. A setup that runs for every test in that folder runs for the
+planted test and for the clean run too: an autouse fixture in that
+folder's `conftest.py` that starts the database, or a Go `TestMain`
+without the build tag. Put the service tests and their setup in their
+own folder or behind the marker or tag, not behind an autouse fixture.
+The audit runs `verify` too (V-01), so the CI job that runs
+`vibe audit` needs the services that `verify` needs.
+
+The reference Stop command already skips `verify-fast` when nothing
+changed since its last passing run (`hook:stamp:check`).
 
 ### V-03 (MUST): `fmt-check` writes no file
 
@@ -233,11 +267,16 @@ starting with `vibe audit` and calls no `verify` command. Start from the
 installs `vibe` and `vibe-guard` from the release and checks them against
 its `checksums.txt`. Set `VIBE_VERSION` to an exact release tag.
 
-### C-05 (SHOULD): tests run on Linux and Windows
+### C-05 (SHOULD): tests run on every declared platform
 
-The steps that call `verify` run on a Linux and a Windows runner after
-matrix expansion. Not applicable when `platforms` has no `windows`. The
-reference `ci.yml` has an `os` matrix.
+The steps that call `verify` run on a runner of each platform in
+`platforms`, after matrix expansion. `platforms: [linux]` needs one Linux
+job; `platforms: [linux, macos]` needs a macOS runner too. The finding
+names each declared platform with no runner. The reference `ci.yml` has
+an `os` matrix over `ubuntu-latest` and `windows-latest`: make it list a
+runner for each platform in `platforms` (`macos-latest` for `macos`).
+Under 1.x, C-05 asks for Linux and Windows instead, and is not
+applicable without `windows`.
 
 GitLab: a job's platform comes from its `tags:`, after `parallel: matrix`
 expansion. A tag containing `windows` is Windows, `linux` Linux, `macos`
@@ -268,6 +307,16 @@ Not applicable when `agents` does not include `claude`. Start from
 `vibe-guard` satisfies A-01 to A-04, A-08 and A-09. Install it first
 (`SKILL.md`, step 5).
 
+A-01 to A-04 and A-08 are the guard set. They are SHOULD rules, MUST
+under 1.x. List all of them in `require` to hold the repository to the
+guard, or none of them: part of the set, or A-09 without it, is a
+configuration error. The reference `vibe.yaml` requires the guard set:
+guarded is the default. A repository whose person declines the guard
+deletes that `require` line (`SKILL.md`, step 4). With the guard set not
+in `require` and no PreToolUse hook matching `Bash`, there is no guard
+to test: A-01 fails, and A-02, A-03, A-04, A-08 and A-09 are not
+applicable.
+
 The hooks run from the project root. Claude Code runs a hook command in
 the agent's current directory, and Task uses the nearest `Taskfile.yml`
 above that directory. Inside a component, or under any directory with
@@ -280,12 +329,12 @@ each hook of your own that calls the task runner. Do not use
 only as written. `vibe-guard hook` finds the root itself and needs no
 prefix.
 
-### A-01 (MUST): shell commands and file edits pass through the guard
+### A-01 (SHOULD): shell commands and file edits pass through the guard
 
 `.claude/settings.json` has PreToolUse hooks matching `Bash`,
 `PowerShell`, `Write`, `Edit` and `MultiEdit`.
 
-### A-02 (MUST): the guard refuses the baseline
+### A-02 (SHOULD): the guard refuses the baseline
 
 Every deny case of the guard corpus is refused (exit 2) or let through by
 a listed exception, and every allow case is allowed. `vibe-guard hook`
@@ -298,13 +347,13 @@ case's rule refuses, not another command of the same line. No exception
 counts for the self-unlock commands or the edits of the unlock marker.
 A guard of the repository's own must lift a rule the same way.
 
-### A-03 (MUST): the guard fails closed
+### A-03 (SHOULD): the guard fails closed
 
 Deny cases are still refused with `PATH` reduced to the system's
 directories and with `.claude/hooks/policy.json` invalid. The reference
 PreToolUse command exits 2 when `vibe-guard` is missing.
 
-### A-04 (MUST): the guard is loosened only through listed exceptions
+### A-04 (SHOULD): the guard is loosened only through listed exceptions
 
 `.claude/hooks/policy.json` is valid version 2. Each entry of
 `exceptions` names a guard rule ID (`rm-rf`, `remove-item-recurse-force`,
@@ -333,12 +382,17 @@ that owns the edited file (`hook:owner`), and every component otherwise.
 A SessionStart hook exists, exits 0 and leaves `git status --porcelain`
 empty (`hook:context` in the reference Taskfiles).
 
-### A-08 (MUST): guardrail settings change only after a person unlocks them
+### A-08 (SHOULD): guardrail settings change only after a person unlocks them
 
 The guard refuses edits of `.claude/settings.json` and `.claude/hooks/`
 without a valid unlock marker, refuses `vibe unlock` and the marker's
 creation, and the Stop hook removes the marker (`vibe-guard relock`).
 `vibe-guard` and the reference Stop command do this.
+
+The lock binds the agent only. A person can always edit
+`.claude/settings.json` and `.claude/hooks/` in their own editor;
+`vibe unlock`, run in their own terminal, only lets the agent edit them
+until its next Stop.
 
 ### A-09 (SHOULD): the guard refuses commands that skip Git hooks
 

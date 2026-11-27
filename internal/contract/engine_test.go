@@ -233,6 +233,21 @@ func TestContractAuditApplicabilityAndWaivers(t *testing.T) { //nolint:gocognit,
 			t.Errorf("C-05 parts = %+v, want one not_applicable part", p)
 		}
 	})
+	// The report carries each rule as it reads under the audited contract
+	// (spec 0074): C-05's title and applicability change in 2.1.0.
+	t.Run("C-05 as the audited contract states it", func(t *testing.T) {
+		t.Parallel()
+		for _, tc := range []struct{ declared, title string }{
+			{"1.2.0", "Tests run on Linux and Windows"},
+			{"2.0.0", "Tests run on every declared platform"},
+		} {
+			rep := engAuditStatic(t, contracttest.Fixture(t, contracttest.Baseline,
+				contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(contracttest.Section{Key: "contract", Body: "contract: " + tc.declared + "\n"}))))
+			if got := contracttest.RuleResult(t, rep, "C-05").Rule.Title; got != tc.title {
+				t.Errorf("contract %s: C-05 title = %q, want %q", tc.declared, got, tc.title)
+			}
+		}
+	})
 	t.Run("A rules not applicable without claude", func(t *testing.T) {
 		t.Parallel()
 		rep := engAuditStatic(t, contracttest.Fixture(t, contracttest.Baseline, contracttest.AgentsConfig("[codex]")))
@@ -303,17 +318,19 @@ func TestContractAuditApplicabilityAndWaivers(t *testing.T) { //nolint:gocognit,
 	}
 }
 
-// A vibe implements contracts 1.2.0 and 2.0.0 side by side: a declared
-// 1.y.z is audited as 1.2.0 and a declared 2.0.z as 2.0.0 (spec 0072,
-// "Contract versions").
+// A vibe implements contracts 1.2.0 and 2.1.0 side by side: a declared
+// 1.y.z is audited as 1.2.0 and a declared 2.0.z or 2.1.z as 2.1.0 (spec
+// 0072, "Contract versions"; spec 0074, "Contract versions").
 func TestContractAuditedVersion(t *testing.T) {
 	t.Parallel()
 	for declared, audited := range map[string]string{
 		"1.0.0": "1.2.0",
 		"1.2.0": "1.2.0",
 		"1.2.5": "1.2.0",
-		"2.0.0": "2.0.0",
-		"2.0.3": "2.0.0",
+		"2.0.0": "2.1.0",
+		"2.0.3": "2.1.0",
+		"2.1.0": "2.1.0",
+		"2.1.4": "2.1.0",
 	} {
 		t.Run(declared, func(t *testing.T) {
 			t.Parallel()

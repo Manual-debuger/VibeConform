@@ -77,12 +77,19 @@ func referenceRepo(t *testing.T, stack, provider string) map[string]string {
 // also checks that every failure names a file and a fix.
 func auditReference(t *testing.T, files map[string]string) *contract.Report {
 	t.Helper()
+	return auditReferenceWith(t, files, contract.Options{Static: true})
+}
+
+// auditReferenceWith runs contract.Audit with opts on the files of a
+// reference repository.
+func auditReferenceWith(t *testing.T, files map[string]string, opts contract.Options) *contract.Report {
+	t.Helper()
 	var edits []contracttest.Edit
 	for name, content := range files {
 		edits = append(edits, contracttest.WithFile(name, content))
 	}
 	dir := contracttest.Fixture(t, t.TempDir(), edits...)
-	report := contracttest.Audit(t, dir, contract.Options{Static: true})
+	report := contracttest.Audit(t, dir, opts)
 	if len(report.Rules) == 0 {
 		t.Fatal("the report has no rules")
 	}
@@ -169,6 +176,18 @@ func TestStaticAuditReadsACdPrefixedHookCommand(t *testing.T) {
 	}
 }
 
+// assertNoBindingFailure fails the test for each rule that counts in the
+// verdict, a MUST rule or a required SHOULD rule, and fails.
+func assertNoBindingFailure(t *testing.T, report *contract.Report) {
+	t.Helper()
+	for _, r := range report.Rules {
+		if (r.Level == contract.Must || r.Required) && r.Result == contract.ResultFail {
+			_, msgs := referenceFindings(t, report, r.Rule.ID)
+			t.Errorf("%s rule %s (required %v) fails: %s", r.Level, r.Rule.ID, r.Required, msgs)
+		}
+	}
+}
+
 // gitlabDecided are the rules a GitLab reference repository must pass
 // under the static audit, MUST and SHOULD: the CI rules the GitLab
 // reference decides (C-03 is not applicable on GitLab CI), its update bot,
@@ -182,10 +201,12 @@ func TestReferenceImplementationsPassTheStaticAudit(t *testing.T) { //nolint:goc
 			t.Run(provider+"/"+stack, func(t *testing.T) {
 				t.Parallel()
 				report := auditReference(t, referenceRepo(t, stack, provider))
-				for _, r := range report.Rules {
-					if r.Rule.Level == contract.Must && r.Result == contract.ResultFail {
-						_, msgs := referenceFindings(t, report, r.Rule.ID)
-						t.Errorf("MUST rule %s fails: %s", r.Rule.ID, msgs)
+				assertNoBindingFailure(t, report)
+				// Guarded is the default (spec 0074): the reference
+				// vibe.yaml requires the guard set.
+				for _, id := range contract.GuardSet() {
+					if !contracttest.RuleResult(t, report, id).Required {
+						t.Errorf("%s is not required: the reference vibe.yaml lacks the guard set", id)
 					}
 				}
 				if provider != setupskill.ProviderGitLab {
@@ -204,6 +225,108 @@ func TestReferenceImplementationsPassTheStaticAudit(t *testing.T) { //nolint:goc
 				}
 			})
 		}
+	}
+}
+
+// withoutTheGuard returns the files of a reference repository as SKILL.md
+// leaves them when the person declines the agent guard (spec 0074): no
+// guard set in vibe.yaml's require, no PreToolUse hooks, no
+// .claude/hooks/policy.json, and no `vibe-guard relock` in the Stop
+// command.
+func withoutTheGuard(t *testing.T, files map[string]string) map[string]string {
+	t.Helper()
+	const requireLine = "require: [A-01, A-02, A-03, A-04, A-08]\n"
+	changed := maps.Clone(files)
+	if !strings.Contains(changed["vibe.yaml"], requireLine) {
+		t.Fatalf("the reference vibe.yaml has no %q to remove:\n%s", requireLine, changed["vibe.yaml"])
+	}
+	changed["vibe.yaml"] = strings.Replace(changed["vibe.yaml"], requireLine, "", 1)
+	if _, ok := changed[".claude/hooks/policy.json"]; !ok {
+		t.Fatal("the reference has no .claude/hooks/policy.json to remove")
+	}
+	delete(changed, ".claude/hooks/policy.json")
+
+	const relock = "vibe-guard relock 2>/dev/null; "
+	raw := changed[".claude/settings.json"]
+	if !strings.Contains(raw, relock) {
+		t.Fatalf("the reference Stop command has no %q to remove", relock)
+	}
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(strings.Replace(raw, relock, "", 1)), &settings); err != nil {
+		t.Fatalf(".claude/settings.json: %v", err)
+	}
+	hooks, ok := settings["hooks"].(map[string]any)
+	if !ok {
+		t.Fatal(".claude/settings.json has no hooks")
+	}
+	if _, ok := hooks["PreToolUse"]; !ok {
+		t.Fatal("the reference .claude/settings.json has no PreToolUse hooks to remove")
+	}
+	delete(hooks, "PreToolUse")
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed[".claude/settings.json"] = string(out) + "\n"
+	return changed
+}
+
+// setupEntrypoint is the setup entrypoint line of a reference vibe.yaml.
+var setupEntrypoint = regexp.MustCompile(`(?m)^  setup: .*\n`)
+
+// TestReferenceWithoutTheGuard: a repository set up from the reference,
+// where the person declined the agent guard, has no binding failure under
+// contract 2.1.0 (spec 0074, "Guard set levels"). A-01 fails as a SHOULD
+// rule, so the report shows the agent is not guarded, and the rules that
+// test a guard are not applicable.
+func TestReferenceWithoutTheGuard(t *testing.T) {
+	t.Parallel()
+	for _, provider := range setupskill.Providers() {
+		for _, stack := range setupskill.Stacks() {
+			t.Run(provider+"/"+stack, func(t *testing.T) {
+				t.Parallel()
+				checkReferenceWithoutTheGuard(t, stack, provider)
+			})
+		}
+	}
+}
+
+// checkReferenceWithoutTheGuard is TestReferenceWithoutTheGuard for one
+// stack on one provider.
+func checkReferenceWithoutTheGuard(t *testing.T, stack, provider string) {
+	t.Helper()
+	report := auditReference(t, withoutTheGuard(t, referenceRepo(t, stack, provider)))
+	if report.Contract.Audited != "2.1.0" {
+		t.Errorf("audited as contract %s, want 2.1.0", report.Contract.Audited)
+	}
+	assertNoBindingFailure(t, report)
+	a01 := contracttest.RuleResult(t, report, "A-01")
+	if a01.Level != contract.Should || a01.Required || a01.Result != contract.ResultFail {
+		t.Errorf("A-01 = %s %s (required %v), want a failing SHOULD rule not required", a01.Level, a01.Result, a01.Required)
+	}
+	for _, id := range []string{"A-02", "A-03", "A-04", "A-08", "A-09"} {
+		if got, msgs := referenceFindings(t, report, id); got != contract.ResultNotApplicable {
+			t.Errorf("%s = %s, want not_applicable: %s", id, got, msgs)
+		}
+	}
+	if got := referenceStaticPart(t, report, "A-05"); got != contract.ResultPass {
+		_, msgs := referenceFindings(t, report, "A-05")
+		t.Errorf("A-05 static part = %s, want pass without vibe-guard relock: %s", got, msgs)
+	}
+
+	// The static audit reaches no verdict. In a full audit where every
+	// other rule passes, the guard rules leave it conformant. A fixture
+	// runs no entrypoint: the other rules are stand-ins, and the setup
+	// entrypoint, which runs before any part, is left out.
+	files := withoutTheGuard(t, referenceRepo(t, stack, provider))
+	files["vibe.yaml"] = setupEntrypoint.ReplaceAllString(files["vibe.yaml"], "")
+	guardRules := append(contract.GuardSet(), "A-09")
+	full := auditReferenceWith(t, files, contract.Options{
+		Rules: contracttest.StandIn(nil, contract.ResultPass, contracttest.RuleIDs("", guardRules...)...),
+		Probe: contract.ProbeOptions{Env: contracttest.EmptyProbeEnv(t)},
+	})
+	if full.Verdict != contract.VerdictConformant {
+		t.Errorf("verdict = %s (%s), want conformant", full.Verdict, full.Reason)
 	}
 }
 
