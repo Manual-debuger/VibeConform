@@ -235,9 +235,9 @@ func TestAuditExplain(t *testing.T) {
 		assertExit(t, r, 1)
 		assertStderr(t, r, "Z-99", "V-01", "R-03")
 	})
-	t.Run("combined with another flag", func(t *testing.T) {
+	t.Run("combined with a flag that does not name the configuration", func(t *testing.T) {
 		for _, other := range [][]string{
-			{"--static"}, {"--json"}, {"--config", "vibe.yaml"}, {"--repo-root", "."},
+			{"--static"}, {"--json"}, {"--probe-timeout", "1m"}, {"--keep-probe-copy"},
 		} {
 			r := runVibeAudit(t, append([]string{"--explain", "C-02"}, other...)...)
 			assertExit(t, r, 1)
@@ -247,7 +247,7 @@ func TestAuditExplain(t *testing.T) {
 	t.Run("several other flags are named in cobra's order", func(t *testing.T) {
 		r := runVibeAudit(t, "--static", "--explain", "C-02", "--repo-root", ".", "--json")
 		assertExit(t, r, 1)
-		assertStderr(t, r, "--explain reads no repository and no configuration; drop --json, --repo-root, --static\n")
+		assertStderr(t, r, "--explain reads only the contract version of the configuration; drop --json, --static\n")
 	})
 	t.Run("a flag that no list holds", func(t *testing.T) {
 		// The flag exists only in this command tree, so a refusal proves
@@ -264,17 +264,85 @@ func TestAuditExplain(t *testing.T) {
 		root.SetArgs([]string{"audit", "--explain", "C-02", "--added-in-test"})
 		r := auditResult{code: ExitCode(root.Execute()), stdout: out.String(), stderr: errOut.String()}
 		assertExit(t, r, 1)
-		assertStderr(t, r, "--explain reads no repository and no configuration; drop --added-in-test\n")
+		assertStderr(t, r, "--explain reads only the contract version of the configuration; drop --added-in-test\n")
 		if r.stdout != "" {
 			t.Errorf("--explain printed the rule although it refused:\n%s", r.stdout)
 		}
 	})
-	t.Run("reads no configuration", func(t *testing.T) {
-		// Run where no vibe.yaml exists: --explain must not look for one.
-		r := runVibeAudit(t, "--explain", "C-02")
+}
+
+// --explain prints a rule as it is under the contract the configuration
+// declares, or under the latest when there is no vibe.yaml (spec 0074).
+// It reads only the contract field: the rest of the file may be invalid.
+func TestAuditExplainReadsTheContractVersion(t *testing.T) {
+	t.Parallel()
+	withConfig := func(t *testing.T, body string) string {
+		t.Helper()
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+	flat := func(r auditResult) string { return strings.Join(strings.Fields(r.stdout), " ") }
+	assertShows := func(t *testing.T, r auditResult, want ...string) {
+		t.Helper()
 		assertExit(t, r, 0)
-		if strings.Contains(r.stderr, "vibe.yaml") {
-			t.Errorf("--explain read a configuration:\n%s", r.stderr)
+		for _, w := range want {
+			if !strings.Contains(flat(r), w) {
+				t.Errorf("--explain does not show %q:\n%s", w, r.stdout)
+			}
+		}
+	}
+	const c05Of1 = "C-05: Tests run on Linux and Windows"
+	const c05Of2 = "C-05: Tests run on every declared platform"
+
+	t.Run("a 1.x configuration", func(t *testing.T) {
+		t.Parallel()
+		dir := withConfig(t, "contract: 1.0.0\nplatforms: [nonsense]\n")
+		r := runVibeAudit(t, "--explain", "C-05", "--repo-root", dir)
+		assertShows(t, r, c05Of1, "Contract: 1.2.0 (vibe.yaml declares 1.0.0)",
+			"Not applicable: when `platforms` does not include `windows`",
+			"Static: the steps that call `verify` run on a Linux runner and on a Windows runner")
+	})
+	t.Run("a 2.0.x configuration is read as 2.1.0", func(t *testing.T) {
+		t.Parallel()
+		dir := withConfig(t, "contract: 2.0.0\n")
+		r := runVibeAudit(t, "--explain", "C-05", "--repo-root", dir)
+		assertShows(t, r, c05Of2, "Contract: 2.1.0 (vibe.yaml declares 2.0.0)", "Not applicable: never",
+			"Static: the steps that call `verify` run on a runner of each platform in `platforms`")
+	})
+	t.Run("--config names the file", func(t *testing.T) {
+		t.Parallel()
+		dir := withConfig(t, "contract: 2.1.0\n")
+		config := filepath.Join(withConfig(t, "contract: 1.2.0\n"), "vibe.yaml")
+		r := runVibeAudit(t, "--explain", "C-05", "--repo-root", dir, "--config", config)
+		assertShows(t, r, c05Of1, "Contract: 1.2.0 ("+config+" declares 1.2.0)")
+	})
+	t.Run("no vibe.yaml means the latest contract", func(t *testing.T) {
+		t.Parallel()
+		r := runVibeAudit(t, "--explain", "C-05", "--repo-root", t.TempDir())
+		assertShows(t, r, c05Of2, "Contract: 2.1.0, the latest (no vibe.yaml)")
+		if r.stderr != "" {
+			t.Errorf("stderr not empty:\n%s", r.stderr)
 		}
 	})
+	for _, tc := range []struct {
+		name, body string
+		want       []string
+	}{
+		{"a contract this vibe does not implement", "contract: 3.0.0\n", []string{"vibe.yaml", "upgrade vibe"}},
+		{"a configuration without a contract", "platforms: [linux]\n", []string{"vibe.yaml", "declare the contract version"}},
+		{"a version 1 configuration", "standard: vibe\n", []string{"vibe.yaml is version 1"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := runVibeAudit(t, "--explain", "C-05", "--repo-root", withConfig(t, tc.body))
+			assertExit(t, r, 1)
+			assertStderr(t, r, tc.want...)
+			if r.stdout != "" {
+				t.Errorf("--explain printed the rule although it cannot tell the contract:\n%s", r.stdout)
+			}
+		})
+	}
 }

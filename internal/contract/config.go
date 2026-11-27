@@ -142,9 +142,45 @@ const v2FieldList = "contract, platforms, agents, components, entrypoints, waive
 // cannot audit is an *UnsupportedVersionError, decided before anything
 // else, since a newer contract may have fields this vibe does not know.
 func Parse(file string, data []byte, repo *Repo) (*Config, error) {
-	top, err := decodeTop(file, data)
+	p, top, err := startParse(file, data, repo)
 	if err != nil {
 		return nil, err
+	}
+	if err := p.top(top); err != nil {
+		return nil, err
+	}
+	return p.cfg, nil
+}
+
+// ParseContract reads only the contract field of a version 2
+// configuration: the version it declares and the one the audit checks it
+// against. vibe audit --explain reads it, since a rule's text and level
+// depend on nothing else (spec 0074). Its errors are Parse's for that
+// field: a *ConfigError when the file is not a map, or the field is
+// missing or not X.Y.Z, and an *UnsupportedVersionError for a version
+// this vibe cannot audit.
+func ParseContract(file string, data []byte) (Versions, error) {
+	p, top, err := startParse(file, data, nil)
+	if err != nil {
+		return Versions{}, err
+	}
+	v := field(top, "contract")
+	if v == nil {
+		return Versions{}, p.fail("contract", "is required")
+	}
+	if err := p.contract(v); err != nil {
+		return Versions{}, err
+	}
+	return p.cfg.Contract, nil
+}
+
+// startParse decodes the configuration and works out the contract its
+// declared version is audited as, before any field is read. A contract
+// version this vibe cannot audit is an *UnsupportedVersionError.
+func startParse(file string, data []byte, repo *Repo) (*configParser, *yaml.Node, error) {
+	top, err := decodeTop(file, data)
+	if err != nil {
+		return nil, nil, err
 	}
 	if top == nil {
 		top = &yaml.Node{Kind: yaml.MappingNode}
@@ -153,16 +189,11 @@ func Parse(file string, data []byte, repo *Repo) (*Config, error) {
 	if v := field(top, "contract"); v != nil && isString(v) {
 		if major, minor, ok := parseVersion(v.Value); ok {
 			if audited, ok = auditedAs(major, minor); !ok {
-				return nil, &UnsupportedVersionError{file: file, declared: v.Value}
+				return nil, nil, &UnsupportedVersionError{file: file, declared: v.Value}
 			}
 		}
 	}
-
-	p := &configParser{file: file, repo: repo, cfg: &Config{file: file}, audited: audited}
-	if err := p.top(top); err != nil {
-		return nil, err
-	}
-	return p.cfg, nil
+	return &configParser{file: file, repo: repo, cfg: &Config{file: file}, audited: audited}, top, nil
 }
 
 type configParser struct {
