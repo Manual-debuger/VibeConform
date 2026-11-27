@@ -148,7 +148,7 @@ func writeContractJSON(w io.Writer, rep *contract.Report, vibeVersion string) er
 	}
 	for _, rr := range rep.Rules {
 		jr := jsonContractRule{
-			ID: rr.Rule.ID, Level: rr.Rule.Level, Category: rr.Rule.Category, Title: rr.Rule.Title,
+			ID: rr.Rule.ID, Level: rr.Level, Category: rr.Rule.Category, Title: rr.Rule.Title,
 			Result: rr.Result, Parts: []jsonPart{}, Findings: []jsonFinding{}, Required: rr.Required,
 		}
 		for _, p := range rr.Parts {

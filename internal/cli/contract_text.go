@@ -25,7 +25,7 @@ func writeContractText(w io.Writer, rep *contract.Report, vibeVersion string) er
 
 	failed := rulesWith(rep, contract.ResultFail)
 	slices.SortStableFunc(failed, func(x, y contract.RuleResult) int {
-		return levelRank(x.Rule.Level) - levelRank(y.Rule.Level)
+		return levelRank(x.Level) - levelRank(y.Level)
 	})
 	writeSection(&b, "Failed", failed, func(rr contract.RuleResult) {
 		writeRuleBlock(&b, rr, contract.ResultFail)
@@ -110,7 +110,7 @@ func writeCategorySummary(b *strings.Builder, rep *contract.Report) {
 				continue
 			}
 			word := resultText(rr.Result)
-			if rr.Result == contract.ResultFail && rr.Rule.Level == contract.Must {
+			if rr.Result == contract.ResultFail && rr.Level == contract.Must {
 				word = "FAIL"
 			}
 			counts[word]++
@@ -200,7 +200,7 @@ const requiredMark = "required"
 // ruleLead is the start of a rule's line: ID and level in columns, then
 // "(required)" for a required SHOULD rule.
 func ruleLead(rr contract.RuleResult) string {
-	lead := fmt.Sprintf("  %s  %-6s  ", rr.Rule.ID, rr.Rule.Level)
+	lead := fmt.Sprintf("  %s  %-6s  ", rr.Rule.ID, rr.Level)
 	if rr.Required {
 		lead += "(" + requiredMark + ") "
 	}

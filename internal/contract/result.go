@@ -115,7 +115,9 @@ type WaiverStatus struct {
 
 // RuleResult is one rule's result.
 type RuleResult struct {
-	Rule   Rule
+	Rule Rule
+	// Level is the rule's level under the audited contract (spec 0074).
+	Level  Level
 	Result Result
 	Parts  []PartOutcome
 	// NotApplicable says why the rule does not apply, when it does not.
@@ -130,7 +132,7 @@ type RuleResult struct {
 // binding reports whether the rule's result counts in the verdict: a MUST
 // rule or a required SHOULD rule.
 func (r RuleResult) binding() bool {
-	return r.Rule.Level == Must || r.Required
+	return r.Level == Must || r.Required
 }
 
 // Findings returns the findings of every part, in part order.
@@ -207,7 +209,7 @@ type Report struct {
 func (r *Report) Count(level Level, result Result) int {
 	n := 0
 	for _, rr := range r.Rules {
-		if rr.Rule.Level == level && rr.Result == result {
+		if rr.Level == level && rr.Result == result {
 			n++
 		}
 	}
@@ -250,7 +252,7 @@ func (r *Report) decide() {
 		}
 		switch rr.Result {
 		case ResultFail:
-			if rr.Rule.Level == Must {
+			if rr.Level == Must {
 				r.FailingMust++
 			} else {
 				r.FailingRequired++

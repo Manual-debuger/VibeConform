@@ -122,12 +122,28 @@ type Part struct {
 	RunLast LastFunc
 }
 
+// LevelChange is a contract version that changed a rule's level, and the
+// level the rule has from that version on (spec 0074, "A rule's level
+// depends on the audited contract").
+type LevelChange struct {
+	// Since is the contract version that changed the level, such as
+	// "2.1.0".
+	Since string
+	Level Level
+}
+
 // Rule is one rule of contract 1.0.0 (spec 0051, "Rules"). The report
 // and --explain read only the registry.
 type Rule struct {
-	ID       string
-	Level    Level
-	Category Category
+	ID string
+	// Level is the level the rule was added with. Its level under a
+	// contract is LevelAt's, and a RuleResult carries the level under the
+	// audited contract; read those, not Level.
+	Level Level
+	// LevelChanges are the contract versions that changed the rule's
+	// level, oldest first, or none when the level never changed.
+	LevelChanges []LevelChange
+	Category     Category
 	// Title is the rule sentence of spec 0051.
 	Title string
 	// Source names the specs, ADRs and principles the rule comes from.
@@ -155,9 +171,23 @@ func (r Rule) Check() string {
 	return strings.Join(texts, " ")
 }
 
-// Waivable reports whether a waiver may suspend the rule: only SHOULD
-// rules can be waived (spec 0051, "vibe.yaml").
-func (r Rule) Waivable() bool { return r.Level == Should }
+// LevelAt is the rule's level under the contract version: the level of
+// its last change that the version is not older than, or the level it was
+// added with.
+func (r Rule) LevelAt(contract string) Level {
+	level := r.Level
+	for _, c := range r.LevelChanges {
+		if compareVersions(contract, c.Since) >= 0 {
+			level = c.Level
+		}
+	}
+	return level
+}
+
+// WaivableAt reports whether a waiver may suspend the rule under the
+// contract version: only SHOULD rules can be waived (spec 0051,
+// "vibe.yaml").
+func (r Rule) WaivableAt(contract string) bool { return r.LevelAt(contract) == Should }
 
 // Rationale is why the rule exists: its sources and, where spec 0051
 // introduces the rule's category, that introduction.
@@ -566,11 +596,12 @@ var rules = []Rule{
 }
 
 // Rules returns every rule of contract 1.0.0 in report order. Each rule
-// has its own copy of its parts.
+// has its own copy of its parts and level changes.
 func Rules() []Rule {
 	out := slices.Clone(rules)
 	for i := range out {
 		out[i].Parts = slices.Clone(out[i].Parts)
+		out[i].LevelChanges = slices.Clone(out[i].LevelChanges)
 	}
 	return out
 }
@@ -583,6 +614,7 @@ func LookupRule(id string) (Rule, bool) {
 	}
 	r := rules[i]
 	r.Parts = slices.Clone(r.Parts)
+	r.LevelChanges = slices.Clone(r.LevelChanges)
 	return r, true
 }
 

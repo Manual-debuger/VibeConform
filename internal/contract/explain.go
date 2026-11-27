@@ -38,7 +38,7 @@ var ruleDetails = map[string]func() string{
 // each contract MAJOR (spec 0072, "The audit's reading under 2.0.0" and
 // "The rerun").
 const a02ExceptionsText = "Exceptions:\n" +
-	"  Under contract 2.0.0, an exception counts for a deny case only when all\n" +
+	"  Under contract 2.x, an exception counts for a deny case only when all\n" +
 	"  of these hold: the guard lets the case through; an exception in\n" +
 	"  `.claude/hooks/policy.json` matches the case; and the guard refuses the\n" +
 	"  case when every exception that matches it is removed from\n" +
@@ -55,7 +55,7 @@ const a02ExceptionsText = "Exceptions:\n" +
 // r01VibeCallsText says what R-01 counts as a call of vibe, under each
 // contract MAJOR (spec 0072, "R-01 and C-04").
 const r01VibeCallsText = "Calls of vibe:\n" +
-	"  Under contract 2.0.0, a command calls `vibe` when the last path element of\n" +
+	"  Under contract 2.x, a command calls `vibe` when the last path element of\n" +
 	"  its first word, after `/` or `\\`, is the literal `vibe` or `vibe.exe`,\n" +
 	"  compared case-sensitively. The directory part may hold an expansion, so\n" +
 	"  `\"$dir/vibe\" verify` and `./bin/vibe verify` are calls. A last element\n" +

@@ -303,17 +303,19 @@ func TestContractAuditApplicabilityAndWaivers(t *testing.T) { //nolint:gocognit,
 	}
 }
 
-// A vibe implements contracts 1.2.0 and 2.0.0 side by side: a declared
-// 1.y.z is audited as 1.2.0 and a declared 2.0.z as 2.0.0 (spec 0072,
-// "Contract versions").
+// A vibe implements contracts 1.2.0 and 2.1.0 side by side: a declared
+// 1.y.z is audited as 1.2.0 and a declared 2.0.z or 2.1.z as 2.1.0 (spec
+// 0072, "Contract versions"; spec 0074, "Contract versions").
 func TestContractAuditedVersion(t *testing.T) {
 	t.Parallel()
 	for declared, audited := range map[string]string{
 		"1.0.0": "1.2.0",
 		"1.2.0": "1.2.0",
 		"1.2.5": "1.2.0",
-		"2.0.0": "2.0.0",
-		"2.0.3": "2.0.0",
+		"2.0.0": "2.1.0",
+		"2.0.3": "2.1.0",
+		"2.1.0": "2.1.0",
+		"2.1.4": "2.1.0",
 	} {
 		t.Run(declared, func(t *testing.T) {
 			t.Parallel()

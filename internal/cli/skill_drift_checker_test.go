@@ -613,7 +613,7 @@ func (c *skillChecker) checkRulesGuidance() {
 		return
 	}
 	for _, r := range contract.Rules() {
-		want := fmt.Sprintf("### %s (%s)", r.ID, r.Level)
+		want := fmt.Sprintf("### %s (%s)", r.ID, r.LevelAt(contract.Latest))
 		if !slices.ContainsFunc(strings.Split(f.text, "\n"), func(l string) bool { return strings.HasPrefix(l, want) }) {
 			c.problem(file, "has no %q heading, so rule %s has no guidance", want, r.ID)
 		}

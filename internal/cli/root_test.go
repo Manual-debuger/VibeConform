@@ -18,7 +18,7 @@ func TestRootCmdVersion(t *testing.T) {
 	// vibe --version names the latest contract version vibe implements
 	// (spec 0054, "vibe --version"; spec 0072, "Contract versions"); the
 	// setup skill's upgrade flow reads it.
-	if got, want := out.String(), "vibe version v0.0.0-test (contract 2.0.0)\n"; got != want {
+	if got, want := out.String(), "vibe version v0.0.0-test (contract 2.1.0)\n"; got != want {
 		t.Errorf("vibe --version printed %q, want %q", got, want)
 	}
 }

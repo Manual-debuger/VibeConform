@@ -37,7 +37,7 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 		}
 		from0051++
 		checkSpec0051Rule(t, r, row)
-		if r.Level == Must {
+		if r.LevelAt(Latest) == Must {
 			must++
 		}
 	}
@@ -83,8 +83,8 @@ func checkSpec0051Rule(t *testing.T, r Rule, row []string) {
 	if r.Check() != row[2] {
 		t.Errorf("%s check = %q, spec says %q", r.ID, r.Check(), row[2])
 	}
-	if string(r.Level) != row[3] {
-		t.Errorf("%s level = %s, spec says %s", r.ID, r.Level, row[3])
+	if string(r.LevelAt(Latest)) != row[3] {
+		t.Errorf("%s level = %s, spec says %s", r.ID, r.LevelAt(Latest), row[3])
 	}
 	if r.Source != row[4] {
 		t.Errorf("%s source = %q, spec says %q", r.ID, r.Source, row[4])
@@ -92,8 +92,8 @@ func checkSpec0051Rule(t *testing.T, r Rule, row []string) {
 	if string(r.Category) != r.ID[:1] {
 		t.Errorf("%s category = %s", r.ID, r.Category)
 	}
-	if r.Waivable() != (r.Level == Should) {
-		t.Errorf("%s waivable = %v", r.ID, r.Waivable())
+	if r.WaivableAt(Latest) != (r.LevelAt(Latest) == Should) {
+		t.Errorf("%s waivable = %v", r.ID, r.WaivableAt(Latest))
 	}
 	for _, p := range r.Parts {
 		if !strings.Contains(strings.ToLower(r.Check()), string(p.Kind)) {
@@ -138,7 +138,7 @@ func checkSpec0061Rule(t *testing.T, r Rule) {
 	if !strings.Contains(spec0061Solution, "\n- **"+r.ID+"**: ") {
 		t.Errorf("%s: spec 0061's Solution does not list it", r.ID)
 	}
-	if r.Level != Should || !r.Waivable() {
+	if r.LevelAt(Latest) != Should || !r.WaivableAt(Latest) {
 		t.Errorf("%s level = %s, ADR 0027 says SHOULD", r.ID, r.Level)
 	}
 	if !strings.Contains(r.Source, "spec 0061") {

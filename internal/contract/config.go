@@ -487,8 +487,8 @@ func (p *configParser) waiverRule(at string, v *yaml.Node, w *Waiver) error {
 	if !isString(v) || !ok {
 		return p.fail(at, "%s is not a rule of contract %s", describe(v), p.rulesVersion())
 	}
-	if r.Level != Should {
-		return p.fail(at, "%s is a %s rule; only SHOULD rules can be waived", r.ID, r.Level)
+	if level := r.LevelAt(p.rulesVersion()); level != Should {
+		return p.fail(at, "%s is a %s rule; only SHOULD rules can be waived", r.ID, level)
 	}
 	for j, other := range p.cfg.Waivers {
 		if other.Rule == r.ID {
@@ -514,8 +514,8 @@ func (p *configParser) require(v *yaml.Node) error {
 		if !isString(item) || !ok {
 			return p.fail(at, "%s is not a rule of contract %s", describe(item), p.rulesVersion())
 		}
-		if r.Level != Should {
-			return p.fail(at, "%s is a %s rule; it is always required", r.ID, r.Level)
+		if level := r.LevelAt(p.rulesVersion()); level != Should {
+			return p.fail(at, "%s is a %s rule; it is always required", r.ID, level)
 		}
 		if j := slices.Index(p.cfg.require, r.ID); j >= 0 {
 			return p.fail(at, "%s is listed twice (also require[%d])", r.ID, j)
