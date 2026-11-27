@@ -52,6 +52,40 @@ check, the static analysis and the tests in it; leave out the slow,
 network or whole-repository checks. Start from
 `reference/taskrunner/<stack>/` (`verify:fast`).
 
+#### Tests that need services
+
+A test that needs Docker, a database or another service is a slow
+check. Keep it out of `verify-fast`, so that the Stop hook (A-05) does
+not start a container at the end of every agent turn, and run it in
+`verify` and CI. V-02 needs only the planted failing test, which has
+no dependencies:
+
+- pytest: give the service tests a marker (`@pytest.mark.db`) and
+  register it in `pyproject.toml` (`[tool.pytest.ini_options]`,
+  `markers = ["db: needs the database"]`). `verify-fast` runs
+  `pytest -m "not db"`, `verify` runs `pytest`. The planted test has no
+  marker, so `-m "not db"` still runs it.
+- Go: put `//go:build integration` on the first line of each service
+  test file. `go test ./...` then builds only the unit tests, and
+  `verify` adds the tag: `go test -tags integration ./...`. Give the
+  lint and type check in `verify` the tag too, or they skip those
+  files. The reference `verify:fast` runs `go test -short`, so a
+  service test can instead call `t.Skip` when `testing.Short()` is
+  true.
+
+The catch: the audit plants its test beside the component's first test
+file, in sorted path order, and runs `verify-fast` on the clean tree as
+well. A setup that runs for every test in that folder runs for the
+planted test and for the clean run too: an autouse fixture in that
+folder's `conftest.py` that starts the database, or a Go `TestMain`
+without the build tag. Put the service tests and their setup in their
+own folder or behind the marker or tag, not behind an autouse fixture.
+The audit runs `verify` too (V-01), so the CI job that runs
+`vibe audit` needs the services that `verify` needs.
+
+The reference Stop command already skips `verify-fast` when nothing
+changed since its last passing run (`hook:stamp:check`).
+
 ### V-03 (MUST): `fmt-check` writes no file
 
 `fmt-check` checks formatting and changes nothing: `gofmt -l`,

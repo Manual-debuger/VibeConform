@@ -83,6 +83,35 @@ repository's own additions:
   root `setup` calls (`reference/taskrunner/monorepo/`).
 - Compare the rest with `reference/taskrunner/<stack>/Taskfile.yml`.
 
+### Tests that need services
+
+The Stop hook runs `verify-fast` at the end of every agent turn (A-05).
+When the old `verify:fast` runs tests that need Docker, a database or
+another service, move them out of it and keep them in `verify` and CI.
+V-02 needs only the planted failing test, which has no dependencies:
+
+- pytest: give the service tests a marker (`@pytest.mark.db`) and
+  register it in `pyproject.toml` (`[tool.pytest.ini_options]`,
+  `markers = ["db: needs the database"]`). `verify-fast` runs
+  `pytest -m "not db"`, `verify` runs `pytest`.
+- Go: put `//go:build integration` on the first line of each service
+  test file, so that `go test ./...` builds only the unit tests, and
+  have `verify` run `go test -tags integration ./...`. Give the lint and
+  type check in `verify` the tag too. Or keep the reference
+  `go test -short` in `verify:fast` and skip the service tests when
+  `testing.Short()` is true.
+
+The audit plants its test beside the component's first test file and
+runs `verify-fast` on the clean tree too, so a setup that runs for
+every test in that folder runs for both: an autouse fixture in that
+folder's `conftest.py` that starts the database, or a Go `TestMain`
+without the build tag. Put the service tests and their setup in their
+own folder or behind the marker or tag. The audit also runs `verify`
+(V-01), so the CI job that runs `vibe audit` needs the services. The
+reference Stop command already skips `verify-fast` when nothing changed
+since its last passing run. `reference/rules.md` (V-02) has the
+details.
+
 ## 4. Remove what belonged to the old system
 
 - `.vibe/` (state and backups).
