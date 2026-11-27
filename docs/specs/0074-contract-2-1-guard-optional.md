@@ -1,6 +1,6 @@
 # Spec 0074: Contract 2.1.0: the guard rules become SHOULD, and C-05 follows `platforms`
 
-Status: draft (2026-11-27). Issue #250. A MINOR contract release under
+Status: approved (2026-11-27). Issue #250; tickets #251 to #256. A MINOR contract release under
 spec 0051, "Versioning". It amends ADR 0025 (decisions 9 to 11) through
 a new ADR.
 
