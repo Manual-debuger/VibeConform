@@ -181,9 +181,14 @@ func checkR01Execution(env *Env, earlier Earlier) PartResult {
 // refused with the shim in place. A-02's probe (#103) runs every case
 // with the shim on PATH and returns its deny-case verdict; this half
 // reads it from the earlier results. Without Claude Code there is no
-// guard to check.
+// guard to check. Where A-02 does not count in the verdict (under 2.1.0,
+// when the guard set is not required), a MUST rule does not hold the
+// repository to the guard either (spec 0074).
 func r01GuardHalf(env *Env, earlier Earlier) PartResult {
 	if ok, _ := needsClaude(env.config); !ok {
+		return Pass()
+	}
+	if guardSetLevel(env.auditedVersion()) != Must && !env.config.requires("A-02") {
 		return Pass()
 	}
 	if g, ok := a02Deny(earlier); ok {

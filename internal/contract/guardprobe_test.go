@@ -270,6 +270,26 @@ func TestGuardProbesVibeGuard(t *testing.T) {
 		}
 		assertPart(t, rep, "R-01", contract.Execution, contract.ResultFail, `corpus case "rm -r -f (spec 0047)"`)
 	})
+	// Spec 0074: a repository that requires the guard set under 2.1.0
+	// keeps the results it had when the guard set was MUST.
+	t.Run("under 2.1.0 with the guard set required, the results are the same", func(t *testing.T) {
+		t.Parallel()
+		required := func(guard string) map[string]string {
+			files := withContract(t, map[string]string{settings: guardSettings(guard)}, "2.1.0")
+			files["vibe.yaml"] += "require: [A-01, A-02, A-03, A-04, A-08]\n"
+			return files
+		}
+		rep := audit(t, guardFixture(t, required(referenceGuard)), []string{"A-02", "A-03", "R-01"}, bin)
+		assertPart(t, rep, "A-02", contract.Probe, contract.ResultPass)
+		assertPart(t, rep, "A-03", contract.Probe, contract.ResultPass)
+		assertPart(t, rep, "R-01", contract.Execution, contract.ResultPass)
+		if rr := contracttest.RuleResult(t, rep, "A-02"); rr.Level != contract.Should || !rr.Required {
+			t.Errorf("A-02 level = %s, required %v; want SHOULD, required", rr.Level, rr.Required)
+		}
+		rep = audit(t, guardFixture(t, required(brokenGuard)), []string{"A-02", "R-01"}, bin)
+		assertPart(t, rep, "A-02", contract.Probe, contract.ResultFail, `corpus case "rm -r -f (spec 0047)"`)
+		assertPart(t, rep, "R-01", contract.Execution, contract.ResultFail, `corpus case "rm -r -f (spec 0047)"`)
+	})
 	t.Run("observe mode fails A-02", func(t *testing.T) {
 		t.Parallel()
 		rep := audit(t, guardFixture(t, map[string]string{

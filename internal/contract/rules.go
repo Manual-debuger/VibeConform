@@ -486,7 +486,7 @@ var rules = []Rule{
 		}},
 	},
 	{
-		ID: "A-01", Level: Must, Category: categoryAgents,
+		ID: "A-01", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "Shell commands and file edits pass through the guard",
 		Source:            "spec 0021",
 		NotApplicableWhen: notApplicableWithoutClaude,
@@ -496,7 +496,7 @@ var rules = []Rule{
 		applies: onConfig(needsClaude),
 	},
 	{
-		ID: "A-02", Level: Must, Category: categoryAgents,
+		ID: "A-02", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard refuses the baseline unless an exception says otherwise",
 		Source:            "specs 0012, 0047",
 		NotApplicableWhen: notApplicableWithoutClaude,
@@ -508,7 +508,7 @@ var rules = []Rule{
 		applies: onConfig(needsClaude),
 	},
 	{
-		ID: "A-03", Level: Must, Category: categoryAgents,
+		ID: "A-03", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard fails closed",
 		Source:            "spec 0021",
 		NotApplicableWhen: notApplicableWithoutClaude,
@@ -519,7 +519,7 @@ var rules = []Rule{
 		applies: onConfig(needsClaude),
 	},
 	{
-		ID: "A-04", Level: Must, Category: categoryAgents,
+		ID: "A-04", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard is loosened only through listed exceptions",
 		Source:            "spec 0050, ADR 0024",
 		NotApplicableWhen: notApplicableWithoutClaude,
@@ -564,7 +564,7 @@ var rules = []Rule{
 		applies: onConfig(needsClaude),
 	},
 	{
-		ID: "A-08", Level: Must, Category: categoryAgents,
+		ID: "A-08", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "An agent changes guardrail settings only after a person unlocks them",
 		Source:            "ADR 0025",
 		NotApplicableWhen: notApplicableWithoutClaude,
@@ -646,6 +646,26 @@ var rules = []Rule{
 		},
 	},
 }
+
+// guardSet is the guard set: the rules that hold the agent's guard (spec
+// 0074). Under contract 1.x they are MUST; from 2.1.0 they are SHOULD,
+// and require lists all of them or none.
+var guardSet = []string{"A-01", "A-02", "A-03", "A-04", "A-08"}
+
+// guardSetLevels is the level history of each rule of the guard set.
+var guardSetLevels = []LevelChange{{Since: "2.1.0", Level: Should}}
+
+// guardSetLevel is the level of the guard set's rules under the contract
+// version: MUST under 1.x, SHOULD from 2.1.0. It reads their level
+// history, not the registry, so that a check can call it.
+func guardSetLevel(contract string) Level {
+	return Rule{Level: Must, LevelChanges: guardSetLevels}.LevelAt(contract)
+}
+
+// GuardSet returns the guard set, A-01, A-02, A-03, A-04 and A-08, in
+// that order (spec 0074). Under contract 2.1.0 a configuration requires
+// all of it or none of it.
+func GuardSet() []string { return slices.Clone(guardSet) }
 
 // Rules returns every rule of contract 1.0.0 in report order. Each rule
 // has its own copy of its parts, level changes and revisions.

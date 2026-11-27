@@ -307,6 +307,11 @@ Not applicable when `agents` does not include `claude`. Start from
 `vibe-guard` satisfies A-01 to A-04, A-08 and A-09. Install it first
 (`SKILL.md`, step 5).
 
+A-01 to A-04 and A-08 are the guard set. They are SHOULD rules, MUST
+under 1.x. List all of them in `require` to hold the repository to the
+guard, or none of them: part of the set, or A-09 without it, is a
+configuration error.
+
 The hooks run from the project root. Claude Code runs a hook command in
 the agent's current directory, and Task uses the nearest `Taskfile.yml`
 above that directory. Inside a component, or under any directory with
@@ -319,12 +324,12 @@ each hook of your own that calls the task runner. Do not use
 only as written. `vibe-guard hook` finds the root itself and needs no
 prefix.
 
-### A-01 (MUST): shell commands and file edits pass through the guard
+### A-01 (SHOULD): shell commands and file edits pass through the guard
 
 `.claude/settings.json` has PreToolUse hooks matching `Bash`,
 `PowerShell`, `Write`, `Edit` and `MultiEdit`.
 
-### A-02 (MUST): the guard refuses the baseline
+### A-02 (SHOULD): the guard refuses the baseline
 
 Every deny case of the guard corpus is refused (exit 2) or let through by
 a listed exception, and every allow case is allowed. `vibe-guard hook`
@@ -337,13 +342,13 @@ case's rule refuses, not another command of the same line. No exception
 counts for the self-unlock commands or the edits of the unlock marker.
 A guard of the repository's own must lift a rule the same way.
 
-### A-03 (MUST): the guard fails closed
+### A-03 (SHOULD): the guard fails closed
 
 Deny cases are still refused with `PATH` reduced to the system's
 directories and with `.claude/hooks/policy.json` invalid. The reference
 PreToolUse command exits 2 when `vibe-guard` is missing.
 
-### A-04 (MUST): the guard is loosened only through listed exceptions
+### A-04 (SHOULD): the guard is loosened only through listed exceptions
 
 `.claude/hooks/policy.json` is valid version 2. Each entry of
 `exceptions` names a guard rule ID (`rm-rf`, `remove-item-recurse-force`,
@@ -372,7 +377,7 @@ that owns the edited file (`hook:owner`), and every component otherwise.
 A SessionStart hook exists, exits 0 and leaves `git status --porcelain`
 empty (`hook:context` in the reference Taskfiles).
 
-### A-08 (MUST): guardrail settings change only after a person unlocks them
+### A-08 (SHOULD): guardrail settings change only after a person unlocks them
 
 The guard refuses edits of `.claude/settings.json` and `.claude/hooks/`
 without a valid unlock marker, refuses `vibe unlock` and the marker's

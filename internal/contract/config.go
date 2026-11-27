@@ -553,6 +553,34 @@ func (p *configParser) require(v *yaml.Node) error {
 		}
 		p.cfg.require = append(p.cfg.require, r.ID)
 	}
+	return p.requireGuardSet()
+}
+
+// requireGuardSet refuses part of the guard set, and A-09 without it,
+// where the guard set is SHOULD (spec 0074): a guard that is hooked up but
+// not tested proves nothing, and a tested guard that is not hooked up does
+// nothing. Where the guard set is MUST, require has already refused it.
+func (p *configParser) requireGuardSet() error {
+	if guardSetLevel(p.rulesVersion()) != Should {
+		return nil
+	}
+	var missing []string
+	for _, id := range guardSet {
+		if !p.cfg.requires(id) {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	if len(missing) < len(guardSet) {
+		return p.fail("require", "lists part of the guard set (%s); add %s, or remove the guard set from require",
+			joinWords(guardSet, " and "), joinWords(missing, " and "))
+	}
+	if i := slices.Index(p.cfg.require, "A-09"); i >= 0 {
+		return p.fail(fmt.Sprintf("require[%d]", i), "A-09 needs the guard set; add %s, or remove A-09",
+			joinWords(missing, " and "))
+	}
 	return nil
 }
 

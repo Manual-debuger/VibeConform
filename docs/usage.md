@@ -587,7 +587,14 @@ its `contract:` line (the setup skill's `reference/upgrade.md`, section
   A-09, and "Behavior to know" under "`vibe audit`" for R-01. No rule
   is added or removed, and no guard corpus case.
 - 2.1.0 (spec 0074): MINOR. A declared 2.0.x is audited as 2.1.0, and
-  the behaviours of 2.0.0 hold.
+  the behaviours of 2.0.0 hold. The guard set (A-01, A-02, A-03, A-04
+  and A-08) is SHOULD, MUST under 1.x (ADR 0029): a repository that
+  wants a guarded agent lists it in `require` and keeps its 2.0.0
+  verdict (see "Required SHOULD rules" under "`vibe.yaml` version 2").
+  R-01's check that the A-02 deny cases are refused without `vibe`
+  counts only when the guard set is required. A 2.0.0 `vibe.yaml` with
+  A-09 in `require` and not the guard set is now a configuration error:
+  add the guard set.
 
 What V-08 cannot catch: it plants only the blanket forms
 `vibe audit --explain V-08` lists. A specific suppression, which names
@@ -940,6 +947,7 @@ the field path and the reason, for the first error in document order:
 ```
 Error: vibe.yaml: entrypoints.verify[2]: must be a command string
 Error: vibe.yaml: waivers[0].rule: C-02 is a MUST rule; only SHOULD rules can be waived
+Error: vibe.yaml: require: lists part of the guard set (A-01, A-02, A-03, A-04 and A-08); add A-03, A-04 and A-08, or remove the guard set from require
 Error: vibe.yaml: integrations: the version 2 schema has no integrations field; agents go in agents; editors moved into the setup skill; repository intelligence has no counterpart
 ```
 
@@ -992,9 +1000,22 @@ waivers:
   makes it count. Without `require`, the verdict counts MUST rules only.
   The first vibe release after v0.14.0-alpha.1 reads `require`; an
   earlier vibe rejects it as an unknown field.
+- **The guard set.** A-01, A-02, A-03, A-04 and A-08 hold the agent
+  guard (see "The agent guard"). Under contract 2.1.0 they are SHOULD
+  rules; under 1.x they are MUST (spec 0074, ADR 0029). To hold the
+  repository to the guard, list the whole guard set in `require`: the
+  verdict then counts it as it did when the set was MUST. `require`
+  lists all of the guard set or none of it, and `require` with A-09
+  needs the whole set. Anything else is an error that names the missing
+  IDs, at `require` for part of the set and at A-09's entry for A-09
+  without it. Under 1.x, the guard set in `require` is an error, since
+  a MUST rule is always required. Without the guard set in `require`, a
+  failing guard rule is reported and does not change the verdict, and
+  R-01 does not check the A-02 deny cases. A guard rule can be waived
+  under 2.x like any SHOULD rule, unless it is required.
 
 ```yaml
-require: [V-06, V-07, A-09]
+require: [V-06, V-07, A-01, A-02, A-03, A-04, A-08, A-09]
 ```
 
 ## The setup skill
@@ -1404,7 +1425,10 @@ and edits to files that conventionally hold secrets (`.env`, `*.pem`,
 +main`, `git branch -d -f`, and PowerShell's `ri -Rec -Fo` all count. The
 audit checks this by probe: it runs the guard corpus through the hook
 (see "`vibe audit`"). Any guard that passes will do; `vibe-guard`, below,
-is the reference, and the setup skill installs it.
+is the reference, and the setup skill installs it. From contract 2.1.0
+the guard is the adopter's choice: the guard rules (the guard set) are
+SHOULD, and a repository that wants them to count lists them in
+`require` (see "The guard set" under "`vibe.yaml` version 2").
 
 **Commands that skip Git hooks** (A-09, SHOULD, since contract 1.2.0; guard
 rule ID `git-skip-hooks`). The guard also refuses `git commit

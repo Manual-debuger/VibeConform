@@ -1,7 +1,7 @@
 # This repository's contract configuration (vibe.yaml version 2, spec
 # 0052). `task audit` and the contract-audit workflow run `vibe audit`
 # on it (spec 0059).
-contract: 2.0.0
+contract: 2.1.0
 platforms: [linux, windows]
 agents: [claude, codex]
 # No components: one Go component at the root, found from go.mod.
@@ -22,5 +22,6 @@ entrypoints:
 # The SHOULD rules this repository holds itself to (spec 0061, acceptance
 # criterion 7; spec 0063): they count in the verdict like MUST rules. V-05
 # is not applicable here (no Python component), which a required rule may
-# be.
-require: [V-05, V-06, V-07, V-08, A-09]
+# be. A-01 to A-04 and A-08 are the guard set (spec 0074): this repository
+# keeps its agent guarded, and A-09 needs the guard set.
+require: [V-05, V-06, V-07, V-08, A-01, A-02, A-03, A-04, A-08, A-09]
