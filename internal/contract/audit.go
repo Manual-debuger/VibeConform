@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"slices"
 	"time"
 )
 
@@ -26,6 +27,13 @@ func Audit(ctx context.Context, cfg *Config, repo *Repo, opts Options) *Report {
 	list := opts.Rules
 	if list == nil {
 		list = Rules()
+	}
+	// Each rule as it reads under the audited contract: its title, check
+	// text and applicability (spec 0074). Its check functions stay, so
+	// a test's stand-ins stay too.
+	list = slices.Clone(list)
+	for i := range list {
+		list[i] = list[i].At(cfg.Contract.Audited)
 	}
 
 	env := newEnv(ctx, cfg, repo)

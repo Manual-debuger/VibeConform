@@ -16,16 +16,15 @@ import (
 // each rule's sentence, check, level and source must match the spec's
 // rule table. The check is derived from the parts (spec 0073), so this
 // also holds each part's lead and check text to the spec. Every part of
-// every rule has a check function.
+// every rule has a check function. The table states the latest contract,
+// so each rule is read as it is under Latest (spec 0074); a revision
+// gives one check text for each part.
 func TestRegistryQuotesSpec0051(t *testing.T) {
 	rows := spec0051Rows(t)
 	must, mustV1, from0051 := 0, 0, 0
 	for _, r := range Rules() {
-		for _, p := range r.Parts {
-			if p.Run == nil && p.RunLast == nil {
-				t.Errorf("%s %s part has no check", r.ID, p.Kind)
-			}
-		}
+		checkRuleParts(t, r)
+		r = r.At(Latest)
 		if r.Since != "" {
 			checkSpec0061Rule(t, r)
 			continue
@@ -48,6 +47,22 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 	if must != 11 || mustV1 != 16 || from0051 != 25 {
 		t.Errorf("%d rules of spec 0051, %d MUST under %s and %d under %s; want 25, 11 and 16",
 			from0051, must, Latest, mustV1, Contract1)
+	}
+}
+
+// checkRuleParts checks that every part of r has a check function and
+// that each revision of r gives one check text for each part.
+func checkRuleParts(t *testing.T, r Rule) {
+	t.Helper()
+	for _, p := range r.Parts {
+		if p.Run == nil && p.RunLast == nil {
+			t.Errorf("%s %s part has no check", r.ID, p.Kind)
+		}
+	}
+	for _, v := range r.Revisions {
+		if len(v.Checks) != len(r.Parts) {
+			t.Errorf("%s revision %s has %d checks for %d parts", r.ID, v.Since, len(v.Checks), len(r.Parts))
+		}
 	}
 }
 

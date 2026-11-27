@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"time"
 
@@ -107,27 +108,56 @@ func runContractAudit(cmd *cobra.Command, f auditFlags) error {
 	return verdictError(rep)
 }
 
-// runExplain explains one rule. It reads no repository and no
-// configuration, so any other flag the user set is an error. It visits
-// the set flags, in cobra's order (sorted by name), and keeps no list of
-// them, so that a flag added later is refused too.
+// explainFlags are the flags --explain reads besides itself: the ones that
+// find the configuration.
+var explainFlags = []string{"explain", "repo-root", "config"}
+
+// runExplain explains one rule as it is under the contract the
+// configuration declares, or under the latest contract when the
+// repository root has no vibe.yaml and --config names none (spec 0074).
+// It reads only the configuration's contract field and no repository, so
+// any flag but those of explainFlags is an error. It visits the set flags,
+// in cobra's order (sorted by name), and keeps no list of the refused
+// ones, so that a flag added later is refused too.
 func runExplain(cmd *cobra.Command, f auditFlags) error {
 	var others []string
 	cmd.Flags().Visit(func(flag *pflag.Flag) {
-		if flag.Name != "explain" {
+		if !slices.Contains(explainFlags, flag.Name) {
 			others = append(others, "--"+flag.Name)
 		}
 	})
 	if len(others) > 0 {
-		return fmt.Errorf("--explain reads no repository and no configuration; drop %s", strings.Join(others, ", "))
+		return fmt.Errorf("--explain reads only the contract version of the configuration; drop %s", strings.Join(others, ", "))
+	}
+	versions, source, err := explainContract(f)
+	if err != nil {
+		return err
 	}
 	rule, ok := contract.LookupRule(f.explain)
 	if !ok {
 		return fmt.Errorf("--explain: %q is not a rule of contract %s; rules: %s",
-			f.explain, contract.Latest, strings.Join(contract.RuleIDs(), " "))
+			f.explain, versions.Audited, strings.Join(contract.RuleIDs(), " "))
 	}
-	if err := writeExplain(cmd.OutOrStdout(), rule, contract.Latest); err != nil {
+	if err := writeExplain(cmd.OutOrStdout(), rule, versions.Audited, source); err != nil {
 		return fmt.Errorf("--explain: %w", err)
 	}
 	return nil
+}
+
+// explainContract is the contract --explain explains a rule under, and
+// where that version comes from, for the explanation's Contract line.
+func explainContract(f auditFlags) (contract.Versions, string, error) {
+	file, data, err := contract.ReadConfig(f.repoRoot, f.config)
+	if errors.Is(err, contract.ErrNoConfig) {
+		return contract.Versions{Declared: contract.Latest, Audited: contract.Latest},
+			fmt.Sprintf("%s, the latest (no %s)", contract.Latest, configFileName), nil
+	}
+	if err != nil {
+		return contract.Versions{}, "", configLoadError(err)
+	}
+	versions, err := contract.ParseContract(file, data)
+	if err != nil {
+		return contract.Versions{}, "", err
+	}
+	return versions, fmt.Sprintf("%s (%s declares %s)", versions.Audited, file, versions.Declared), nil
 }

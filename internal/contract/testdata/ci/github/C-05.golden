@@ -84,3 +84,50 @@ fix: fix the syntax so that the file parses
 file: .circleci/config.yml
 message: contract 1.2.0 reads GitHub Actions and GitLab CI only, and this repository's CI is .circleci/config.yml
 fix: run CI in GitHub Actions under .github/workflows/ or in GitLab CI (.gitlab-ci.yml), or wait for a vibe that reads this provider
+
+== 2.1.0, [linux] with a Linux runner
+no findings
+
+== 2.1.0, [linux] with only a Windows runner
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no Linux runner (called in .github/workflows/ci.yml job w)
+fix: run `task verify` on Linux, such as in a job with runs-on: ubuntu-latest
+
+== 2.1.0, [windows] with only a Windows runner
+no findings
+
+== 2.1.0, [windows] with only a Linux runner
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no Windows runner (called in .github/workflows/ci.yml job l)
+fix: run `task verify` on Windows, such as in a job with runs-on: windows-latest
+
+== 2.1.0, [linux, windows] with both runners
+no findings
+
+== 2.1.0, [linux, windows] with Linux only
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no Windows runner (called in .github/workflows/ci.yml job l)
+fix: run `task verify` on Windows too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}
+
+== 2.1.0, [linux, macos] with both runners
+no findings
+
+== 2.1.0, [linux, macos] with Linux and Windows
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no macOS runner (called in .github/workflows/ci.yml job l, .github/workflows/ci.yml job w)
+fix: run `task verify` on macOS too, such as with a matrix over os: [ubuntu-latest, macos-latest] and runs-on: ${{ matrix.os }}
+
+== 2.1.0, the missing platforms in platforms order
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no macOS or Linux runner (called in .github/workflows/ci.yml job w)
+fix: run `task verify` on macOS and Linux too, such as with a matrix over os: [macos-latest, windows-latest, ubuntu-latest] and runs-on: ${{ matrix.os }}
+
+== 2.1.0, runners of unknown platform
+file: .github/workflows/ci.yml
+message: the verify command `task verify` runs on no Linux runner (called in .github/workflows/ci.yml job x); runners of unknown platform: ${{ inputs.os }}
+fix: run `task verify` on Linux, such as in a job with runs-on: ubuntu-latest
+
+== 2.1.0, verify called nowhere
+file: .github/workflows/
+message: no workflow step calls the verify command `task verify`, so it runs on no runner
+fix: call `task verify` in a job that runs on macos-latest
