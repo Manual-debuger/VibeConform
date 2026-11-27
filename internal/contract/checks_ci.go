@@ -349,9 +349,9 @@ func checkC05(env *Env) PartResult {
 	for _, c := range verify {
 		r := runnersOf(ci, c)
 		if len(r.where) == 0 {
-			fix := w.uncalledOnRunnerFix(c)
+			fix := w.uncalledOnLinuxWindowsFix(c)
 			if followsPlatforms {
-				fix = w.uncalledOnPlatformsFix(c, want)
+				fix = w.uncalledOnDeclaredFix(c, want)
 			}
 			findings = append(findings, Finding{File: ci.Dir, Message: w.uncalledOnRunner(c), Fix: fix})
 			continue
@@ -371,9 +371,9 @@ func checkC05(env *Env) PartResult {
 		if len(r.unknown) > 0 {
 			msg += "; runners of unknown platform: " + strings.Join(r.unknown, "; ")
 		}
-		fix := w.lackingPlatformFix(c, joinWords(names, " and "))
+		fix := w.lackingLinuxWindowsFix(c, joinWords(names, " and "))
 		if followsPlatforms {
-			fix = w.lackingPlatformsFix(c, lacking, want)
+			fix = w.lackingDeclaredFix(c, lacking, want)
 		}
 		findings = append(findings, Finding{File: r.file, Message: msg, Fix: fix})
 	}
@@ -412,15 +412,9 @@ func runnersOf(ci *ciModel, c shellCommand) commandRunners {
 	return r
 }
 
-func platformName(p string) string {
-	switch p {
-	case platformLinux:
-		return "Linux"
-	case platformWindows:
-		return "Windows"
-	}
-	return "macOS"
-}
+// platformName is a platform value of platforms as findings name it, such
+// as Linux.
+func platformName(p string) string { return platformFacts[p].name }
 
 // scanners are the first words, or first two words, of the commands D-03
 // recognizes as vulnerability scanners.
