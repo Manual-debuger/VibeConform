@@ -183,7 +183,7 @@ func TestReferenceImplementationsPassTheStaticAudit(t *testing.T) { //nolint:goc
 				t.Parallel()
 				report := auditReference(t, referenceRepo(t, stack, provider))
 				for _, r := range report.Rules {
-					if r.Rule.Level == contract.Must && r.Result == contract.ResultFail {
+					if r.Level == contract.Must && r.Result == contract.ResultFail {
 						_, msgs := referenceFindings(t, report, r.Rule.ID)
 						t.Errorf("MUST rule %s fails: %s", r.Rule.ID, msgs)
 					}

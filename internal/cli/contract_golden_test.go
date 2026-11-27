@@ -18,9 +18,13 @@ import (
 // rule's check or a finding's wording changes.
 var updateGoldens = flag.Bool("update", false, "rewrite the contract report goldens; review the diff, then commit it")
 
+// goldenContract is the contract the golden reports' fixtures declare:
+// the 2.x contract this vibe implements (spec 0074).
+var goldenContract = contracttest.Section{Key: "contract", Body: "contract: 2.1.0\n"}
+
 func requiredGoldenEdits() []contracttest.Edit {
 	return []contracttest.Edit{
-		contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(contracttest.Section{Key: "require", Body: "require: [V-05, V-06, R-03]\n"})),
+		contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(goldenContract, contracttest.Section{Key: "require", Body: "require: [V-05, V-06, R-03]\n"})),
 		contracttest.WithoutFile(".github/pull_request_template.md"),
 	}
 }
@@ -37,13 +41,13 @@ func TestContractReportGolden(t *testing.T) { //nolint:gocognit // baseline: pre
 		edits []contracttest.Edit
 		args  []string
 	}{
-		{name: "baseline"},
-		{name: "static", args: []string{"--static"}},
+		{name: "baseline", edits: []contracttest.Edit{contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(goldenContract))}},
+		{name: "static", edits: []contracttest.Edit{contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(goldenContract))}, args: []string{"--static"}},
 		{name: "mixed", edits: []contracttest.Edit{
 			// V-04 fails (MUST); R-02 fails (SHOULD) with an expired
 			// waiver; R-03 is waived; C-05 is not applicable, so its
 			// waiver is unused.
-			contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(
+			contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(goldenContract,
 				contracttest.Section{Key: "platforms", Body: "platforms: [linux]\n"},
 				contracttest.Section{Key: "entrypoints", Body: "entrypoints:\n  verify: task verify\n  verify-fast: task verify:fast\n  fmt-check: task fmt:check\n"},
 				contracttest.Section{Key: "waivers", Body: "waivers:\n" +

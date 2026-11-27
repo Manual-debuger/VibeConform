@@ -58,7 +58,7 @@ func (e *Env) readFile(name string) ([]byte, error) {
 
 // The readings that differ between the contracts this vibe implements
 // (spec 0072). A check asks for the reading it needs; each holds under
-// 2.0.0 and not under 1.2.0.
+// 2.x (2.0.0 and 2.1.0) and not under 1.2.0.
 
 // narrowsExceptions: a command exception counts for a deny case only when
 // it prefixes a simple command the case's rule refuses, and no exception

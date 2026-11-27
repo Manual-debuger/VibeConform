@@ -28,6 +28,7 @@ func reportOf(t *testing.T, static bool, results map[string]contract.RuleResult)
 			}
 		}
 		rr.Rule = rule
+		rr.Level = rule.LevelAt(rep.Contract.Audited)
 		rep.Rules = append(rep.Rules, rr)
 	}
 	return rep

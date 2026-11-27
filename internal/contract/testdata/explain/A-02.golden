@@ -6,7 +6,7 @@ every corpus case is fed to every PreToolUse hook command that matches its tool.
 
 Details:
 Exceptions:
-  Under contract 2.0.0, an exception counts for a deny case only when all
+  Under contract 2.x, an exception counts for a deny case only when all
   of these hold: the guard lets the case through; an exception in
   `.claude/hooks/policy.json` matches the case; and the guard refuses the
   case when every exception that matches it is removed from

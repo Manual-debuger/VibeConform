@@ -12,8 +12,9 @@ import (
 const (
 	// Contract1 is the 1.x contract: a declared 1.y.z is audited as it.
 	Contract1 = "1.2.0"
-	// Contract2 is the 2.x contract: a declared 2.0.z is audited as it.
-	Contract2 = "2.0.0"
+	// Contract2 is the 2.x contract: a declared 2.0.z or 2.1.z is audited
+	// as it (spec 0074).
+	Contract2 = "2.1.0"
 	// Latest is the newest contract this vibe implements. vibe --version
 	// shows it, and a new configuration declares it: vibe init writes it,
 	// and the setup skill names it (spec 0072).
@@ -67,6 +68,33 @@ func parseVersion(v string) (major, minor int, ok bool) {
 		return 0, 0, false
 	}
 	return major, minor, true
+}
+
+// compareVersions orders two X.Y.Z versions: negative when a is older
+// than b, zero when they are equal, positive when a is newer. A version
+// that is not X.Y.Z sorts as 0.0.0; the callers pass well-formed ones.
+func compareVersions(a, b string) int {
+	pa, pb := versionParts(a), versionParts(b)
+	for i := range pa {
+		if pa[i] != pb[i] {
+			return pa[i] - pb[i]
+		}
+	}
+	return 0
+}
+
+// versionParts is an X.Y.Z version's three numbers, or zeros when it is
+// not one.
+func versionParts(v string) [3]int {
+	var out [3]int
+	m := versionPattern.FindStringSubmatch(v)
+	if m == nil {
+		return out
+	}
+	for i := range out {
+		out[i], _ = strconv.Atoi(m[i+1])
+	}
+	return out
 }
 
 // auditedAs returns the implemented contract a well-formed declared

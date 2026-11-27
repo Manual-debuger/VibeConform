@@ -13,8 +13,9 @@ const explainWidth = 76
 
 // writeExplain prints one rule as the registry holds it (spec 0052,
 // "Package and command"): the facts first, then the rationale and the
-// check as spec 0051 states it.
-func writeExplain(w io.Writer, rule contract.Rule) error {
+// check as spec 0051 states it. Its level and whether it is waivable are
+// the ones under the contract version (spec 0074).
+func writeExplain(w io.Writer, rule contract.Rule, version string) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s: %s\n\n", rule.ID, rule.Title)
 
@@ -27,11 +28,11 @@ func writeExplain(w io.Writer, rule contract.Rule) error {
 		notApplicable = "never; the rule always applies"
 	}
 	waivable := "no, a MUST rule cannot be waived"
-	if rule.Waivable() {
+	if rule.WaivableAt(version) {
 		waivable = "yes, through a waiver in vibe.yaml with a reason and an until date"
 	}
 	for _, field := range [][2]string{
-		{"Level", string(rule.Level)},
+		{"Level", string(rule.LevelAt(version))},
 		{"Category", string(rule.Category) + ", " + rule.Category.Name()},
 		{"Checks", strings.Join(kinds, ", ")},
 		{"Source", rule.Source},

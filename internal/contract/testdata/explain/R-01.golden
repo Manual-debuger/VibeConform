@@ -9,7 +9,7 @@ with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny c
 
 Details:
 Calls of vibe:
-  Under contract 2.0.0, a command calls `vibe` when the last path element of
+  Under contract 2.x, a command calls `vibe` when the last path element of
   its first word, after `/` or `\`, is the literal `vibe` or `vibe.exe`,
   compared case-sensitively. The directory part may hold an expansion, so
   `"$dir/vibe" verify` and `./bin/vibe verify` are calls. A last element
