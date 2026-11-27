@@ -66,7 +66,7 @@ jobs:
           esac
           dir="$RUNNER_TEMP/gitleaks"
           mkdir -p "$dir"
-          curl -fsSL -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
+          curl -fsSL --retry 3 -o "$dir/$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$asset"
           echo "$sum  $dir/$asset" | sha256sum -c -
           case "$asset" in
             *.zip) unzip -q -o "$dir/$asset" gitleaks.exe -d "$dir" ;;

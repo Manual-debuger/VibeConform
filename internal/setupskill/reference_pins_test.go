@@ -216,6 +216,53 @@ func installsGitleaks(content string) bool {
 // any other SHA-256 in a file that installs gitleaks is a stale or
 // mistyped pin.
 func TestGitleaksInstallsMatchPins(t *testing.T) {
+	installs := map[string]int{}
+	for name, content := range gitleaksInstallFiles(t) {
+		installs[strings.SplitN(name, "/", 2)[0]]++
+		checkGitleaksPins(t, name, content)
+	}
+	// Each place holds copies, so a moved or renamed file cannot make the
+	// check pass by matching nothing.
+	for _, place := range []string{"internal", ".github", "examples"} {
+		if installs[place] == 0 {
+			t.Errorf("no file under %s installs gitleaks; the check matched nothing there", place)
+		}
+	}
+}
+
+// TestGitleaksDownloadsRetry: every curl that downloads the gitleaks
+// release retries, so a transient error from github.com (an HTTP 504 failed
+// the Examples workflow's install-tools step on main at 7b26c6c) does not
+// fail the job. curl's --retry covers timeouts and the 408, 429, 500, 502,
+// 503 and 504 responses.
+func TestGitleaksDownloadsRetry(t *testing.T) {
+	downloads := map[string]int{}
+	for name, content := range gitleaksInstallFiles(t) {
+		for i, line := range strings.Split(content, "\n") {
+			if !strings.Contains(line, "curl ") || !installsGitleaks(line) {
+				continue
+			}
+			downloads[strings.SplitN(name, "/", 2)[0]]++
+			if !strings.Contains(line, "--retry") {
+				t.Errorf("%s:%d downloads gitleaks with curl but does not retry (add --retry 3): %s", name, i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+	// Each place downloads with curl, so a change to the line's form cannot
+	// make the check pass by matching nothing.
+	for _, place := range []string{"internal", ".github", "examples"} {
+		if downloads[place] == 0 {
+			t.Errorf("no curl download of gitleaks found under %s; the check matched nothing there", place)
+		}
+	}
+}
+
+// gitleaksInstallFiles returns every copy of the gitleaks install step,
+// keyed by its path from the repository root: the skill's reference CI
+// files, this repository's workflows and actions, and the examples'
+// workflows.
+func gitleaksInstallFiles(t *testing.T) map[string]string {
+	t.Helper()
 	files := map[string]string{}
 	skill := setupskill.FS()
 	refs, err := fs.Glob(skill, "reference/ci/*/*.yml")
@@ -243,21 +290,12 @@ func TestGitleaksInstallsMatchPins(t *testing.T) {
 			files[f] = string(b)
 		}
 	}
-	installs := map[string]int{}
-	for name, content := range files {
+	for f, content := range files {
 		if !installsGitleaks(content) {
-			continue
-		}
-		installs[strings.SplitN(name, "/", 2)[0]]++
-		checkGitleaksPins(t, name, content)
-	}
-	// Each place holds copies, so a moved or renamed file cannot make the
-	// check pass by matching nothing.
-	for _, place := range []string{"internal", ".github", "examples"} {
-		if installs[place] == 0 {
-			t.Errorf("no file under %s installs gitleaks; the check matched nothing there", place)
+			delete(files, f)
 		}
 	}
+	return files
 }
 
 // checkGitleaksPins checks one CI file that installs gitleaks against
