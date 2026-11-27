@@ -1,8 +1,8 @@
 name: CodeQL
 
-# Free on public repositories (see PUBLIC_REPO_CHECKLIST.md); scans the Go
-# source on every push/PR to main plus a weekly sweep for newly disclosed
-# query coverage against unchanged code.
+# Free on public repositories (see docs/usage.md, "GitHub settings set by
+# hand"); scans the Go source on every push/PR to main plus a weekly
+# sweep for newly disclosed query coverage against unchanged code.
 
 on:
   push:

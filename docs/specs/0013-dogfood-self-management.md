@@ -91,7 +91,9 @@ already establishes independently.
   `.github/` is fully managed.
 - No branch-protection or repository-settings management. `vibe` writes
   files in a working tree; it does not call the GitHub API. See
-  `PUBLIC_REPO_CHECKLIST.md` for what is configured by hand and why.
+  `docs/usage.md`, "GitHub settings set by hand", for what is configured
+  by hand and why (this pointed to `PUBLIC_REPO_CHECKLIST.md` until that
+  file was retired).
 - No `vibe sync` in CI, ever. CI audits; it never writes. A CI job that
   syncs and commits would make the gate unfalsifiable.
 - No removal of the hand-written guardrails this repository already has —
