@@ -116,9 +116,13 @@ Then ask your agent to set up VibeConform. The skill:
   which installs `vibe` with the setup action), `dependabot.yml`, a pull
   request template, `AGENTS.md`, `CLAUDE.md`, and the agent hooks in
   `.claude/settings.json`;
-- hands you a command that writes `.claude/hooks/policy.json`, because
-  the guard refuses that file to the agent, and waits until you have run
-  it;
+- asks whether you want the agent guard, `vibe-guard`. Guarded is the
+  default: `vibe.yaml` then requires the guard set (A-01 to A-04 and
+  A-08). On "no" it leaves out the guard, its hooks and its policy, and
+  removes the guard set from `require`;
+- with the guard, hands you a command that writes
+  `.claude/hooks/policy.json`, because the guard refuses that file to the
+  agent, and waits until you have run it;
 - checks that `vibe-guard` is found by a non-interactive shell;
 - runs `vibe audit` and fixes each finding until the verdict is
   `conformant`, or stops and tells you what needs a person.

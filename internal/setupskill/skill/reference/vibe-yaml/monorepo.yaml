@@ -20,3 +20,6 @@ entrypoints:
   verify-fast: task verify:fast
   fmt: task fmt
   fmt-check: task fmt:check
+# The guard set: the audit holds the agent's guard to its rules.
+# Removing this line drops the guard rules from the verdict.
+require: [A-01, A-02, A-03, A-04, A-08]

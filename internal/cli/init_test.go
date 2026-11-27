@@ -125,8 +125,22 @@ func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocycl
 			if !slices.Equal(cfg.Components, c.want) {
 				t.Errorf("components = %v, want %v", cfg.Components, c.want)
 			}
+			// Guarded is the default, and removing the line is the visible
+			// way out (spec 0074, "vibe init"): the guard set is required,
+			// under a comment that says what removing it drops.
+			if !strings.Contains(written, "\nrequire: [A-01, A-02, A-03, A-04, A-08]\n") {
+				t.Errorf("vibe.yaml does not require the guard set:\n%s", written)
+			}
+			if !strings.Contains(written, "drops the guard rules") {
+				t.Errorf("vibe.yaml has no comment on removing the guard set:\n%s", written)
+			}
 
 			rep := auditJSON(t, dir, "--static")
+			for _, id := range contract.GuardSet() {
+				if r := rep.rule(t, id); r.Level != "SHOULD" || r.Required == nil || !*r.Required {
+					t.Errorf("%s: level %s, required key %v; want a required SHOULD rule", id, r.Level, r.Required != nil && *r.Required)
+				}
+			}
 			assertRule(t, rep, "V-04", "fail", "entrypoints.verify ", "entrypoints.verify-fast ", "entrypoints.fmt ", "entrypoints.fmt-check ")
 			for _, r := range rep.Rules {
 				if r.ID == "V-04" || r.Result == "pass" || r.Result == "not_applicable" || r.Result == "not_run" {
