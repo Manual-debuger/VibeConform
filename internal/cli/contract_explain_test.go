@@ -12,10 +12,12 @@ import (
 // --explain prints what the registry knows about one rule (spec 0052,
 // "Package and command"): ID, level, category, rule sentence, check
 // kinds, source, rationale, the check as spec 0051 states it, when the
-// rule is not applicable, and whether it can be waived.
+// rule is not applicable, and whether it can be waived. With no vibe.yaml,
+// the rule is the one under the latest contract.
 func TestAuditExplainEveryRule(t *testing.T) {
 	t.Parallel()
 	for _, rule := range contract.Rules() {
+		rule := rule.At(contract.Latest)
 		t.Run(rule.ID, func(t *testing.T) {
 			r := runVibeAudit(t, "--explain", rule.ID)
 			assertExit(t, r, 0)
@@ -71,7 +73,7 @@ func TestAuditExplainContent(t *testing.T) {
 		}},
 		{"C-05", []string{
 			"Level: SHOULD", "Category: C, CI", "Checks: static", "Source: principle 2",
-			"Not applicable: when `platforms` does not include `windows`",
+			"Not applicable: never; the rule always applies",
 			"Waivable: yes, through a waiver in vibe.yaml",
 			"The C rules read GitHub Actions or GitLab CI (GitLab CI since 1.1.0).",
 		}},

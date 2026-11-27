@@ -132,6 +132,25 @@ type LevelChange struct {
 	Level Level
 }
 
+// Revision is a contract version that changed what a rule says and when
+// it applies, with the rule's text from that version on (spec 0074). It
+// replaces the rule's title, the check text of each part and its
+// applicability, all together. The parts' check functions do not change:
+// a check that differs between contract versions reads the audited
+// version itself.
+type Revision struct {
+	// Since is the contract version that made the change, such as "2.1.0".
+	Since string
+	Title string
+	// Checks are the parts' check texts, without their leads: one for each
+	// part, in part order.
+	Checks            []string
+	NotApplicableWhen string
+	// applies is the applicability from Since on; nil means the rule
+	// always applies.
+	applies func(env *Env) (bool, string)
+}
+
 // Rule is one rule of contract 1.0.0 (spec 0051, "Rules"). The report
 // and --explain read only the registry.
 type Rule struct {
@@ -144,6 +163,11 @@ type Rule struct {
 	// level, oldest first, or none when the level never changed.
 	LevelChanges []LevelChange
 	Category     Category
+	// Revisions are the contract versions that changed the rule's title,
+	// check text or applicability, oldest first; At applies them. Title,
+	// the parts' Check, NotApplicableWhen and applies hold the rule's text
+	// before the first of them. Read a rule through At.
+	Revisions []Revision
 	// Title is the rule sentence of spec 0051.
 	Title string
 	// Source names the specs, ADRs and principles the rule comes from.
@@ -169,6 +193,26 @@ func (r Rule) Check() string {
 		texts[i] = p.Lead + p.Check
 	}
 	return strings.Join(texts, " ")
+}
+
+// At is the rule as it reads under the contract version: its title, the
+// check text of its parts and its applicability from its last revision
+// that the version is not older than. Its level is LevelAt's. Call it on
+// a registry rule: the result keeps the revisions, so At of another
+// version on it is not that version's rule.
+func (r Rule) At(contract string) Rule {
+	out := r
+	out.Parts = slices.Clone(r.Parts)
+	for _, v := range r.Revisions {
+		if compareVersions(contract, v.Since) < 0 {
+			continue
+		}
+		out.Title, out.NotApplicableWhen, out.applies = v.Title, v.NotApplicableWhen, v.applies
+		for i := range out.Parts {
+			out.Parts[i].Check = v.Checks[i]
+		}
+	}
+	return out
 }
 
 // LevelAt is the rule's level under the contract version: the level of
@@ -454,6 +498,14 @@ var rules = []Rule{
 				"expansion. Not applicable when `platforms` does not include `windows`.", checkC05),
 		},
 		applies: onConfig(needsWindows),
+		// Under 2.1.0 the rule follows platforms (spec 0074); checkC05
+		// reads the audited version.
+		Revisions: []Revision{{
+			Since: "2.1.0",
+			Title: "Tests run on every declared platform",
+			Checks: []string{"the steps that call `verify` run on a runner of each platform in `platforms`, " +
+				"after matrix expansion."},
+		}},
 	},
 	{
 		ID: "A-01", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
@@ -638,12 +690,11 @@ func guardSetLevel(contract string) Level {
 func GuardSet() []string { return slices.Clone(guardSet) }
 
 // Rules returns every rule of contract 1.0.0 in report order. Each rule
-// has its own copy of its parts and level changes.
+// has its own copy of its parts, level changes and revisions.
 func Rules() []Rule {
-	out := slices.Clone(rules)
-	for i := range out {
-		out[i].Parts = slices.Clone(out[i].Parts)
-		out[i].LevelChanges = slices.Clone(out[i].LevelChanges)
+	out := make([]Rule, len(rules))
+	for i, r := range rules {
+		out[i] = copyRule(r)
 	}
 	return out
 }
@@ -654,10 +705,19 @@ func LookupRule(id string) (Rule, bool) {
 	if i < 0 {
 		return Rule{}, false
 	}
-	r := rules[i]
+	return copyRule(rules[i]), true
+}
+
+// copyRule is r with its own copy of its parts, level changes and
+// revisions.
+func copyRule(r Rule) Rule {
 	r.Parts = slices.Clone(r.Parts)
 	r.LevelChanges = slices.Clone(r.LevelChanges)
-	return r, true
+	r.Revisions = slices.Clone(r.Revisions)
+	for i := range r.Revisions {
+		r.Revisions[i].Checks = slices.Clone(r.Revisions[i].Checks)
+	}
+	return r
 }
 
 // RuleIDs returns every rule ID in report order.

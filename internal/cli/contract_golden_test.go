@@ -62,15 +62,16 @@ func TestContractReportGolden(t *testing.T) { //nolint:gocognit // baseline: pre
 		{name: "static", edits: []contracttest.Edit{contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(goldenContract))}, args: []string{"--static"}},
 		{name: "mixed", edits: []contracttest.Edit{
 			// V-04 fails (MUST); R-02 fails (SHOULD) with an expired
-			// waiver; R-03 is waived; C-05 is not applicable, so its
-			// waiver is unused.
+			// waiver; R-03 is waived; V-05 is not applicable (no Python
+			// component), so its waiver is unused. Under 2.1.0, C-05
+			// follows platforms: one Linux runner is enough (spec 0074).
 			contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(goldenContract,
 				contracttest.Section{Key: "platforms", Body: "platforms: [linux]\n"},
 				contracttest.Section{Key: "entrypoints", Body: "entrypoints:\n  verify: task verify\n  verify-fast: task verify:fast\n  fmt-check: task fmt:check\n"},
 				contracttest.Section{Key: "waivers", Body: "waivers:\n" +
 					"  - rule: R-02\n    reason: rewriting AGENTS.md\n    until: 2000-01-01\n" +
 					"  - rule: R-03\n    reason: templates move to the org repository\n    until: 2999-12-31\n" +
-					"  - rule: C-05\n    reason: one platform for now\n    until: 2999-12-31\n"},
+					"  - rule: V-05\n    reason: no type checker for Python yet\n    until: 2999-12-31\n"},
 			)),
 			contracttest.WithFile("AGENTS.md", "Run the checks before you finish.\n"),
 			contracttest.WithoutFile(".github/pull_request_template.md"),

@@ -267,11 +267,16 @@ starting with `vibe audit` and calls no `verify` command. Start from the
 installs `vibe` and `vibe-guard` from the release and checks them against
 its `checksums.txt`. Set `VIBE_VERSION` to an exact release tag.
 
-### C-05 (SHOULD): tests run on Linux and Windows
+### C-05 (SHOULD): tests run on every declared platform
 
-The steps that call `verify` run on a Linux and a Windows runner after
-matrix expansion. Not applicable when `platforms` has no `windows`. The
-reference `ci.yml` has an `os` matrix.
+The steps that call `verify` run on a runner of each platform in
+`platforms`, after matrix expansion. `platforms: [linux]` needs one Linux
+job; `platforms: [linux, macos]` needs a macOS runner too. The finding
+names each declared platform with no runner. The reference `ci.yml` has
+an `os` matrix over `ubuntu-latest` and `windows-latest`: make it list a
+runner for each platform in `platforms` (`macos-latest` for `macos`).
+Under 1.x, C-05 asks for Linux and Windows instead, and is not
+applicable without `windows`.
 
 GitLab: a job's platform comes from its `tags:`, after `parallel: matrix`
 expansion. A tag containing `windows` is Windows, `linux` Linux, `macos`
