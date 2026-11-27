@@ -21,6 +21,12 @@ const (
 	Latest = Contract2
 )
 
+// contract21 is contract 2.1.0, which made the guard set SHOULD, C-05
+// follow platforms and the rules that test the guard not applicable
+// without one (spec 0074). The rule table's revisions and level changes
+// name it, and so do the checks whose reading it changed.
+const contract21 = "2.1.0"
+
 // implemented lists the contracts this vibe implements, oldest first.
 var implemented = []string{Contract1, Contract2}
 

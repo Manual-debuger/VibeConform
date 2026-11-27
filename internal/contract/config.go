@@ -45,6 +45,15 @@ func (c *Config) requires(id string) bool {
 	return slices.Contains(c.require, id)
 }
 
+// guardSetBinds reports whether the guard set counts in the verdict: it
+// is MUST under the audited contract (1.x), or require lists it (spec
+// 0074). It is the one answer to that question. requireGuardSet makes
+// require list all of the guard set or none of it, so A-01 stands for
+// the set.
+func (c *Config) guardSetBinds() bool {
+	return guardSetLevel(c.Contract.Audited) == Must || c.requires(guardSet[0])
+}
+
 // The platforms of contract 1.0.0.
 const (
 	platformLinux   = "linux"

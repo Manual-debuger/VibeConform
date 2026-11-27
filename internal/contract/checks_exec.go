@@ -188,7 +188,7 @@ func r01GuardHalf(env *Env, earlier Earlier) PartResult {
 	if ok, _ := needsClaude(env.config); !ok {
 		return Pass()
 	}
-	if guardSetLevel(env.auditedVersion()) != Must && !env.config.requires("A-02") {
+	if !env.guardSetBinds() {
 		return Pass()
 	}
 	if g, ok := a02Deny(earlier); ok {

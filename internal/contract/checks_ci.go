@@ -339,7 +339,7 @@ func checkC05(env *Env) PartResult {
 	if !ok {
 		return res
 	}
-	followsPlatforms := env.auditsContract2()
+	followsPlatforms := env.followsPlatforms()
 	want := []string{platformLinux, platformWindows}
 	if followsPlatforms {
 		want = env.config.platforms

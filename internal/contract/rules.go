@@ -346,7 +346,7 @@ func testsTheGuard(r Rule) Rule {
 		checks[i] = p.Check
 	}
 	r.Revisions = append(r.Revisions, Revision{
-		Since: "2.1.0", Title: r.Title, Checks: checks,
+		Since: contract21, Title: r.Title, Checks: checks,
 		NotApplicableWhen: notApplicableWithoutClaude + ", or when `require` does not list the guard set and no " +
 			"PreToolUse hook in `.claude/settings.json` matches `Bash` (A-01 reports the missing guard)",
 		applies: guardToTest,
@@ -363,7 +363,7 @@ func guardToTest(env *Env) (bool, string) {
 	if ok, why := needsClaude(env.config); !ok {
 		return false, why
 	}
-	if env.config.requires(guardSet[0]) || env.hooksBash() {
+	if env.guardSetBinds() || env.hooksBash() {
 		return true, ""
 	}
 	return false, "no PreToolUse hook in " + claudeSettingsFile + " matches Bash, so there is no guard to test; " +
@@ -513,7 +513,7 @@ var rules = []Rule{
 		// Under 2.1.0 the rule follows platforms (spec 0074); checkC05
 		// reads the audited version.
 		Revisions: []Revision{{
-			Since: "2.1.0",
+			Since: contract21,
 			Title: "Tests run on every declared platform",
 			Checks: []string{"the steps that call `verify` run on a runner of each platform in `platforms`, " +
 				"after matrix expansion."},
@@ -687,7 +687,7 @@ var rules = []Rule{
 var guardSet = []string{"A-01", "A-02", "A-03", "A-04", "A-08"}
 
 // guardSetLevels is the level history of each rule of the guard set.
-var guardSetLevels = []LevelChange{{Since: "2.1.0", Level: Should}}
+var guardSetLevels = []LevelChange{{Since: contract21, Level: Should}}
 
 // guardSetLevel is the level of the guard set's rules under the contract
 // version: MUST under 1.x, SHOULD from 2.1.0. It reads their level
