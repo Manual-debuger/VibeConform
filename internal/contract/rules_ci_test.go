@@ -563,7 +563,46 @@ func TestRuleC05(t *testing.T) {
 			Findings: []string{".github/workflows/broken.yml: ", "job x must be a map"}},
 		{Name: "another CI provider", Want: "undecided", Edits: []contracttest.Edit{contracttest.WithoutFile(ciFile), contracttest.WithoutFile(ciAuditFile),
 			contracttest.WithFile(".circleci/config.yml", "version: 2.1\n")}, Findings: []string{".circleci/config.yml: "}},
+
+		// Contract 2.1.0: a runner for each platform in platforms (spec 0074).
+		{Name: "2.1.0, [linux] with a Linux runner", Want: "pass",
+			Edits: []contracttest.Edit{c05Platforms("[linux]"), ciWith(ciPRAndPush, ubuntu)}},
+		{Name: "2.1.0, [linux] with only a Windows runner", Want: "fail",
+			Edits:    []contracttest.Edit{c05Platforms("[linux]"), ciWith(ciPRAndPush, windows)},
+			Findings: []string{ciFile + ": ", "`task verify`", "no Linux runner", "ubuntu-latest"}},
+		{Name: "2.1.0, [windows] with only a Windows runner", Want: "pass",
+			Edits: []contracttest.Edit{c05Platforms("[windows]"), ciWith(ciPRAndPush, windows)}},
+		{Name: "2.1.0, [windows] with only a Linux runner", Want: "fail",
+			Edits:    []contracttest.Edit{c05Platforms("[windows]"), ciWith(ciPRAndPush, ubuntu)},
+			Findings: []string{"no Windows runner", "windows-latest"}},
+		{Name: "2.1.0, [linux, windows] with both runners", Want: "pass",
+			Edits: []contracttest.Edit{c05Platforms("[linux, windows]"), ciWith(ciPRAndPush, ubuntu+windows)}},
+		{Name: "2.1.0, [linux, windows] with Linux only", Want: "fail",
+			Edits:    []contracttest.Edit{c05Platforms("[linux, windows]"), ciWith(ciPRAndPush, ubuntu)},
+			Findings: []string{"no Windows runner"}},
+		{Name: "2.1.0, [linux, macos] with both runners", Want: "pass",
+			Edits: []contracttest.Edit{c05Platforms("[linux, macos]"), ciWith(ciPRAndPush, ubuntu+ciVerifyJob("m", "macos-14"))}},
+		{Name: "2.1.0, [linux, macos] with Linux and Windows", Want: "fail",
+			Edits:    []contracttest.Edit{c05Platforms("[linux, macos]"), ciWith(ciPRAndPush, ubuntu+windows)},
+			Findings: []string{"no macOS runner", "macos-latest"}},
+		{Name: "2.1.0, the missing platforms in platforms order", Want: "fail",
+			Edits:    []contracttest.Edit{c05Platforms("[macos, windows, linux]"), ciWith(ciPRAndPush, windows)},
+			Findings: []string{"no macOS or Linux runner"}},
+		{Name: "2.1.0, runners of unknown platform", Want: "fail",
+			Edits:    []contracttest.Edit{c05Platforms("[linux]"), ciWith(ciPRAndPush, ciVerifyJob("x", "${{ inputs.os }}"))},
+			Findings: []string{"no Linux runner", "unknown platform", "${{ inputs.os }}"}},
+		{Name: "2.1.0, verify called nowhere", Want: "fail",
+			Edits:    []contracttest.Edit{c05Platforms("[macos]"), ciWith(ciPRAndPush, ciJob("x", "ubuntu-latest", "echo hi"))},
+			Findings: []string{".github/workflows/: ", "no workflow step calls", "macos-latest"}},
 	})
+}
+
+// c05Platforms is the baseline vibe.yaml under contract 2.1.0 with the
+// given platforms, a YAML flow list.
+func c05Platforms(list string) contracttest.Edit {
+	return contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(
+		contracttest.Section{Key: "contract", Body: "contract: 2.1.0\n"},
+		contracttest.Section{Key: "platforms", Body: "platforms: " + list + "\n"}))
 }
 
 // D-03: some workflow runs a recognized vulnerability scanner.

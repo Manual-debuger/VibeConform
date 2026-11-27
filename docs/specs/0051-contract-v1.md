@@ -263,7 +263,7 @@ the table state the GitLab CI reading of each rule; spec 0052
 | C-02 | Toolchains and actions are pinned | Static, across every workflow (not only generated ones): every `uses:` other than a local path is pinned to a full 40-character commit SHA, and no `run:` step contains a command word ending in `@latest` | MUST | spec 0044 |
 | C-03 | Workflow permissions default to read | Static: every workflow has top-level `permissions` that grant no write scope (`contents: read`, `read-all` or `{}`). Jobs may widen them. | MUST | spec 0010 |
 | C-04 | The audit runs in its own job | Static: a job triggered on pull requests runs `vibe audit` (or the setup action followed by it) and does not call `verify` | MUST | spec 0022 |
-| C-05 | Tests run on Linux and Windows | Static: the steps that call `verify` run on a Linux runner and on a Windows runner, after matrix expansion. Not applicable when `platforms` does not include `windows`. | SHOULD | principle 2 |
+| C-05 | Tests run on every declared platform | Static: the steps that call `verify` run on a runner of each platform in `platforms`, after matrix expansion. | SHOULD | principle 2 |
 
 #### Reading GitLab CI
 
@@ -451,9 +451,24 @@ read GitLab CI (see "C: CI"):
   version: the rule table records the version in which a rule's level
   changed, and the audit, the report, `--explain`, waivers and
   `require` read the level for the audited contract. The behaviours
-  2.0.0 introduced hold under 2.1.0. Each change and why it is MINOR:
+  2.0.0 introduced hold under 2.1.0. A rule's title, check and
+  applicability can depend on the version in the same way, and
+  `vibe audit --explain` prints the rule for the contract that
+  `vibe.yaml` declares, or for the latest when there is none. Each
+  change and why it is MINOR:
 
-  - No rule's level or check has changed yet.
+  - **C-05 follows `platforms`.** Under 1.x, C-05 ("Tests run on Linux
+    and Windows") asks for a Linux runner and a Windows runner, and it
+    is not applicable when `platforms` does not include `windows`.
+    Under 2.1.0 it asks for a runner of each platform in `platforms`, in
+    the order `platforms` lists them, and it always applies; the
+    finding names each declared platform with no runner. The CI readers
+    are unchanged. C-05 is SHOULD, so the new check changes no verdict
+    unless the repository requires C-05. One case can change: a
+    repository that requires C-05, declares `macos` and no `windows`,
+    and has no macOS runner. C-05 was not applicable there and now
+    fails. It is MINOR because only an explicit `require` of a rule
+    that was not applicable reaches it.
 - **2.0.0** (2026-11-26, spec 0072, issues #227 and #120 Part B). A
   MAJOR release. `vibe` still audits a repository that declares 1.x, as
   1.2.0, with unchanged results; a repository moves to 2.0.0 when it

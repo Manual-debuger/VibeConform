@@ -83,3 +83,53 @@ fix: fix the syntax so that the file parses
 file: .gitlab-ci.yml
 message: no job calls the verify command `task verify`, so it runs on no runner
 fix: call `task verify` in a job on a Linux runner (tags: [linux], or no tags and an image:) and in one with tags: [windows]
+
+== 2.1.0, [linux] with a Linux runner
+no findings
+
+== 2.1.0, [linux] with an image only
+no findings
+
+== 2.1.0, [linux] with only a Windows runner
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no Linux runner (called in .gitlab-ci.yml job a)
+fix: run `task verify` on Linux: in a job whose tags name a runner of that platform, such as tags: [linux] (or no tags and an image:), or with a parallel: matrix over the tags
+
+== 2.1.0, [windows] with only a Windows runner
+no findings
+
+== 2.1.0, [windows] with only a Linux runner
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no Windows runner (called in .gitlab-ci.yml job a)
+fix: run `task verify` on Windows: in a job whose tags name a runner of that platform, such as tags: [windows] (saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags
+
+== 2.1.0, [linux, windows] with both runners
+no findings
+
+== 2.1.0, [linux, windows] with Linux only
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no Windows runner (called in .gitlab-ci.yml job a)
+fix: run `task verify` on Windows too: in a job whose tags name a runner of that platform, such as tags: [windows] (saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags
+
+== 2.1.0, [linux, macos] with both runners
+no findings
+
+== 2.1.0, [linux, macos] with Linux and Windows
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no macOS runner (called in .gitlab-ci.yml job verify:linux, .gitlab-ci.yml job verify:windows)
+fix: run `task verify` on macOS too: in a job whose tags name a runner of that platform, such as tags: [macos] (saas-macos-medium-m1 on GitLab.com), or with a parallel: matrix over the tags
+
+== 2.1.0, the missing platforms in platforms order
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no macOS or Linux runner (called in .gitlab-ci.yml job a)
+fix: run `task verify` on macOS and Linux too: in a job for each whose tags name a runner of that platform, such as tags: [macos] (saas-macos-medium-m1 on GitLab.com) and tags: [linux] (or no tags and an image:), or with a parallel: matrix over the tags
+
+== 2.1.0, runners of unknown platform
+file: .gitlab-ci.yml
+message: the verify command `task verify` runs on no Linux runner (called in .gitlab-ci.yml job a); runners of unknown platform: job a: tags [docker]
+fix: run `task verify` on Linux: in a job whose tags name a runner of that platform, such as tags: [linux] (or no tags and an image:), or with a parallel: matrix over the tags
+
+== 2.1.0, verify called nowhere
+file: .gitlab-ci.yml
+message: no job calls the verify command `task verify`, so it runs on no runner
+fix: call `task verify` in a job on a runner of each platform in platforms, such as tags: [macos] (saas-macos-medium-m1 on GitLab.com)
