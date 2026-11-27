@@ -1,6 +1,7 @@
 package contract_test
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -175,6 +176,18 @@ func TestGuardSetR01GuardHalf(t *testing.T) {
 		if text := contracttest.FindingText(r01(t, "2.1.0", "")); strings.Contains(text, noHook) {
 			t.Errorf("R-01 holds the repository to A-02's deny cases:\n%s", text)
 		}
+	})
+	// With go on PATH, verify passes, so R-01 as a whole passes: A-02 is
+	// not applicable and leaves R-01 neither failing nor undecided.
+	t.Run("2.1.0 without the guard set passes", func(t *testing.T) {
+		t.Parallel()
+		dir := probeFixture(t, contracttest.WithFile("vibe.yaml", probeGoConfig(t, "2.1.0", "")))
+		rep := contracttest.Audit(t, dir, contract.Options{
+			Rules: contracttest.Rules(t, "A-02", "R-01"),
+			Probe: contract.ProbeOptions{Env: os.Environ()},
+		})
+		contracttest.AssertRule(t, rep, "A-02", contract.ResultNotApplicable)
+		contracttest.AssertRule(t, rep, "R-01", contract.ResultPass)
 	})
 	t.Run("2.1.0 with the guard set", func(t *testing.T) {
 		t.Parallel()
