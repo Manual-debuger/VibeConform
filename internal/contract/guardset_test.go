@@ -204,101 +204,113 @@ func probeGoConfig(t *testing.T, version, require string) string {
 // guard-testing rules").
 var guardTesting = []string{"A-02", "A-03", "A-04", "A-08", "A-09"}
 
+// auditGuardRules is the full audit of A-01 and the rules that test the
+// guard on the baseline with edits.
+func auditGuardRules(t *testing.T, edits ...contracttest.Edit) *contract.Report {
+	t.Helper()
+	dir := contracttest.Fixture(t, contracttest.Baseline, edits...)
+	return contracttest.Audit(t, dir, contract.Options{
+		Rules: contracttest.Rules(t, append([]string{"A-01"}, guardTesting...)...),
+		Probe: contract.ProbeOptions{Env: contracttest.EmptyProbeEnv(t)},
+	})
+}
+
+// assertNoGuardToTest checks that A-01 fails and that every rule that
+// tests the guard is not applicable, with a reason naming A-01, and ran
+// no part.
+func assertNoGuardToTest(t *testing.T, rep *contract.Report) {
+	t.Helper()
+	contracttest.AssertRule(t, rep, "A-01", contract.ResultFail)
+	for _, id := range guardTesting {
+		rr := contracttest.RuleResult(t, rep, id)
+		if rr.Result != contract.ResultNotApplicable || !strings.Contains(rr.NotApplicable, "A-01") {
+			t.Errorf("%s = %s (%q), want not applicable with a reason naming A-01", id, rr.Result, rr.NotApplicable)
+		}
+		for _, po := range rr.Parts {
+			if po.Result != contract.ResultNotApplicable {
+				t.Errorf("%s: a %s part ran: %s", id, po.Kind, po.Result)
+			}
+		}
+	}
+}
+
+// assertGuardTested checks that every rule that tests the guard applies.
+func assertGuardTested(t *testing.T, rep *contract.Report) {
+	t.Helper()
+	for _, id := range guardTesting {
+		if rr := contracttest.RuleResult(t, rep, id); rr.Result == contract.ResultNotApplicable {
+			t.Errorf("%s is not applicable (%q), want it to apply", id, rr.NotApplicable)
+		}
+	}
+}
+
 // Under 2.1.0 a repository without a guard gets one finding, A-01's, and
 // not one for each rule that tests the guard. A guard is a PreToolUse
 // hook that matches Bash, read as A-01 reads it (spec 0074, #255).
 func TestGuardTestingRulesWithoutAGuard(t *testing.T) {
 	t.Parallel()
+	settings := func(content string) contracttest.Edit {
+		return contracttest.WithFile(".claude/settings.json", content)
+	}
 	const bashOnly = `{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "guard"}]}]}}`
 	const editsOnly = `{"hooks": {"PreToolUse": [{"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "guard"}]}]}}`
-	audit := func(t *testing.T, edits ...contracttest.Edit) *contract.Report {
-		t.Helper()
-		dir := contracttest.Fixture(t, contracttest.Baseline, edits...)
-		return contracttest.Audit(t, dir, contract.Options{
-			Rules: contracttest.Rules(t, append([]string{"A-01"}, guardTesting...)...),
-			Probe: contract.ProbeOptions{Env: contracttest.EmptyProbeEnv(t)},
+	for _, tc := range []struct {
+		name    string
+		edits   []contracttest.Edit
+		guarded bool
+	}{
+		{"2.1.0, no guard hook", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings(unguardedSettings)}, false},
+		{"2.1.0, no settings.json", []contracttest.Edit{guardSetConfig("2.1.0", ""), contracttest.WithoutFile(".claude/settings.json")}, false},
+		{"2.1.0, a guard hook for edits only", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings(editsOnly)}, false},
+		{"2.1.0, a guard hook", []contracttest.Edit{guardSetConfig("2.1.0", "")}, true},
+		{"2.1.0, a guard hook for Bash only", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings(bashOnly)}, true},
+		{"2.1.0, a settings.json that does not parse", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings("{")}, true},
+		{"1.2.0, no guard hook", []contracttest.Edit{guardSetConfig("1.2.0", ""), settings(unguardedSettings)}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rep := auditGuardRules(t, tc.edits...)
+			if tc.guarded {
+				assertGuardTested(t, rep)
+			} else {
+				assertNoGuardToTest(t, rep)
+			}
 		})
 	}
-	notApplicable := func(t *testing.T, rep *contract.Report) {
-		t.Helper()
-		for _, id := range guardTesting {
-			rr := contracttest.RuleResult(t, rep, id)
-			if rr.Result != contract.ResultNotApplicable || !strings.Contains(rr.NotApplicable, "A-01") {
-				t.Errorf("%s = %s (%q), want not applicable with a reason naming A-01", id, rr.Result, rr.NotApplicable)
-			}
-			for _, po := range rr.Parts {
-				if po.Result != contract.ResultNotApplicable {
-					t.Errorf("%s: a %s part ran: %s", id, po.Kind, po.Result)
-				}
-			}
+}
+
+// With the guard set required, every guard rule applies without a guard,
+// fails, and the verdict is not conformant (spec 0074, #255).
+func TestGuardTestingRulesWithTheGuardSetRequired(t *testing.T) {
+	t.Parallel()
+	rep := auditGuardRules(t, guardSetConfig("2.1.0", guardSetRequire),
+		contracttest.WithFile(".claude/settings.json", unguardedSettings),
+		contracttest.WithoutFile(".claude/hooks/policy.json"))
+	// The probe environment has no bash, so a probe that needs one cannot
+	// decide; either way the rule applies and does not pass.
+	for _, id := range append([]string{"A-01"}, guardTesting...) {
+		if rr := contracttest.RuleResult(t, rep, id); rr.Result != contract.ResultFail && rr.Result != contract.ResultUndecided {
+			t.Errorf("%s = %s (%q), want fail:\n%s", id, rr.Result, rr.NotApplicable, contracttest.FindingText(rr))
 		}
 	}
-	applicable := func(t *testing.T, rep *contract.Report) {
-		t.Helper()
-		for _, id := range guardTesting {
-			if rr := contracttest.RuleResult(t, rep, id); rr.Result == contract.ResultNotApplicable {
-				t.Errorf("%s is not applicable (%q), want it to apply", id, rr.NotApplicable)
-			}
-		}
+	if rep.Verdict == contract.VerdictConformant {
+		t.Errorf("verdict = %s, want no conformant verdict", rep.Verdict)
 	}
-	unguarded := contracttest.WithFile(".claude/settings.json", unguardedSettings)
-	t.Run("2.1.0, no guard hook, the guard set not required", func(t *testing.T) {
-		t.Parallel()
-		rep := audit(t, guardSetConfig("2.1.0", ""), unguarded)
-		contracttest.AssertRule(t, rep, "A-01", contract.ResultFail, "no PreToolUse command hook matches")
-		notApplicable(t, rep)
-	})
-	t.Run("2.1.0, no settings.json, the guard set not required", func(t *testing.T) {
-		t.Parallel()
-		rep := audit(t, guardSetConfig("2.1.0", ""), contracttest.WithoutFile(".claude/settings.json"))
-		contracttest.AssertRule(t, rep, "A-01", contract.ResultFail)
-		notApplicable(t, rep)
-	})
-	t.Run("2.1.0, a guard hook for edits only, the guard set not required", func(t *testing.T) {
-		t.Parallel()
-		notApplicable(t, audit(t, guardSetConfig("2.1.0", ""), contracttest.WithFile(".claude/settings.json", editsOnly)))
-	})
-	t.Run("2.1.0, no guard hook, the guard set required", func(t *testing.T) {
-		t.Parallel()
-		rep := audit(t, guardSetConfig("2.1.0", guardSetRequire), unguarded,
-			contracttest.WithoutFile(".claude/hooks/policy.json"))
-		// The probe environment has no bash, so a probe that needs one
-		// cannot decide; either way the rule applies and does not pass.
-		for _, id := range append([]string{"A-01"}, guardTesting...) {
-			if rr := contracttest.RuleResult(t, rep, id); rr.Result != contract.ResultFail && rr.Result != contract.ResultUndecided {
-				t.Errorf("%s = %s (%q), want fail:\n%s", id, rr.Result, rr.NotApplicable, contracttest.FindingText(rr))
-			}
-		}
-		if rep.Verdict == contract.VerdictConformant {
-			t.Errorf("verdict = %s, want no conformant verdict", rep.Verdict)
-		}
-	})
-	t.Run("2.1.0, a guard hook, the guard set not required", func(t *testing.T) {
-		t.Parallel()
-		applicable(t, audit(t, guardSetConfig("2.1.0", "")))
-	})
-	t.Run("2.1.0, a guard hook for Bash only, the guard set not required", func(t *testing.T) {
-		t.Parallel()
-		applicable(t, audit(t, guardSetConfig("2.1.0", ""), contracttest.WithFile(".claude/settings.json", bashOnly)))
-	})
-	t.Run("2.1.0, a settings.json that does not parse", func(t *testing.T) {
-		t.Parallel()
-		applicable(t, audit(t, guardSetConfig("2.1.0", ""), contracttest.WithFile(".claude/settings.json", "{")))
-	})
-	t.Run("1.2.0, no guard hook", func(t *testing.T) {
-		t.Parallel()
-		applicable(t, audit(t, guardSetConfig("1.2.0", ""), unguarded))
-	})
-	t.Run("2.1.0, agents without claude", func(t *testing.T) {
-		t.Parallel()
-		dir := contracttest.Fixture(t, contracttest.Baseline, unguarded, contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(
+}
+
+// Without `claude` in agents, the rules that test the guard keep their
+// reason (spec 0074: the existing condition stays).
+func TestGuardTestingRulesWithoutClaude(t *testing.T) {
+	t.Parallel()
+	dir := contracttest.Fixture(t, contracttest.Baseline,
+		contracttest.WithFile(".claude/settings.json", unguardedSettings),
+		contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(
 			contracttest.Section{Key: "contract", Body: "contract: 2.1.0\n"},
 			contracttest.Section{Key: "agents", Body: "agents: []\n"})))
-		rep := contracttest.Audit(t, dir, contract.Options{Rules: contracttest.Rules(t, guardTesting...), Static: true})
-		for _, id := range guardTesting {
-			if rr := contracttest.RuleResult(t, rep, id); rr.NotApplicable != "agents does not include claude" {
-				t.Errorf("%s not applicable because %q, want %q", id, rr.NotApplicable, "agents does not include claude")
-			}
+	rep := contracttest.Audit(t, dir, contract.Options{Rules: contracttest.Rules(t, guardTesting...), Static: true})
+	for _, id := range guardTesting {
+		if rr := contracttest.RuleResult(t, rep, id); rr.NotApplicable != "agents does not include claude" {
+			t.Errorf("%s not applicable because %q, want %q", id, rr.NotApplicable, "agents does not include claude")
 		}
-	})
+	}
 }
