@@ -60,8 +60,11 @@ func TestAuditExplainContent(t *testing.T) {
 			"Under contract 2.x, a command calls `vibe` when the last path element of its first word, after `/` or `\\`, is the literal `vibe` or `vibe.exe`",
 			"Under contract 1.x, its first word must be the literal `vibe`.",
 		}},
-		// spec 0072, "The audit's reading under 2.0.0" and "The rerun".
+		// spec 0072, "The audit's reading under 2.0.0" and "The rerun";
+		// spec 0074, "Applicability of the guard-testing rules".
 		{"A-02", []string{
+			"Not applicable: when `agents` does not include `claude`; under contract 2.1.0, also when `require` " +
+				"does not list the guard set and no PreToolUse hook in `.claude/settings.json` matches `Bash`",
 			"Under contract 2.x, an exception counts for a deny case only when",
 			"the guard refuses the case when every exception that matches it is removed from `.claude/hooks/policy.json`",
 			"A command exception must prefix the simple command the case's rule refuses, and no exception matches a fixed case",

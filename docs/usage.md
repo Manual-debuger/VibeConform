@@ -585,6 +585,9 @@ its `contract:` line (the setup skill's `reference/upgrade.md`, section
   counts only when the guard set is required. A 2.0.0 `vibe.yaml` with
   A-09 in `require` and not the guard set is now a configuration error:
   add the guard set.
+  Without the guard set in `require` and without a PreToolUse hook for
+  `Bash`, A-02, A-03, A-04, A-08 and A-09 are not applicable, and A-01
+  is the one finding.
 
 What V-08 cannot catch: it plants only the blanket forms
 `vibe audit --explain V-08` lists. A specific suppression, which names
@@ -688,7 +691,13 @@ jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "
 - **Not applicable** in contracts 1.2.0 and 2.1.0: C-03 when the C
   rules read GitLab CI; C-05 when `platforms` has no `windows`; every A rule when
   `agents` has no `claude`; R-02 when `agents` is empty, and R-02's
-  `CLAUDE.md` half when `agents` has no `claude`.
+  `CLAUDE.md` half when `agents` has no `claude`. Under 2.1.0 only, the
+  rules that test the guard (A-02, A-03, A-04, A-08 and A-09) are also
+  not applicable when `require` does not list the guard set and no
+  PreToolUse hook in `.claude/settings.json` matches `Bash`, read as A-01
+  reads it. There is no guard to test then: A-01 fails and reports it,
+  and the guard probes do not run. A settings file that does not parse
+  keeps them applicable.
 - Commands are parsed as POSIX shell (ADR 0026). A command is "called"
   when a simple command anywhere in a hook, CI command (a GitHub `run:`
   step, a GitLab `before_script` or `script` line) or entrypoint has
@@ -992,7 +1001,9 @@ waivers:
   without it. Under 1.x, the guard set in `require` is an error, since
   a MUST rule is always required. Without the guard set in `require`, a
   failing guard rule is reported and does not change the verdict, and
-  R-01 does not check the A-02 deny cases. A guard rule can be waived
+  R-01 does not check the A-02 deny cases. With no PreToolUse hook for
+  `Bash` either, there is no guard to test: A-01 fails, and A-02, A-03,
+  A-04, A-08 and A-09 are not applicable. A guard rule can be waived
   under 2.x like any SHOULD rule, unless it is required.
 
 ```yaml

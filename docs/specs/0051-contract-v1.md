@@ -364,6 +364,13 @@ anything else is a configuration error that names the missing IDs. A
 level cell such as "SHOULD (MUST before 2.1.0)" gives the level under
 the latest contract and the level before that version.
 
+Under 2.1.0, the rules that test the guard (A-02, A-03, A-04, A-08 and
+A-09) are also not applicable when `require` does not list the guard
+set and no PreToolUse hook in `.claude/settings.json` matches `Bash`,
+read as A-01 reads it (spec 0074). There is then no guard to test: A-01
+fails and is the one finding, and the guard probes do not run. With the
+guard set in `require`, every guard rule applies.
+
 | ID | Rule | Check | Level | Source |
 |---|---|---|---|---|
 | A-01 | Shell commands and file edits pass through the guard | Static: in `.claude/settings.json`, PreToolUse hooks match each of `Bash`, `PowerShell`, `Write`, `Edit` and `MultiEdit` | SHOULD (MUST before 2.1.0) | spec 0021 |
@@ -475,6 +482,12 @@ read GitLab CI (see "C: CI"):
     configuration that 2.0.0 accepted is refused: `require` with A-09
     and not the guard set. Adding the guard set to `require` fixes it
     and changes no 2.0.0 verdict, since the guard set was MUST there.
+  - **Without a guard, the rules that test it are not applicable**
+    (issue #255). When `require` does not list the guard set and no
+    PreToolUse hook matches `Bash`, A-02, A-03, A-04, A-08 and A-09
+    report "not applicable" and A-01 reports the missing guard. A
+    relaxed rule: these rules are SHOULD there, so no verdict changes;
+    the report has one finding instead of six.
 - **2.0.0** (2026-11-26, spec 0072, issues #227 and #120 Part B). A
   MAJOR release. `vibe` still audits a repository that declares 1.x, as
   1.2.0, with unchanged results; a repository moves to 2.0.0 when it
