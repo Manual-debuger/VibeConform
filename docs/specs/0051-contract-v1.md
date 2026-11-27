@@ -1,7 +1,8 @@
 # Spec 0051: Contract v1.0.0
 
-Current version: 2.0.0 (see "Changes" under "Versioning"). `vibe` also
-audits 1.x, as 1.2.0 (spec 0072).
+Current version: 2.1.0 (see "Changes" under "Versioning"). `vibe`
+audits a declared 2.0.x as 2.1.0 (spec 0074), and also audits 1.x, as
+1.2.0 (spec 0072).
 
 Status: accepted (2026-10-16). Issue #96. Decided by ADR 0025. Settled
 with the user on 2026-10-16 in a grilling session; "Qn" refers to its
@@ -444,6 +445,15 @@ read GitLab CI (see "C: CI"):
 
 ### Changes
 
+- **2.1.0** (spec 0074, issue #250). A MINOR release. `vibe` audits a
+  repository that declares 2.0.x as 2.1.0, as it audits an older MINOR
+  of the same MAJOR. A rule's level can now depend on the contract
+  version: the rule table records the version in which a rule's level
+  changed, and the audit, the report, `--explain`, waivers and
+  `require` read the level for the audited contract. The behaviours
+  2.0.0 introduced hold under 2.1.0. Each change and why it is MINOR:
+
+  - No rule's level or check has changed yet.
 - **2.0.0** (2026-11-26, spec 0072, issues #227 and #120 Part B). A
   MAJOR release. `vibe` still audits a repository that declares 1.x, as
   1.2.0, with unchanged results; a repository moves to 2.0.0 when it
@@ -528,7 +538,7 @@ read GitLab CI (see "C: CI"):
 
 ## Later versions
 
-These are not in 2.0.0:
+These are not in 2.1.0:
 
 - **Refuse agent reads of credential files** through `permissions.deny`.
   This would be a SHOULD rule, so a MINOR release (Q6).
