@@ -95,7 +95,7 @@ func startProbeSession(env *Env, opts ProbeOptions) *probeSession {
 		base = os.Environ()
 	}
 	s := &probeSession{ctx: env.ctx, opts: opts, baselines: map[string]*entrypointRun{}}
-	s.bash, s.bashErr = ResolveBash(base)
+	s.bash, s.bashErr = guardrule.ResolveBash(base)
 
 	tmp, err := os.MkdirTemp("", "vibe-audit-")
 	if err != nil {
@@ -116,7 +116,7 @@ func startProbeSession(env *Env, opts ProbeOptions) *probeSession {
 
 	runEnv := envUnset(base, gitRepoVariables...)
 	runEnv = envSet(runEnv, "CLAUDE_PROJECT_DIR", s.root)
-	path, _ := envGet(base, "PATH")
+	path := envGet(base, "PATH")
 	if path == "" {
 		path = s.shim.dir
 	} else {
@@ -372,7 +372,7 @@ func (s *probeSession) env(o runOpts) []string {
 func (s *probeSession) RunProgram(label, file string, argv []string, o runOpts) runOutcome {
 	out := runOutcome{Label: label, Command: strings.Join(argv, " "), File: file}
 	env := s.env(o)
-	prog := lookPath(argv[0], env, s.dir(o))
+	prog := guardrule.LookPath(argv[0], env, s.dir(o))
 	if prog == "" {
 		out.Undecided = fmt.Sprintf("`%s` is not installed on this machine", argv[0])
 		return out
@@ -503,7 +503,7 @@ func (s *probeSession) RunEntrypoint(env *Env, name, label string) entrypointRun
 			k, v, _ := strings.Cut(a, "=")
 			runEnv = envSet(runEnv, k, v)
 		}
-		prog := lookPath(argv[0], runEnv, s.root)
+		prog := guardrule.LookPath(argv[0], runEnv, s.root)
 		if prog == "" {
 			run.Undecided = fmt.Sprintf("`%s` is not installed on this machine", argv[0])
 			return run

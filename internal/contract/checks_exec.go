@@ -205,7 +205,7 @@ func a02Deny(earlier Earlier) (PartResult, bool) {
 	return *r.deny, true
 }
 
-// d01CheckText is D-01's check text, for the rule and its part. Its
+// d01CheckText is the check text of D-01's execution part. Its
 // commands come from the lockfile records, so it names what runs.
 var d01CheckText = "per component, by the lockfile found. " + lockfileCheckText() +
 	" A component with dependencies and no recognized lockfile fails."

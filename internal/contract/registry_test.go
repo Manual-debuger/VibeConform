@@ -8,13 +8,48 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Manual-debuger/VibeConform/internal/testkit"
 )
 
 // The registry quotes spec 0051 (spec 0052, "Rule registry and results"):
 // each rule's sentence, check, level and source must match the spec's
-// rule table, and each part's check must be a piece of the whole check.
-// Every part of every rule has a check function.
-func TestRegistryQuotesSpec0051(t *testing.T) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
+// rule table. The check is derived from the parts (spec 0073), so this
+// also holds each part's lead and check text to the spec. Every part of
+// every rule has a check function.
+func TestRegistryQuotesSpec0051(t *testing.T) {
+	rows := spec0051Rows(t)
+	must, from0051 := 0, 0
+	for _, r := range Rules() {
+		for _, p := range r.Parts {
+			if p.Run == nil && p.RunLast == nil {
+				t.Errorf("%s %s part has no check", r.ID, p.Kind)
+			}
+		}
+		if r.Since != "" {
+			checkSpec0061Rule(t, r)
+			continue
+		}
+		row, ok := rows[r.ID]
+		if !ok {
+			t.Errorf("%s is not in spec 0051 and has no Since", r.ID)
+			continue
+		}
+		from0051++
+		checkSpec0051Rule(t, r, row)
+		if r.Level == Must {
+			must++
+		}
+	}
+	if must != 16 || from0051 != 25 {
+		t.Errorf("%d rules of spec 0051, %d MUST; want 25 and 16", from0051, must)
+	}
+}
+
+// spec0051Rows reads spec 0051's rule table: each row's cells (ID,
+// sentence, check, level, source) by rule ID.
+func spec0051Rows(t *testing.T) map[string][]string {
+	t.Helper()
 	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "specs", "0051-contract-v1.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -34,56 +69,36 @@ func TestRegistryQuotesSpec0051(t *testing.T) { //nolint:gocognit,gocyclo // bas
 	if len(rows) != 25 {
 		t.Fatalf("found %d rule rows in spec 0051, want 25", len(rows))
 	}
+	return rows
+}
 
-	must, from0051 := 0, 0
-	for _, r := range Rules() {
-		for _, p := range r.Parts {
-			if p.Run == nil && p.RunLast == nil {
-				t.Errorf("%s %s part has no check", r.ID, p.Kind)
-			}
-		}
-		if r.Since != "" {
-			checkSpec0061Rule(t, r)
-			continue
-		}
-		row, ok := rows[r.ID]
-		if !ok {
-			t.Errorf("%s is not in spec 0051 and has no Since", r.ID)
-			continue
-		}
-		from0051++
-		if r.Title != row[1] {
-			t.Errorf("%s title = %q, spec says %q", r.ID, r.Title, row[1])
-		}
-		if r.Check != row[2] {
-			t.Errorf("%s check = %q, spec says %q", r.ID, r.Check, row[2])
-		}
-		if string(r.Level) != row[3] {
-			t.Errorf("%s level = %s, spec says %s", r.ID, r.Level, row[3])
-		}
-		if r.Source != row[4] {
-			t.Errorf("%s source = %q, spec says %q", r.ID, r.Source, row[4])
-		}
-		if string(r.Category) != r.ID[:1] {
-			t.Errorf("%s category = %s", r.ID, r.Category)
-		}
-		if r.Waivable() != (r.Level == Should) {
-			t.Errorf("%s waivable = %v", r.ID, r.Waivable())
-		}
-		for _, p := range r.Parts {
-			if !strings.Contains(r.Check, p.Check) {
-				t.Errorf("%s %s part %q is not part of its check", r.ID, p.Kind, p.Check)
-			}
-			if !strings.Contains(strings.ToLower(r.Check), string(p.Kind)) {
-				t.Errorf("%s has a %s part its check does not name", r.ID, p.Kind)
-			}
-		}
-		if r.Level == Must {
-			must++
-		}
+// checkSpec0051Rule checks a rule of spec 0051's table against its row:
+// its sentence, check, level, source and category, and that its check
+// names the kind of each part.
+func checkSpec0051Rule(t *testing.T, r Rule, row []string) {
+	t.Helper()
+	if r.Title != row[1] {
+		t.Errorf("%s title = %q, spec says %q", r.ID, r.Title, row[1])
 	}
-	if must != 16 || from0051 != 25 {
-		t.Errorf("%d rules of spec 0051, %d MUST; want 25 and 16", from0051, must)
+	if r.Check() != row[2] {
+		t.Errorf("%s check = %q, spec says %q", r.ID, r.Check(), row[2])
+	}
+	if string(r.Level) != row[3] {
+		t.Errorf("%s level = %s, spec says %s", r.ID, r.Level, row[3])
+	}
+	if r.Source != row[4] {
+		t.Errorf("%s source = %q, spec says %q", r.ID, r.Source, row[4])
+	}
+	if string(r.Category) != r.ID[:1] {
+		t.Errorf("%s category = %s", r.ID, r.Category)
+	}
+	if r.Waivable() != (r.Level == Should) {
+		t.Errorf("%s waivable = %v", r.ID, r.Waivable())
+	}
+	for _, p := range r.Parts {
+		if !strings.Contains(strings.ToLower(r.Check()), string(p.Kind)) {
+			t.Errorf("%s has a %s part its check does not name", r.ID, p.Kind)
+		}
 	}
 }
 
@@ -111,7 +126,7 @@ var spec0061Solution = func() string {
 // 0051's table does not hold: it was added in contract 1.2.0, spec
 // 0061's Solution lists it as "- **ID**:", it is a SHOULD rule (spec
 // 0061 and ADR 0027: a MINOR adds SHOULD rules only), its source names
-// spec 0061, and its parts are pieces of its check.
+// spec 0061. Its check text is pinned by the explain goldens.
 func checkSpec0061Rule(t *testing.T, r Rule) {
 	t.Helper()
 	if spec0061Solution == "" {
@@ -131,11 +146,6 @@ func checkSpec0061Rule(t *testing.T, r Rule) {
 	}
 	if string(r.Category) != r.ID[:1] {
 		t.Errorf("%s category = %s", r.ID, r.Category)
-	}
-	for _, p := range r.Parts {
-		if !strings.Contains(r.Check, p.Check) {
-			t.Errorf("%s %s part %q is not part of its check", r.ID, p.Kind, p.Check)
-		}
 	}
 }
 
@@ -170,22 +180,17 @@ func staticFixture(t *testing.T) (*Config, *Repo) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not on PATH")
 	}
-	dir := t.TempDir()
+	r := testkit.NewRepo(t, "repo")
 	data := []byte("contract: 1.2.0\nplatforms: [linux]\nagents: [claude]\n")
 	for name, content := range map[string][]byte{"vibe.yaml": data, "go.mod": []byte("module fixture\n\ngo 1.22\n")} {
-		if err := os.WriteFile(filepath.Join(dir, name), content, 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(r.Dir, name), content, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, args := range [][]string{{"init", "-q"}, {"add", "-A"}} {
-		cmd := exec.Command("git", args...) // #nosec G204 -- fixed arguments
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
+	r.Init(t)
+	r.Git(t, "add", "-A")
 	ctx := context.Background()
-	repo, err := OpenRepo(ctx, dir)
+	repo, err := OpenRepo(ctx, r.Dir)
 	if err != nil {
 		t.Fatal(err)
 	}

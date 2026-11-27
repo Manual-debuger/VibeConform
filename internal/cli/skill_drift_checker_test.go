@@ -1,16 +1,11 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"io/fs"
 	"os"
-	"os/exec"
 	pathpkg "path"
 	"path/filepath"
 	"regexp"
@@ -19,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -28,6 +22,7 @@ import (
 	"github.com/Manual-debuger/VibeConform/internal/guard"
 	"github.com/Manual-debuger/VibeConform/internal/guardrule"
 	"github.com/Manual-debuger/VibeConform/internal/setupskill"
+	"github.com/Manual-debuger/VibeConform/internal/testkit"
 )
 
 // checkSkill is the drift checker (spec 0054, "The drift test (#109)"):
@@ -58,6 +53,7 @@ func checkSkill(skill fs.FS) []string {
 		return nil
 	})
 	for _, f := range c.files {
+		c.checkPlaceholders(f)
 		c.checkRuleIDs(f)
 		c.checkSkillPaths(f)
 		if strings.HasSuffix(f.path, ".md") {
@@ -107,6 +103,24 @@ func (c *skillChecker) file(path string) (skillFile, bool) {
 	return skillFile{}, false
 }
 
+// placeholderPattern is a setup-skill placeholder's form: a name that
+// starts with VIBE_, in double braces. The reference Taskfiles' templates
+// ({{OS}}, {{.TASK_VERSION}}) and the workflows' expressions
+// (${{ matrix.os }}) also use double braces; they are the person's tools'
+// syntax, which Render leaves alone, and not placeholders.
+var placeholderPattern = regexp.MustCompile(`\{\{\s*VIBE_[^{}]*\}\}`)
+
+// checkPlaceholders: every placeholder in the file is one that Render
+// replaces (spec 0073). Any other would reach the repository as written.
+func (c *skillChecker) checkPlaceholders(f skillFile) {
+	for _, p := range uniqueMatches(placeholderPattern, f.text) {
+		if p != setupskill.VersionPlaceholder && p != setupskill.ReleasePagePlaceholder {
+			c.problem(f.path, "holds %s, which is not a placeholder that Render replaces (%s, %s)",
+				p, setupskill.VersionPlaceholder, setupskill.ReleasePagePlaceholder)
+		}
+	}
+}
+
 // ruleIDPattern is a contract rule ID's form (spec 0051).
 var ruleIDPattern = regexp.MustCompile(`\b[VHCADR]-[0-9]{2}\b`)
 
@@ -134,9 +148,6 @@ func uniqueMatches(re *regexp.Regexp, s string) []string {
 // a path or word character.
 var skillPathPattern = regexp.MustCompile(`(?:^|[^A-Za-z0-9_./-])(reference/[A-Za-z0-9_./<>-]*)`)
 
-// referenceStacks are the values of <stack> in a skill path.
-var referenceStacks = []string{"go", "python", "typescript", "monorepo"}
-
 // checkSkillPaths: every path into the skill exists, for every stack when
 // it names <stack>. A path ending in / is a directory.
 func (c *skillChecker) checkSkillPaths(f skillFile) {
@@ -150,7 +161,7 @@ func (c *skillChecker) checkSkillPaths(f skillFile) {
 		paths := []string{p}
 		if strings.Contains(p, "<stack>") {
 			paths = nil
-			for _, s := range referenceStacks {
+			for _, s := range setupskill.Stacks() {
 				paths = append(paths, strings.ReplaceAll(p, "<stack>", s))
 			}
 		}
@@ -453,40 +464,21 @@ func checkVibeArgs(args []string) string { //nolint:gocognit // baseline: pre-ex
 	return ""
 }
 
-var (
-	guardCommandsOnce sync.Once
-	guardCommands     map[string]map[string]bool // command -> flag -> takes a value
-)
-
-// vibeGuardCommands is vibe-guard's real command set, read from the
-// usage its help command prints.
+// vibeGuardCommands is vibe-guard's command set, from the command table
+// that internal/guard exports: command or alias -> flag -> whether it
+// takes a value.
 func vibeGuardCommands() map[string]map[string]bool {
-	guardCommandsOnce.Do(func() {
-		var out bytes.Buffer
-		guard.Main([]string{"help"}, guard.Env{
-			Stdin: strings.NewReader(""), Stdout: &out, Stderr: &out,
-			Getenv: func(string) string { return "" }, Now: time.Now,
-		}, "test")
-		guardCommands = map[string]map[string]bool{}
-		for _, line := range strings.Split(out.String(), "\n") {
-			words := strings.Fields(line)
-			if len(words) < 2 || words[0] != "vibe-guard" {
-				continue
-			}
-			flags := map[string]bool{}
-			for i := 2; i < len(words); i++ {
-				w := strings.Trim(words[i], "[]")
-				if strings.HasPrefix(w, "--") {
-					flags[w] = i+1 < len(words) && strings.HasPrefix(words[i+1], "<")
-				}
-			}
-			guardCommands[words[1]] = flags
+	out := map[string]map[string]bool{}
+	for _, c := range guard.Commands() {
+		flags := map[string]bool{}
+		for _, f := range c.Flags {
+			flags[f.Name] = f.TakesValue()
 		}
-		// The aliases guard.Main accepts beside its usage.
-		guardCommands["--version"] = map[string]bool{}
-		guardCommands["help"] = map[string]bool{}
-	})
-	return guardCommands
+		for _, name := range append([]string{c.Name}, c.Aliases...) {
+			out[name] = flags
+		}
+	}
+	return out
 }
 
 // checkVibeGuardArgs checks vibe-guard's arguments against its command
@@ -553,7 +545,8 @@ func (c *skillChecker) checkRepoFile(file, span string) {
 		return
 	}
 	isDir := strings.HasSuffix(span, "/")
-	if !isDir && !slices.Contains(repoFileExtensions, pathpkg.Ext(span)) {
+	// A bare extension, such as .md, names a kind of file, not a file.
+	if !isDir && (!slices.Contains(repoFileExtensions, pathpkg.Ext(span)) || pathpkg.Ext(span) == span) {
 		return
 	}
 	if slices.Contains(removedOrAvoided, span) {
@@ -574,57 +567,28 @@ var (
 	knownRepoFilesList []string
 )
 
-// knownRepoFiles are the repository paths the contract reads (the string
-// literals of internal/contract and internal/guardrule) and the paths
-// the reference implementations and vibe init --skill create.
+// knownRepoFiles are the repository paths the contract reads
+// (contract.RepoPaths), the guard's files (internal/guardrule), and the
+// paths the reference implementations and vibe init --skill create
+// (setupskill.Place, setupskill.Dirs).
 func knownRepoFiles() []string {
 	knownRepoFilesOnce.Do(func() {
-		for _, dir := range []string{"../contract", "../guardrule"} {
-			knownRepoFilesList = append(knownRepoFilesList, goStringLiterals(dir)...)
-		}
-		for _, stack := range referenceStacks {
-			for _, provider := range referenceProviders {
+		knownRepoFilesList = append(contract.RepoPaths(), guardrule.PolicyFile, guardrule.LocalPolicyFile)
+		for _, stack := range setupskill.Stacks() {
+			for _, provider := range setupskill.Providers() {
 				for _, ref := range referenceFiles(setupskill.FS()) {
-					if p, ok := referenceTarget(stack, provider, ref); ok {
+					if p, ok := setupskill.Place(stack, provider, ref); ok {
 						knownRepoFilesList = append(knownRepoFilesList, p)
 					}
 				}
 			}
 		}
-		knownRepoFilesList = append(knownRepoFilesList, setupskill.Dirs...)
+		knownRepoFilesList = append(knownRepoFilesList, setupskill.Dirs()...)
 		for i, p := range knownRepoFilesList {
 			knownRepoFilesList[i] = strings.TrimSuffix(p, "/")
 		}
 	})
 	return knownRepoFilesList
-}
-
-// goStringLiterals returns the string literals of the non-test Go files in
-// dir.
-func goStringLiterals(dir string) []string {
-	paths, err := filepath.Glob(filepath.Join(dir, "*.go"))
-	if err != nil {
-		panic(err)
-	}
-	var out []string
-	for _, p := range paths {
-		if strings.HasSuffix(p, "_test.go") {
-			continue
-		}
-		f, err := parser.ParseFile(token.NewFileSet(), p, nil, 0)
-		if err != nil {
-			panic(err)
-		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING {
-				if s, err := strconv.Unquote(lit.Value); err == nil {
-					out = append(out, s)
-				}
-			}
-			return true
-		})
-	}
-	return out
 }
 
 // referenceFiles lists the files under reference/ in skill.
@@ -637,87 +601,6 @@ func referenceFiles(skill fs.FS) []string {
 		return nil
 	})
 	return out
-}
-
-// monorepoComponents are the components of reference/vibe-yaml/monorepo.yaml,
-// by language.
-var monorepoComponents = map[string]string{
-	"go":         "services/api",
-	"typescript": "apps/web",
-	"python":     "services/worker",
-}
-
-// The CI providers a reference repository uses (spec 0055): GitHub
-// Actions with Dependabot, or GitLab CI with Renovate.
-const (
-	providerGitHub = "github"
-	providerGitLab = "gitlab"
-)
-
-var referenceProviders = []string{providerGitHub, providerGitLab}
-
-// gitlabReferences are the reference files only a GitLab repository uses,
-// with their places in it.
-var gitlabReferences = map[string]string{
-	".gitlab-ci.yml": ".gitlab-ci.yml",
-	"renovate.json":  "renovate.json",
-}
-
-// referenceTarget is where a repository of stack on provider places the
-// reference file ref (a skill path), or false when it does not use it.
-// A GitHub repository takes the workflows and dependabot.yml; a GitLab
-// repository takes .gitlab-ci.yml, renovate.json and the pull request
-// template as a merge request template.
-func referenceTarget(stack, provider, ref string) (string, bool) { //nolint:gocognit,gocyclo // baseline: pre-existing complexity
-	parts := strings.Split(strings.TrimPrefix(ref, "reference/"), "/")
-	if parts[0] == "ci" {
-		name := parts[len(parts)-1]
-		target, gitlabOnly := gitlabReferences[name]
-		switch {
-		case len(parts) == 2 && name == "pull_request_template.md" && provider == providerGitLab:
-			return ".gitlab/merge_request_templates/Default.md", true
-		case gitlabOnly && provider != providerGitLab:
-			return "", false
-		case gitlabOnly:
-			return target, len(parts) == 2 || parts[1] == stack
-		case len(parts) == 3 && provider == providerGitLab:
-			return "", false
-		}
-	}
-	switch {
-	case len(parts) == 2 && parts[0] == "vibe-yaml":
-		return "vibe.yaml", parts[1] == stack+".yaml"
-	case len(parts) == 2 && parts[0] == "agents":
-		switch parts[1] {
-		case "settings.json":
-			return ".claude/settings.json", true
-		case "policy.json":
-			return guardrule.PolicyFile, true
-		}
-		return parts[1], true
-	case len(parts) == 2 && parts[0] == "ci":
-		return ".github/" + parts[1], true
-	case len(parts) == 3 && parts[0] == "ci" && parts[1] == stack:
-		if parts[2] == "dependabot.yml" {
-			return ".github/dependabot.yml", true
-		}
-		return ".github/workflows/" + parts[2], true
-	case len(parts) == 3 && parts[0] == "hooks" && parts[1] == stack:
-		return parts[2], true
-	case len(parts) == 3 && parts[0] == "taskrunner" && parts[1] == stack:
-		if lang, ok := strings.CutSuffix(parts[2], ".Taskfile.yml"); ok && stack == "monorepo" {
-			dir, ok := monorepoComponents[lang]
-			return dir + "/Taskfile.yml", ok
-		}
-		return parts[2], true
-	case len(parts) == 3 && parts[0] == "lint":
-		if stack == "monorepo" {
-			dir, ok := monorepoComponents[parts[1]]
-			return dir + "/" + parts[2], ok
-		}
-		return parts[2], parts[1] == stack
-	}
-	return "", false
 }
 
 // checkRulesGuidance: reference/rules.md has a heading for every rule of
@@ -816,13 +699,14 @@ func buildReferenceConfig(f skillFile, builds *int) error {
 	for _, comp := range decl.Components {
 		files[pathpkg.Join(comp.Path, manifestByLanguage[comp.Language])] = ""
 	}
-	dir, err := os.MkdirTemp("", "vibe-skill-config-")
+	parent, err := os.MkdirTemp("", "vibe-skill-config-")
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.RemoveAll(dir) }()
+	defer func() { _ = os.RemoveAll(parent) }()
 	*builds++
-	if err := writeGitTree(dir, files); err != nil {
+	dir, err := writeGitTree(parent, files)
+	if err != nil {
 		return err
 	}
 	repo, err := contract.OpenRepo(context.Background(), dir)
@@ -833,26 +717,33 @@ func buildReferenceConfig(f skillFile, builds *int) error {
 	return err
 }
 
-// writeGitTree writes files (slash paths) under dir and makes it a Git
-// repository that tracks them all.
-func writeGitTree(dir string, files map[string]string) error {
+// writeGitTree writes files (slash paths) under parent/repo and makes it
+// a Git repository that tracks them all, with git isolated as
+// internal/testkit isolates it. It returns parent/repo.
+func writeGitTree(parent string, files map[string]string) (string, error) {
+	dir := filepath.Join(parent, "repo")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
 	for name, content := range files {
 		p := filepath.Join(dir, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			return err
+			return "", err
 		}
 		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-			return err
+			return "", err
 		}
 	}
-	for _, args := range [][]string{{"init", "-q"}, {"-c", "core.autocrlf=false", "add", "-A"}} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("git %v: %w\n%s", args, err, out)
+	env, err := testkit.GitEnv(parent)
+	if err != nil {
+		return "", err
+	}
+	for _, args := range [][]string{{"init", "-q"}, {"add", "-A"}} {
+		if _, err := testkit.RunGit(env, dir, args...); err != nil {
+			return "", err
 		}
 	}
-	return nil
+	return dir, nil
 }
 
 // checkReferencePolicies: every reference policy.json loads as a valid
@@ -890,8 +781,11 @@ func (c *skillChecker) checkReferenceHooks() {
 		return
 	}
 	pre, stop := cfg.Hooks["PreToolUse"], cfg.Hooks["Stop"]
+	// Render replaces the release-page placeholder with the release page
+	// of the version that replaces the version placeholder.
+	releasePage := strings.NewReplacer(setupskill.ReleasePagePlaceholder, guard.ReleasePage(setupskill.VersionPlaceholder))
 	if len(pre) != 1 || len(pre[0].Hooks) != 1 || pre[0].Matcher != guard.ReferencePreToolUseMatcher ||
-		pre[0].Hooks[0].Command != guard.ReferencePreToolUse(setupskill.VersionPlaceholder) {
+		releasePage.Replace(pre[0].Hooks[0].Command) != guard.ReferencePreToolUse(setupskill.VersionPlaceholder) {
 		c.problem(file, "PreToolUse is not the reference guard's matcher and command")
 	}
 	if len(stop) != 1 || len(stop[0].Hooks) != 1 || stop[0].Hooks[0].Command != guard.ReferenceStop {
@@ -943,7 +837,7 @@ func (c *skillChecker) checkSkillIgnored() {
 			c.problem(name, "is missing, so the repository's checks read the skill's own files")
 			continue
 		}
-		for _, dir := range setupskill.Dirs {
+		for _, dir := range setupskill.Dirs() {
 			if !strings.Contains(f.text, dir) {
 				c.problem(name, "does not exclude %s, so the repository's checks read the skill's own files", dir)
 			}

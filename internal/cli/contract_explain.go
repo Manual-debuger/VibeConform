@@ -45,7 +45,7 @@ func writeExplain(w io.Writer, rule contract.Rule) error {
 	b.WriteString("\nRationale:\n")
 	writeWrapped(&b, "  ", "  ", rule.Rationale())
 	b.WriteString("\nCheck:\n")
-	writeWrapped(&b, "  ", "  ", rule.Check)
+	writeWrapped(&b, "  ", "  ", rule.Check())
 	if details := contract.RuleDetails(rule.ID); details != "" {
 		b.WriteString("\n" + details)
 	}

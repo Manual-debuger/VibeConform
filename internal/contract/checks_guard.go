@@ -103,12 +103,7 @@ func (r caseRun) undecided() *runOutcome {
 func (r caseRun) what() string { return describeGuardCase(r.c) }
 
 func describeGuardCase(c GuardCase) string {
-	t := c.Target()
-	arg := t.Command
-	if guardrule.IsEditTool(t.Tool) {
-		arg = t.Path
-	}
-	return fmt.Sprintf("corpus case %q (%s %q)", c.Name, c.Payload.ToolName, arg)
+	return fmt.Sprintf("corpus case %q (%s %q)", c.Name, c.Payload.ToolName, c.Target().Text())
 }
 
 // exits says how every hook ended.
@@ -238,13 +233,15 @@ func (s *probeSession) setUnlock(state string) error {
 }
 
 // policyExceptions returns the guard policy's exceptions as the audit
-// applies them: entries with a guard rule ID and a match. Only
-// policy.json counts; policy.local.json never does.
+// applies them: the entries guardrule.NewException builds, which have a
+// guard rule ID and a match that is one simple command for a command
+// rule. An entry it refuses lifts nothing. Only policy.json counts;
+// policy.local.json never does.
 func policyExceptions(env *Env) []guardrule.Exception {
 	var out []guardrule.Exception
 	for _, g := range guardExceptions(env) {
-		if guardrule.IsContractID(g.Rule) && g.Match != "" {
-			out = append(out, guardrule.Exception{Rule: g.Rule, Match: g.Match, Reason: g.Reason})
+		if ex, err := guardrule.NewException(g.Rule, g.Match, g.Reason); err == nil {
+			out = append(out, ex)
 		}
 	}
 	return out
@@ -361,7 +358,7 @@ func (t *corpusTally) denyCase(run caseRun, rerun *caseRerun) {
 	ex := t.exceptionsFor(c)
 	switch {
 	case len(ex) > 0 && !t.env.rerunsExceptions():
-		t.uses = append(t.uses, GuardExceptionUse{Rule: ex[0].Rule, Match: ex[0].Match, Case: c.Name})
+		t.uses = append(t.uses, GuardExceptionUse{Rule: ex[0].Rule(), Match: ex[0].Match(), Case: c.Name})
 	case len(run.runs) == 0:
 		tool := c.Payload.ToolName
 		if _, seen := t.unmatched[tool]; !seen {
@@ -545,7 +542,7 @@ func systemPath(env []string) string {
 	if runtime.GOOS != "windows" {
 		return "/usr/bin:/bin:/usr/sbin:/sbin"
 	}
-	root, _ := envGet(env, "SystemRoot")
+	root := envGet(env, "SystemRoot")
 	if root == "" {
 		root = `C:\Windows`
 	}

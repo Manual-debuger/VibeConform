@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Manual-debuger/VibeConform/internal/testkit"
 )
 
 // A project below the Git top (spec 0068, #180): Claude Code runs in
@@ -173,26 +175,15 @@ func TestProjectBelowGitTopRelock(t *testing.T) {
 // git rev-parse --git-common-dir, run in the project, points (as
 // vibe unlock writes it) unlocks the project's settings.
 func TestProjectBelowGitTopAgreesWithGit(t *testing.T) {
-	gitBin, err := exec.LookPath("git")
-	if err != nil {
+	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not on PATH")
 	}
-	top := t.TempDir()
-	proj := filepath.Join(top, "proj")
+	top := testkit.InitRepo(t)
+	proj := filepath.Join(top.Dir, "proj")
 	if err := os.MkdirAll(proj, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command(gitBin, "-C", top, "init", "-q").CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v\n%s", err, out)
-	}
-	out, err := exec.Command(gitBin, "-C", proj, "rev-parse", "--git-common-dir").Output()
-	if err != nil {
-		t.Fatalf("git rev-parse: %v", err)
-	}
-	common := filepath.FromSlash(strings.TrimSpace(string(out)))
-	if !filepath.IsAbs(common) {
-		common = filepath.Join(proj, common)
-	}
+	common := testkit.Repo{Dir: proj, Env: top.Env}.CommonDir(t)
 	r := repo{Root: proj}
 	assertRefused(t, r.hook(t, editPayload("Write", filepath.Join(proj, ".claude", "settings.json"), proj)), "guardrail-settings")
 	writeFile(t, filepath.Join(common, "vibe-unlock"), marker(testNow.Add(10*time.Minute)))

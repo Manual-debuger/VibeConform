@@ -288,9 +288,11 @@ vibe init --skill --repo-root ./some/other/repo
   `.claude/skills/` is not a guardrail path, so an agent may run it.
 - It prints each path it removed (`removed <path>`) and wrote
   (`wrote <path>`).
-- The skill's only placeholder is the `vibe` version. `init --skill`
-  replaces it with the version the `vibe-guard` install hint uses: this
-  `vibe`'s release version, or `latest` for a source build.
+- The skill has two placeholders. `init --skill` replaces the `vibe`
+  version with the version the `vibe-guard` install hint uses: this
+  `vibe`'s release version, or `latest` for a source build. It replaces
+  the release page with that version's page on GitHub, or the releases
+  page for `latest`, as the install hint does.
 - `--skill` takes no arguments.
 
 ### `vibe --version`
@@ -1828,7 +1830,10 @@ repository is an ordinary file, edited directly.
 - `.golangci.yml` enables `gocyclo` (15) and `gocognit` (20). The
   functions that were over those limits when they were enabled carry
   `//nolint:gocognit,gocyclo // baseline: pre-existing complexity` (only
-  the linters that report them); new code meets the limits.
+  the linters that report them); new code meets the limits. `task lint`
+  fails when the count of those comments is higher than the ceiling in
+  `internal/baselines/main.go` (spec 0073), so the count only goes
+  down: a change that removes one lowers the ceiling too.
 - `Taskfile.local.yml` holds this repository's own tasks (`task build`
   and others), included optionally by `Taskfile.yml`.
 

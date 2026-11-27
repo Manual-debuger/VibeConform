@@ -3,7 +3,13 @@ package guard
 import (
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
+
+	gr "github.com/Manual-debuger/VibeConform/internal/guardrule"
 )
+
+// PolicyFile is the repository's guard policy, which vibe-guard reads
+// and the reference policy is written to.
+const PolicyFile = gr.PolicyFile
 
 // The reference hook commands (spec 0053, "The reference hook
 // commands"), as .claude/settings.json runs them.
@@ -19,15 +25,22 @@ const releases = "https://github.com/Manual-debuger/VibeConform/releases"
 // install or from the release page, and refuses (exit 2), so a missing
 // guard fails closed. command -v is a shell builtin, so the check works
 // with only the operating system's PATH. version is what InstallVersion
-// returns; for latest the link is to the releases page.
+// returns; the link is ReleasePage(version).
 func ReferencePreToolUse(version string) string {
-	page := releases + "/tag/" + version
-	if version == "latest" {
-		page = releases
-	}
 	return `command -v vibe-guard >/dev/null 2>&1 || { echo "vibe-guard is not installed; install it: ` +
 		`go install github.com/Manual-debuger/VibeConform/cmd/vibe-guard@` + version +
-		`, or download it from ` + page + `" >&2; exit 2; }; vibe-guard hook`
+		`, or download it from ` + ReleasePage(version) + `" >&2; exit 2; }; vibe-guard hook`
+}
+
+// ReleasePage is the page that publishes vibe-guard's release archives
+// for version, which is what InstallVersion returns: the tag's page, or
+// the releases page for latest, which has no tag of its own (spec 0073).
+// The setup skill's release-page placeholder is replaced with it.
+func ReleasePage(version string) string {
+	if version == "latest" {
+		return releases
+	}
+	return releases + "/tag/" + version
 }
 
 // ProjectRootPrefix starts every reference hook command that calls Task

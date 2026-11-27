@@ -95,8 +95,19 @@ internal/contract
   on every report: each failed part has a finding, and each finding
   names a file and a fix. The tests of `internal/contract` and
   `internal/cli` import it. Among this module's packages it imports only
-  `internal/contract`, and only test files import it; two `depguard`
-  rules enforce both. The report goldens stay in `internal/cli/testdata`.
+  `internal/contract` and `internal/testkit`, and only test files import
+  it; two `depguard` rules enforce both. The report goldens stay in `internal/cli/testdata`.
+- **Test Git repositories** (spec 0073). `internal/testkit` is the one
+  helper for a test's isolated temporary Git repository: git runs with
+  the person's global and system configuration ignored, none of the
+  person's `GIT_` variables and no repository above the temporary
+  directory, and the helper inits a repository with one commit and
+  names its common Git directory. Every test that runs git in a
+  repository of its own uses it, and so does `contracttest`'s fixture
+  builder for its Git fixtures. Only test files and `contracttest`
+  (itself imported by test files only) import `internal/testkit`, and it
+  imports no package of this module; two `depguard` rules enforce both,
+  as for `contracttest`.
 - **Shell parsing.** "Called" means a simple command in the shell parse
   tree, so `internal/contract` depends on `mvdan.cc/sh/v3/syntax` (ADR
   0026). `internal/contract/shell.go` is the only file that imports it;
@@ -117,6 +128,13 @@ internal/contract
   CLI's tests hand a fixture's known file list in through a repository
   seam (`contract.NewRepo`), so a rule-table case starts no git (spec
   0056).
+- **Check text from parts** (spec 0073). A rule's check text,
+  `Rule.Check()`, is derived: each part's `Lead` ("Static: ",
+  "Probe: ", "Static, " and so on, as spec 0051 writes it) and its
+  `Check`, joined in order; an empty lead continues the part before it.
+  `--explain` prints a part's `Check` without its lead. `registry_test.go`
+  compares each rule's derived text with spec 0051's row and spec
+  0061's text.
 - **One last part** (spec 0071, which replaced spec 0064's needs). The
   runner decides the static parts first. Then, in the probe copy, it
   runs the execution and probe parts that have `Run`, in registry order
@@ -189,14 +207,22 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
 
 - **`internal/guardrule`** holds what the audit and the guard must agree
   on: the contract guard rule IDs and the guard-internal ones,
-  `policy.json` version 2 parsing, exception matching, the policy file
+  `policy.json` version 2 parsing, exception matching (a `Rule` and an
+  `Exception` have unexported fields and are built only by `NewRule` and
+  `NewException`, which refuse an invalid one and parse a command match
+  once per shell and compile a glob once; `ParsePolicy` builds through
+  them, spec 0073), the kinds as typed values (a rule's `RuleKind`,
+  `CommandRule` or `PathRule`, with one pattern; a `Target`'s
+  `TargetKind`, built by `NewCommandTarget` and `NewPathTarget`; a
+  PowerShell writer's kind; spec 0073), the policy file
   paths, the unlock marker's name and format (`vibe unlock` writes it,
   `vibe-guard` reads it, the audit plants it), the finder of the Git top
   and the common Git directory that holds the marker (`FindRepo`, which
   reads `.git` files and runs no `git`; `vibe-guard` and `vibe unlock`
   both call it, spec 0069), and the decomposition of a Bash or
-  PowerShell command into simple commands. It imports no `internal/`
-  package.
+  PowerShell command into simple commands: `wrappers.go` unwraps the
+  commands a wrapper runs (spec 0053), and `writes.go` reads the files a
+  command writes (spec 0058). It imports no `internal/` package.
 - **`internal/guard`** is `vibe-guard`'s logic: the baseline rules, the
   decision, observe mode, the unlock marker, `hook`, `explain`, `relock`,
   and the reference hook commands. Its `Guard` keeps its state
@@ -227,6 +253,14 @@ cmd/vibe-guard ──────────────→ internal/guard ─�
   commands and the version rule (`InstallVersion`: the version the
   install hint names). The `internal/setupskill` and `internal/doctor`
   boundaries have `depguard` rules too, and no import tests (spec 0063).
+- **One way to find bash** (spec 0073). `guardrule.ResolveBash` finds
+  the bash Claude Code runs hooks with: Git Bash on Windows
+  (`CLAUDE_CODE_GIT_BASH_PATH`, or the `bash.exe` next to `git.exe`,
+  never WSL's), bash on `PATH` elsewhere. The audit, `vibe doctor` and
+  the tests that run hooks (`hookShell` in `internal/setupskill`,
+  `findBash` in `internal/guard`) all call it; each test keeps its own
+  skip policy. `guardrule.LookPath`, which it uses, is also how the
+  audit finds the programs it runs.
 
 ### The setup skill
 
@@ -237,17 +271,24 @@ directory, embedded with `go:embed`, and `Install`, which `vibe init
 ```text
 cmd/vibe → internal/cli ──→ internal/setupskill ──→ internal/guard
            (vibe init --skill)   (embedded skill/)    (InstallVersion,
+                                                       ReleasePage,
                                                        reference commands)
 ```
 
 - **Imports.** Among this repository's packages, `internal/setupskill`
-  imports only `internal/guard`, for the version rule that fills the
-  skill's one placeholder (the `vibe` version). A `depguard` rule in
-  `.golangci.yml` enforces that for non-test code (spec 0063).
+  imports only `internal/guard`, for the version rule and the release
+  page that fill the skill's two placeholders: `{{VIBE_VERSION}}`, the
+  version the install hint names (`InstallVersion`), and
+  `{{VIBE_RELEASE_PAGE}}`, its release page (`ReleasePage`, which the
+  reference PreToolUse command uses too; spec 0073). A `depguard` rule
+  in `.golangci.yml` enforces that for non-test code (spec 0063). The
+  drift checker fails on any other `{{VIBE_…}}` in the skill.
 - **Embedded bytes.** `.gitattributes` forces LF for
   `internal/setupskill/skill/`, and a test fails on any carriage return
   in an embedded file, so a CRLF working copy cannot change what a build
-  ships.
+  ships. `FS()` builds the skill's file system once, and `Dirs()`
+  returns a new slice on each call, so no caller can change the
+  package's state (spec 0073).
 - **Reference files.** The skill's reference implementations
   (`skill/reference/`) are single files per stack, maintained here; they
   began as copies of the template-sync system's templates, which spec
@@ -259,14 +300,23 @@ cmd/vibe → internal/cli ──→ internal/setupskill ──→ internal/guard
   filter and its checks, the Stop gate and the green stamp (including a
   project in a subdirectory), the Go test modes, the CI pins, and the
   hooks run from any directory (spec 0058).
+- **Placement manifest** (spec 0073). `placement.go` says where a
+  repository built from the references places each reference file:
+  `Stacks`, `Providers`, `Place(stack, provider, ref)` and the
+  reference monorepo's `MonorepoComponents` (directory, language and
+  Taskfile include ID). The drift checker, the static-audit test and
+  the hooks test read it; none keeps its own copy.
 - **The drift test** (#109) is test code in `internal/cli`
   (`skill_drift_checker_test.go`), not a package: it checks the
   skill's `vibe` commands and flags against the real command tree, which
   only `internal/cli` builds, and loads the reference `vibe.yaml` files
   through `contract.Parse` in a Git work tree. One function reads a
   skill as a file system and returns every problem: rule IDs, guard rule
-  IDs, `vibe` and `vibe-guard` commands and flags (`vibe-guard`'s from its
-  help output), paths into the skill, repository files named, the
+  IDs, `vibe` and `vibe-guard` commands and flags (`vibe-guard`'s from
+  the command table `guard.Commands`, which also generates its usage),
+  paths into the skill, repository files named (against
+  `contract.RepoPaths`, the paths the rules read, guardrule's policy
+  files and the placement manifest; spec 0073), the
   reference `vibe.yaml`, `policy.json` and hook commands, a `rules.md`
   entry per rule, and `vibe unlock` in `upgrade.md`. A fenced block
   marked `text` is output, not commands. A second test assembles a
@@ -321,10 +371,12 @@ internal/
   contract/                 # contract audit: vibe.yaml v2, rule registry, static checks, the CI model with its GitHub Actions and GitLab CI readers, probe copy and probes (spec 0052, 0053, 0055)
     contracttest/           # the audit's test seam: fixture builder, listed-fixture opener, audit helper with the report check; imported by test files only (ADR 0028)
     probetest/              # the probe tests that run real tools, in a package of their own for go test's time budget (spec 0053)
-  guardrule/                # guard rule IDs, policy.json v2, command parsing shared by the audit and vibe-guard; imports nothing from internal/ (spec 0053)
+  guardrule/                # guard rule IDs, policy.json v2, command parsing shared by the audit and vibe-guard, ResolveBash; imports nothing from internal/ (spec 0053, 0073)
   guard/                    # vibe-guard: baseline rules, hook/explain/relock, unlock marker, reference commands, version rule; imports only guardrule (spec 0053, 0054)
   setupskill/               # the embedded vibeconform-setup skill, vibe init --skill, and the tests that run its reference hooks; imports only guard (spec 0054)
-  doctor/                   # vibe doctor's checks; imports only contract, for the configuration, hook reader and bash resolution (spec 0059)
+  doctor/                   # vibe doctor's checks; imports only contract, for the configuration and hook reader, and guardrule, for bash resolution (spec 0059, 0073)
+  testkit/                  # the tests' isolated temporary Git repository; imported by test files only, imports nothing from this module (spec 0073)
+  baselines/                # the complexity baseline ceiling task lint runs, a main package; imports nothing from this module (spec 0073)
 ```
 
 - **`vibe init`** (spec 0059) gets the components from
@@ -342,11 +394,12 @@ internal/
   `vibe.yaml`, the entrypoints in `contract.EntrypointOrder`, then what
   the hooks need) and returns the report; the CLI prints it and sets
   the exit code (spec 0065). Doctor reuses the audit's readers (the
-  entrypoint splitter `ParseSimpleCommand`, `ReadClaudeHooks` and
-  `ResolveBash`), so it finds programs and bash exactly as the audit
-  would run them. Among this repository's packages it imports only
-  `internal/contract`; a `depguard` rule in `.golangci.yml` enforces
-  that for non-test code (spec 0063).
+  entrypoint splitter `ParseSimpleCommand` and `ReadClaudeHooks`) and
+  its bash resolution (`guardrule.ResolveBash`, spec 0073), so it finds
+  programs and bash exactly as the audit would run them. Among this
+  repository's packages it imports only `internal/contract` and
+  `internal/guardrule`; a `depguard` rule in `.golangci.yml` enforces
+  that (spec 0063).
 - **The removed commands.** `vibe sync`, `vibe diff` and `vibe check` are
   hidden commands that print the migration guide's path and exit 1.
   `contract.ReadConfig` stays, so that a version 1 `vibe.yaml` gets the
@@ -384,6 +437,15 @@ point for local and CI verification (`task fmt`, `task lint`, `task test`,
 invoke these tasks rather than duplicating command lists, and `vibe.yaml`
 declares them as the entrypoints. An adopting repository may use any
 runner; the contract only asks that its entrypoints exist and behave.
+
+`task lint` runs `golangci-lint`, then the complexity baseline ceiling
+(`internal/baselines`, spec 0073): it counts the `//nolint:… //
+baseline: pre-existing complexity` comments in the repository's Go
+files and fails when the count is higher than the ceiling recorded in
+`internal/baselines/main.go`, so that a new function over the
+`gocyclo` or `gocognit` limit is simplified, not given a baseline. A
+change that removes a baseline lowers the ceiling in the same commit;
+below the ceiling the check passes and names the new one.
 
 `task verify` and `task verify:fast` depend only on native language
 tooling, never on `vibe` (spec 0017; contract rule R-01 for adopters).

@@ -29,7 +29,7 @@ func TestAuditExplainEveryRule(t *testing.T) {
 			flat := strings.Join(strings.Fields(r.stdout), " ")
 			for _, want := range []string{
 				string(rule.Level), string(rule.Category) + ", " + rule.Category.Name(),
-				rule.Source, rule.Rationale(), rule.Check,
+				rule.Source, rule.Rationale(), rule.Check(),
 			} {
 				if !strings.Contains(flat, strings.Join(strings.Fields(want), " ")) {
 					t.Errorf("--explain %s does not show %q:\n%s", rule.ID, want, r.stdout)
@@ -171,7 +171,7 @@ func TestAuditExplainA09ListsItsCases(t *testing.T) {
 		t.Fatalf("A-09 has %d corpus cases, want the 13 of spec 0061", len(cases))
 	}
 	for _, c := range cases {
-		want := fmt.Sprintf("\n  %-5s  %-10s  %s\n", c.Want, c.Payload.ToolName, c.Target().Command)
+		want := fmt.Sprintf("\n  %-5s  %-10s  %s\n", c.Want, c.Payload.ToolName, c.Target().Text())
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("--explain A-09 lacks %q:\n%s", want, r.stdout)
 		}

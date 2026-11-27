@@ -37,12 +37,6 @@ type Env struct {
 	Now func() time.Time
 }
 
-const usage = `usage:
-  vibe-guard hook                                  decide the PreToolUse payload on stdin
-  vibe-guard explain [--tool <tool>] '<command or path>'
-  vibe-guard relock                                delete the unlock marker
-  vibe-guard version`
-
 // Main runs vibe-guard with args (without the program name) and returns
 // the exit code.
 func Main(args []string, env Env, version string) int {
@@ -50,23 +44,23 @@ func Main(args []string, env Env, version string) int {
 		say(env.Stderr, usage)
 		return exitUsage
 	}
-	switch args[0] {
-	case "hook":
+	switch lookupCommand(args[0]) {
+	case cmdHook:
 		if len(args) != 1 {
 			break
 		}
 		return hook(env)
-	case "explain":
+	case cmdExplain:
 		return explain(args[1:], env)
-	case "relock":
+	case cmdRelock:
 		if len(args) != 1 {
 			break
 		}
 		return relock(env)
-	case "version", "--version":
+	case cmdVersion:
 		say(env.Stdout, "vibe-guard "+version)
 		return 0
-	case "help", "-h", "--help":
+	case cmdHelp:
 		say(env.Stdout, usage)
 		return 0
 	}
@@ -169,18 +163,14 @@ func hook(env Env) int {
 // reasonTail is "<why>. Explain: vibe-guard explain '<command>'".
 func reasonTail(d Decision, t gr.Target) string {
 	s := strings.TrimSuffix(d.Finding.Why, ".") + "."
-	if t.Tool == "" {
+	if t.Tool() == "" {
 		return s
 	}
-	arg := t.Command
-	if gr.IsEditTool(t.Tool) {
-		arg = t.Path
-	}
 	explain := "vibe-guard explain "
-	if t.Tool != gr.Bash {
-		explain += "--tool " + t.Tool + " "
+	if t.Tool() != gr.Bash {
+		explain += "--tool " + t.Tool() + " "
 	}
-	return s + " Explain: " + explain + shellQuote(arg)
+	return s + " Explain: " + explain + shellQuote(t.Text())
 }
 
 // shellQuote quotes s for a POSIX shell, on one line: in single quotes,
@@ -273,18 +263,14 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 			strings.Join(append(append([]string{}, gr.CommandTools...), gr.EditTools...), ", "))
 		return exitUsage
 	}
-	t := gr.Target{Tool: tool, Command: arg}
+	t := gr.NewCommandTarget(tool, arg)
 	if gr.IsEditTool(tool) {
-		t = gr.Target{Tool: tool, Path: arg}
+		t = gr.NewPathTarget(tool, arg)
 	}
 	d := g.Decide(Call{Target: t})
 	w := env.Stdout
 	sayf(w, "tool: %s\n", tool)
-	if gr.IsEditTool(tool) {
-		sayf(w, "path: %s\n", arg)
-	} else {
-		sayf(w, "command: %s\n", arg)
-	}
+	sayf(w, "%s: %s\n", t.Kind(), arg)
 	observe := ""
 	if d.Outcome == Deny && !d.Refuses() {
 		observe = " (observe mode: the hook allows the call and logs it)"
@@ -297,7 +283,7 @@ func explain(args []string, env Env) int { //nolint:gocognit,gocyclo // baseline
 	}
 	for _, f := range d.Lifted {
 		sayf(w, "lifted: rule %s by the exception {rule: %s, match: %q, reason: %q}\n",
-			f.Rule, f.Exception.Rule, f.Exception.Match, f.Exception.Reason)
+			f.Rule, f.Exception.Rule(), f.Exception.Match(), f.Exception.Reason())
 		writeMatch(w, f)
 	}
 	if d.Finding == nil && len(d.Lifted) == 0 {

@@ -125,7 +125,7 @@ func checkReadings(t *testing.T, c contract.GuardCase, tally *readingsTally) {
 		lifted := got.Code == 0
 		if lifted {
 			tally.lifts.Add(1)
-			if gr.IsPathRule(e.Rule) {
+			if gr.IsPathRule(e.Rule()) {
 				tally.pathLifts.Add(1)
 			} else {
 				tally.commandLifts.Add(1)
@@ -143,13 +143,13 @@ func compareReadings(t *testing.T, c contract.GuardCase, e gr.Exception, root, s
 	if lifted && !e.Matches(c.Target(), root) {
 		t.Errorf("vibe-guard lets the case through by exception {rule %q, match %q}, which the audit's 1.x reading "+
 			"(Exception.Matches) does not accept; widen Exception.Matches (spec 0070, \"The two readings of an exception\")",
-			e.Rule, e.Match)
+			e.Rule(), e.Match())
 	}
 	counts := c.ExceptionMatchesRefused(e, root)
 	if d, listed := readingDifferences[c.Name]; listed && counts && !lifted {
 		if refusedBy := "vibe-guard: refused by rule " + d.rule + ":"; !strings.HasPrefix(stderr, refusedBy) {
 			t.Errorf("exception {rule %q, match %q}: a listed difference (%s), but the guard's refusal is %q, not by rule %s",
-				e.Rule, e.Match, d.why, stderr, d.rule)
+				e.Rule(), e.Match(), d.why, stderr, d.rule)
 		}
 		tally.differed.Store(c.Name, true)
 		return
@@ -157,7 +157,7 @@ func compareReadings(t *testing.T, c contract.GuardCase, e gr.Exception, root, s
 	if counts != lifted {
 		t.Errorf("vibe-guard lifts the case by exception {rule %q, match %q}: %v; the audit's 2.0.0 reading "+
 			"(GuardCase.ExceptionMatchesRefused) counts it: %v; they must agree (spec 0072, \"The audit's reading under 2.0.0\")",
-			e.Rule, e.Match, lifted, counts)
+			e.Rule(), e.Match(), lifted, counts)
 	}
 }
 
@@ -167,21 +167,25 @@ func exceptionsBuiltFor(t *testing.T, c contract.GuardCase, root string) []built
 	t.Helper()
 	tgt := c.Target()
 	var cmds []gr.Command
-	if gr.IsCommandTool(tgt.Tool) {
+	if tgt.Kind() == gr.CommandTarget {
 		var err error
-		if cmds, err = gr.Commands(gr.ShellFor(tgt.Tool), tgt.Command); err != nil {
+		if cmds, err = gr.Commands(gr.ShellFor(tgt.Tool()), tgt.Text()); err != nil {
 			t.Fatalf("a deny case for rule %s does not parse: %v", c.Rule, err)
 		}
 	}
 	exceptionFor := func(match string) gr.Exception {
-		return gr.Exception{Rule: c.Rule, Match: match, Reason: "two readings"}
+		e, err := gr.NewException(c.Rule, match, "two readings")
+		if err != nil {
+			t.Fatalf("an exception for rule %s: %v", c.Rule, err)
+		}
+		return e
 	}
 	if !gr.IsPathRule(c.Rule) {
 		return commandExceptions(t, cmds, exceptionFor)
 	}
 	var out []builtException
-	if gr.IsEditTool(tgt.Tool) {
-		out = append(out, builtException{Exception: exceptionFor(gr.RelPath(root, tgt.Path))})
+	if tgt.Kind() == gr.PathTarget {
+		out = append(out, builtException{Exception: exceptionFor(gr.RelPath(root, tgt.Text()))})
 	}
 	for _, cmd := range cmds {
 		for _, w := range cmd.Writes {
@@ -265,7 +269,7 @@ func policyWith(t *testing.T, e gr.Exception) string {
 	t.Helper()
 	data, err := json.Marshal(map[string]any{
 		"version": 2, "mode": "enforce", "rules": []any{},
-		"exceptions": []map[string]string{{"rule": e.Rule, "match": e.Match, "reason": e.Reason}},
+		"exceptions": []map[string]string{{"rule": e.Rule(), "match": e.Match(), "reason": e.Reason()}},
 	})
 	if err != nil {
 		t.Fatal(err)

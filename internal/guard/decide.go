@@ -150,9 +150,9 @@ func (g *Guard) Decide(c Call) Decision {
 	switch t := c.Target; {
 	case c.Err != nil:
 		d = deny(c.Err.Rule, c.Err.Why)
-	case gr.IsCommandTool(t.Tool):
+	case t.Kind() == gr.CommandTarget:
 		d = g.decideCommand(t)
-	case gr.IsEditTool(t.Tool):
+	case t.Kind() == gr.PathTarget:
 		d = g.decidePath(t)
 	}
 	d.Observe = g.policy.Mode == gr.Observe
@@ -160,8 +160,8 @@ func (g *Guard) Decide(c Call) Decision {
 }
 
 func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit // baseline: pre-existing complexity
-	shell := gr.ShellFor(t.Tool)
-	cmds, err := gr.Commands(shell, t.Command)
+	shell := gr.ShellFor(t.Tool())
+	cmds, err := gr.Commands(shell, t.Text())
 	if err != nil {
 		return deny(gr.IDParseError, "the command "+err.Error())
 	}
@@ -185,11 +185,11 @@ func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit // basel
 			return d
 		}
 		for _, r := range g.policy.Rules {
-			if r.Command == "" || !r.AppliesTo(t.Tool) || !r.MatchesCommand(*c) {
+			if r.Kind() != gr.CommandRule || !r.AppliesTo(t.Tool()) || !r.MatchesCommand(*c) {
 				continue
 			}
-			f := Finding{Rule: r.ID, Why: r.Reason, Command: c}
-			if r.Level == gr.Deny {
+			f := Finding{Rule: r.ID(), Why: r.Reason(), Command: c}
+			if r.Level() == gr.Deny {
 				d.Outcome, d.Finding = Deny, &f
 				return d
 			}
@@ -206,18 +206,18 @@ func (g *Guard) decideCommand(t gr.Target) Decision { //nolint:gocognit // basel
 
 func (g *Guard) decidePath(t gr.Target) Decision {
 	var d Decision
-	p := g.normalize(t.Path)
-	if f := g.firstRefusal(g.pathMatches(pathRules, p, t.Path, nil), &d); f != nil {
+	p := g.normalize(t.Text())
+	if f := g.firstRefusal(g.pathMatches(pathRules, p, t.Text(), nil), &d); f != nil {
 		d.Outcome, d.Finding = Deny, f
 		return d
 	}
 	var ask *Finding
 	for _, r := range g.policy.Rules {
-		if r.Path == "" || !r.AppliesTo(t.Tool) || !r.MatchesPath(p, g.repo.Root) {
+		if r.Kind() != gr.PathRule || !r.AppliesTo(t.Tool()) || !r.MatchesPath(p, g.repo.Root) {
 			continue
 		}
-		f := Finding{Rule: r.ID, Why: r.Reason, Path: t.Path}
-		if r.Level == gr.Deny {
+		f := Finding{Rule: r.ID(), Why: r.Reason(), Path: t.Text()}
+		if r.Level() == gr.Deny {
 			d.Outcome, d.Finding = Deny, &f
 			return d
 		}
@@ -328,7 +328,7 @@ func isGitBashDrive(p string) bool {
 // exception returns the first exception for rule that matches.
 func (g *Guard) exception(rule string, matches func(gr.Exception) bool) *gr.Exception {
 	for i, e := range g.policy.Exceptions {
-		if e.Rule == rule && matches(e) {
+		if e.Rule() == rule && matches(e) {
 			return &g.policy.Exceptions[i]
 		}
 	}

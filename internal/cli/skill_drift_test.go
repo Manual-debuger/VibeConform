@@ -154,6 +154,11 @@ func TestSkillDriftFixtures(t *testing.T) {
 		{"unknown repository file", func(*testing.T) func(fstest.MapFS) {
 			return appendTo("SKILL.md", "Write `.github/vibe-settings.yml`.")
 		}, ".github/vibe-settings.yml"},
+		{"a file the contract names but never reads", func(*testing.T) func(fstest.MapFS) {
+			// The contract's source names lefthook-local.yml only to skip
+			// it, so it is not a path the contract reads (spec 0073).
+			return appendTo("SKILL.md", "Write `lefthook-local.yml`.")
+		}, "lefthook-local.yml"},
 		{"invalid reference vibe.yaml", func(t *testing.T) func(fstest.MapFS) {
 			return replaceIn(t, "reference/vibe-yaml/python.yaml", "verify-fast:", "verify-quick:")
 		}, "reference/vibe-yaml/python.yaml"},
@@ -183,6 +188,12 @@ func TestSkillDriftFixtures(t *testing.T) {
 		{"the policy SKILL.md hands to the person differs from the reference", func(t *testing.T) func(fstest.MapFS) {
 			return replaceIn(t, "SKILL.md", `    "rules": [],`, `    "tools": [],`)
 		}, "SKILL.md"},
+		{"unknown placeholder", func(*testing.T) func(fstest.MapFS) {
+			return appendTo("SKILL.md", "Install vibe from {{VIBE_CHANNEL}}.")
+		}, "{{VIBE_CHANNEL}}"},
+		{"placeholder with spaces", func(*testing.T) func(fstest.MapFS) {
+			return appendTo("reference/upgrade.md", "Install vibe {{ VIBE_VERSION }}.")
+		}, "{{ VIBE_VERSION }}"},
 		{"upgrade.md does not name vibe unlock", func(*testing.T) func(fstest.MapFS) {
 			return func(files fstest.MapFS) {
 				f := files["reference/upgrade.md"]

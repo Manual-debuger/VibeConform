@@ -36,7 +36,9 @@ linters:
     # (V-06, a function of cyclomatic complexity 42 and cognitive
     # complexity 41). Existing code over the limits gets a specific
     # suppression with the reason "baseline: pre-existing complexity",
-    # not a higher limit.
+    # not a higher limit. New code meets the limits: task lint fails when
+    # the count of those suppressions is higher than the ceiling in
+    # internal/baselines/main.go (spec 0073).
     gocyclo:
       min-complexity: 15
     gocognit:
@@ -49,13 +51,15 @@ linters:
     # the real vibe-guard. A trailing $ makes an entry an exact match,
     # so that internal/guard does not also deny internal/guardrule.
     #
-    # internal/doctor and internal/setupskill may each import one package
-    # of this module (spec 0063). Their rules deny the module path, which
-    # matches every package of the module, and allow the one package with
-    # a trailing $. They use list-mode lax: an import that matches neither
-    # list passes, and when an import matches both lists, the longer entry
-    # wins. So the allowed package passes and every other package of the
-    # module fails. In the default mode, a non-empty allow list fails
+    # internal/doctor and internal/setupskill may each import only the
+    # packages of this module their rule allows (spec 0063): doctor
+    # internal/contract, and internal/guardrule for ResolveBash (spec
+    # 0073); setupskill internal/guard. Their rules deny the module path,
+    # which matches every package of the module, and allow each package
+    # with a trailing $. They use list-mode lax: an import that matches
+    # neither list passes, and when an import matches both lists, the
+    # longer entry wins. So the allowed packages pass and every other
+    # package of the module fails. In the default mode, a non-empty allow list fails
     # every import not in it, the standard library too, and a match in
     # both lists fails. The doctor rule covers its tests too, as the
     # import test it replaces did; it also allows internal/doctor itself,
@@ -88,11 +92,12 @@ linters:
             - "**/internal/doctor/**"
           allow:
             - github.com/Manual-debuger/VibeConform/internal/contract$
+            - github.com/Manual-debuger/VibeConform/internal/guardrule$
             - github.com/Manual-debuger/VibeConform/internal/doctor$
             - github.com/Manual-debuger/VibeConform/internal/contract/contracttest$
           deny:
             - pkg: github.com/Manual-debuger/VibeConform
-              desc: vibe doctor reuses the audit's readers and imports no package of this module except internal/contract (spec 0059)
+              desc: vibe doctor reuses the audit's readers and imports no package of this module except internal/contract and internal/guardrule (spec 0059, 0073)
         setupskill:
           list-mode: lax
           files:
@@ -106,8 +111,9 @@ linters:
         # internal/contract/contracttest is the contract audit's test seam
         # (ADR 0028, spec 0065). Test files import it; no other file does,
         # so it never reaches a binary. It imports no package of this
-        # module except internal/contract, in the same lax mode as the
-        # doctor rule.
+        # module except internal/contract and internal/testkit, whose
+        # isolated git builds its Git fixtures (spec 0073), in the same
+        # lax mode as the doctor rule.
         contracttest-importers:
           files:
             - "$all"
@@ -123,9 +129,39 @@ linters:
             - "!$test"
           allow:
             - github.com/Manual-debuger/VibeConform/internal/contract$
+            - github.com/Manual-debuger/VibeConform/internal/testkit$
           deny:
             - pkg: github.com/Manual-debuger/VibeConform
-              desc: contracttest imports no package of this module except internal/contract
+              desc: contracttest imports no package of this module except internal/contract and internal/testkit
+        # internal/testkit holds the tests' isolated temporary Git
+        # repository (spec 0073). As with contracttest, test files import
+        # it, and so does contracttest, which is itself imported by test
+        # files only (ADR 0028); no other file does, so it never reaches a
+        # binary. It imports no package of this module.
+        testkit-importers:
+          files:
+            - "$all"
+            - "!$test"
+            - "!**/internal/contract/contracttest/**"
+          deny:
+            - pkg: github.com/Manual-debuger/VibeConform/internal/testkit$
+              desc: testkit is a test helper; only _test.go files import it (spec 0073)
+        testkit:
+          files:
+            - "**/internal/testkit/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/Manual-debuger/VibeConform
+              desc: testkit imports no package of this module (spec 0073)
+        # internal/baselines is the baseline ceiling task lint runs (spec
+        # 0073), a main package that reads files and imports no package of
+        # this module.
+        baselines:
+          files:
+            - "**/internal/baselines/**"
+          deny:
+            - pkg: github.com/Manual-debuger/VibeConform
+              desc: the baseline ceiling imports no package of this module (spec 0073)
     revive:
       rules:
         - name: exported

@@ -34,8 +34,8 @@ func TestGuardCorpusIsValid(t *testing.T) {
 		}
 		// Every command parses, so that a shell-parsing guard can decide
 		// it by its rules rather than refuse it as a parse error.
-		if tgt := c.Target(); guardrule.IsCommandTool(tgt.Tool) {
-			if _, err := guardrule.Commands(guardrule.ShellFor(tgt.Tool), tgt.Command); err != nil {
+		if tgt := c.Target(); tgt.Kind() == guardrule.CommandTarget {
+			if _, err := guardrule.Commands(guardrule.ShellFor(tgt.Tool()), tgt.Text()); err != nil {
 				t.Errorf("%s: %v", c.Name, err)
 			}
 		}
@@ -212,7 +212,7 @@ func TestParseGuardCorpusDefaultsUnlock(t *testing.T) {
 	if cases[0].Unlock != UnlockExpired || cases[1].Unlock != unlockNone {
 		t.Errorf("unlocks = %q, %q", cases[0].Unlock, cases[1].Unlock)
 	}
-	if got := cases[0].Target(); got != (guardrule.Target{Tool: "Write", Path: ".claude/settings.json"}) {
+	if got := cases[0].Target(); got != guardrule.NewPathTarget("Write", ".claude/settings.json") {
 		t.Errorf("target = %+v", got)
 	}
 }
