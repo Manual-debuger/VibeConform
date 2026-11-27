@@ -176,8 +176,10 @@ func TestSkillDriftFixtures(t *testing.T) {
 		{"reference Stop command differs from the guard's", func(t *testing.T) func(fstest.MapFS) {
 			return replaceIn(t, "reference/agents/settings.json", "vibe-guard relock 2>/dev/null; ", "")
 		}, "Stop"},
+		// An older MINOR of 2.x: under 1.x the reference's guard set in
+		// require would be a second problem, since it is MUST there.
 		{"reference vibe.yaml declares an older contract", func(t *testing.T) func(fstest.MapFS) {
-			return replaceIn(t, "reference/vibe-yaml/monorepo.yaml", "contract: "+contract.Latest, "contract: 1.0.0")
+			return replaceIn(t, "reference/vibe-yaml/monorepo.yaml", "contract: "+contract.Latest, "contract: 2.0.0")
 		}, "reference/vibe-yaml/monorepo.yaml"},
 		{"SKILL.md names an older contract", func(t *testing.T) func(fstest.MapFS) {
 			return replaceIn(t, "SKILL.md", "under contract "+contract.Latest, "under contract 1.0.0")
