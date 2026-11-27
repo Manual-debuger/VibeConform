@@ -339,6 +339,18 @@ func TestAuditExplainReadsTheContractVersion(t *testing.T) {
 			t.Errorf("--explain A-02 under 1.2.0 names the guard set:\n%s", r.stdout)
 		}
 	})
+	// R-01's guard half holds under 2.1.0 only with the guard set
+	// required (spec 0074, "Amendments").
+	t.Run("R-01's check under each contract", func(t *testing.T) {
+		t.Parallel()
+		const condition = "when `require` lists the guard set, the A-02 deny cases are still refused"
+		assertShows(t, runVibeAudit(t, "--explain", "R-01", "--repo-root", withConfig(t, "contract: 2.1.0\n")), condition)
+		r := runVibeAudit(t, "--explain", "R-01", "--repo-root", withConfig(t, "contract: 1.2.0\n"))
+		assertShows(t, r, "passes in the probe copy and the A-02 deny cases are still refused")
+		if strings.Contains(flat(r), "guard set") {
+			t.Errorf("--explain R-01 under 1.2.0 names the guard set:\n%s", r.stdout)
+		}
+	})
 	t.Run("--config names the file", func(t *testing.T) {
 		t.Parallel()
 		dir := withConfig(t, "contract: 2.1.0\n")

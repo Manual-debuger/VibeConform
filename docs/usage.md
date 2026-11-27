@@ -722,7 +722,8 @@ jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "
   `.claude/settings.json` matches `Bash`, read as A-01 reads it. There
   is no guard to test then: A-01 fails and reports it, and the guard
   probes do not run. A settings file that does not parse keeps them
-  applicable.
+  applicable: the audit cannot tell that there is no guard, so it tests
+  for one, the safer reading.
 - **C-05 follows `platforms` under 2.1.0** (spec 0074). Each command of
   `verify` must run on a runner of each platform in `platforms`, after
   matrix expansion, and the finding names each declared platform with

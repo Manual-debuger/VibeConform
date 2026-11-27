@@ -369,7 +369,10 @@ A-09) are also not applicable when `require` does not list the guard
 set and no PreToolUse hook in `.claude/settings.json` matches `Bash`,
 read as A-01 reads it (spec 0074). There is then no guard to test: A-01
 fails and is the one finding, and the guard probes do not run. With the
-guard set in `require`, every guard rule applies.
+guard set in `require`, every guard rule applies. A
+`.claude/settings.json` that does not parse keeps them applicable: the
+audit cannot tell that there is no guard, so it tests for one, the safer
+reading.
 
 | ID | Rule | Check | Level | Source |
 |---|---|---|---|---|
@@ -413,7 +416,7 @@ read GitLab CI (see "C: CI"):
 
 | ID | Rule | Check | Level | Source |
 |---|---|---|---|---|
-| R-01 | Everything but the audit works without vibe | Static: no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 and `vibe --version` in a CI job that calls no entrypoint. Execution: with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases are still refused. | MUST | principle 3, spec 0017 |
+| R-01 | Everything but the audit works without vibe | Static: no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 and `vibe --version` in a CI job that calls no entrypoint. Execution: with `vibe` not on `PATH`, `verify` passes in the probe copy and, when `require` lists the guard set, the A-02 deny cases are still refused. | MUST | principle 3, spec 0017 |
 | R-02 | Agents are told the verification entrypoints | Static: `AGENTS.md` exists and contains every `verify` command, and `CLAUDE.md` exists and references `AGENTS.md` | SHOULD | spec 0043 |
 | R-03 | Pull requests report verification | Static: a pull request template exists and has a heading containing "verif" (case-insensitive) | SHOULD | spec 0010 |
 
@@ -498,6 +501,15 @@ read GitLab CI (see "C: CI"):
     configuration that 2.0.0 accepted is refused: `require` with A-09
     and not the guard set. Adding the guard set to `require` fixes it
     and changes no 2.0.0 verdict, since the guard set was MUST there.
+  - **R-01 checks the A-02 deny cases only when the guard set is
+    required.** R-01 stays MUST. Its execution part still runs `verify`
+    without `vibe`, but its guard half, "the A-02 deny cases are still
+    refused", holds only when `require` lists the guard set; otherwise
+    that half passes. Under 1.x, where the guard set is MUST, it holds
+    always. Otherwise a MUST rule would require the guard that the
+    guard set leaves to the adopter. A relaxed check: a repository that
+    was conformant under 2.0.0 stays conformant, and one that requires
+    the guard set keeps its 2.0.0 verdict.
   - **Without a guard, the rules that test it are not applicable**
     (issue #255). When `require` does not list the guard set and no
     PreToolUse hook matches `Bash`, A-02, A-03, A-04, A-08 and A-09

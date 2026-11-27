@@ -655,13 +655,21 @@ var rules = []Rule{
 		Title:  "Everything but the audit works without vibe",
 		Source: "principle 3, spec 0017",
 		Parts: []Part{
-			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 "+
-				"and `vibe --version` in a CI job that calls no entrypoint.", checkR01),
+			static(r01StaticCheck, checkR01),
 			// R-01 reads A-02's deny verdict and the vibe calls of every
 			// other part, so it is the last part.
 			executionLast("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
 				"are still refused.", checkR01Execution),
 		},
+		// Under 2.1.0 the guard half holds only where the guard set
+		// counts in the verdict (spec 0074, "Amendments"); r01GuardHalf
+		// reads it.
+		Revisions: []Revision{{
+			Since: contract21,
+			Title: "Everything but the audit works without vibe",
+			Checks: []string{r01StaticCheck, "with `vibe` not on `PATH`, `verify` passes in the probe copy and, " +
+				"when `require` lists the guard set, the A-02 deny cases are still refused."},
+		}},
 	},
 	{
 		ID: "R-02", Level: Should, Category: categoryRemovability,
@@ -682,6 +690,11 @@ var rules = []Rule{
 		},
 	},
 }
+
+// r01StaticCheck is the check text of R-01's static part, the same under
+// every contract.
+const r01StaticCheck = "no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 " +
+	"and `vibe --version` in a CI job that calls no entrypoint."
 
 // guardSet is the guard set: the rules that hold the agent's guard (spec
 // 0074). Under contract 1.x they are MUST; from 2.1.0 they are SHOULD,
