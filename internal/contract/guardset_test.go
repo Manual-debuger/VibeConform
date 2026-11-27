@@ -280,16 +280,17 @@ func TestGuardTestingRulesWithoutAGuard(t *testing.T) {
 }
 
 // With the guard set required, every guard rule applies without a guard,
-// fails, and the verdict is not conformant (spec 0074, #255).
+// fails, and the verdict is not conformant (spec 0074, user story 22).
 func TestGuardTestingRulesWithTheGuardSetRequired(t *testing.T) {
 	t.Parallel()
+	// A settings.json with no hook at all: with no hook to run, no probe
+	// needs bash, so every rule decides although the probe environment has
+	// none. A Stop hook would leave A-08 undecided here, not failing.
 	rep := auditGuardRules(t, guardSetConfig("2.1.0", guardSetRequire),
-		contracttest.WithFile(".claude/settings.json", unguardedSettings),
+		contracttest.WithFile(".claude/settings.json", "{}\n"),
 		contracttest.WithoutFile(".claude/hooks/policy.json"))
-	// The probe environment has no bash, so a probe that needs one cannot
-	// decide; either way the rule applies and does not pass.
 	for _, id := range append([]string{"A-01"}, guardTesting...) {
-		if rr := contracttest.RuleResult(t, rep, id); rr.Result != contract.ResultFail && rr.Result != contract.ResultUndecided {
+		if rr := contracttest.RuleResult(t, rep, id); rr.Result != contract.ResultFail {
 			t.Errorf("%s = %s (%q), want fail:\n%s", id, rr.Result, rr.NotApplicable, contracttest.FindingText(rr))
 		}
 	}
