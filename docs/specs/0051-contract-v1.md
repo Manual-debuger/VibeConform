@@ -215,7 +215,9 @@ the future. A missing, unreadable or expired marker is not valid.
 
 ## Rules
 
-Contract v1 has 25 rules: 16 MUST and 9 SHOULD.
+Contract v1 has 25 rules: 16 MUST and 9 SHOULD. From 2.1.0 the five
+rules of the guard set (see "A: agent guardrails") are SHOULD, which
+makes 11 MUST and 14 SHOULD.
 
 "Called" means a hook command, CI `run:` step (on GitLab CI, a
 `before_script` or `script` line) or entrypoint that, when parsed as
@@ -352,16 +354,26 @@ The A rules cover Claude Code only. Codex is exempt; bringing it in is
 MAJOR. Personal, uncommitted settings (`.claude/settings.local.json`)
 may override any guardrail, and the audit does not read them.
 
+A-01, A-02, A-03, A-04 and A-08 form the **guard set** (spec 0074,
+ADR 0029). Under 1.x they are MUST. From 2.1.0 they are SHOULD: the
+guard is the adopter's choice. A repository that wants a guarded agent
+lists the whole guard set in `require` (spec 0063), and the verdict then
+counts each of them like a MUST rule. `require` lists all of the guard
+set or none of it, and `require` with A-09 needs the whole guard set;
+anything else is a configuration error that names the missing IDs. A
+level cell such as "SHOULD (MUST before 2.1.0)" gives the level under
+the latest contract and the level before that version.
+
 | ID | Rule | Check | Level | Source |
 |---|---|---|---|---|
-| A-01 | Shell commands and file edits pass through the guard | Static: in `.claude/settings.json`, PreToolUse hooks match each of `Bash`, `PowerShell`, `Write`, `Edit` and `MultiEdit` | MUST | spec 0021 |
-| A-02 | The guard refuses the baseline unless an exception says otherwise | Probe: every corpus case is fed to every PreToolUse hook command that matches its tool. A deny case is satisfied as described under "Guard policy and exceptions". Every allow case must be allowed. A hook "refuses" by exiting 2. | MUST | specs 0012, 0047 |
-| A-03 | The guard fails closed | Probe: every deny case is still refused in two situations: with `PATH` reduced to the operating system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON | MUST | spec 0021 |
-| A-04 | The guard is loosened only through listed exceptions | Static: `.claude/hooks/policy.json` is valid version 2; every exception names a guard rule ID and has a non-empty reason; when a PreToolUse hook runs `vibe-guard hook`, vibe-guard can load it; the audit lists them. Tightening is not restricted. | MUST | spec 0050, ADR 0024 |
+| A-01 | Shell commands and file edits pass through the guard | Static: in `.claude/settings.json`, PreToolUse hooks match each of `Bash`, `PowerShell`, `Write`, `Edit` and `MultiEdit` | SHOULD (MUST before 2.1.0) | spec 0021 |
+| A-02 | The guard refuses the baseline unless an exception says otherwise | Probe: every corpus case is fed to every PreToolUse hook command that matches its tool. A deny case is satisfied as described under "Guard policy and exceptions". Every allow case must be allowed. A hook "refuses" by exiting 2. | SHOULD (MUST before 2.1.0) | specs 0012, 0047 |
+| A-03 | The guard fails closed | Probe: every deny case is still refused in two situations: with `PATH` reduced to the operating system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON | SHOULD (MUST before 2.1.0) | spec 0021 |
+| A-04 | The guard is loosened only through listed exceptions | Static: `.claude/hooks/policy.json` is valid version 2; every exception names a guard rule ID and has a non-empty reason; when a PreToolUse hook runs `vibe-guard hook`, vibe-guard can load it; the audit lists them. Tightening is not restricted. | SHOULD (MUST before 2.1.0) | spec 0050, ADR 0024 |
 | A-05 | The agent's turn ends with `verify-fast` | Static: a Stop hook calls `verify-fast`. Probe: with a planted defect, the Stop hook exits 2 for a payload with `stop_hook_active: false`, and exits 0 for one with `stop_hook_active: true` | MUST | spec 0023 |
 | A-06 | Edited files are formatted | Static: a PostToolUse hook that matches `Write` and `Edit` calls `fmt` | SHOULD | spec 0023 |
 | A-07 | Session start injects facts and changes nothing | Static: a SessionStart hook exists. Execution: running it in the probe copy exits 0, and `git status --porcelain` stays empty. | SHOULD | spec 0023 |
-| A-08 | An agent changes guardrail settings only after a person unlocks them | Probe: a `Write` to `.claude/settings.json` and an `Edit` under `.claude/hooks/` are refused with no marker, allowed with a valid marker, and refused with an expired marker. A `Bash` call that runs `vibe unlock`, and any `Write` or `Bash` that creates the marker, are refused. After the Stop hook runs, the marker is gone. | MUST | ADR 0025 |
+| A-08 | An agent changes guardrail settings only after a person unlocks them | Probe: a `Write` to `.claude/settings.json` and an `Edit` under `.claude/hooks/` are refused with no marker, allowed with a valid marker, and refused with an expired marker. A `Bash` call that runs `vibe unlock`, and any `Write` or `Bash` that creates the marker, are refused. After the Stop hook runs, the marker is gone. | SHOULD (MUST before 2.1.0) | ADR 0025 |
 
 ### D: dependencies and supply chain
 
@@ -453,7 +465,16 @@ read GitLab CI (see "C: CI"):
   `require` read the level for the audited contract. The behaviours
   2.0.0 introduced hold under 2.1.0. Each change and why it is MINOR:
 
-  - No rule's level or check has changed yet.
+  - **The guard set (A-01, A-02, A-03, A-04 and A-08) is SHOULD**
+    (issue #254, ADR 0029). A repository that wants a guarded agent
+    lists the whole guard set in `require`, and the verdict counts it
+    as under 2.0.0; `require` with part of the guard set, or with A-09
+    and not the guard set, is a configuration error. A relaxed rule: a
+    repository that was conformant under 2.0.0 stays conformant, and
+    one that requires the guard set keeps its 2.0.0 verdict. One
+    configuration that 2.0.0 accepted is refused: `require` with A-09
+    and not the guard set. Adding the guard set to `require` fixes it
+    and changes no 2.0.0 verdict, since the guard set was MUST there.
 - **2.0.0** (2026-11-26, spec 0072, issues #227 and #120 Part B). A
   MAJOR release. `vibe` still audits a repository that declares 1.x, as
   1.2.0, with unchanged results; a repository moves to 2.0.0 when it

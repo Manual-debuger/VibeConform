@@ -8,7 +8,9 @@ ADR 0009. Generalizes ADR 0024. The rules themselves are in
 issues #95–#112, milestones "Contract v1 · Phase 0" to "Phase 4".
 Settled with the user on 2026-10-16 in a grilling session; "Qn" below
 refers to its questions, which the issues also cite. Decision 12 is
-superseded by ADR 0027 (contract 1.2 quality probes).
+superseded by ADR 0027 (contract 1.2 quality probes). Decisions 9 to 11
+are amended by ADR 0029: from contract 2.1.0 they hold whenever the
+repository requires the guard set.
 
 ## Context
 

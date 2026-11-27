@@ -19,7 +19,7 @@ import (
 // every rule has a check function.
 func TestRegistryQuotesSpec0051(t *testing.T) {
 	rows := spec0051Rows(t)
-	must, from0051 := 0, 0
+	must, mustV1, from0051 := 0, 0, 0
 	for _, r := range Rules() {
 		for _, p := range r.Parts {
 			if p.Run == nil && p.RunLast == nil {
@@ -40,10 +40,32 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 		if r.LevelAt(Latest) == Must {
 			must++
 		}
+		if r.LevelAt(Contract1) == Must {
+			mustV1++
+		}
 	}
-	if must != 16 || from0051 != 25 {
-		t.Errorf("%d rules of spec 0051, %d MUST; want 25 and 16", from0051, must)
+	// Spec 0074: the five rules of the guard set are SHOULD from 2.1.0.
+	if must != 11 || mustV1 != 16 || from0051 != 25 {
+		t.Errorf("%d rules of spec 0051, %d MUST under %s and %d under %s; want 25, 11 and 16",
+			from0051, must, Latest, mustV1, Contract1)
 	}
+}
+
+// levelCell reads a Level cell of spec 0051's table: a level, such as
+// "MUST", or a level with the one it had before a contract version, such
+// as "SHOULD (MUST before 2.1.0)". It returns the level under the latest
+// contract and the rule's level history.
+func levelCell(t *testing.T, cell string) (latest Level, added Level, changes []LevelChange) {
+	t.Helper()
+	level, history, ok := strings.Cut(cell, " (")
+	if !ok {
+		return Level(cell), Level(cell), nil
+	}
+	old, since, ok := strings.Cut(strings.TrimSuffix(history, ")"), " before ")
+	if !ok || !strings.HasSuffix(history, ")") {
+		t.Fatalf("level cell %q: want \"LEVEL (OLD before X.Y.Z)\"", cell)
+	}
+	return Level(level), Level(old), []LevelChange{{Since: since, Level: Level(level)}}
 }
 
 // spec0051Rows reads spec 0051's rule table: each row's cells (ID,
@@ -83,8 +105,9 @@ func checkSpec0051Rule(t *testing.T, r Rule, row []string) {
 	if r.Check() != row[2] {
 		t.Errorf("%s check = %q, spec says %q", r.ID, r.Check(), row[2])
 	}
-	if string(r.LevelAt(Latest)) != row[3] {
-		t.Errorf("%s level = %s, spec says %s", r.ID, r.LevelAt(Latest), row[3])
+	latest, added, changes := levelCell(t, row[3])
+	if r.LevelAt(Latest) != latest || r.Level != added || !slices.Equal(r.LevelChanges, changes) {
+		t.Errorf("%s level = %s (added as %s, changes %v), spec says %s", r.ID, r.LevelAt(Latest), r.Level, r.LevelChanges, row[3])
 	}
 	if r.Source != row[4] {
 		t.Errorf("%s source = %q, spec says %q", r.ID, r.Source, row[4])

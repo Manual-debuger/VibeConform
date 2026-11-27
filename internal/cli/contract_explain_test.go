@@ -47,9 +47,9 @@ func TestAuditExplainContent(t *testing.T) {
 		want []string
 	}{
 		{"A-01", []string{
-			"Level: MUST", "Category: A, Agent guardrails", "Checks: static", "Source: spec 0021",
+			"Level: SHOULD", "Category: A, Agent guardrails", "Checks: static", "Source: spec 0021",
 			"Not applicable: when `agents` does not include `claude`",
-			"Waivable: no, a MUST rule cannot be waived",
+			"Waivable: yes, through a waiver in vibe.yaml",
 			"The A rules cover Claude Code only.",
 			"PreToolUse hooks match each of `Bash`, `PowerShell`, `Write`, `Edit` and `MultiEdit`",
 		}},
