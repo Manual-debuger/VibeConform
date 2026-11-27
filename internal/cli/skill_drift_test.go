@@ -196,6 +196,12 @@ func TestSkillDriftFixtures(t *testing.T) {
 		{"placeholder with spaces", func(*testing.T) func(fstest.MapFS) {
 			return appendTo("reference/upgrade.md", "Install vibe {{ VIBE_VERSION }}.")
 		}, "{{ VIBE_VERSION }}"},
+		{"SKILL.md does not ask about the guard", func(t *testing.T) func(fstest.MapFS) {
+			return replaceIn(t, "SKILL.md", guardQuestion, "whether they like the agent guard")
+		}, guardQuestion},
+		{"SKILL.md keeps the relock when the guard is declined", func(t *testing.T) func(fstest.MapFS) {
+			return replaceIn(t, "SKILL.md", "`vibe-guard relock`", "the relock")
+		}, "vibe-guard relock"},
 		{"upgrade.md does not name vibe unlock", func(*testing.T) func(fstest.MapFS) {
 			return func(files fstest.MapFS) {
 				f := files["reference/upgrade.md"]

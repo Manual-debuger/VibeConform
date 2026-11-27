@@ -33,7 +33,7 @@ Compare the MAJOR parts (the X).
    lists, and install `vibe-guard` from the same commit as `vibe`.
 4. Run the audit loop (`SKILL.md`, step 6). A new MINOR may add SHOULD
    rules; see `reference/rules.md`. From 1.1 to 1.2, also do
-   section 4 below.
+   section 4 below; from 2.0 to 2.1, section 6.
 
 ## 3b. New MAJOR
 
@@ -48,7 +48,8 @@ case, and it may need new guardrail settings.
 3. Update `vibe-guard`, then make the guardrail changes.
 4. Set `contract:` in `vibe.yaml` to the new version, and update the
    setup action as in 3a.
-5. Run the audit loop. From 1.x to 2.0, also do section 5 below.
+5. Run the audit loop. From 1.x to 2.x, also do sections 5 and 6
+   below.
 
 Your next Stop locks the guardrails again (`vibe-guard relock`).
 
@@ -124,3 +125,17 @@ move.
   path elements. Replace each such call with the entrypoint
   command it stands for, as for a call by name. The audit job of C-04
   and `vibe --version` in a job that calls no entrypoint stay exempt.
+
+## 6. From contract 2.0 to 2.1
+
+2.1.0 makes the guard set (A-01 to A-04 and A-08) SHOULD rules, and
+C-05 checks a runner for each platform in `platforms`. A repository that
+declares 2.0.0 is audited as 2.1.0 already.
+
+- **The guard set.** Ask the person whether they keep the agent guard.
+  If they do, add `require: [A-01, A-02, A-03, A-04, A-08]` to
+  `vibe.yaml`, so the verdict counts the guard rules as before. List all
+  five or none: part of the set, or A-09 without it, is a configuration
+  error.
+- **C-05.** Add a CI job that runs `verify` on each declared platform
+  that has none, or remove the platform from `platforms`.

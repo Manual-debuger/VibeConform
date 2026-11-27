@@ -1058,17 +1058,22 @@ What the agent does with it, in order:
    `.claude/settings.json` is in place; its task and script go last.
 3. **Decide the entrypoints**: keep the team's runner (Task, make, just,
    package scripts), and use Task only when there is none. Write
-   `vibe.yaml` version 2. A monorepo whose CI verifies each component in
-   its own job declares `verify` as the list of those commands.
+   `vibe.yaml` version 2, with the guard set in `require` as the
+   reference has it. A monorepo whose CI verifies each component in its
+   own job declares `verify` as the list of those commands.
 4. **Satisfy the rules** one category at a time from
    `reference/rules.md`, keeping whatever already satisfies a rule. Each
    configuration is one file; no `*.local.*` or `*.base.*`. The skill's
    own directories go into the formatter's and linters' ignores. The
-   setup action is pinned to a release, never `latest`.
-   `.claude/hooks/policy.json` comes before `.claude/settings.json`; a
+   setup action is pinned to a release, never `latest`. Before it
+   writes anything under `.claude/`, it asks you whether you want the
+   agent guard (spec 0074). On "no" it removes the guard set from
+   `require` and writes no guard hooks, no `policy.json` and no
+   `vibe-guard relock` in the Stop command, and skips step 5. With the
+   guard, `.claude/hooks/policy.json` comes before `.claude/settings.json`; a
    guard refuses the agent that file, so the skill hands you a command
    that writes it, and stops until you have run it.
-5. **Install `vibe-guard`** from the release archive with its SHA-256
+5. **Install `vibe-guard`**, with the guard and your consent, from the release archive with its SHA-256
    checked against `checksums.txt`, or with `go install`, and check that
    a non-interactive shell, as hooks use, finds it.
 6. **Audit loop**: stage the changes (the audit reads tracked files
@@ -1086,7 +1091,7 @@ The skill's files:
 |---|---|
 | `SKILL.md` | The process above, for the agent |
 | `reference/rules.md` | One entry per rule of contract 2.1.0: what satisfies it on GitHub Actions and on GitLab CI, which file to start from |
-| `reference/vibe-yaml/` | `vibe.yaml` version 2 for Go, Python, TypeScript and a monorepo |
+| `reference/vibe-yaml/` | `vibe.yaml` version 2 for Go, Python, TypeScript and a monorepo, each with the guard set in `require` |
 | `reference/taskrunner/` | Taskfiles per stack, with `verify`, `verify:fast`, `fmt`, `fmt:check` and the agent hook tasks |
 | `reference/hooks/` | `lefthook.yml` per stack |
 | `reference/ci/` | `ci.yml` (verify on Linux and Windows, a vulnerability scan), `audit.yml` (the audit job with the setup action), `dependabot.yml`, the pull request template; per stack, a `.gitlab-ci.yml` for GitLab CI, and `renovate.json`, the update bot on GitLab (spec 0055) |

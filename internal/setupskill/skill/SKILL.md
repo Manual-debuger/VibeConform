@@ -69,9 +69,8 @@ Files under `reference/` are loaded on demand:
 ### 2. Migrate
 
 If the template-sync markers are present, follow `reference/migrate.md`
-first: merge each seam pair into one file, fold `Taskfile.local.yml` into
-`Taskfile.yml`, remove `.vibe/`, `Taskfile.vibe.yml`, the old guard
-scripts and the managed-region markers, and replace the old `vibeconform`
+first: it merges each seam pair into one file and removes `.vibe/`, the
+old guard scripts, the managed-region markers and the old `vibeconform`
 skill.
 
 ### 3. Decide the entrypoints
@@ -89,10 +88,10 @@ in a job of its own, declare `verify` as the list of those commands, such
 as `verify: [task api:verify, task web:verify, task worker:verify]`: CI
 then calls every command of the list, and the jobs stay as they are.
 
-`require` is optional: a list of SHOULD rule IDs, such as
-`require: [V-06, V-07]`, that the verdict then counts like MUST rules.
-Do not add it yourself. Add it only when the person asks to hold the
-repository to SHOULD rules it already passes.
+`require` lists SHOULD rule IDs that the verdict counts like MUST rules.
+Keep the reference's guard set, `require: [A-01, A-02, A-03, A-04, A-08]`,
+unless the person declines the guard (step 4). Add other IDs only when
+the person asks to hold the repository to SHOULD rules it already passes.
 
 ### 4. Satisfy the rules
 
@@ -119,7 +118,13 @@ the reference file it names and adapt it. Notes:
   newest release tag that
   `git ls-remote --tags https://github.com/Manual-debuger/VibeConform`
   lists, for the action and for `vibe-guard`.
-- For Claude Code, write `.claude/hooks/policy.json` before
+- **The agent guard.** Before you write `.claude/`, ask the person
+  whether they want the agent guard, `vibe-guard`, which checks the
+  agent's shell commands and edits (`reference/rules.md`, A). On "no",
+  remove the guard set from `require`, and skip `policy.json`, the
+  PreToolUse hooks, the `vibe-guard relock` part of the Stop command
+  and the install in step 5.
+- With the guard, write `.claude/hooks/policy.json` before
   `.claude/settings.json`. A guard running in your session refuses the
   policy write (`guard-policy-file`). Then hand that step to the person,
   with this command, run at the repository root (keep it if the
@@ -143,9 +148,8 @@ the reference file it names and adapt it. Notes:
 - `AGENTS.md` names every `verify` and `verify-fast` command and says:
   "Do not weaken a test, lint or type check to make a change pass."
   `CLAUDE.md` references `AGENTS.md` (`reference/agents/`).
-- Every component needs a test, or V-01 fails with "has no tests". A
-  component with no test runner gets one: see V-01 in
-  `reference/rules.md`.
+- Every component needs a test, or V-01 fails ("has no tests"). V-01 in
+  `reference/rules.md` says how to add a test runner.
 - Keep the repository's checks off this skill's directories,
   `.claude/skills/vibeconform-setup/` and
   `.agents/skills/vibeconform-setup/`: add both to the formatter's and
@@ -174,13 +178,11 @@ The guard hooks refuse every tool call when `vibe-guard` is not on
 Check with `vibe-guard version`. Installing a tool on the person's
 machine needs their consent: ask before you do it.
 
-Hooks do not run in an interactive shell. A directory that only an
-interactive shell puts on `PATH` (in `~/.bashrc`, say) is invisible to
-them. Check every tool the hooks and entrypoints call in a
-non-interactive shell, such as
+Hooks run in a non-interactive shell, which misses a `PATH` set only in
+`~/.bashrc`. Check every tool the hooks and entrypoints call there:
 `bash -c 'command -v vibe-guard task'` and `bash -lc 'command -v vibe-guard task'`.
-If one is missing there, ask the person to put its directory on `PATH`
-for every shell.
+If one is missing, ask the person to put its directory on `PATH` for
+every shell.
 
 ### 6. Audit loop
 
@@ -216,5 +218,4 @@ Give the person:
   `.claude/hooks/policy.json`, `vibe unlock`, push);
 - on GitLab, the project settings the audit cannot read and what to set
   them to (`reference/rules.md`, "GitLab project settings the audit
-  cannot read"): pipelines must succeed, a protected default branch, and
-  job-token push access off.
+  cannot read").
