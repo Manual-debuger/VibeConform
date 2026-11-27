@@ -406,14 +406,23 @@ that still reports it passes, and a specific suppression
 | `--json` | off | Print the report as JSON on stdout, nothing else on stdout |
 | `--probe-timeout <duration>` | `30m` | Time limit of each entrypoint run in the probe copy. It must be positive |
 | `--keep-probe-copy` | off | Keep the probe copy and print its path on stderr, for debugging |
-| `--explain <ID>` | | Explain one rule, such as `C-02`, and read nothing else |
+| `--explain <ID>` | | Explain one rule, such as `C-02`, under the contract `vibe.yaml` declares |
 
-`--explain` reads no repository and no configuration, so it works
-anywhere, and combining it with any other audit flag is an error. It
-prints what the rule registry holds: ID and rule sentence, level,
-category, check kinds, source, when the rule is not applicable, whether
-it can be waived, the rationale and the check as spec 0051 states it.
-The rationale is spec 0051's source for the rule, plus the category's
+`--explain` explains a rule as it is under the contract the
+configuration declares: a rule's title, level, check and applicability
+can change between contract versions (spec 0074). It reads only the
+`contract` field of `vibe.yaml` at `--repo-root`, or of the file
+`--config` names, and no repository. A declared version is read as the
+audit reads it: 1.x as 1.2.0, 2.0.x as 2.1.0. Without a `vibe.yaml` it
+explains the rule under the latest contract, so it works anywhere. A
+configuration it cannot read, a version 1 file and a contract this
+`vibe` does not implement are errors. Combining it with any audit flag
+other than `--repo-root` and `--config` is an error. It prints what the
+rule registry holds for that contract: ID and rule sentence, the
+contract and where its version comes from, level, category, check
+kinds, source, when the rule is not applicable, whether it can be
+waived, the rationale and the check as spec 0051 states it. The
+rationale is spec 0051's source for the rule, plus the category's
 introduction where spec 0051 has one (H, C and A). An unknown ID is exit
 `1` and lists the valid IDs.
 
@@ -421,6 +430,7 @@ introduction where spec 0051 has one (H, C and A). An unknown ID is exit
 $ vibe audit --explain C-02
 C-02: Toolchains and actions are pinned
 
+  Contract:        2.1.0 (vibe.yaml declares 2.1.0)
   Level:           MUST
   Category:        C, CI
   Checks:          static
@@ -463,7 +473,7 @@ vibe audit: contract 2.1.0 (vibe …), static checks only
   R  Removability and repository hygiene   2 pass, 1 not run
 
 Failed
-  C-05  SHOULD  Tests run on Linux and Windows
+  C-05  SHOULD  Tests run on every declared platform
         .github/workflows/ci.yml: the verify command `task lint` runs on no Windows runner (…)
         Fix: run `task lint` on Windows too, such as with a matrix over os: […]
   D-03  SHOULD  CI scans for known vulnerabilities
@@ -679,9 +689,18 @@ jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "
 - A file a rule needs that does not parse fails that rule, and the
   finding names the file and the parse error.
 - **Not applicable** in contracts 1.2.0 and 2.1.0: C-03 when the C
-  rules read GitLab CI; C-05 when `platforms` has no `windows`; every A rule when
-  `agents` has no `claude`; R-02 when `agents` is empty, and R-02's
-  `CLAUDE.md` half when `agents` has no `claude`.
+  rules read GitLab CI; every A rule when `agents` has no `claude`;
+  R-02 when `agents` is empty, and R-02's `CLAUDE.md` half when `agents`
+  has no `claude`. Under 1.2.0 only, C-05 when `platforms` has no
+  `windows`.
+- **C-05 follows `platforms` under 2.1.0** (spec 0074). Each command of
+  `verify` must run on a runner of each platform in `platforms`, after
+  matrix expansion, and the finding names each declared platform with
+  no runner, in `platforms` order. `platforms: [linux]` is satisfied by
+  one Linux job, and `platforms: [linux, macos]` asks for a macOS
+  runner. Under 1.2.0, C-05 ("Tests run on Linux and Windows") asks for
+  a Linux and a Windows runner whatever `platforms` lists. A platform
+  you cannot test in CI yet can be waived like any SHOULD rule.
 - Commands are parsed as POSIX shell (ADR 0026). A command is "called"
   when a simple command anywhere in a hook, CI command (a GitHub `run:`
   step, a GitLab `before_script` or `script` line) or entrypoint has
