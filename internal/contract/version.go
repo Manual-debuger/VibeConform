@@ -52,29 +52,32 @@ func (e *UnsupportedVersionError) Error() string {
 
 var versionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
-// parseVersion checks an X.Y.Z version and returns its MAJOR and MINOR;
-// a PATCH makes no conformant repository non-conformant, so it is not
-// returned. ok is false for anything else.
-func parseVersion(v string) (major, minor int, ok bool) {
+// versionParts checks an X.Y.Z version and returns its three numbers.
+// ok is false for anything else, and for a MAJOR or MINOR too large to
+// read; a PATCH makes no conformant repository non-conformant, so one too
+// large reads as the largest int.
+func versionParts(v string) (parts [3]int, ok bool) {
 	m := versionPattern.FindStringSubmatch(v)
 	if m == nil {
-		return 0, 0, false
+		return parts, false
 	}
-	var err error
-	if major, err = strconv.Atoi(m[1]); err != nil {
-		return 0, 0, false
+	ok = true
+	for i := range parts {
+		var err error
+		// Atoi returns the largest int with its range error.
+		if parts[i], err = strconv.Atoi(m[i+1]); err != nil && i < 2 {
+			ok = false
+		}
 	}
-	if minor, err = strconv.Atoi(m[2]); err != nil {
-		return 0, 0, false
-	}
-	return major, minor, true
+	return parts, ok
 }
 
 // compareVersions orders two X.Y.Z versions: negative when a is older
 // than b, zero when they are equal, positive when a is newer. A version
 // that is not X.Y.Z sorts as 0.0.0; the callers pass well-formed ones.
 func compareVersions(a, b string) int {
-	pa, pb := versionParts(a), versionParts(b)
+	pa, _ := versionParts(a)
+	pb, _ := versionParts(b)
 	for i := range pa {
 		if pa[i] != pb[i] {
 			return pa[i] - pb[i]
@@ -83,28 +86,14 @@ func compareVersions(a, b string) int {
 	return 0
 }
 
-// versionParts is an X.Y.Z version's three numbers, or zeros when it is
-// not one.
-func versionParts(v string) [3]int {
-	var out [3]int
-	m := versionPattern.FindStringSubmatch(v)
-	if m == nil {
-		return out
-	}
-	for i := range out {
-		out[i], _ = strconv.Atoi(m[i+1])
-	}
-	return out
-}
-
 // auditedAs returns the implemented contract a well-formed declared
 // version is audited as: the one of the same MAJOR, when the declared
 // MINOR is not newer. ok is false when this vibe implements no such
 // contract.
 func auditedAs(major, minor int) (audited string, ok bool) {
 	for _, v := range implemented {
-		implMajor, implMinor, _ := parseVersion(v)
-		if major == implMajor && minor <= implMinor {
+		impl, _ := versionParts(v)
+		if major == impl[0] && minor <= impl[1] {
 			return v, true
 		}
 	}

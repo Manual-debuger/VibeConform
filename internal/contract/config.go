@@ -187,8 +187,8 @@ func startParse(file string, data []byte, repo *Repo) (*configParser, *yaml.Node
 	}
 	var audited string
 	if v := field(top, "contract"); v != nil && isString(v) {
-		if major, minor, ok := parseVersion(v.Value); ok {
-			if audited, ok = auditedAs(major, minor); !ok {
+		if parts, ok := versionParts(v.Value); ok {
+			if audited, ok = auditedAs(parts[0], parts[1]); !ok {
 				return nil, nil, &UnsupportedVersionError{file: file, declared: v.Value}
 			}
 		}
@@ -292,7 +292,7 @@ func (p *configParser) contract(v *yaml.Node) error {
 	if !isString(v) {
 		return p.fail("contract", "must be a contract version X.Y.Z, such as %s", Latest)
 	}
-	if _, _, ok := parseVersion(v.Value); !ok {
+	if _, ok := versionParts(v.Value); !ok {
 		return p.fail("contract", "%q is not a contract version X.Y.Z, such as %s", v.Value, Latest)
 	}
 	// Parse already refused an unsupported version.
