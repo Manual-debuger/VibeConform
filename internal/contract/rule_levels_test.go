@@ -70,3 +70,38 @@ func TestRuleLevelAt(t *testing.T) {
 		t.Errorf("WaivableAt(1.2.0) = %v, WaivableAt(2.1.0) = %v; want false, true", r.WaivableAt("1.2.0"), r.WaivableAt("2.1.0"))
 	}
 }
+
+// At resolves a rule for one contract version, level included, and the
+// rule it returns is that version's for good: At of another version on it
+// changes nothing.
+func TestRuleAtResolvesOnce(t *testing.T) {
+	t.Parallel()
+	a01, ok := contract.LookupRule("A-01")
+	if !ok {
+		t.Fatal("no A-01")
+	}
+	c05, ok := contract.LookupRule("C-05")
+	if !ok {
+		t.Fatal("no C-05")
+	}
+	for _, tc := range []struct {
+		rule        contract.Rule
+		first, then string
+		level       contract.Level
+		title       string
+	}{
+		{a01, "2.1.0", "1.2.0", contract.Should, a01.Title},
+		{a01, "1.2.0", "2.1.0", contract.Must, a01.Title},
+		{c05, "2.1.0", "1.2.0", contract.Should, "Tests run on every declared platform"},
+		{c05, "1.2.0", "2.1.0", contract.Should, "Tests run on Linux and Windows"},
+	} {
+		r := tc.rule.At(tc.first)
+		again := r.At(tc.then)
+		for _, got := range []contract.Rule{r, again} {
+			if got.Level != tc.level || got.LevelAt(tc.then) != tc.level || got.Title != tc.title {
+				t.Errorf("%s at %s, then at %s: level %s (LevelAt %s), title %q; want %s, %q",
+					tc.rule.ID, tc.first, tc.then, got.Level, got.LevelAt(tc.then), got.Title, tc.level, tc.title)
+			}
+		}
+	}
+}

@@ -30,12 +30,12 @@ func writeExplain(w io.Writer, rule contract.Rule, version, source string) error
 		notApplicable = "never; the rule always applies"
 	}
 	waivable := "no, a MUST rule cannot be waived"
-	if rule.WaivableAt(version) {
+	if rule.Level == contract.Should {
 		waivable = "yes, through a waiver in vibe.yaml with a reason and an until date"
 	}
 	for _, field := range [][2]string{
 		{"Contract", source},
-		{"Level", string(rule.LevelAt(version))},
+		{"Level", string(rule.Level)},
 		{"Category", string(rule.Category) + ", " + rule.Category.Name()},
 		{"Checks", strings.Join(kinds, ", ")},
 		{"Source", rule.Source},

@@ -155,9 +155,10 @@ type Revision struct {
 // and --explain read only the registry.
 type Rule struct {
 	ID string
-	// Level is the level the rule was added with. Its level under a
-	// contract is LevelAt's, and a RuleResult carries the level under the
-	// audited contract; read those, not Level.
+	// Level is the level the rule was added with, or, on a rule At
+	// returned, its level under that contract. A registry rule's level
+	// under a contract is LevelAt's, and a RuleResult carries the level
+	// under the audited contract.
 	Level Level
 	// LevelChanges are the contract versions that changed the rule's
 	// level, oldest first, or none when the level never changed.
@@ -195,13 +196,14 @@ func (r Rule) Check() string {
 	return strings.Join(texts, " ")
 }
 
-// At is the rule as it reads under the contract version: its title, the
-// check text of its parts and its applicability from its last revision
-// that the version is not older than. Its level is LevelAt's. Call it on
-// a registry rule: the result keeps the revisions, so At of another
-// version on it is not that version's rule.
+// At is the rule as it reads under the contract version: its level is
+// LevelAt's, and its title, the check text of its parts and its
+// applicability are those of its last revision that the version is not
+// older than. The rule it returns has no level changes and no revisions
+// left, so At of another version on it returns it unchanged.
 func (r Rule) At(contract string) Rule {
 	out := r
+	out.Level, out.LevelChanges, out.Revisions = r.LevelAt(contract), nil, nil
 	out.Parts = slices.Clone(r.Parts)
 	for _, v := range r.Revisions {
 		if compareVersions(contract, v.Since) < 0 {
