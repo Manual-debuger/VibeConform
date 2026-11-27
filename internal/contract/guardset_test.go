@@ -11,25 +11,7 @@ import (
 )
 
 // guardSetRequire is the require field that lists the guard set.
-const guardSetRequire = "require: [A-01, A-02, A-03, A-04, A-08]\n"
-
-// unguardedSettings is the baseline's .claude/settings.json without its
-// PreToolUse entry: the Stop, PostToolUse and SessionStart hooks stay,
-// so A-05 to A-07 can still pass.
-const unguardedSettings = `{
-  "hooks": {
-    "SessionStart": [
-      {"matcher": "startup|resume|clear", "hooks": [{"type": "command", "command": "task -x hook:context"}]}
-    ],
-    "PostToolUse": [
-      {"matcher": "Write|Edit|MultiEdit", "hooks": [{"type": "command", "command": "task fmt"}]}
-    ],
-    "Stop": [
-      {"hooks": [{"type": "command", "command": "task verify:fast 1>&2 || exit 2"}]}
-    ]
-  }
-}
-`
+var guardSetRequire = "require: [" + strings.Join(contract.GuardSet(), ", ") + "]\n"
 
 // guardSetConfig is the baseline vibe.yaml declaring contract version,
 // with require when it is not empty.
@@ -62,7 +44,7 @@ func TestGuardSetVerdicts(t *testing.T) {
 	unguarded := func(t *testing.T, version, require string) *contract.Report {
 		t.Helper()
 		dir := contracttest.Fixture(t, contracttest.Baseline, guardSetConfig(version, require),
-			contracttest.WithFile(".claude/settings.json", unguardedSettings))
+			contracttest.WithFile(".claude/settings.json", contracttest.UnguardedSettings))
 		return engAudit(t, dir, guardSetRules())
 	}
 	level := func(t *testing.T, rep *contract.Report, id string, want contract.Level, required bool) {
@@ -272,13 +254,13 @@ func TestGuardTestingRulesWithoutAGuard(t *testing.T) {
 		edits   []contracttest.Edit
 		guarded bool
 	}{
-		{"2.1.0, no guard hook", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings(unguardedSettings)}, false},
+		{"2.1.0, no guard hook", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings(contracttest.UnguardedSettings)}, false},
 		{"2.1.0, no settings.json", []contracttest.Edit{guardSetConfig("2.1.0", ""), contracttest.WithoutFile(".claude/settings.json")}, false},
 		{"2.1.0, a guard hook for edits only", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings(editsOnly)}, false},
 		{"2.1.0, a guard hook", []contracttest.Edit{guardSetConfig("2.1.0", "")}, true},
 		{"2.1.0, a guard hook for Bash only", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings(bashOnly)}, true},
 		{"2.1.0, a settings.json that does not parse", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings("{")}, true},
-		{"1.2.0, no guard hook", []contracttest.Edit{guardSetConfig("1.2.0", ""), settings(unguardedSettings)}, true},
+		{"1.2.0, no guard hook", []contracttest.Edit{guardSetConfig("1.2.0", ""), settings(contracttest.UnguardedSettings)}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -317,7 +299,7 @@ func TestGuardTestingRulesWithTheGuardSetRequired(t *testing.T) {
 func TestGuardTestingRulesWithoutClaude(t *testing.T) {
 	t.Parallel()
 	dir := contracttest.Fixture(t, contracttest.Baseline,
-		contracttest.WithFile(".claude/settings.json", unguardedSettings),
+		contracttest.WithFile(".claude/settings.json", contracttest.UnguardedSettings),
 		contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(
 			contracttest.Section{Key: "contract", Body: "contract: 2.1.0\n"},
 			contracttest.Section{Key: "agents", Body: "agents: []\n"})))
