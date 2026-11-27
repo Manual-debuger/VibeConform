@@ -1837,6 +1837,26 @@ repository is an ordinary file, edited directly.
 - `Taskfile.local.yml` holds this repository's own tasks (`task build`
   and others), included optionally by `Taskfile.yml`.
 
+### GitHub settings set by hand
+
+`vibe` writes files and never calls the GitHub API (spec 0013), so these
+settings live only in the repository's GitHub settings. This list is
+their record; change it when you change them.
+
+- Branch protection on `main` (classic protection API):
+  - A pull request is required, with 0 approvals: the project has one
+    maintainer. `.github/CODEOWNERS` records ownership only.
+  - The required status checks are `CI / gate` and `Contract / audit`,
+    and the branch must be up to date with `main`.
+  - Force pushes and branch deletion are blocked.
+  - Linear history is not required. Pull requests are merged with merge
+    commits, by the maintainer's choice.
+  - `enforce_admins` is off, so the sole maintainer cannot be locked
+    out. Turn it on when there is a second contributor.
+- Secret scanning and push protection are on (Settings, Code security).
+- Code scanning: `.github/workflows/codeql.yml` uploads CodeQL results
+  for Go on each push and pull request to `main` and weekly.
+
 ## Removing VibeConform
 
 Nothing a conformant repository runs calls `vibe` (rule R-01), so its

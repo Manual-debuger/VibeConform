@@ -1,3 +1,4 @@
 # Solo-maintainer repository — no required-review enforcement is configured
-# (see PUBLIC_REPO_CHECKLIST.md), this only records ownership.
+# (see docs/usage.md, "GitHub settings set by hand"), this only records
+# ownership.
 * @Manual-debuger
