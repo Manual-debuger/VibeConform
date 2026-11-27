@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
@@ -276,24 +277,7 @@ func TestAuditExplain(t *testing.T) {
 // It reads only the contract field: the rest of the file may be invalid.
 func TestAuditExplainReadsTheContractVersion(t *testing.T) {
 	t.Parallel()
-	withConfig := func(t *testing.T, body string) string {
-		t.Helper()
-		dir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		return dir
-	}
-	flat := func(r auditResult) string { return strings.Join(strings.Fields(r.stdout), " ") }
-	assertShows := func(t *testing.T, r auditResult, want ...string) {
-		t.Helper()
-		assertExit(t, r, 0)
-		for _, w := range want {
-			if !strings.Contains(flat(r), w) {
-				t.Errorf("--explain does not show %q:\n%s", w, r.stdout)
-			}
-		}
-	}
+	withConfig, flat, assertShows := explainConfig, explainFlat, assertExplains
 	const c05Of1 = "C-05: Tests run on Linux and Windows"
 	const c05Of2 = "C-05: Tests run on every declared platform"
 
@@ -371,4 +355,85 @@ func TestAuditExplainReadsTheContractVersion(t *testing.T) {
 			}
 		})
 	}
+}
+
+// explainConfig is a new directory holding a vibe.yaml with body.
+func explainConfig(t *testing.T, body string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "vibe.yaml"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// explainFlat is --explain's stdout with each run of white space as one
+// space, so that a wrapped line matches.
+func explainFlat(r auditResult) string { return strings.Join(strings.Fields(r.stdout), " ") }
+
+// assertExplains checks that --explain succeeded and shows each of want.
+func assertExplains(t *testing.T, r auditResult, want ...string) {
+	t.Helper()
+	assertExit(t, r, 0)
+	for _, w := range want {
+		if !strings.Contains(explainFlat(r), w) {
+			t.Errorf("--explain does not show %q:\n%s", w, r.stdout)
+		}
+	}
+}
+
+// --explain works for every configuration the audit accepts and refuses
+// only what the audit refuses (spec 0074); R-01's check text follows the
+// contract too.
+func TestAuditExplainFollowsTheAudit(t *testing.T) {
+	t.Parallel()
+	withConfig, flat, assertShows := explainConfig, explainFlat, assertExplains
+	// R-01's guard half holds under 2.1.0 only with the guard set
+	// required (spec 0074, "Amendments").
+	t.Run("R-01's check under each contract", func(t *testing.T) {
+		t.Parallel()
+		const condition = "when `require` lists the guard set, the A-02 deny cases are still refused"
+		assertShows(t, runVibeAudit(t, "--explain", "R-01", "--repo-root", withConfig(t, "contract: 2.1.0\n")), condition)
+		r := runVibeAudit(t, "--explain", "R-01", "--repo-root", withConfig(t, "contract: 1.2.0\n"))
+		assertShows(t, r, "passes in the probe copy and the A-02 deny cases are still refused")
+		if strings.Contains(flat(r), "guard set") {
+			t.Errorf("--explain R-01 under 1.2.0 names the guard set:\n%s", r.stdout)
+		}
+	})
+	// Every configuration the audit accepts, under 1.x and 2.x, can be
+	// explained under.
+	t.Run("a configuration the audit accepts", func(t *testing.T) {
+		t.Parallel()
+		guardSet := "require: [" + strings.Join(contract.GuardSet(), ", ") + "]\n"
+		for _, tc := range []struct {
+			name     string
+			sections []contracttest.Section
+			contract string
+		}{
+			{"1.2.0", nil, "Contract: 1.2.0 (vibe.yaml declares 1.2.0)"},
+			{"1.0.0", []contracttest.Section{{Key: "contract", Body: "contract: 1.0.0\n"}}, "Contract: 1.2.0 (vibe.yaml declares 1.0.0)"},
+			{"2.1.0 with the guard set", []contracttest.Section{
+				{Key: "contract", Body: "contract: 2.1.0\n"}, {Key: "require", Body: guardSet},
+			}, "Contract: 2.1.0 (vibe.yaml declares 2.1.0)"},
+		} {
+			dir := contracttest.Fixture(t, contracttest.Baseline,
+				contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(tc.sections...)))
+			if r := runVibeAudit(t, "--static", "--repo-root", dir); r.code != 1 || !strings.Contains(r.stdout, "vibe audit: contract") {
+				t.Fatalf("%s: the audit refuses the configuration (exit %d):\n%s", tc.name, r.code, r.stderr)
+			}
+			assertShows(t, runVibeAudit(t, "--explain", "A-01", "--repo-root", dir), tc.contract)
+		}
+	})
+	// A file the audit refuses, --explain refuses with the same error.
+	t.Run("a malformed configuration", func(t *testing.T) {
+		t.Parallel()
+		dir := withConfig(t, "contract: 2.1.0\nplatforms: [linux\n")
+		explain := runVibeAudit(t, "--explain", "C-05", "--repo-root", dir)
+		audit := runVibeAudit(t, "--repo-root", dir)
+		assertExit(t, explain, 1)
+		assertStderr(t, explain, "vibe.yaml", "not valid YAML")
+		if explain.stderr != audit.stderr || explain.stdout != "" {
+			t.Errorf("--explain says\n%s\nand the audit says\n%s", explain.stderr, audit.stderr)
+		}
+	})
 }

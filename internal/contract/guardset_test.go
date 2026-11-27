@@ -1,6 +1,7 @@
 package contract_test
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -10,25 +11,7 @@ import (
 )
 
 // guardSetRequire is the require field that lists the guard set.
-const guardSetRequire = "require: [A-01, A-02, A-03, A-04, A-08]\n"
-
-// unguardedSettings is the baseline's .claude/settings.json without its
-// PreToolUse entry: the Stop, PostToolUse and SessionStart hooks stay,
-// so A-05 to A-07 can still pass.
-const unguardedSettings = `{
-  "hooks": {
-    "SessionStart": [
-      {"matcher": "startup|resume|clear", "hooks": [{"type": "command", "command": "task -x hook:context"}]}
-    ],
-    "PostToolUse": [
-      {"matcher": "Write|Edit|MultiEdit", "hooks": [{"type": "command", "command": "task fmt"}]}
-    ],
-    "Stop": [
-      {"hooks": [{"type": "command", "command": "task verify:fast 1>&2 || exit 2"}]}
-    ]
-  }
-}
-`
+var guardSetRequire = "require: [" + strings.Join(contract.GuardSet(), ", ") + "]\n"
 
 // guardSetConfig is the baseline vibe.yaml declaring contract version,
 // with require when it is not empty.
@@ -61,7 +44,7 @@ func TestGuardSetVerdicts(t *testing.T) {
 	unguarded := func(t *testing.T, version, require string) *contract.Report {
 		t.Helper()
 		dir := contracttest.Fixture(t, contracttest.Baseline, guardSetConfig(version, require),
-			contracttest.WithFile(".claude/settings.json", unguardedSettings))
+			contracttest.WithFile(".claude/settings.json", contracttest.UnguardedSettings))
 		return engAudit(t, dir, guardSetRules())
 	}
 	level := func(t *testing.T, rep *contract.Report, id string, want contract.Level, required bool) {
@@ -176,6 +159,18 @@ func TestGuardSetR01GuardHalf(t *testing.T) {
 			t.Errorf("R-01 holds the repository to A-02's deny cases:\n%s", text)
 		}
 	})
+	// With go on PATH, verify passes, so R-01 as a whole passes: A-02 is
+	// not applicable and leaves R-01 neither failing nor undecided.
+	t.Run("2.1.0 without the guard set passes", func(t *testing.T) {
+		t.Parallel()
+		dir := probeFixture(t, contracttest.WithFile("vibe.yaml", probeGoConfig(t, "2.1.0", "")))
+		rep := contracttest.Audit(t, dir, contract.Options{
+			Rules: contracttest.Rules(t, "A-02", "R-01"),
+			Probe: contract.ProbeOptions{Env: os.Environ()},
+		})
+		contracttest.AssertRule(t, rep, "A-02", contract.ResultNotApplicable)
+		contracttest.AssertRule(t, rep, "R-01", contract.ResultPass)
+	})
 	t.Run("2.1.0 with the guard set", func(t *testing.T) {
 		t.Parallel()
 		rr := r01(t, "2.1.0", guardSetRequire)
@@ -259,13 +254,13 @@ func TestGuardTestingRulesWithoutAGuard(t *testing.T) {
 		edits   []contracttest.Edit
 		guarded bool
 	}{
-		{"2.1.0, no guard hook", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings(unguardedSettings)}, false},
+		{"2.1.0, no guard hook", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings(contracttest.UnguardedSettings)}, false},
 		{"2.1.0, no settings.json", []contracttest.Edit{guardSetConfig("2.1.0", ""), contracttest.WithoutFile(".claude/settings.json")}, false},
 		{"2.1.0, a guard hook for edits only", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings(editsOnly)}, false},
 		{"2.1.0, a guard hook", []contracttest.Edit{guardSetConfig("2.1.0", "")}, true},
 		{"2.1.0, a guard hook for Bash only", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings(bashOnly)}, true},
 		{"2.1.0, a settings.json that does not parse", []contracttest.Edit{guardSetConfig("2.1.0", ""), settings("{")}, true},
-		{"1.2.0, no guard hook", []contracttest.Edit{guardSetConfig("1.2.0", ""), settings(unguardedSettings)}, true},
+		{"1.2.0, no guard hook", []contracttest.Edit{guardSetConfig("1.2.0", ""), settings(contracttest.UnguardedSettings)}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -280,16 +275,17 @@ func TestGuardTestingRulesWithoutAGuard(t *testing.T) {
 }
 
 // With the guard set required, every guard rule applies without a guard,
-// fails, and the verdict is not conformant (spec 0074, #255).
+// fails, and the verdict is not conformant (spec 0074, user story 22).
 func TestGuardTestingRulesWithTheGuardSetRequired(t *testing.T) {
 	t.Parallel()
+	// A settings.json with no hook at all: with no hook to run, no probe
+	// needs bash, so every rule decides although the probe environment has
+	// none. A Stop hook would leave A-08 undecided here, not failing.
 	rep := auditGuardRules(t, guardSetConfig("2.1.0", guardSetRequire),
-		contracttest.WithFile(".claude/settings.json", unguardedSettings),
+		contracttest.WithFile(".claude/settings.json", "{}\n"),
 		contracttest.WithoutFile(".claude/hooks/policy.json"))
-	// The probe environment has no bash, so a probe that needs one cannot
-	// decide; either way the rule applies and does not pass.
 	for _, id := range append([]string{"A-01"}, guardTesting...) {
-		if rr := contracttest.RuleResult(t, rep, id); rr.Result != contract.ResultFail && rr.Result != contract.ResultUndecided {
+		if rr := contracttest.RuleResult(t, rep, id); rr.Result != contract.ResultFail {
 			t.Errorf("%s = %s (%q), want fail:\n%s", id, rr.Result, rr.NotApplicable, contracttest.FindingText(rr))
 		}
 	}
@@ -303,7 +299,7 @@ func TestGuardTestingRulesWithTheGuardSetRequired(t *testing.T) {
 func TestGuardTestingRulesWithoutClaude(t *testing.T) {
 	t.Parallel()
 	dir := contracttest.Fixture(t, contracttest.Baseline,
-		contracttest.WithFile(".claude/settings.json", unguardedSettings),
+		contracttest.WithFile(".claude/settings.json", contracttest.UnguardedSettings),
 		contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(
 			contracttest.Section{Key: "contract", Body: "contract: 2.1.0\n"},
 			contracttest.Section{Key: "agents", Body: "agents: []\n"})))

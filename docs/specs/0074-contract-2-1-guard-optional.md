@@ -251,6 +251,29 @@ Contract 2.1.0, a MINOR release:
   decisions 9 to 11: they hold whenever the repository requires the
   guard set.
 
+### Amendments
+
+Made during implementation, after approval (code review of the
+integration branch):
+
+- **R-01's guard half follows the guard set.** R-01 stays MUST, but
+  under 2.1.0 its guard half ("the A-02 deny cases are still refused")
+  holds only when `require` lists the guard set; otherwise that half
+  passes. Under 1.x it holds always. Without this, A-02 being not
+  applicable would leave R-01 undecided, and a MUST rule would require
+  the guard that the guard set leaves to the adopter. R-01 has a 2.1.0
+  revision of its check text that says so, which `--explain R-01` and
+  spec 0051's table show, and spec 0051's 2.1.0 "Changes" entry names
+  it.
+- **Why MINOR also covers one refused configuration.** A 2.0.0
+  `vibe.yaml` with A-09 in `require` and not the guard set is refused
+  under 2.1.0. Adding the guard set to `require` fixes it and changes
+  no 2.0.0 verdict, since the guard set was MUST there.
+- **An unparsable `.claude/settings.json`** keeps the rules that test
+  the guard applicable under 2.1.0. The audit cannot tell that there is
+  no guard, so it tests for one, the safer reading. Spec 0051's A
+  introduction and `docs/usage.md` state it.
+
 ## Testing Decisions
 
 - **Seams.** Rule behaviour is tested through `contract.Audit` (ADR

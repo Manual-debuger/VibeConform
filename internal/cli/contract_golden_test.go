@@ -22,23 +22,6 @@ var updateGoldens = flag.Bool("update", false, "rewrite the contract report gold
 // the 2.x contract this vibe implements (spec 0074).
 var goldenContract = contracttest.Section{Key: "contract", Body: "contract: 2.1.0\n"}
 
-// unguardedSettings is the baseline's .claude/settings.json without its
-// PreToolUse hook: no guard, and the other hooks as they are.
-const unguardedSettings = `{
-  "hooks": {
-    "SessionStart": [
-      {"matcher": "startup|resume|clear", "hooks": [{"type": "command", "command": "task -x hook:context"}]}
-    ],
-    "PostToolUse": [
-      {"matcher": "Write|Edit|MultiEdit", "hooks": [{"type": "command", "command": "task fmt"}]}
-    ],
-    "Stop": [
-      {"hooks": [{"type": "command", "command": "task verify:fast 1>&2 || exit 2"}]}
-    ]
-  }
-}
-`
-
 func requiredGoldenEdits() []contracttest.Edit {
 	return []contracttest.Edit{
 		contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(goldenContract, contracttest.Section{Key: "require", Body: "require: [V-05, V-06, R-03]\n"})),
@@ -92,7 +75,7 @@ func TestContractReportGolden(t *testing.T) { //nolint:gocognit // baseline: pre
 		// fails, and the rules that test the guard are not applicable.
 		{name: "no-guard", edits: []contracttest.Edit{
 			contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(goldenContract)),
-			contracttest.WithFile(".claude/settings.json", unguardedSettings),
+			contracttest.WithFile(".claude/settings.json", contracttest.UnguardedSettings),
 		}},
 	}
 	for _, tc := range cases {

@@ -35,16 +35,16 @@ type ciWording struct {
 	noAuditJob    string
 	noAuditJobFix string
 
-	// C-05: no job calls a verify command, and the fix of a verify command
-	// that runs on no runner of the lacking platforms.
-	uncalledOnRunner    func(c shellCommand) string
-	uncalledOnRunnerFix func(c shellCommand) string
-	lackingPlatformFix  func(c shellCommand, lacking string) string
-	// C-05 under contract 2.x, which follows platforms (spec 0074): the
+	// C-05: no job calls a verify command. Under 1.x, the fix of that
+	// and of a verify command that runs on no Linux or no Windows runner.
+	uncalledOnRunner          func(c shellCommand) string
+	uncalledOnLinuxWindowsFix func(c shellCommand) string
+	lackingLinuxWindowsFix    func(c shellCommand, lacking string) string
+	// C-05 from contract 2.1.0, which follows platforms (spec 0074): the
 	// same two fixes, for the declared platforms, given as platform
 	// values such as "macos".
-	uncalledOnPlatformsFix func(c shellCommand, declared []string) string
-	lackingPlatformsFix    func(c shellCommand, lacking, declared []string) string
+	uncalledOnDeclaredFix func(c shellCommand, declared []string) string
+	lackingDeclaredFix    func(c shellCommand, lacking, declared []string) string
 
 	// D-03: no job runs a recognized scanner.
 	noScanner    string
@@ -81,21 +81,21 @@ var githubWording = &ciWording{
 	uncalledOnRunner: func(c shellCommand) string {
 		return fmt.Sprintf("no workflow step calls the verify command `%s`, so it runs on no runner", c)
 	},
-	uncalledOnRunnerFix: func(c shellCommand) string {
+	uncalledOnLinuxWindowsFix: func(c shellCommand) string {
 		return fmt.Sprintf("call `%s` in a job that runs on ubuntu-latest and windows-latest (a matrix over os)", c)
 	},
-	lackingPlatformFix: func(c shellCommand, lacking string) string {
+	lackingLinuxWindowsFix: func(c shellCommand, lacking string) string {
 		return fmt.Sprintf("run `%s` on %s too, such as with a matrix over os: [ubuntu-latest, windows-latest] and runs-on: ${{ matrix.os }}",
 			c, lacking)
 	},
-	uncalledOnPlatformsFix: func(c shellCommand, declared []string) string {
+	uncalledOnDeclaredFix: func(c shellCommand, declared []string) string {
 		labels := mapWords(declared, githubRunnerLabel)
 		if len(labels) == 1 {
 			return fmt.Sprintf("call `%s` in a job that runs on %s", c, labels[0])
 		}
 		return fmt.Sprintf("call `%s` in a job that runs on %s (a matrix over os)", c, joinWords(labels, " and "))
 	},
-	lackingPlatformsFix: func(c shellCommand, lacking, declared []string) string {
+	lackingDeclaredFix: func(c shellCommand, lacking, declared []string) string {
 		names := joinWords(mapWords(lacking, platformName), " and ")
 		if len(declared) == 1 {
 			return fmt.Sprintf("run `%s` on %s, such as in a job with runs-on: %s", c, names, githubRunnerLabel(declared[0]))
@@ -132,18 +132,18 @@ var gitlabWording = &ciWording{
 	uncalledOnRunner: func(c shellCommand) string {
 		return fmt.Sprintf("no job calls the verify command `%s`, so it runs on no runner", c)
 	},
-	uncalledOnRunnerFix: func(c shellCommand) string {
+	uncalledOnLinuxWindowsFix: func(c shellCommand) string {
 		return fmt.Sprintf("call `%s` in a job on a Linux runner (tags: [linux], or no tags and an image:) and in one with tags: [windows]", c)
 	},
-	lackingPlatformFix: func(c shellCommand, lacking string) string {
+	lackingLinuxWindowsFix: func(c shellCommand, lacking string) string {
 		return fmt.Sprintf("run `%s` on %s too: in a job whose tags name a runner of that platform, such as tags: [windows] "+
 			"(saas-windows-medium-amd64 on GitLab.com), or with a parallel: matrix over the tags", c, lacking)
 	},
-	uncalledOnPlatformsFix: func(c shellCommand, declared []string) string {
+	uncalledOnDeclaredFix: func(c shellCommand, declared []string) string {
 		return fmt.Sprintf("call `%s` in a job on a runner of each platform in platforms, such as %s",
 			c, joinWords(mapWords(declared, gitlabRunnerTags), " and "))
 	},
-	lackingPlatformsFix: func(c shellCommand, lacking, declared []string) string {
+	lackingDeclaredFix: func(c shellCommand, lacking, declared []string) string {
 		too, job := " too", "a job"
 		if len(declared) == 1 {
 			too = ""
@@ -163,26 +163,19 @@ var gitlabWording = &ciWording{
 }
 
 // githubRunnerLabel is a GitHub-hosted runner label of the platform.
-func githubRunnerLabel(platform string) string {
-	switch platform {
-	case platformLinux:
-		return "ubuntu-latest"
-	case platformWindows:
-		return "windows-latest"
-	}
-	return "macos-latest"
-}
+func githubRunnerLabel(platform string) string { return platformFacts[platform].githubLabel }
 
 // gitlabRunnerTags are job keys that put a job on a runner of the
 // platform, as the GitLab reader reads them.
-func gitlabRunnerTags(platform string) string {
-	switch platform {
-	case platformLinux:
-		return "tags: [linux] (or no tags and an image:)"
-	case platformWindows:
-		return "tags: [windows] (saas-windows-medium-amd64 on GitLab.com)"
-	}
-	return "tags: [macos] (saas-macos-medium-m1 on GitLab.com)"
+func gitlabRunnerTags(platform string) string { return platformFacts[platform].gitlabTags }
+
+// platformFacts is what C-05's findings say about each platform of
+// platforms: its name, a GitHub-hosted runner label for it, and the job
+// keys that put a GitLab CI job on one of its runners.
+var platformFacts = map[string]struct{ name, githubLabel, gitlabTags string }{
+	platformLinux:   {"Linux", "ubuntu-latest", "tags: [linux] (or no tags and an image:)"},
+	platformWindows: {"Windows", "windows-latest", "tags: [windows] (saas-windows-medium-amd64 on GitLab.com)"},
+	platformMacOS:   {"macOS", "macos-latest", "tags: [macos] (saas-macos-medium-m1 on GitLab.com)"},
 }
 
 // mapWords is each of words through f, in order.

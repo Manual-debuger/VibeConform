@@ -131,7 +131,7 @@ func TestInitWritesAConfigTheAuditReads(t *testing.T) { //nolint:gocognit,gocycl
 			if !strings.Contains(written, "\nrequire: [A-01, A-02, A-03, A-04, A-08]\n") {
 				t.Errorf("vibe.yaml does not require the guard set:\n%s", written)
 			}
-			if !strings.Contains(written, "drops the guard rules") {
+			if !strings.Contains(written, "drops the guard set") {
 				t.Errorf("vibe.yaml has no comment on removing the guard set:\n%s", written)
 			}
 

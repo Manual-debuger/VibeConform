@@ -195,7 +195,7 @@ contract: 2.1.0
 platforms: [linux, windows]
 agents: [claude]
 # The guard set: the audit holds the agent's guard to its rules.
-# Removing this line drops the guard rules from the verdict.
+# Removing this line drops the guard set from the verdict.
 require: [A-01, A-02, A-03, A-04, A-08]
 # Declare the four entrypoints: one command each, or a list of commands.
 # Until they are declared, vibe audit fails V-04. The setup skill
@@ -211,9 +211,9 @@ require: [A-01, A-02, A-03, A-04, A-08]
   **`platforms`** is `[linux, windows]` and **`agents`** is `[claude]`.
   Edit them to what the repository supports; see "`vibe.yaml` version 2".
 - **`require`** lists the guard set, A-01 to A-04 and A-08 (spec 0074),
-  so the verdict counts the guard rules like MUST rules. A repository
-  that does not want an agent guard deletes the line; the guard rules
-  then do not decide the verdict.
+  so the verdict counts the guard set like MUST rules. A repository
+  that does not want an agent guard deletes the line; the guard set
+  then does not decide the verdict.
 - **Components** come from the tracked files (`git ls-files`, so a new
   manifest must be added to Git first). Each directory up to three levels
   below the root with a `go.mod`, a `pyproject.toml`, or a `package.json`
@@ -407,13 +407,13 @@ that still reports it passes, and a specific suppression
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--repo-root` | `.` | Repository to check. Its `vibe.yaml` is the configuration unless `--config` names another |
-| `--config <path>` | `vibe.yaml` at `--repo-root` | Configuration file to read instead. The path is relative to the current directory, not to `--repo-root`. It must be a version 2 file |
+| `--repo-root` | `.` | Repository to check. Its `vibe.yaml` is the configuration unless `--config` names another. With `--explain`, only that file's contract version is read |
+| `--config <path>` | `vibe.yaml` at `--repo-root` | Configuration file to read instead. The path is relative to the current directory, not to `--repo-root`. It must be a version 2 file. With `--explain`, only its contract version is read |
 | `--static` | off | Run only the static checks. Fast, runs nothing, and never reaches a verdict: execution and probe parts are `not run`, so the exit code is always `1` |
 | `--json` | off | Print the report as JSON on stdout, nothing else on stdout |
 | `--probe-timeout <duration>` | `30m` | Time limit of each entrypoint run in the probe copy. It must be positive |
 | `--keep-probe-copy` | off | Keep the probe copy and print its path on stderr, for debugging |
-| `--explain <ID>` | | Explain one rule, such as `C-02`, under the contract `vibe.yaml` declares |
+| `--explain <ID>` | | Explain one rule, such as `C-02`, under the contract the configuration declares. It combines only with `--repo-root` and `--config` |
 
 `--explain` explains a rule as it is under the contract the
 configuration declares: a rule's title, level, check and applicability
@@ -421,14 +421,20 @@ can change between contract versions (spec 0074). It reads only the
 `contract` field of `vibe.yaml` at `--repo-root`, or of the file
 `--config` names, and no repository. A declared version is read as the
 audit reads it: 1.x as 1.2.0, 2.0.x as 2.1.0. Without a `vibe.yaml` it
-explains the rule under the latest contract, so it works anywhere. A
-configuration it cannot read, a version 1 file and a contract this
-`vibe` does not implement are errors. Combining it with any audit flag
-other than `--repo-root` and `--config` is an error. It prints what the
-rule registry holds for that contract: ID and rule sentence, the
-contract and where its version comes from, level, category, check
+explains the rule under the latest contract, so it works anywhere. It
+explains a rule for every configuration the audit accepts, under 1.x
+and 2.x, and refuses only a file the audit refuses too: one that is not
+valid YAML, has no `contract` or no X.Y.Z in it, is version 1, or
+declares a contract this `vibe` does not implement.
+Combining it with any audit flag other than `--repo-root` and
+`--config` is an error. It prints what the rule registry holds for that
+contract: ID and rule sentence, the contract, level, category, check
 kinds, source, when the rule is not applicable, whether it can be
 waived, the rationale and the check as spec 0051 states it. The
+`Contract:` line names the contract the rule is explained under and
+where its version comes from: `2.1.0 (vibe.yaml declares 2.0.0)`, with
+the file `--config` names in place of `vibe.yaml`, or `2.1.0, the
+latest (no vibe.yaml)`. The
 rationale is spec 0051's source for the rule, plus the category's
 introduction where spec 0051 has one (H, C and A). An unknown ID is exit
 `1` and lists the valid IDs.
@@ -716,7 +722,8 @@ jq -r '.rules[] | select(.level == "MUST" and (.result == "fail" or .result == "
   `.claude/settings.json` matches `Bash`, read as A-01 reads it. There
   is no guard to test then: A-01 fails and reports it, and the guard
   probes do not run. A settings file that does not parse keeps them
-  applicable.
+  applicable: the audit cannot tell that there is no guard, so it tests
+  for one, the safer reading.
 - **C-05 follows `platforms` under 2.1.0** (spec 0074). Each command of
   `verify` must run on a runner of each platform in `platforms`, after
   matrix expansion, and the finding names each declared platform with
@@ -1450,9 +1457,8 @@ and edits to files that conventionally hold secrets (`.env`, `*.pem`,
 audit checks this by probe: it runs the guard corpus through the hook
 (see "`vibe audit`"). Any guard that passes will do; `vibe-guard`, below,
 is the reference, and the setup skill installs it. From contract 2.1.0
-the guard is the adopter's choice: the guard rules (the guard set) are
-SHOULD, and a repository that wants them to count lists them in
-`require` (see "The guard set" under "`vibe.yaml` version 2").
+the guard is the adopter's choice: the guard set is SHOULD, and a
+repository that wants it to count lists it in `require` (see "The guard set" under "`vibe.yaml` version 2").
 
 **Commands that skip Git hooks** (A-09, SHOULD, since contract 1.2.0; guard
 rule ID `git-skip-hooks`). The guard also refuses `git commit

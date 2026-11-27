@@ -22,9 +22,9 @@ import (
 func TestRegistryQuotesSpec0051(t *testing.T) {
 	rows := spec0051Rows(t)
 	must, mustV1, from0051 := 0, 0, 0
-	for _, r := range Rules() {
-		checkRuleParts(t, r)
-		r = r.At(Latest)
+	for _, reg := range Rules() {
+		checkRuleParts(t, reg)
+		r := reg.At(Latest)
 		if r.Since != "" {
 			checkSpec0061Rule(t, r)
 			continue
@@ -35,11 +35,11 @@ func TestRegistryQuotesSpec0051(t *testing.T) {
 			continue
 		}
 		from0051++
-		checkSpec0051Rule(t, r, row)
-		if r.LevelAt(Latest) == Must {
+		checkSpec0051Rule(t, reg, row)
+		if r.Level == Must {
 			must++
 		}
-		if r.LevelAt(Contract1) == Must {
+		if reg.LevelAt(Contract1) == Must {
 			mustV1++
 		}
 	}
@@ -109,11 +109,12 @@ func spec0051Rows(t *testing.T) map[string][]string {
 	return rows
 }
 
-// checkSpec0051Rule checks a rule of spec 0051's table against its row:
-// its sentence, check, level, source and category, and that its check
-// names the kind of each part.
-func checkSpec0051Rule(t *testing.T, r Rule, row []string) {
+// checkSpec0051Rule checks a registry rule of spec 0051's table against
+// its row: its sentence and check under Latest, its level history, its
+// source and category, and that its check names the kind of each part.
+func checkSpec0051Rule(t *testing.T, reg Rule, row []string) {
 	t.Helper()
+	r := reg.At(Latest)
 	if r.Title != row[1] {
 		t.Errorf("%s title = %q, spec says %q", r.ID, r.Title, row[1])
 	}
@@ -121,8 +122,8 @@ func checkSpec0051Rule(t *testing.T, r Rule, row []string) {
 		t.Errorf("%s check = %q, spec says %q", r.ID, r.Check(), row[2])
 	}
 	latest, added, changes := levelCell(t, row[3])
-	if r.LevelAt(Latest) != latest || r.Level != added || !slices.Equal(r.LevelChanges, changes) {
-		t.Errorf("%s level = %s (added as %s, changes %v), spec says %s", r.ID, r.LevelAt(Latest), r.Level, r.LevelChanges, row[3])
+	if r.Level != latest || reg.Level != added || !slices.Equal(reg.LevelChanges, changes) {
+		t.Errorf("%s level = %s (added as %s, changes %v), spec says %s", r.ID, r.Level, reg.Level, reg.LevelChanges, row[3])
 	}
 	if r.Source != row[4] {
 		t.Errorf("%s source = %q, spec says %q", r.ID, r.Source, row[4])

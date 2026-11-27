@@ -141,7 +141,8 @@ func a07Hook(s *probeSession, command string, limit time.Duration) PartResult {
 }
 
 // checkR01Execution: with vibe replaced by the shim, the baseline verify
-// passes and the A-02 deny cases are still refused. The findings list
+// passes and, where the guard set binds, the A-02 deny cases are still
+// refused (r01GuardHalf). The findings list
 // every call of vibe the shim recorded in any run of the audit: setup's,
 // those of every earlier part, and those of R-01's own runs.
 func checkR01Execution(env *Env, earlier Earlier) PartResult {
@@ -188,7 +189,7 @@ func r01GuardHalf(env *Env, earlier Earlier) PartResult {
 	if ok, _ := needsClaude(env.config); !ok {
 		return Pass()
 	}
-	if guardSetLevel(env.auditedVersion()) != Must && !env.config.requires("A-02") {
+	if !env.guardSetBinds() {
 		return Pass()
 	}
 	if g, ok := a02Deny(earlier); ok {

@@ -155,9 +155,10 @@ type Revision struct {
 // and --explain read only the registry.
 type Rule struct {
 	ID string
-	// Level is the level the rule was added with. Its level under a
-	// contract is LevelAt's, and a RuleResult carries the level under the
-	// audited contract; read those, not Level.
+	// Level is the level the rule was added with, or, on a rule At
+	// returned, its level under that contract. A registry rule's level
+	// under a contract is LevelAt's, and a RuleResult carries the level
+	// under the audited contract.
 	Level Level
 	// LevelChanges are the contract versions that changed the rule's
 	// level, oldest first, or none when the level never changed.
@@ -195,13 +196,14 @@ func (r Rule) Check() string {
 	return strings.Join(texts, " ")
 }
 
-// At is the rule as it reads under the contract version: its title, the
-// check text of its parts and its applicability from its last revision
-// that the version is not older than. Its level is LevelAt's. Call it on
-// a registry rule: the result keeps the revisions, so At of another
-// version on it is not that version's rule.
+// At is the rule as it reads under the contract version: its level is
+// LevelAt's, and its title, the check text of its parts and its
+// applicability are those of its last revision that the version is not
+// older than. The rule it returns has no level changes and no revisions
+// left, so At of another version on it returns it unchanged.
 func (r Rule) At(contract string) Rule {
 	out := r
+	out.Level, out.LevelChanges, out.Revisions = r.LevelAt(contract), nil, nil
 	out.Parts = slices.Clone(r.Parts)
 	for _, v := range r.Revisions {
 		if compareVersions(contract, v.Since) < 0 {
@@ -346,7 +348,7 @@ func testsTheGuard(r Rule) Rule {
 		checks[i] = p.Check
 	}
 	r.Revisions = append(r.Revisions, Revision{
-		Since: "2.1.0", Title: r.Title, Checks: checks,
+		Since: contract21, Title: r.Title, Checks: checks,
 		NotApplicableWhen: notApplicableWithoutClaude + ", or when `require` does not list the guard set and no " +
 			"PreToolUse hook in `.claude/settings.json` matches `Bash` (A-01 reports the missing guard)",
 		applies: guardToTest,
@@ -363,7 +365,7 @@ func guardToTest(env *Env) (bool, string) {
 	if ok, why := needsClaude(env.config); !ok {
 		return false, why
 	}
-	if env.config.requires(guardSet[0]) || env.hooksBash() {
+	if env.guardSetBinds() || env.hooksBash() {
 		return true, ""
 	}
 	return false, "no PreToolUse hook in " + claudeSettingsFile + " matches Bash, so there is no guard to test; " +
@@ -513,7 +515,7 @@ var rules = []Rule{
 		// Under 2.1.0 the rule follows platforms (spec 0074); checkC05
 		// reads the audited version.
 		Revisions: []Revision{{
-			Since: "2.1.0",
+			Since: contract21,
 			Title: "Tests run on every declared platform",
 			Checks: []string{"the steps that call `verify` run on a runner of each platform in `platforms`, " +
 				"after matrix expansion."},
@@ -653,13 +655,21 @@ var rules = []Rule{
 		Title:  "Everything but the audit works without vibe",
 		Source: "principle 3, spec 0017",
 		Parts: []Part{
-			static("no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 "+
-				"and `vibe --version` in a CI job that calls no entrypoint.", checkR01),
+			static(r01StaticCheck, checkR01),
 			// R-01 reads A-02's deny verdict and the vibe calls of every
 			// other part, so it is the last part.
 			executionLast("with `vibe` not on `PATH`, `verify` passes in the probe copy and the A-02 deny cases "+
 				"are still refused.", checkR01Execution),
 		},
+		// Under 2.1.0 the guard half holds only where the guard set
+		// counts in the verdict (spec 0074, "Amendments"); r01GuardHalf
+		// reads it.
+		Revisions: []Revision{{
+			Since: contract21,
+			Title: "Everything but the audit works without vibe",
+			Checks: []string{r01StaticCheck, "with `vibe` not on `PATH`, `verify` passes in the probe copy and, " +
+				"when `require` lists the guard set, the A-02 deny cases are still refused."},
+		}},
 	},
 	{
 		ID: "R-02", Level: Should, Category: categoryRemovability,
@@ -681,13 +691,18 @@ var rules = []Rule{
 	},
 }
 
+// r01StaticCheck is the check text of R-01's static part, the same under
+// every contract.
+const r01StaticCheck = "no entrypoint, hook command or CI step calls `vibe`, except the audit job of C-04 " +
+	"and `vibe --version` in a CI job that calls no entrypoint."
+
 // guardSet is the guard set: the rules that hold the agent's guard (spec
 // 0074). Under contract 1.x they are MUST; from 2.1.0 they are SHOULD,
 // and require lists all of them or none.
 var guardSet = []string{"A-01", "A-02", "A-03", "A-04", "A-08"}
 
 // guardSetLevels is the level history of each rule of the guard set.
-var guardSetLevels = []LevelChange{{Since: "2.1.0", Level: Should}}
+var guardSetLevels = []LevelChange{{Since: contract21, Level: Should}}
 
 // guardSetLevel is the level of the guard set's rules under the contract
 // version: MUST under 1.x, SHOULD from 2.1.0. It reads their level

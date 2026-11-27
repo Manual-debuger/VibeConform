@@ -129,35 +129,42 @@ func runExplain(cmd *cobra.Command, f auditFlags) error {
 	if len(others) > 0 {
 		return fmt.Errorf("--explain reads only the contract version of the configuration; drop %s", strings.Join(others, ", "))
 	}
-	versions, source, err := explainContract(f)
+	under, err := explainContract(f)
 	if err != nil {
 		return err
 	}
 	rule, ok := contract.LookupRule(f.explain)
 	if !ok {
 		return fmt.Errorf("--explain: %q is not a rule of contract %s; rules: %s",
-			f.explain, versions.Audited, strings.Join(contract.RuleIDs(), " "))
+			f.explain, under.audited, strings.Join(contract.RuleIDs(), " "))
 	}
-	if err := writeExplain(cmd.OutOrStdout(), rule, versions.Audited, source); err != nil {
+	if err := writeExplain(cmd.OutOrStdout(), rule, under); err != nil {
 		return fmt.Errorf("--explain: %w", err)
 	}
 	return nil
 }
 
-// explainContract is the contract --explain explains a rule under, and
-// where that version comes from, for the explanation's Contract line.
-func explainContract(f auditFlags) (contract.Versions, string, error) {
+// explainedContract is the contract --explain explains a rule under.
+type explainedContract struct {
+	audited string
+	// source is the explanation's Contract line: the version and where
+	// it comes from.
+	source string
+}
+
+// explainContract is the contract --explain explains a rule under.
+func explainContract(f auditFlags) (explainedContract, error) {
 	file, data, err := contract.ReadConfig(f.repoRoot, f.config)
 	if errors.Is(err, contract.ErrNoConfig) {
-		return contract.Versions{Declared: contract.Latest, Audited: contract.Latest},
-			fmt.Sprintf("%s, the latest (no %s)", contract.Latest, configFileName), nil
+		return explainedContract{contract.Latest, fmt.Sprintf("%s, the latest (no %s)", contract.Latest, configFileName)}, nil
 	}
 	if err != nil {
-		return contract.Versions{}, "", configLoadError(err)
+		return explainedContract{}, configLoadError(err)
 	}
 	versions, err := contract.ParseContract(file, data)
 	if err != nil {
-		return contract.Versions{}, "", err
+		return explainedContract{}, err
 	}
-	return versions, fmt.Sprintf("%s (%s declares %s)", versions.Audited, file, versions.Declared), nil
+	return explainedContract{versions.Audited,
+		fmt.Sprintf("%s (%s declares %s)", versions.Audited, file, versions.Declared)}, nil
 }

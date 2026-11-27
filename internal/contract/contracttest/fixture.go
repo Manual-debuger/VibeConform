@@ -40,6 +40,24 @@ var (
 	ProbeTypeScript = tree("probe-typescript")
 )
 
+// UnguardedSettings is the Baseline's .claude/settings.json without its
+// PreToolUse entry: no guard. The SessionStart, PostToolUse and Stop
+// hooks stay, so A-05 to A-07 can still pass.
+const UnguardedSettings = `{
+  "hooks": {
+    "SessionStart": [
+      {"matcher": "startup|resume|clear", "hooks": [{"type": "command", "command": "task -x hook:context"}]}
+    ],
+    "PostToolUse": [
+      {"matcher": "Write|Edit|MultiEdit", "hooks": [{"type": "command", "command": "task fmt"}]}
+    ],
+    "Stop": [
+      {"hooks": [{"type": "command", "command": "task verify:fast 1>&2 || exit 2"}]}
+    ]
+  }
+}
+`
+
 // tree is the absolute path of a tree under internal/contract/testdata.
 func tree(name string) string {
 	_, file, _, ok := runtime.Caller(0)

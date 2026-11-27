@@ -134,7 +134,7 @@ declares 2.0.0 is audited as 2.1.0 already.
 
 - **The guard set.** Ask the person whether they keep the agent guard.
   If they do, add `require: [A-01, A-02, A-03, A-04, A-08]` to
-  `vibe.yaml`, so the verdict counts the guard rules as before. List all
+  `vibe.yaml`, so the verdict counts the guard set as before. List all
   five or none: part of the set, or A-09 without it, is a configuration
   error.
 - **C-05.** Add a CI job that runs `verify` on each declared platform

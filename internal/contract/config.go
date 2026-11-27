@@ -45,6 +45,15 @@ func (c *Config) requires(id string) bool {
 	return slices.Contains(c.require, id)
 }
 
+// guardSetBinds reports whether the guard set counts in the verdict: it
+// is MUST under the audited contract (1.x), or require lists it (spec
+// 0074). It is the one answer to that question. requireGuardSet makes
+// require list all of the guard set or none of it, so A-01 stands for
+// the set.
+func (c *Config) guardSetBinds() bool {
+	return guardSetLevel(c.Contract.Audited) == Must || c.requires(guardSet[0])
+}
+
 // The platforms of contract 1.0.0.
 const (
 	platformLinux   = "linux"
@@ -187,8 +196,8 @@ func startParse(file string, data []byte, repo *Repo) (*configParser, *yaml.Node
 	}
 	var audited string
 	if v := field(top, "contract"); v != nil && isString(v) {
-		if major, minor, ok := parseVersion(v.Value); ok {
-			if audited, ok = auditedAs(major, minor); !ok {
+		if parts, ok := versionParts(v.Value); ok {
+			if audited, ok = auditedAs(parts[0], parts[1]); !ok {
 				return nil, nil, &UnsupportedVersionError{file: file, declared: v.Value}
 			}
 		}
@@ -292,7 +301,7 @@ func (p *configParser) contract(v *yaml.Node) error {
 	if !isString(v) {
 		return p.fail("contract", "must be a contract version X.Y.Z, such as %s", Latest)
 	}
-	if _, _, ok := parseVersion(v.Value); !ok {
+	if _, ok := versionParts(v.Value); !ok {
 		return p.fail("contract", "%q is not a contract version X.Y.Z, such as %s", v.Value, Latest)
 	}
 	// Parse already refused an unsupported version.
