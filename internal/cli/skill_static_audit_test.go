@@ -285,42 +285,48 @@ func TestReferenceWithoutTheGuard(t *testing.T) {
 		for _, stack := range setupskill.Stacks() {
 			t.Run(provider+"/"+stack, func(t *testing.T) {
 				t.Parallel()
-				report := auditReference(t, withoutTheGuard(t, referenceRepo(t, stack, provider)))
-				if report.Contract.Audited != "2.1.0" {
-					t.Errorf("audited as contract %s, want 2.1.0", report.Contract.Audited)
-				}
-				assertNoBindingFailure(t, report)
-				a01 := contracttest.RuleResult(t, report, "A-01")
-				if a01.Level != contract.Should || a01.Required || a01.Result != contract.ResultFail {
-					t.Errorf("A-01 = %s %s (required %v), want a failing SHOULD rule not required", a01.Level, a01.Result, a01.Required)
-				}
-				for _, id := range []string{"A-02", "A-03", "A-04", "A-08", "A-09"} {
-					if got, msgs := referenceFindings(t, report, id); got != contract.ResultNotApplicable {
-						t.Errorf("%s = %s, want not_applicable: %s", id, got, msgs)
-					}
-				}
-				if got := referenceStaticPart(t, report, "A-05"); got != contract.ResultPass {
-					_, msgs := referenceFindings(t, report, "A-05")
-					t.Errorf("A-05 static part = %s, want pass without vibe-guard relock: %s", got, msgs)
-				}
-
-				// The static audit reaches no verdict. In a full audit
-				// where every other rule passes, the guard rules leave it
-				// conformant. A fixture runs no entrypoint: the other
-				// rules are stand-ins, and the setup entrypoint, which
-				// runs before any part, is left out.
-				files := withoutTheGuard(t, referenceRepo(t, stack, provider))
-				files["vibe.yaml"] = setupEntrypoint.ReplaceAllString(files["vibe.yaml"], "")
-				guardRules := append(contract.GuardSet(), "A-09")
-				full := auditReferenceWith(t, files, contract.Options{
-					Rules: contracttest.StandIn(nil, contract.ResultPass, contracttest.RuleIDs("", guardRules...)...),
-					Probe: contract.ProbeOptions{Env: contracttest.EmptyProbeEnv(t)},
-				})
-				if full.Verdict != contract.VerdictConformant {
-					t.Errorf("verdict = %s (%s), want conformant", full.Verdict, full.Reason)
-				}
+				checkReferenceWithoutTheGuard(t, stack, provider)
 			})
 		}
+	}
+}
+
+// checkReferenceWithoutTheGuard is TestReferenceWithoutTheGuard for one
+// stack on one provider.
+func checkReferenceWithoutTheGuard(t *testing.T, stack, provider string) {
+	t.Helper()
+	report := auditReference(t, withoutTheGuard(t, referenceRepo(t, stack, provider)))
+	if report.Contract.Audited != "2.1.0" {
+		t.Errorf("audited as contract %s, want 2.1.0", report.Contract.Audited)
+	}
+	assertNoBindingFailure(t, report)
+	a01 := contracttest.RuleResult(t, report, "A-01")
+	if a01.Level != contract.Should || a01.Required || a01.Result != contract.ResultFail {
+		t.Errorf("A-01 = %s %s (required %v), want a failing SHOULD rule not required", a01.Level, a01.Result, a01.Required)
+	}
+	for _, id := range []string{"A-02", "A-03", "A-04", "A-08", "A-09"} {
+		if got, msgs := referenceFindings(t, report, id); got != contract.ResultNotApplicable {
+			t.Errorf("%s = %s, want not_applicable: %s", id, got, msgs)
+		}
+	}
+	if got := referenceStaticPart(t, report, "A-05"); got != contract.ResultPass {
+		_, msgs := referenceFindings(t, report, "A-05")
+		t.Errorf("A-05 static part = %s, want pass without vibe-guard relock: %s", got, msgs)
+	}
+
+	// The static audit reaches no verdict. In a full audit where every
+	// other rule passes, the guard rules leave it conformant. A fixture
+	// runs no entrypoint: the other rules are stand-ins, and the setup
+	// entrypoint, which runs before any part, is left out.
+	files := withoutTheGuard(t, referenceRepo(t, stack, provider))
+	files["vibe.yaml"] = setupEntrypoint.ReplaceAllString(files["vibe.yaml"], "")
+	guardRules := append(contract.GuardSet(), "A-09")
+	full := auditReferenceWith(t, files, contract.Options{
+		Rules: contracttest.StandIn(nil, contract.ResultPass, contracttest.RuleIDs("", guardRules...)...),
+		Probe: contract.ProbeOptions{Env: contracttest.EmptyProbeEnv(t)},
+	})
+	if full.Verdict != contract.VerdictConformant {
+		t.Errorf("verdict = %s (%s), want conformant", full.Verdict, full.Reason)
 	}
 }
 
