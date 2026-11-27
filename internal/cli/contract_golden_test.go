@@ -63,6 +63,13 @@ func TestContractReportGolden(t *testing.T) { //nolint:gocognit // baseline: pre
 		// decided or, with --static, does not run.
 		{name: "required", edits: requiredGoldenEdits()},
 		{name: "required-static", edits: requiredGoldenEdits(), args: []string{"--static"}},
+		// The guard set (spec 0074): SHOULD under 2.1.0, and marked
+		// required wherever the report lists it when vibe.yaml requires
+		// it. Under 1.2.0 it is MUST.
+		{name: "guard-set-required", edits: []contracttest.Edit{contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(goldenContract,
+			contracttest.Section{Key: "require", Body: "require: [A-01, A-02, A-03, A-04, A-08]\n"}))}},
+		{name: "contract-1", edits: []contracttest.Edit{contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(
+			contracttest.Section{Key: "contract", Body: "contract: 1.2.0\n"}))}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
