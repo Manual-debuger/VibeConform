@@ -292,6 +292,28 @@ func needsAgents(cfg *Config) (bool, string) {
 
 const notApplicableWithoutClaude = "when `agents` does not include `claude`"
 
+// notApplicableWithoutGuard is when a rule that tests the guard does not
+// apply (spec 0074, "Applicability of the guard-testing rules").
+const notApplicableWithoutGuard = notApplicableWithoutClaude + "; under contract 2.1.0, also when `require` " +
+	"does not list the guard set and no PreToolUse hook in `.claude/settings.json` matches `Bash` " +
+	"(A-01 reports the missing guard)"
+
+// guardToTest is the applicability of the rules that test the guard:
+// A-02, A-03, A-04, A-08 and A-09. With `claude` in agents they apply,
+// except under 2.1.0 when require does not list the guard set and no
+// PreToolUse hook matches Bash, read as A-01 reads it. Then there is no
+// guard to test, and A-01's failure is the one finding (spec 0074).
+func guardToTest(env *Env) (bool, string) {
+	if ok, why := needsClaude(env.config); !ok {
+		return false, why
+	}
+	if guardSetLevel(env.auditedVersion()) == Must || env.config.requires(guardSet[0]) || env.hooksBash() {
+		return true, ""
+	}
+	return false, "no PreToolUse hook in " + claudeSettingsFile + " matches Bash, so there is no guard to test; " +
+		"A-01 reports the missing guard"
+}
+
 // rules is the rule table, in report order: contract 1.0.0's 16 MUST and
 // 9 SHOULD rules, whose sentences, checks and sources are spec 0051's
 // verbatim, and the SHOULD rules contract 1.2.0 adds (spec 0061).
@@ -447,36 +469,36 @@ var rules = []Rule{
 		ID: "A-02", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard refuses the baseline unless an exception says otherwise",
 		Source:            "specs 0012, 0047",
-		NotApplicableWhen: notApplicableWithoutClaude,
+		NotApplicableWhen: notApplicableWithoutGuard,
 		Parts: []Part{
 			probeRun("every corpus case is fed to every PreToolUse hook command that matches its tool. A deny case "+
 				"is satisfied as described under \"Guard policy and exceptions\". Every allow case must be allowed. "+
 				"A hook \"refuses\" by exiting 2.", checkA02),
 		},
-		applies: onConfig(needsClaude),
+		applies: guardToTest,
 	},
 	{
 		ID: "A-03", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard fails closed",
 		Source:            "spec 0021",
-		NotApplicableWhen: notApplicableWithoutClaude,
+		NotApplicableWhen: notApplicableWithoutGuard,
 		Parts: []Part{
 			probeRun("every deny case is still refused in two situations: with `PATH` reduced to the operating "+
 				"system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON", checkA03),
 		},
-		applies: onConfig(needsClaude),
+		applies: guardToTest,
 	},
 	{
 		ID: "A-04", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard is loosened only through listed exceptions",
 		Source:            "spec 0050, ADR 0024",
-		NotApplicableWhen: notApplicableWithoutClaude,
+		NotApplicableWhen: notApplicableWithoutGuard,
 		Parts: []Part{
 			static("`.claude/hooks/policy.json` is valid version 2; every exception names a guard rule ID and "+
 				"has a non-empty reason; when a PreToolUse hook runs `vibe-guard hook`, vibe-guard can load it; "+
 				"the audit lists them. Tightening is not restricted.", checkA04),
 		},
-		applies: onConfig(needsClaude),
+		applies: guardToTest,
 	},
 	{
 		ID: "A-05", Level: Must, Category: categoryAgents,
@@ -515,26 +537,26 @@ var rules = []Rule{
 		ID: "A-08", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "An agent changes guardrail settings only after a person unlocks them",
 		Source:            "ADR 0025",
-		NotApplicableWhen: notApplicableWithoutClaude,
+		NotApplicableWhen: notApplicableWithoutGuard,
 		Parts: []Part{
 			probeRun("a `Write` to `.claude/settings.json` and an `Edit` under `.claude/hooks/` are refused with no "+
 				"marker, allowed with a valid marker, and refused with an expired marker. A `Bash` call that runs "+
 				"`vibe unlock`, and any `Write` or `Bash` that creates the marker, are refused. After the Stop hook "+
 				"runs, the marker is gone.", checkA08),
 		},
-		applies: onConfig(needsClaude),
+		applies: guardToTest,
 	},
 	{
 		ID: "A-09", Level: Should, Category: categoryAgents, Since: "1.2.0",
 		Title:             "The guard refuses commands that skip Git hooks",
 		Source:            "spec 0061, ADR 0027",
-		NotApplicableWhen: notApplicableWithoutClaude,
+		NotApplicableWhen: notApplicableWithoutGuard,
 		Parts: []Part{
 			probeRun("every A-09 corpus case is fed to every PreToolUse hook command that matches its tool. A deny "+
 				"case is satisfied as described under \"Guard policy and exceptions\". Every allow case must be allowed.",
 				checkA09),
 		},
-		applies: onConfig(needsClaude),
+		applies: guardToTest,
 	},
 	{
 		ID: "D-01", Level: Must, Category: categoryDependencies,
