@@ -195,7 +195,7 @@ contract: 2.1.0
 platforms: [linux, windows]
 agents: [claude]
 # The guard set: the audit holds the agent's guard to its rules.
-# Removing this line drops the guard rules from the verdict.
+# Removing this line drops the guard set from the verdict.
 require: [A-01, A-02, A-03, A-04, A-08]
 # Declare the four entrypoints: one command each, or a list of commands.
 # Until they are declared, vibe audit fails V-04. The setup skill
@@ -211,9 +211,9 @@ require: [A-01, A-02, A-03, A-04, A-08]
   **`platforms`** is `[linux, windows]` and **`agents`** is `[claude]`.
   Edit them to what the repository supports; see "`vibe.yaml` version 2".
 - **`require`** lists the guard set, A-01 to A-04 and A-08 (spec 0074),
-  so the verdict counts the guard rules like MUST rules. A repository
-  that does not want an agent guard deletes the line; the guard rules
-  then do not decide the verdict.
+  so the verdict counts the guard set like MUST rules. A repository
+  that does not want an agent guard deletes the line; the guard set
+  then does not decide the verdict.
 - **Components** come from the tracked files (`git ls-files`, so a new
   manifest must be added to Git first). Each directory up to three levels
   below the root with a `go.mod`, a `pyproject.toml`, or a `package.json`
@@ -1457,9 +1457,8 @@ and edits to files that conventionally hold secrets (`.env`, `*.pem`,
 audit checks this by probe: it runs the guard corpus through the hook
 (see "`vibe audit`"). Any guard that passes will do; `vibe-guard`, below,
 is the reference, and the setup skill installs it. From contract 2.1.0
-the guard is the adopter's choice: the guard rules (the guard set) are
-SHOULD, and a repository that wants them to count lists them in
-`require` (see "The guard set" under "`vibe.yaml` version 2").
+the guard is the adopter's choice: the guard set is SHOULD, and a
+repository that wants it to count lists it in `require` (see "The guard set" under "`vibe.yaml` version 2").
 
 **Commands that skip Git hooks** (A-09, SHOULD, since contract 1.2.0; guard
 rule ID `git-skip-hooks`). The guard also refuses `git commit
