@@ -131,6 +131,14 @@ refuse every command with the same effect. `vibe-guard` is VibeConform's
 reference agent guard; any guard that passes the guard probes will do.
 _Avoid_: sandbox, firewall, policy engine
 
+**Guard set**:
+The rules that hold the agent guard: A-01, A-02, A-03, A-04 and A-08.
+Under contract 1.x they are MUST. From 2.1.0 they are SHOULD, and an
+adopting repository that wants a guarded agent lists the whole set in
+`require`; `require` with only part of it is a configuration error
+(ADR 0029).
+_Avoid_: guard rules (for the set), guard bundle
+
 **Guard exception**:
 An adopting repository's statement that one agent guard rule lets one
 named command through. Every other rule still applies to it. It is the
