@@ -324,6 +324,20 @@ func TestAuditExplainReadsTheContractVersion(t *testing.T) {
 			assertShows(t, r, "A-01: ", tc.level, tc.waivable)
 		}
 	})
+	// Without a guard, the rules that test it are not applicable under
+	// 2.1.0 only (spec 0074, "Applicability of the guard-testing rules").
+	t.Run("A-02's applicability under each contract", func(t *testing.T) {
+		t.Parallel()
+		const withoutGuard = "or when `require` does not list the guard set and no PreToolUse hook in " +
+			"`.claude/settings.json` matches `Bash`"
+		r := runVibeAudit(t, "--explain", "A-02", "--repo-root", withConfig(t, "contract: 2.0.0\n"))
+		assertShows(t, r, "Not applicable: when `agents` does not include `claude`, "+withoutGuard)
+		r = runVibeAudit(t, "--explain", "A-02", "--repo-root", withConfig(t, "contract: 1.2.0\n"))
+		assertShows(t, r, "Not applicable: when `agents` does not include `claude`")
+		if strings.Contains(flat(r), "guard set") {
+			t.Errorf("--explain A-02 under 1.2.0 names the guard set:\n%s", r.stdout)
+		}
+	})
 	t.Run("--config names the file", func(t *testing.T) {
 		t.Parallel()
 		dir := withConfig(t, "contract: 2.1.0\n")
