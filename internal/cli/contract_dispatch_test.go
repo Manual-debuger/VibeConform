@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Manual-debuger/VibeConform/internal/contract"
 	"github.com/Manual-debuger/VibeConform/internal/contract/contracttest"
 )
 
@@ -351,6 +352,42 @@ func TestAuditExplainReadsTheContractVersion(t *testing.T) {
 		assertShows(t, r, c05Of2, "Contract: 2.1.0, the latest (no vibe.yaml)")
 		if r.stderr != "" {
 			t.Errorf("stderr not empty:\n%s", r.stderr)
+		}
+	})
+	// Every configuration the audit accepts, under 1.x and 2.x, can be
+	// explained under.
+	t.Run("a configuration the audit accepts", func(t *testing.T) {
+		t.Parallel()
+		guardSet := "require: [" + strings.Join(contract.GuardSet(), ", ") + "]\n"
+		for _, tc := range []struct {
+			name     string
+			sections []contracttest.Section
+			contract string
+		}{
+			{"1.2.0", nil, "Contract: 1.2.0 (vibe.yaml declares 1.2.0)"},
+			{"1.0.0", []contracttest.Section{{Key: "contract", Body: "contract: 1.0.0\n"}}, "Contract: 1.2.0 (vibe.yaml declares 1.0.0)"},
+			{"2.1.0 with the guard set", []contracttest.Section{
+				{Key: "contract", Body: "contract: 2.1.0\n"}, {Key: "require", Body: guardSet},
+			}, "Contract: 2.1.0 (vibe.yaml declares 2.1.0)"},
+		} {
+			dir := contracttest.Fixture(t, contracttest.Baseline,
+				contracttest.WithFile("vibe.yaml", contracttest.ConfigWith(tc.sections...)))
+			if r := runVibeAudit(t, "--static", "--repo-root", dir); r.code != 1 || !strings.Contains(r.stdout, "vibe audit: contract") {
+				t.Fatalf("%s: the audit refuses the configuration (exit %d):\n%s", tc.name, r.code, r.stderr)
+			}
+			assertShows(t, runVibeAudit(t, "--explain", "A-01", "--repo-root", dir), tc.contract)
+		}
+	})
+	// A file the audit refuses, --explain refuses with the same error.
+	t.Run("a malformed configuration", func(t *testing.T) {
+		t.Parallel()
+		dir := withConfig(t, "contract: 2.1.0\nplatforms: [linux\n")
+		explain := runVibeAudit(t, "--explain", "C-05", "--repo-root", dir)
+		audit := runVibeAudit(t, "--repo-root", dir)
+		assertExit(t, explain, 1)
+		assertStderr(t, explain, "vibe.yaml", "not valid YAML")
+		if explain.stderr != audit.stderr || explain.stdout != "" {
+			t.Errorf("--explain says\n%s\nand the audit says\n%s", explain.stderr, audit.stderr)
 		}
 	})
 	for _, tc := range []struct {

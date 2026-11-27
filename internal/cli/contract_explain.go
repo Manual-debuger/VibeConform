@@ -15,9 +15,9 @@ const explainWidth = 76
 // "Package and command"): the facts first, then the rationale and the
 // check as spec 0051 states it. The rule is the one under the contract
 // version: its title, level, check, applicability and whether it is
-// waivable (spec 0074). source says where the version comes from.
-func writeExplain(w io.Writer, rule contract.Rule, version, source string) error {
-	rule = rule.At(version)
+// waivable (spec 0074).
+func writeExplain(w io.Writer, rule contract.Rule, under explainedContract) error {
+	rule = rule.At(under.audited)
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s: %s\n\n", rule.ID, rule.Title)
 
@@ -34,7 +34,7 @@ func writeExplain(w io.Writer, rule contract.Rule, version, source string) error
 		waivable = "yes, through a waiver in vibe.yaml with a reason and an until date"
 	}
 	for _, field := range [][2]string{
-		{"Contract", source},
+		{"Contract", under.source},
 		{"Level", string(rule.Level)},
 		{"Category", string(rule.Category) + ", " + rule.Category.Name()},
 		{"Checks", strings.Join(kinds, ", ")},

@@ -407,13 +407,13 @@ that still reports it passes, and a specific suppression
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--repo-root` | `.` | Repository to check. Its `vibe.yaml` is the configuration unless `--config` names another |
-| `--config <path>` | `vibe.yaml` at `--repo-root` | Configuration file to read instead. The path is relative to the current directory, not to `--repo-root`. It must be a version 2 file |
+| `--repo-root` | `.` | Repository to check. Its `vibe.yaml` is the configuration unless `--config` names another. With `--explain`, only that file's contract version is read |
+| `--config <path>` | `vibe.yaml` at `--repo-root` | Configuration file to read instead. The path is relative to the current directory, not to `--repo-root`. It must be a version 2 file. With `--explain`, only its contract version is read |
 | `--static` | off | Run only the static checks. Fast, runs nothing, and never reaches a verdict: execution and probe parts are `not run`, so the exit code is always `1` |
 | `--json` | off | Print the report as JSON on stdout, nothing else on stdout |
 | `--probe-timeout <duration>` | `30m` | Time limit of each entrypoint run in the probe copy. It must be positive |
 | `--keep-probe-copy` | off | Keep the probe copy and print its path on stderr, for debugging |
-| `--explain <ID>` | | Explain one rule, such as `C-02`, under the contract `vibe.yaml` declares |
+| `--explain <ID>` | | Explain one rule, such as `C-02`, under the contract the configuration declares. It combines only with `--repo-root` and `--config` |
 
 `--explain` explains a rule as it is under the contract the
 configuration declares: a rule's title, level, check and applicability
@@ -421,14 +421,20 @@ can change between contract versions (spec 0074). It reads only the
 `contract` field of `vibe.yaml` at `--repo-root`, or of the file
 `--config` names, and no repository. A declared version is read as the
 audit reads it: 1.x as 1.2.0, 2.0.x as 2.1.0. Without a `vibe.yaml` it
-explains the rule under the latest contract, so it works anywhere. A
-configuration it cannot read, a version 1 file and a contract this
-`vibe` does not implement are errors. Combining it with any audit flag
-other than `--repo-root` and `--config` is an error. It prints what the
-rule registry holds for that contract: ID and rule sentence, the
-contract and where its version comes from, level, category, check
+explains the rule under the latest contract, so it works anywhere. It
+explains a rule for every configuration the audit accepts, under 1.x
+and 2.x, and refuses only a file the audit refuses too: one that is not
+valid YAML, has no `contract` or no X.Y.Z in it, is version 1, or
+declares a contract this `vibe` does not implement.
+Combining it with any audit flag other than `--repo-root` and
+`--config` is an error. It prints what the rule registry holds for that
+contract: ID and rule sentence, the contract, level, category, check
 kinds, source, when the rule is not applicable, whether it can be
 waived, the rationale and the check as spec 0051 states it. The
+`Contract:` line names the contract the rule is explained under and
+where its version comes from: `2.1.0 (vibe.yaml declares 2.0.0)`, with
+the file `--config` names in place of `vibe.yaml`, or `2.1.0, the
+latest (no vibe.yaml)`. The
 rationale is spec 0051's source for the rule, plus the category's
 introduction where spec 0051 has one (H, C and A). An unknown ID is exit
 `1` and lists the valid IDs.
