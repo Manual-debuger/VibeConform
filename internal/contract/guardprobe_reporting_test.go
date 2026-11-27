@@ -90,13 +90,19 @@ func TestRuleA02Reporting(t *testing.T) {
 // A deny case that no PreToolUse hook runs is not one an exception let
 // through under 2.0.0 (spec 0072, "The rerun"): the "no PreToolUse hook
 // matches" finding names the case and the exception that did not count.
-// Under 1.2.0 the exception counts, as before.
+// Under 1.2.0 the exception counts, as before. Under 2.x the fixture
+// requires the guard set: with no hook and no guard set required, A-02
+// is not applicable (spec 0074).
 func TestRuleA02UnmatchedCaseWithAnException(t *testing.T) {
 	t.Parallel()
 	report := func(t *testing.T, version string) *contract.Report {
 		t.Helper()
+		files := withContract(t, map[string]string{".claude/hooks/policy.json": probeRmBuildException}, version)
+		if version != contract.Contract1 {
+			files["vibe.yaml"] += guardSetRequire
+		}
 		var edits []contracttest.Edit
-		for p, content := range withContract(t, map[string]string{".claude/hooks/policy.json": probeRmBuildException}, version) {
+		for p, content := range files {
 			edits = append(edits, contracttest.WithFile(p, content))
 		}
 		return probeAuditRules(t, probeFixture(t, edits...), "A-02")

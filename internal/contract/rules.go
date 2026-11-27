@@ -336,6 +336,40 @@ func needsAgents(cfg *Config) (bool, string) {
 
 const notApplicableWithoutClaude = "when `agents` does not include `claude`"
 
+// testsTheGuard is r, a rule that tests the guard (A-02, A-03, A-04,
+// A-08 and A-09), with its 2.1.0 revision: the same title and checks,
+// and not applicable when there is no guard to test (spec 0074,
+// "Applicability of the guard-testing rules").
+func testsTheGuard(r Rule) Rule {
+	checks := make([]string, len(r.Parts))
+	for i, p := range r.Parts {
+		checks[i] = p.Check
+	}
+	r.Revisions = append(r.Revisions, Revision{
+		Since: "2.1.0", Title: r.Title, Checks: checks,
+		NotApplicableWhen: notApplicableWithoutClaude + ", or when `require` does not list the guard set and no " +
+			"PreToolUse hook in `.claude/settings.json` matches `Bash` (A-01 reports the missing guard)",
+		applies: guardToTest,
+	})
+	return r
+}
+
+// guardToTest is the applicability of the rules that test the guard from
+// 2.1.0: with `claude` in agents they apply unless require does not list
+// the guard set and no PreToolUse hook matches Bash, read as A-01 reads
+// it. Then there is no guard to test, and A-01's failure is the one
+// finding (spec 0074).
+func guardToTest(env *Env) (bool, string) {
+	if ok, why := needsClaude(env.config); !ok {
+		return false, why
+	}
+	if env.config.requires(guardSet[0]) || env.hooksBash() {
+		return true, ""
+	}
+	return false, "no PreToolUse hook in " + claudeSettingsFile + " matches Bash, so there is no guard to test; " +
+		"A-01 reports the missing guard"
+}
+
 // rules is the rule table, in report order: contract 1.0.0's 16 MUST and
 // 9 SHOULD rules, whose sentences, checks and sources are spec 0051's
 // verbatim, and the SHOULD rules contract 1.2.0 adds (spec 0061).
@@ -495,7 +529,7 @@ var rules = []Rule{
 		},
 		applies: onConfig(needsClaude),
 	},
-	{
+	testsTheGuard(Rule{
 		ID: "A-02", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard refuses the baseline unless an exception says otherwise",
 		Source:            "specs 0012, 0047",
@@ -506,8 +540,8 @@ var rules = []Rule{
 				"A hook \"refuses\" by exiting 2.", checkA02),
 		},
 		applies: onConfig(needsClaude),
-	},
-	{
+	}),
+	testsTheGuard(Rule{
 		ID: "A-03", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard fails closed",
 		Source:            "spec 0021",
@@ -517,8 +551,8 @@ var rules = []Rule{
 				"system's directories, and with `.claude/hooks/policy.json` replaced by invalid JSON", checkA03),
 		},
 		applies: onConfig(needsClaude),
-	},
-	{
+	}),
+	testsTheGuard(Rule{
 		ID: "A-04", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "The guard is loosened only through listed exceptions",
 		Source:            "spec 0050, ADR 0024",
@@ -529,7 +563,7 @@ var rules = []Rule{
 				"the audit lists them. Tightening is not restricted.", checkA04),
 		},
 		applies: onConfig(needsClaude),
-	},
+	}),
 	{
 		ID: "A-05", Level: Must, Category: categoryAgents,
 		Title:             "The agent's turn ends with `verify-fast`",
@@ -563,7 +597,7 @@ var rules = []Rule{
 		},
 		applies: onConfig(needsClaude),
 	},
-	{
+	testsTheGuard(Rule{
 		ID: "A-08", Level: Must, LevelChanges: guardSetLevels, Category: categoryAgents,
 		Title:             "An agent changes guardrail settings only after a person unlocks them",
 		Source:            "ADR 0025",
@@ -575,8 +609,8 @@ var rules = []Rule{
 				"runs, the marker is gone.", checkA08),
 		},
 		applies: onConfig(needsClaude),
-	},
-	{
+	}),
+	testsTheGuard(Rule{
 		ID: "A-09", Level: Should, Category: categoryAgents, Since: "1.2.0",
 		Title:             "The guard refuses commands that skip Git hooks",
 		Source:            "spec 0061, ADR 0027",
@@ -587,7 +621,7 @@ var rules = []Rule{
 				checkA09),
 		},
 		applies: onConfig(needsClaude),
-	},
+	}),
 	{
 		ID: "D-01", Level: Must, Category: categoryDependencies,
 		Title:  "Lockfiles are committed and match the declared dependencies",

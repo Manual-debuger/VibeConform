@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"regexp"
 	"slices"
@@ -116,6 +117,18 @@ func (e *Env) readClaudeSettings(missingFix string) (s *claudeSettings, result P
 		return nil, Fail(parseFailure(claudeSettingsFile, err)), false
 	}
 	return e.claudeSettings.settings, Pass(), true
+}
+
+// hooksBash reports whether a PreToolUse command hook matches Bash, as
+// A-01 reads it. A missing or untracked settings file has no hook. When
+// the file cannot be read or does not parse, the audit cannot tell, so
+// hooksBash is true and the rules that read the file report it.
+func (e *Env) hooksBash() bool {
+	if _, err := e.readFile(claudeSettingsFile); errors.Is(err, fs.ErrNotExist) {
+		return false
+	}
+	s, _, ok := e.readClaudeSettings("")
+	return !ok || len(s.matching(eventPreToolUse, "Bash")) > 0
 }
 
 // ClaudeSettingsFile is the Claude Code settings file the A rules read.

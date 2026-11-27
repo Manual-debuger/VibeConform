@@ -310,7 +310,9 @@ Not applicable when `agents` does not include `claude`. Start from
 A-01 to A-04 and A-08 are the guard set. They are SHOULD rules, MUST
 under 1.x. List all of them in `require` to hold the repository to the
 guard, or none of them: part of the set, or A-09 without it, is a
-configuration error.
+configuration error. With the guard set not in `require` and no
+PreToolUse hook matching `Bash`, there is no guard to test: A-01 fails,
+and A-02, A-03, A-04, A-08 and A-09 are not applicable.
 
 The hooks run from the project root. Claude Code runs a hook command in
 the agent's current directory, and Task uses the nearest `Taskfile.yml`

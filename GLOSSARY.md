@@ -94,7 +94,9 @@ _Avoid_: exemption, suppression, ignore
 **Not applicable**:
 The state of a rule that does not apply to an adopting repository because
 of what the repository declares, such as a Linux-only platform, or
-because of the CI provider it uses. It is reported, not checked.
+because of the CI provider it uses, or, for the rules that test the
+guard, because there is no guard to test (contract 2.1.0). It is
+reported, not checked.
 _Avoid_: skipped, waived
 
 **Adopting repository**:
