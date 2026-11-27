@@ -194,6 +194,9 @@ In a Go repository with `go.mod` at the root, the file is:
 contract: 2.1.0
 platforms: [linux, windows]
 agents: [claude]
+# The guard set: the audit holds the agent's guard to its rules.
+# Removing this line drops the guard rules from the verdict.
+require: [A-01, A-02, A-03, A-04, A-08]
 # Declare the four entrypoints: one command each, or a list of commands.
 # Until they are declared, vibe audit fails V-04. The setup skill
 # (vibe init --skill) can fill them in. For example:
@@ -207,6 +210,10 @@ agents: [claude]
 - **`contract`** is the contract version this `vibe` implements.
   **`platforms`** is `[linux, windows]` and **`agents`** is `[claude]`.
   Edit them to what the repository supports; see "`vibe.yaml` version 2".
+- **`require`** lists the guard set, A-01 to A-04 and A-08 (spec 0074),
+  so the verdict counts the guard rules like MUST rules. A repository
+  that does not want an agent guard deletes the line; the guard rules
+  then do not decide the verdict.
 - **Components** come from the tracked files (`git ls-files`, so a new
   manifest must be added to Git first). Each directory up to three levels
   below the root with a `go.mod`, a `pyproject.toml`, or a `package.json`
